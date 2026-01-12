@@ -1,0 +1,28 @@
+version: "3.9"
+
+# Fichero de override para despliegue en producción.
+# Se utiliza junto con docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    # En producción no exponemos el puerto de PostgreSQL al host.
+    ports: []
+
+  backend-fastapi:
+    # Usar un fichero .env real (no el .env.example).
+    env_file:
+      - ../backend-fastapi/.env
+    # No exponer el puerto directamente; se accede solo vía Cloudflare Tunnel.
+    ports: []
+
+  frontend-react:
+    # El frontend habla siempre con la API pública HTTPS.
+    environment:
+      VITE_API_BASE_URL: https://api.mavico.shop
+    ports: []
+
+  cloudflared:
+    # Montamos la configuración del túnel desde ./cloudflared.
+    volumes:
+      - ./cloudflared:/etc/cloudflared

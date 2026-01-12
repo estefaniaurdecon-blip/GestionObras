@@ -1,0 +1,49 @@
+from fastapi import APIRouter
+
+from . import (
+    audit,
+    auth,
+    dashboard,
+    erp,
+    health,
+    hr,
+    invitations,
+    internal,
+    notifications,
+    tenants,
+    tickets,
+    tools,
+    users,
+)
+
+
+api_router = APIRouter()
+
+# Rutas públicas / semi públicas
+api_router.include_router(health.router, prefix="/health", tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Rutas protegidas
+api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(erp.router, prefix="/erp", tags=["erp"])
+api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
+api_router.include_router(hr.router, prefix="/hr", tags=["hr"])
+api_router.include_router(
+    invitations.router,
+    prefix="/invitations",
+    tags=["invitations"],
+)
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["notifications"],
+)
+api_router.include_router(
+    internal.router,
+    prefix="/internal",
+    tags=["internal"],
+)

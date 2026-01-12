@@ -1,0 +1,21 @@
+"""
+Punto central donde se importan todos los modelos SQLModel.
+
+Esto permite que `SQLModel.metadata.create_all()` conozca todas las tablas.
+"""
+
+from app.models.tenant import Tenant  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.models.role import Role  # noqa: F401
+from app.models.permission import Permission  # noqa: F401
+from app.models.role_permission import RolePermission  # noqa: F401
+from app.models.tool import Tool  # noqa: F401
+from app.models.tenant_tool import TenantTool  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
+from app.models.ticket import Ticket  # noqa: F401
+from app.models.ticket_message import TicketMessage  # noqa: F401
+from app.models.ticket_participant import TicketParticipant  # noqa: F401
+from app.models.hr import Department, EmployeeProfile, EmployeeDepartment  # noqa: F401
+from app.models.user_invitation import UserInvitation  # noqa: F401
+from app.models.erp import Project, Task, TimeEntry, TimeSession  # noqa: F401
