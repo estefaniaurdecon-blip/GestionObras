@@ -18,6 +18,7 @@ import {
   useToast,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
@@ -51,11 +52,17 @@ interface NewTenantFormState {
  * Permite crear nuevos tenants y ver el listado actual.
  * Al crear un tenant, también se crea su administrador principal.
  */
+// Pantalla de administracion de tenants y sus administradores.
 export const TenantSettingsPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   let isSuperAdmin = false;
   try {
@@ -68,6 +75,7 @@ export const TenantSettingsPage: React.FC = () => {
     isSuperAdmin = false;
   }
 
+  // Estado del formulario de alta de tenant.
   const [form, setForm] = useState<NewTenantFormState>({
     name: "",
     subdomain: "",
@@ -76,12 +84,14 @@ export const TenantSettingsPage: React.FC = () => {
     admin_password: "",
   });
 
+  // Carga de tenants existentes.
   const { data: tenants, isLoading, isError } = useQuery<Tenant[]>({
     queryKey: ["tenants"],
     queryFn: fetchTenants,
     enabled: isSuperAdmin,
   });
 
+  // Mutacion para crear tenant y admin.
   const createTenantMutation = useMutation({
     mutationFn: async (payload: NewTenantFormState) => {
       const tenantResponse = await apiClient.post<Tenant>("/api/v1/tenants/", {
@@ -138,6 +148,7 @@ export const TenantSettingsPage: React.FC = () => {
     },
   });
 
+  // Actualiza el formulario segun inputs.
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({
@@ -146,11 +157,13 @@ export const TenantSettingsPage: React.FC = () => {
     }));
   };
 
+  // Envia el formulario para crear tenant.
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createTenantMutation.mutate(form);
   };
 
+  // Elimina un tenant existente.
   const handleDeleteTenant = (tenantId: number) => {
     apiClient
       .delete(`/api/v1/tenants/${tenantId}`)
@@ -174,9 +187,36 @@ export const TenantSettingsPage: React.FC = () => {
       });
   };
 
+  // Render principal de la pagina.
   return (
     <AppShell>
-      <Heading mb={4}>Ajustes del tenant</Heading>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <Stack position="relative" spacing={2} maxW="640px">
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            Administracion
+          </Text>
+          <Heading size="lg">Ajustes de tenants</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            Configura empresas y credenciales de administracion.
+          </Text>
+        </Stack>
+      </Box>
       {!isSuperAdmin && (
         <Text mb={6}>
           Solo el Super Admin global puede ver y gestionar la lista completa de tenants.

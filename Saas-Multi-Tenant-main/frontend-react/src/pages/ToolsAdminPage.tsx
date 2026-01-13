@@ -12,6 +12,7 @@ import {
   useToast,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
@@ -43,11 +44,17 @@ async function fetchTenants(): Promise<TenantOption[]> {
  * - Como Super Admin: puedes seleccionar el tenant y activar/desactivar herramientas.
  * - Como admin_tenant: gestionas las herramientas de tu tenant.
  */
+// Pantalla de herramientas por tenant.
 export const ToolsAdminPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.600", "gray.300");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   let isSuperAdmin = false;
   let initialTenantId: number | null = null;
@@ -68,6 +75,7 @@ export const ToolsAdminPage: React.FC = () => {
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(initialTenantId);
 
+  // Catalogo global de herramientas.
   const { data: catalog, isLoading: isCatalogLoading } = useQuery<Tool[]>({
     queryKey: ["tool-catalog"],
     queryFn: fetchToolCatalog,
@@ -88,12 +96,14 @@ export const ToolsAdminPage: React.FC = () => {
     },
   });
 
+  // Herramientas habilitadas para el tenant seleccionado.
   const { data: tenantTools, isLoading: isTenantLoading } = useQuery<Tool[]>({
     queryKey: ["tenant-tools-admin", selectedTenantId],
     queryFn: () => fetchTenantTools(selectedTenantId as number),
     enabled: selectedTenantId !== null,
   });
 
+  // Activar/desactivar herramienta para un tenant.
   const toggleMutation = useMutation({
     mutationFn: async ({
       tenantId,
@@ -130,11 +140,13 @@ export const ToolsAdminPage: React.FC = () => {
 
   const tenantToolIds = new Set(tenantTools?.map((t) => t.id) ?? []);
 
+  // Cambia el tenant seleccionado en la vista.
   const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = Number(e.target.value);
     setSelectedTenantId(Number.isNaN(id) ? null : id);
   };
 
+  // Alterna el estado de una herramienta.
   const handleToggle = (toolId: number, enabled: boolean) => {
     if (!selectedTenantId) return;
     toggleMutation.mutate({
@@ -144,9 +156,36 @@ export const ToolsAdminPage: React.FC = () => {
     });
   };
 
+  // Render principal de la pagina.
   return (
     <AppShell>
-      <Heading mb={4}>Herramientas del tenant</Heading>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <Box position="relative">
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            Administracion
+          </Text>
+          <Heading size="lg">Herramientas</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            Activa o desactiva modulos por tenant.
+          </Text>
+        </Box>
+      </Box>
 
       {isSuperAdmin && (
         <Box mb={4}>
@@ -216,4 +255,3 @@ export const ToolsAdminPage: React.FC = () => {
     </AppShell>
   );
 };
-

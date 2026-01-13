@@ -12,6 +12,7 @@ import {
   Tr,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -30,14 +31,21 @@ interface AuditLogItem {
  * Muestra el log real de acciones clave (login, gestión de tenants, etc.)
  * obtenido del backend.
  */
+// Pantalla de auditoria con el registro de acciones.
 export const AuditLogPage: React.FC = () => {
+  // Estilos base de la tabla.
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   const [items, setItems] = useState<AuditLogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
 
+  // Carga el log de auditoria al montar la pagina.
   useEffect(() => {
     let cancelled = false;
 
@@ -69,9 +77,36 @@ export const AuditLogPage: React.FC = () => {
     };
   }, []);
 
+  // Render principal de la pagina.
   return (
     <AppShell>
-      <Heading mb={4}>Auditoria</Heading>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <Box position="relative">
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            Administracion
+          </Text>
+          <Heading size="lg">Auditoria</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            Registro de acciones y eventos clave del sistema.
+          </Text>
+        </Box>
+      </Box>
       <Text mb={6}>
         Registro de acciones relevantes en la plataforma para este tenant.
       </Text>
@@ -127,4 +162,3 @@ export const AuditLogPage: React.FC = () => {
     </AppShell>
   );
 };
-

@@ -77,7 +77,9 @@ interface NewUserFormState {
  * Admin de tenant:
  *   - Gestiona solo los usuarios de su propio tenant (sin selector).
  */
+// Pantalla de gestion de usuarios: listado, filtros y acciones.
 export const UsersPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
@@ -283,6 +285,7 @@ export const UsersPage: React.FC = () => {
     });
   }, [users, searchTerm, roleFilter, statusFilter]);
 
+  // Render principal de la pagina.
   return (
     <AppShell>
       <Box

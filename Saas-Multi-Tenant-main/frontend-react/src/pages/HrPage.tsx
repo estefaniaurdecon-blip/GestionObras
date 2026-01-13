@@ -81,7 +81,9 @@ interface EmployeeEditFormState {
   isActive: boolean;
 }
 
+// Pantalla de recursos humanos: departamentos y empleados.
 export const HrPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -229,6 +231,7 @@ export const HrPage: React.FC = () => {
     },
   });
 
+  // Mutacion para crear empleados.
   const createEmployeeMutation = useMutation({
     mutationFn: createEmployee,
     onSuccess: () => {
@@ -260,6 +263,7 @@ export const HrPage: React.FC = () => {
     },
   });
 
+  // Mutacion para editar empleados.
   const updateEmployeeMutation = useMutation({
     mutationFn: updateEmployee,
     onSuccess: () => {
@@ -284,6 +288,7 @@ export const HrPage: React.FC = () => {
     },
   });
 
+  // Mutacion para eliminar empleados.
   const deleteEmployeeMutation = useMutation({
     mutationFn: deleteEmployee,
     onSuccess: () => {
@@ -404,6 +409,7 @@ export const HrPage: React.FC = () => {
     });
   };
 
+  // Confirma y elimina empleado seleccionado.
   const handleDeleteEmployee = () => {
     if (!editingEmployee) return;
     onDeleteOpen();
@@ -498,6 +504,7 @@ export const HrPage: React.FC = () => {
     [headcount]
   );
 
+  // Render principal de la pagina.
   return (
     <AppShell>
       <Box

@@ -42,13 +42,19 @@ import {
   TimeSessionBlock,
   updateTimeSession,
 } from "../api/erpSessions";
+import { updateErpTask } from "../api/erpManagement";
 import { AppShell } from "../components/layout/AppShell";
 
+// Horas visibles en el calendario (0-23).
 const HOURS = Array.from({ length: 24 }, (_, idx) => idx);
+// Altura de cada bloque de hora en el calendario (px).
 const HOUR_HEIGHT = 48;
+// Duracion minima por sesion de tiempo (min).
 const MIN_SESSION_MINUTES = 30;
+// Opciones de granularidad para ajustar/arrastrar sesiones (min).
 const MINUTES_STEP_OPTIONS = [15, 30, 60];
 
+// Convierte segundos a formato HH:mm:ss.
 const formatSeconds = (total: number): string => {
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -58,6 +64,7 @@ const formatSeconds = (total: number): string => {
     .join(":");
 };
 
+// Calcula el inicio de semana (lunes) para una fecha dada.
 const startOfWeek = (date: Date): Date => {
   const day = date.getDay();
   const diff = (day + 6) % 7;
@@ -67,29 +74,50 @@ const startOfWeek = (date: Date): Date => {
   return start;
 };
 
+// Suma dias a una fecha sin mutar el original.
 const addDays = (date: Date, days: number): Date => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 };
 
-const formatDayLabel = (date: Date): string =>
-  date.toLocaleDateString("es-ES", { weekday: "short", day: "numeric" });
+const WEEKDAY_LABELS = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
 
+// Formatea el encabezado corto de dia (lun 12).
+const formatDayLabel = (date: Date): string => {
+  const day = WEEKDAY_LABELS[date.getDay()] ?? "";
+  return `${day} ${date.getDate()}`;
+};
+
+// Formatea fecha para inputs datetime-local.
 const formatDateInput = (date: Date): string =>
   date.toISOString().slice(0, 16);
 
+// Limita un valor entre min y max.
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
+// Redondea minutos al paso configurado.
 const roundToStep = (minutes: number, step: number): number =>
   Math.round(minutes / step) * step;
 
+// Formatea minutos a HH:mm para ayudas visuales de arrastre.
+const formatMinutesLabel = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${mins
+    .toString()
+    .padStart(2, "0")}`;
+};
+
+// Pantalla principal de control de tiempo con calendario interactivo.
 export const TimeControlPage: React.FC = () => {
+  // Utilidades globales (toasts y modal).
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const calendarRef = useRef<HTMLDivElement | null>(null);
 
+  // Estado de tracking actual y tareas disponibles.
   const [activeSession, setActiveSession] = useState<TimeSession | null>(null);
   const [taskIdInput, setTaskIdInput] = useState<string>("");
   const [tasks, setTasks] = useState<ErpTask[]>([]);
@@ -98,7 +126,17 @@ export const TimeControlPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<Date>(new Date());
   const [dragTaskId, setDragTaskId] = useState<number | null>(null);
+  const [isDraggingSession, setIsDraggingSession] = useState(false);
+  const [recentTaskIds, setRecentTaskIds] = useState<number[]>(() => {
+    try {
+      const raw = localStorage.getItem("recent_task_ids");
+      return raw ? (JSON.parse(raw) as number[]) : [];
+    } catch {
+      return [];
+    }
+  });
 
+  // Vista activa del modulo de tiempo.
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "timesheet">(
     "calendar",
   );
@@ -110,6 +148,7 @@ export const TimeControlPage: React.FC = () => {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [minutesStep, setMinutesStep] = useState<number>(15);
 
+  // Estado del formulario modal para crear/editar sesiones.
   const [draftTaskId, setDraftTaskId] = useState<string>("");
   const [draftStart, setDraftStart] = useState<string>("");
   const [draftEnd, setDraftEnd] = useState<string>("");
@@ -129,16 +168,20 @@ export const TimeControlPage: React.FC = () => {
     offsetMinutes?: number;
   } | null>(null);
 
+  // Tokens de color para UI.
   const cardBg = useColorModeValue("white", "gray.700");
   const panelBg = useColorModeValue("gray.50", "gray.800");
   const subtleText = useColorModeValue("gray.500", "gray.300");
   const mutedText = useColorModeValue("gray.400", "gray.500");
   const accent = useColorModeValue("brand.500", "brand.300");
+  const calendarHeaderBg = useColorModeValue("green.600", "green.700");
+  const calendarHeaderText = useColorModeValue("white", "white");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   `;
 
+  // Flags y derivados del estado actual.
   const isRunning = Boolean(activeSession && activeSession.is_active);
   const currentUserId = useMemo(() => {
     try {
@@ -150,11 +193,13 @@ export const TimeControlPage: React.FC = () => {
       return null;
     }
   }, []);
+  // Dias visibles en la semana actual.
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)),
     [weekStart],
   );
 
+  // Convierte coordenadas Y en minutos dentro del calendario.
   const getMinutesFromClientY = (clientY: number): number => {
     const rect = calendarRef.current?.getBoundingClientRect();
     if (!rect) return 0;
@@ -163,6 +208,7 @@ export const TimeControlPage: React.FC = () => {
     return clamp(roundToStep(minutes, minutesStep), 0, 24 * 60);
   };
 
+  // Convierte coordenadas X en indice de dia de la semana.
   const getDayIndexFromClientX = (clientX: number): number => {
     const rect = calendarRef.current?.getBoundingClientRect();
     if (!rect) return 0;
@@ -171,6 +217,7 @@ export const TimeControlPage: React.FC = () => {
     return clamp(Math.floor(x / columnWidth) - 1, 0, 6);
   };
 
+  // Convierte un indice de dia y minutos en una fecha absoluta.
   const minutesToDate = (dayIndex: number, minutes: number): Date => {
     const base = new Date(weekDays[dayIndex]);
     base.setHours(0, 0, 0, 0);
@@ -178,12 +225,14 @@ export const TimeControlPage: React.FC = () => {
     return base;
   };
 
+  // Mapa rapido de tareas por id para renderizado.
   const taskById = useMemo(() => {
     const map = new Map<number, ErpTask>();
     tasks.forEach((task) => map.set(task.id, task));
     return map;
   }, [tasks]);
 
+  // Rango de fechas para cargar sesiones de la semana.
   const weekRange = useMemo(() => {
     const start = new Date(weekStart);
     const end = addDays(weekStart, 6);
@@ -191,26 +240,36 @@ export const TimeControlPage: React.FC = () => {
     return { start, end };
   }, [weekStart]);
 
+  // Total de segundos acumulados en la semana.
   const totalWeekSeconds = useMemo(() => {
     return sessions.reduce((acc, session) => acc + session.duration_seconds, 0);
   }, [sessions]);
 
+  // Formato legible del tiempo activo.
   const formattedElapsed = useMemo(
     () => formatSeconds(elapsedSeconds),
     [elapsedSeconds],
   );
+  // Ultimas tareas recientes para acceso rapido.
   const recentTasks = useMemo(() => {
     const scopedTasks = currentUserId
       ? tasks.filter((task) => task.assigned_to_id === currentUserId)
       : tasks;
+    const taskById = new Map(scopedTasks.map((task) => [task.id, task]));
+    const fromHistory = recentTaskIds
+      .map((id) => taskById.get(id))
+      .filter((task): task is ErpTask => Boolean(task))
+      .slice(0, 3);
+    if (fromHistory.length > 0) return fromHistory;
     return [...scopedTasks]
       .sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )
       .slice(0, 3);
-  }, [tasks, currentUserId]);
+  }, [tasks, currentUserId, recentTaskIds]);
 
+  // Carga la sesion activa al iniciar la pantalla.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -224,6 +283,7 @@ export const TimeControlPage: React.FC = () => {
     };
   }, []);
 
+  // Carga tareas del ERP para selects y tablero.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -247,6 +307,7 @@ export const TimeControlPage: React.FC = () => {
     };
   }, []);
 
+  // Mantiene el contador de tiempo activo sincronizado.
   useEffect(() => {
     if (!activeSession || !activeSession.is_active) {
       setElapsedSeconds(0);
@@ -266,6 +327,7 @@ export const TimeControlPage: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, [activeSession]);
 
+  // Actualiza el reloj de "ahora" para la linea temporal.
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNow(new Date());
@@ -273,12 +335,14 @@ export const TimeControlPage: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  // Refresca la tarea seleccionada cuando hay sesion activa.
   useEffect(() => {
     if (activeSession?.task_id) {
       setTaskIdInput(String(activeSession.task_id));
     }
   }, [activeSession]);
 
+  // Carga sesiones de tiempo para la semana visible.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -310,6 +374,7 @@ export const TimeControlPage: React.FC = () => {
     };
   }, [weekRange.start, weekRange.end]);
 
+  // Gestiona el arrastre y resize de sesiones en el calendario.
   useEffect(() => {
     if (!dragState) return;
 
@@ -381,6 +446,7 @@ export const TimeControlPage: React.FC = () => {
         (dragState.mode === "move" || dragState.mode === "resize") &&
         dragState.sessionId
       ) {
+        setIsDraggingSession(false);
         const startDate = minutesToDate(dragState.dayIndex, dragState.startMinutes);
         const endDate = minutesToDate(dragState.dayIndex, dragState.endMinutes);
         setSessions((prev) =>
@@ -412,6 +478,7 @@ export const TimeControlPage: React.FC = () => {
         }
       }
 
+      setIsDraggingSession(false);
       setDragState(null);
     };
 
@@ -423,6 +490,26 @@ export const TimeControlPage: React.FC = () => {
     };
   }, [dragState, selection, onOpen, taskIdInput, toast, weekDays]);
 
+  // Guarda un historico corto de tareas seleccionadas por el usuario.
+  const updateRecentTaskIds = (taskId: number) => {
+    setRecentTaskIds((prev) => {
+      const next = [taskId, ...prev.filter((id) => id !== taskId)].slice(0, 10);
+      localStorage.setItem("recent_task_ids", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Seleccion de tarea desde el desplegable.
+  // Sincroniza selector y lista de ultimas tareas.
+  const handleTaskSelectionChange = (value: string) => {
+    setTaskIdInput(value);
+    const id = Number(value);
+    if (!Number.isNaN(id) && id > 0) {
+      updateRecentTaskIds(id);
+    }
+  };
+
+  // Inicia tracking manual desde el selector de tarea.
   const handleStart = async () => {
     const taskId = Number(taskIdInput);
     if (!taskId || Number.isNaN(taskId)) {
@@ -437,9 +524,16 @@ export const TimeControlPage: React.FC = () => {
     try {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
+      updateRecentTaskIds(taskId);
+      await updateErpTask(taskId, { status: "in_progress" });
       setActiveSession(session);
       setTaskIdInput(String(taskId));
       setWeekStart(startOfWeek(new Date()));
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, status: "in_progress" } : task,
+        ),
+      );
       toast({
         title: "Tracking iniciado",
         description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
@@ -458,6 +552,7 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Inicia tracking rapido desde accesos directos.
   const handleQuickStart = async (taskId: number) => {
     if (isRunning) {
       toast({
@@ -470,9 +565,16 @@ export const TimeControlPage: React.FC = () => {
     try {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
+      updateRecentTaskIds(taskId);
+      await updateErpTask(taskId, { status: "in_progress" });
       setActiveSession(session);
       setTaskIdInput(String(taskId));
       setWeekStart(startOfWeek(new Date()));
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId ? { ...task, status: "in_progress" } : task,
+        ),
+      );
       toast({
         title: "Tracking iniciado",
         description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
@@ -491,6 +593,7 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Detiene la sesion activa de tracking.
   const handleStop = async () => {
     try {
       setIsLoading(true);
@@ -514,6 +617,7 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Inicia la seleccion para crear una nueva sesion en el calendario.
   const startSelection = (dayIndex: number, minutes: number) => {
     const normalized = clamp(roundToStep(minutes, minutesStep), 0, 24 * 60);
     setSelection({
@@ -529,6 +633,7 @@ export const TimeControlPage: React.FC = () => {
     });
   };
 
+  // Guarda una sesion nueva o edita una existente.
   const handleSaveSession = async () => {
     const taskId = Number(draftTaskId);
     if (!taskId || Number.isNaN(taskId)) {
@@ -573,12 +678,14 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Limpia estado del modal de sesion.
   const handleCloseModal = () => {
     setEditingSessionId(null);
     setDraftDescription("");
     onClose();
   };
 
+  // Elimina una sesion desde el modal.
   const handleDeleteSession = async () => {
     if (!editingSessionId) return;
     try {
@@ -595,6 +702,7 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Abre el modal con los datos de una sesion existente.
   const openEditSession = (session: TimeSessionBlock) => {
     const start = new Date(session.started_at);
     const end = session.ended_at
@@ -609,6 +717,7 @@ export const TimeControlPage: React.FC = () => {
     onOpen();
   };
 
+  // Elimina rapidamente una sesion desde la vista calendario.
   const handleQuickDelete = async (sessionId: number) => {
     try {
       await deleteTimeSession(sessionId);
@@ -623,6 +732,8 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Arrastre de tareas recientes para crear una sesion en el calendario.
+  // Arrastre desde accesos rapidos hacia el calendario.
   const handleTaskDragStart = (
     event: React.DragEvent<HTMLDivElement>,
     taskId: number,
@@ -632,6 +743,8 @@ export const TimeControlPage: React.FC = () => {
     setDragTaskId(taskId);
   };
 
+  // Drop de una tarea sobre el calendario para crear sesion.
+  // Crea sesion al soltar una tarea sobre el calendario.
   const handleCalendarDrop = async (
     event: React.DragEvent<HTMLDivElement>,
   ) => {
@@ -668,6 +781,7 @@ export const TimeControlPage: React.FC = () => {
     }
   };
 
+  // Render principal de la pagina.
   return (
     <AppShell>
       <Box
@@ -701,7 +815,7 @@ export const TimeControlPage: React.FC = () => {
             <FormLabel>Que estas trabajando?</FormLabel>
             <Select
               value={taskIdInput}
-              onChange={(e) => setTaskIdInput(e.target.value)}
+              onChange={(e) => handleTaskSelectionChange(e.target.value)}
               placeholder="Selecciona una tarea"
               isDisabled={isLoading}
             >
@@ -894,8 +1008,19 @@ export const TimeControlPage: React.FC = () => {
               </Text>
             </Box>
             {weekDays.map((day) => (
-              <Box key={day.toISOString()} p={3} borderRightWidth="1px">
-                <Text fontSize="sm" fontWeight="semibold">
+              <Box
+                key={day.toISOString()}
+                p={3}
+                borderRightWidth="1px"
+                bg={calendarHeaderBg}
+              >
+                <Text
+                  fontSize="xs"
+                  fontWeight="semibold"
+                  textTransform="uppercase"
+                  letterSpacing="0.08em"
+                  color={calendarHeaderText}
+                >
                   {formatDayLabel(day)}
                 </Text>
               </Box>
@@ -957,6 +1082,39 @@ export const TimeControlPage: React.FC = () => {
                 </Box>
               </Box>
             )}
+            {dragState &&
+              (dragState.mode === "move" || dragState.mode === "resize") &&
+              dragState.sessionId && (
+                <Box
+                  position="absolute"
+                  left={`calc(${(dragState.dayIndex + 1) * 12.5}% )`}
+                  top={`${(dragState.startMinutes / 60) * HOUR_HEIGHT}px`}
+                  width="12.5%"
+                  height={`${((dragState.endMinutes - dragState.startMinutes) / 60) * HOUR_HEIGHT}px`}
+                  border="2px dashed"
+                  borderColor={accent}
+                  bg="rgba(0,102,43,0.08)"
+                  borderRadius="md"
+                  pointerEvents="none"
+                  zIndex={3}
+                >
+                  <Box
+                    position="absolute"
+                    top="-18px"
+                    left="4px"
+                    bg={accent}
+                    color="white"
+                    px={2}
+                    py={0.5}
+                    borderRadius="full"
+                    fontSize="xs"
+                    boxShadow="sm"
+                  >
+                    {formatMinutesLabel(dragState.startMinutes)} -{" "}
+                    {formatMinutesLabel(dragState.endMinutes)}
+                  </Box>
+                </Box>
+              )}
             {selection && (
               <Box
                 position="absolute"
@@ -1007,10 +1165,35 @@ export const TimeControlPage: React.FC = () => {
                   borderRadius="md"
                   p={2}
                   overflow="visible"
-                  cursor="pointer"
+                  cursor={
+                    session.is_active
+                      ? "default"
+                      : isDraggingSession
+                      ? "grabbing"
+                      : "grab"
+                  }
+                  userSelect="none"
+                  transition="box-shadow 0.2s ease, border-color 0.2s ease"
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (isDraggingSession) return;
                     openEditSession(session);
+                  }}
+                  onMouseDown={(event) => {
+                    if (session.is_active) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const minutes = getMinutesFromClientY(event.clientY);
+                    const offset = minutes - startMinutes;
+                    setIsDraggingSession(true);
+                    setDragState({
+                      mode: "move",
+                      sessionId: session.id,
+                      dayIndex,
+                      startMinutes,
+                      endMinutes,
+                      offsetMinutes: offset,
+                    });
                   }}
                   onDoubleClick={(event) => {
                     event.stopPropagation();
@@ -1028,14 +1211,23 @@ export const TimeControlPage: React.FC = () => {
                       top="2px"
                       left="2px"
                       right="28px"
-                      height="10px"
+                      height="16px"
                       borderRadius="full"
-                      bg="rgba(0, 102, 43, 0.25)"
+                      bg="rgba(0, 102, 43, 0.35)"
                       cursor="grab"
+                      display="flex"
+                      alignItems="center"
+                      paddingLeft="6px"
+                      fontSize="10px"
+                      color="white"
+                      textTransform="uppercase"
+                      letterSpacing="0.06em"
                       onMouseDown={(event) => {
+                        event.preventDefault();
                         event.stopPropagation();
                         const minutes = getMinutesFromClientY(event.clientY);
                         const offset = minutes - startMinutes;
+                        setIsDraggingSession(true);
                         setDragState({
                           mode: "move",
                           sessionId: session.id,
@@ -1045,7 +1237,9 @@ export const TimeControlPage: React.FC = () => {
                           offsetMinutes: offset,
                         });
                       }}
-                    />
+                    >
+                      Mover
+                    </Box>
                   )}
                   <HStack spacing={2} justify="space-between" align="start" mb={1}>
                     <Text
@@ -1084,7 +1278,9 @@ export const TimeControlPage: React.FC = () => {
                       bg={accent}
                       cursor="ns-resize"
                       onMouseDown={(event) => {
+                        event.preventDefault();
                         event.stopPropagation();
+                        setIsDraggingSession(true);
                         setDragState({
                           mode: "resize",
                           sessionId: session.id,

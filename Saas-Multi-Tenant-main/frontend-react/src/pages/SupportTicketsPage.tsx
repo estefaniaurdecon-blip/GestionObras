@@ -23,6 +23,7 @@ import {
   useToast,
   Switch,
 } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
@@ -66,7 +67,9 @@ const formatDateTime = (iso?: string | null) => {
   return d.toLocaleString();
 };
 
+// Pantalla de soporte: listado de tickets y conversacion.
 export const SupportTicketsPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
@@ -74,6 +77,10 @@ export const SupportTicketsPage: React.FC = () => {
   const subtleText = useColorModeValue("gray.600", "gray.300");
   const rowHoverBg = useColorModeValue("gray.50", "gray.600");
   const rowActiveBg = useColorModeValue("gray.100", "gray.600");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   const [statusFilter, setStatusFilter] = useState<"" | TicketStatus>("");
   const [priorityFilter, setPriorityFilter] = useState<"" | TicketPriority>("");
@@ -110,6 +117,7 @@ export const SupportTicketsPage: React.FC = () => {
     isSuperAdmin ? currentTenantId : null,
   );
 
+  // Carga de tickets segun filtros.
   const ticketsQuery = useQuery<Ticket[]>({
     queryKey: [
       "tickets",
@@ -131,6 +139,7 @@ export const SupportTicketsPage: React.FC = () => {
     [ticketsQuery.data, selectedTicketId],
   );
 
+  // Carga de mensajes para el ticket seleccionado.
   const messagesQuery = useQuery<TicketMessage[]>({
     queryKey: ["ticket-messages", selectedTicketId],
     queryFn: () => fetchTicketMessages(selectedTicketId as number),
@@ -149,6 +158,7 @@ export const SupportTicketsPage: React.FC = () => {
     enabled: isSuperAdmin,
   });
 
+  // Mutacion de creacion de ticket.
   const createMutation = useMutation({
     mutationFn: () =>
       createTicket({
@@ -182,6 +192,7 @@ export const SupportTicketsPage: React.FC = () => {
     },
   });
 
+  // Mutacion de envio de mensajes.
   const replyMutation = useMutation({
     mutationFn: () =>
       addTicketMessage({
@@ -212,6 +223,7 @@ export const SupportTicketsPage: React.FC = () => {
     },
   });
 
+  // Mutacion para cerrar ticket.
   const closeMutation = useMutation({
     mutationFn: () => closeTicket(selectedTicketId as number),
     onSuccess: () => {
@@ -238,6 +250,7 @@ export const SupportTicketsPage: React.FC = () => {
     },
   });
 
+  // Mutacion para reabrir ticket.
   const reopenMutation = useMutation({
     mutationFn: () => reopenTicket(selectedTicketId as number),
     onSuccess: () => {
@@ -259,6 +272,7 @@ export const SupportTicketsPage: React.FC = () => {
     },
   });
 
+  // Mutacion para asignar ticket a un usuario.
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!selectedTicketId || !assigneeId) return;
@@ -287,6 +301,7 @@ export const SupportTicketsPage: React.FC = () => {
     },
   });
 
+  // Envia formulario de nuevo ticket.
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject.trim() || !newDescription.trim()) {
@@ -300,6 +315,7 @@ export const SupportTicketsPage: React.FC = () => {
     createMutation.mutate();
   };
 
+  // Envia un mensaje al ticket.
   const handleSendReply = () => {
     if (!selectedTicketId) return;
     if (!replyBody.trim()) {
@@ -313,6 +329,7 @@ export const SupportTicketsPage: React.FC = () => {
     replyMutation.mutate();
   };
 
+  // Selecciona ticket para ver detalle.
   const handleSelectTicket = (ticket: Ticket) => {
     setSelectedTicketId(ticket.id);
     setAssigneeId("");
@@ -320,9 +337,36 @@ export const SupportTicketsPage: React.FC = () => {
 
   const tickets = ticketsQuery.data ?? [];
 
+  // Render principal de la pagina.
   return (
     <AppShell>
-      <Heading mb={2}>Soporte y tickets</Heading>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <Stack position="relative" spacing={2} maxW="680px">
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            Soporte
+          </Text>
+          <Heading size="lg">Soporte y tickets</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            Gestiona incidencias por tenant y sigue la conversacion.
+          </Text>
+        </Stack>
+      </Box>
       <Text mb={6} color={subtleText}>
         Gestiona las incidencias de la plataforma por tenant. Los tickets se ordenan por
         la última actividad registrada.

@@ -47,7 +47,9 @@ import { fetchErpTasks, type ErpTask } from "../api/erpTimeTracking";
 import { fetchUsersByTenant, type TenantUserSummary } from "../api/users";
 import { AppShell } from "../components/layout/AppShell";
 
+// Pantalla de tareas: resumen, creacion, Kanban y detalle.
 export const ErpTasksPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
@@ -80,6 +82,7 @@ export const ErpTasksPage: React.FC = () => {
     done: "Completado",
   };
 
+  // Estado del formulario de tareas y modales.
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskProjectId, setTaskProjectId] = useState<string>("");
@@ -87,14 +90,22 @@ export const ErpTasksPage: React.FC = () => {
   const [taskStartDate, setTaskStartDate] = useState("");
   const [taskEndDate, setTaskEndDate] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickAddStatus, setQuickAddStatus] =
-    useState<KanbanStatus>("pending");
+  const [quickAddStatus, setQuickAddStatus] = useState<KanbanStatus>("pending");
   const [quickAddTitle, setQuickAddTitle] = useState("");
   const [quickAddDescription, setQuickAddDescription] = useState("");
   const [quickAddProjectId, setQuickAddProjectId] = useState<string>("");
   const [quickAddAssigneeId, setQuickAddAssigneeId] = useState<string>("");
   const [quickAddStartDate, setQuickAddStartDate] = useState("");
   const [quickAddEndDate, setQuickAddEndDate] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTaskId, setEditTaskId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editProjectId, setEditProjectId] = useState<string>("");
+  const [editAssigneeId, setEditAssigneeId] = useState<string>("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editStatus, setEditStatus] = useState<KanbanStatus>("pending");
   const [selectedTask, setSelectedTask] = useState<ErpTask | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
@@ -102,6 +113,7 @@ export const ErpTasksPage: React.FC = () => {
     Record<number, KanbanStatus>
   >({});
 
+  // Determina permisos y tenant del usuario actual.
   let tenantId = 1;
   let isSuperAdmin = false;
   try {
@@ -121,6 +133,7 @@ export const ErpTasksPage: React.FC = () => {
     isSuperAdmin = false;
   }
 
+  // Datos principales del ERP.
   const { data: projects } = useQuery<ErpProject[]>({
     queryKey: ["erp-projects"],
     queryFn: fetchErpProjects,
@@ -136,6 +149,7 @@ export const ErpTasksPage: React.FC = () => {
     queryFn: () => fetchUsersByTenant(tenantId),
   });
 
+  // Mapas auxiliares para mostrar nombres en el Kanban.
   const userMap = useMemo(() => {
     const map = new Map<number, string>();
     (users ?? []).forEach((user) => {
@@ -152,9 +166,32 @@ export const ErpTasksPage: React.FC = () => {
     return map;
   }, [projects]);
 
-  const taskCount = tasks?.length ?? 0;
-  const assignedCount = tasks?.filter((task) => task.assigned_to_id).length ?? 0;
+  // Identifica al usuario actual para tareas asignadas.
+  const currentUserId = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("current_user");
+      if (!raw) return null;
+      const me = JSON.parse(raw) as { id?: number; user_id?: number };
+      return me.id ?? me.user_id ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
+  // Lista de tareas asignadas al usuario actual.
+  const assignedTasks = useMemo(() => {
+    if (!currentUserId) return [];
+    return (tasks ?? []).filter(
+      (task) => task.assigned_to_id === currentUserId
+    );
+  }, [tasks, currentUserId]);
+
+  // KPIs del resumen.
+  const taskCount = tasks?.length ?? 0;
+  const assignedCount =
+    tasks?.filter((task) => task.assigned_to_id).length ?? 0;
+
+  // Mutaciones para crear y editar tareas.
   const createTaskMutation = useMutation({
     mutationFn: (payload: ErpTaskCreate) => createErpTask(payload),
     onSuccess: async () => {
@@ -198,6 +235,7 @@ export const ErpTasksPage: React.FC = () => {
     },
   });
 
+  // Actualizacion optimista del estado en Kanban.
   const updateTaskStatusMutation = useMutation({
     mutationFn: async (payload: { taskId: number; status: KanbanStatus }) => {
       await updateErpTask(payload.taskId, { status: payload.status });
@@ -210,7 +248,8 @@ export const ErpTasksPage: React.FC = () => {
       });
       toast({
         title: "No se pudo mover la tarea",
-        description: error?.response?.data?.detail ?? "Revisa permisos y datos.",
+        description:
+          error?.response?.data?.detail ?? "Revisa permisos y datos.",
         status: "error",
       });
     },
@@ -219,6 +258,34 @@ export const ErpTasksPage: React.FC = () => {
     },
   });
 
+  const updateTaskMutation = useMutation({
+    mutationFn: async () => {
+      if (!editTaskId) return;
+      await updateErpTask(editTaskId, {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        project_id: editProjectId ? Number(editProjectId) : null,
+        assigned_to_id: editAssigneeId ? Number(editAssigneeId) : null,
+        start_date: editStartDate || null,
+        end_date: editEndDate || null,
+        status: editStatus,
+      });
+    },
+    onSuccess: async () => {
+      setEditOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+      toast({ title: "Tarea actualizada", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "No se pudo actualizar la tarea",
+        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        status: "error",
+      });
+    },
+  });
+
+  // Envia el formulario de creacion de tarea.
   const handleCreateTask = () => {
     if (!taskTitle.trim()) {
       toast({ title: "Titulo requerido", status: "warning" });
@@ -237,11 +304,13 @@ export const ErpTasksPage: React.FC = () => {
     createTaskMutation.mutate(payload);
   };
 
+  // Abre el modal de alta rapida en una columna.
   const openQuickAdd = (status: KanbanStatus) => {
     setQuickAddStatus(status);
     setQuickAddOpen(true);
   };
 
+  // Crea una tarea desde el modal rapido.
   const handleQuickAdd = () => {
     if (!quickAddTitle.trim()) {
       toast({ title: "Titulo requerido", status: "warning" });
@@ -261,6 +330,19 @@ export const ErpTasksPage: React.FC = () => {
     quickCreateTaskMutation.mutate(payload);
   };
 
+  const openEditTask = (task: ErpTask) => {
+    setEditTaskId(task.id);
+    setEditTitle(task.title);
+    setEditDescription(task.description ?? "");
+    setEditProjectId(task.project_id ? String(task.project_id) : "");
+    setEditAssigneeId(task.assigned_to_id ? String(task.assigned_to_id) : "");
+    setEditStartDate(task.start_date ?? "");
+    setEditEndDate(task.end_date ?? "");
+    setEditStatus(getTaskStatus(task));
+    setEditOpen(true);
+  };
+
+  // Normaliza el estado para la vista Kanban.
   const getTaskStatus = (task: ErpTask): KanbanStatus => {
     const raw = task.status?.toLowerCase();
     if (raw === "pending" || raw === "in_progress" || raw === "done") {
@@ -269,6 +351,7 @@ export const ErpTasksPage: React.FC = () => {
     return task.is_completed ? "done" : "pending";
   };
 
+  // Agrupa tareas por estado para las columnas.
   const tasksByStatus = useMemo(() => {
     const groups: Record<KanbanStatus, ErpTask[]> = {
       pending: [],
@@ -282,9 +365,10 @@ export const ErpTasksPage: React.FC = () => {
     return groups;
   }, [tasks, optimisticStatus]);
 
+  // Manejo de drag and drop en Kanban.
   const handleDragStart = (
     event: React.DragEvent<HTMLDivElement>,
-    taskId: number,
+    taskId: number
   ) => {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(taskId));
@@ -338,6 +422,7 @@ export const ErpTasksPage: React.FC = () => {
     },
   } as const;
 
+  // Render principal de la pagina.
   return (
     <AppShell>
       <Box
@@ -363,9 +448,15 @@ export const ErpTasksPage: React.FC = () => {
           </Text>
           <Heading size="lg">Tareas y seguimiento del equipo</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Organiza trabajo diario, mueve prioridades y sigue el estado en vivo.
+            Organiza trabajo diario, mueve prioridades y sigue el estado en
+            vivo.
           </Text>
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} pt={2} maxW="420px">
+          <SimpleGrid
+            columns={{ base: 1, md: 2 }}
+            spacing={4}
+            pt={2}
+            maxW="420px"
+          >
             <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
               <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
                 Tareas totales
@@ -394,7 +485,7 @@ export const ErpTasksPage: React.FC = () => {
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
               <Box
                 as={Link}
                 to="/erp/projects"
@@ -404,7 +495,11 @@ export const ErpTasksPage: React.FC = () => {
                 bg={cardBg}
                 _hover={{ shadow: "md", borderColor: accent }}
               >
-                <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
+                <Text
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  color={subtleText}
+                >
                   Proyectos
                 </Text>
                 <Heading size="sm" mb={1}>
@@ -423,7 +518,11 @@ export const ErpTasksPage: React.FC = () => {
                 bg={cardBg}
                 _hover={{ shadow: "md", borderColor: accent }}
               >
-                <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
+                <Text
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  color={subtleText}
+                >
                   Tiempo en vivo
                 </Text>
                 <Heading size="sm" mb={1}>
@@ -442,7 +541,11 @@ export const ErpTasksPage: React.FC = () => {
                 bg={cardBg}
                 _hover={{ shadow: "md", borderColor: accent }}
               >
-                <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
+                <Text
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  color={subtleText}
+                >
                   Analitica
                 </Text>
                 <Heading size="sm" mb={1}>
@@ -453,16 +556,61 @@ export const ErpTasksPage: React.FC = () => {
                 </Text>
               </Box>
             </SimpleGrid>
+            <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+              <Heading size="sm" mb={3}>
+                Mis tareas asignadas
+              </Heading>
+              {assignedTasks.length === 0 ? (
+                <Text fontSize="sm" color={subtleText}>
+                  No tienes tareas asignadas ahora mismo.
+                </Text>
+              ) : (
+                <Stack spacing={3}>
+                  {assignedTasks.slice(0, 10).map((task) => (
+                    <Box
+                      key={task.id}
+                      borderWidth="1px"
+                      borderRadius="lg"
+                      p={3}
+                    >
+                      <Text fontWeight="semibold">{task.title}</Text>
+                      <Text fontSize="xs" color={subtleText}>
+                        {task.project_id
+                          ? `Proyecto: ${
+                              projectMap.get(task.project_id) ?? task.project_id
+                            }`
+                          : "Sin proyecto"}
+                      </Text>
+                      <Badge
+                        mt={2}
+                        colorScheme={kanbanStyles[getTaskStatus(task)].accent}
+                      >
+                        {statusLabels[getTaskStatus(task)]}
+                      </Badge>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
           </TabPanel>
           <TabPanel px={0}>
-            <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg} maxW="640px">
+            <Box
+              borderWidth="1px"
+              borderRadius="xl"
+              p={6}
+              bg={panelBg}
+              maxW="640px"
+            >
               <Heading size="sm" mb={4}>
                 Crear tarea
               </Heading>
               <Stack spacing={3}>
                 <FormControl>
                   <FormLabel>Titulo de la tarea</FormLabel>
-                  <Input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+                  <Input
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                  />
                 </FormControl>
                 <FormControl>
                   <FormLabel>Descripcion</FormLabel>
@@ -507,7 +655,11 @@ export const ErpTasksPage: React.FC = () => {
                 <FormControl>
                   <FormLabel>Asignar a</FormLabel>
                   <Select
-                    placeholder={isSuperAdmin ? "Selecciona usuario" : "Usuarios del tenant"}
+                    placeholder={
+                      isSuperAdmin
+                        ? "Selecciona usuario"
+                        : "Usuarios del tenant"
+                    }
                     value={taskAssigneeId}
                     onChange={(e) => setTaskAssigneeId(e.target.value)}
                   >
@@ -534,7 +686,8 @@ export const ErpTasksPage: React.FC = () => {
               Tareas
             </Heading>
             <Text fontSize="sm" color={subtleText} mb={4}>
-              Arrastra las tarjetas para actualizar su estado de forma inmediata.
+              Arrastra las tarjetas para actualizar su estado de forma
+              inmediata.
             </Text>
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
               {kanbanColumns.map((column) => (
@@ -545,13 +698,20 @@ export const ErpTasksPage: React.FC = () => {
                   bg={kanbanStyles[column.id].columnBg}
                   p={4}
                   minH="280px"
-                  borderColor={dragOverStatus === column.id ? accent : "transparent"}
+                  borderColor={
+                    dragOverStatus === column.id ? accent : "transparent"
+                  }
                   boxShadow={dragOverStatus === column.id ? "sm" : "none"}
                   onDragOver={handleDragOver(column.id)}
                   onDragLeave={() => setDragOverStatus(null)}
                   onDrop={handleDrop(column.id)}
                 >
-                  <Stack direction="row" justify="space-between" align="center" mb={4}>
+                  <Stack
+                    direction="row"
+                    justify="space-between"
+                    align="center"
+                    mb={4}
+                  >
                     <Stack direction="row" spacing={2} align="center">
                       <Box
                         px={3}
@@ -592,7 +752,9 @@ export const ErpTasksPage: React.FC = () => {
                           cursor="grab"
                           opacity={draggedTaskId === task.id ? 0.6 : 1}
                           draggable
-                          onDragStart={(event) => handleDragStart(event, task.id)}
+                          onDragStart={(event) =>
+                            handleDragStart(event, task.id)
+                          }
                           onDragEnd={handleDragEnd}
                           onClick={() => setSelectedTask(task)}
                           _hover={{ borderColor: accent, boxShadow: "md" }}
@@ -602,7 +764,10 @@ export const ErpTasksPage: React.FC = () => {
                               <Heading size="sm">{task.title}</Heading>
                               <Text fontSize="xs" color={subtleText}>
                                 {task.project_id
-                                  ? `En ${projectMap.get(task.project_id) ?? "Proyecto"}`
+                                  ? `En ${
+                                      projectMap.get(task.project_id) ??
+                                      "Proyecto"
+                                    }`
                                   : "Sin proyecto"}
                               </Text>
                             </Box>
@@ -625,10 +790,26 @@ export const ErpTasksPage: React.FC = () => {
                               )}
                             </Stack>
                             {task.description && (
-                              <Text fontSize="xs" color={subtleText} noOfLines={2}>
+                              <Text
+                                fontSize="xs"
+                                color={subtleText}
+                                noOfLines={2}
+                              >
                                 {task.description}
                               </Text>
                             )}
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              colorScheme="green"
+                              alignSelf="flex-start"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEditTask(task);
+                              }}
+                            >
+                              Editar
+                            </Button>
                           </Stack>
                         </Box>
                       ))
@@ -645,7 +826,11 @@ export const ErpTasksPage: React.FC = () => {
                 </Box>
               ))}
             </SimpleGrid>
-            <Modal isOpen={quickAddOpen} onClose={() => setQuickAddOpen(false)} size="lg">
+            <Modal
+              isOpen={quickAddOpen}
+              onClose={() => setQuickAddOpen(false)}
+              size="lg"
+            >
               <ModalOverlay />
               <ModalContent>
                 <ModalHeader>Crear tarea</ModalHeader>
@@ -689,7 +874,9 @@ export const ErpTasksPage: React.FC = () => {
                       <FormLabel>Asignar a</FormLabel>
                       <Select
                         placeholder={
-                          isSuperAdmin ? "Selecciona usuario" : "Usuarios del tenant"
+                          isSuperAdmin
+                            ? "Selecciona usuario"
+                            : "Usuarios del tenant"
                         }
                         value={quickAddAssigneeId}
                         onChange={(e) => setQuickAddAssigneeId(e.target.value)}
@@ -722,7 +909,11 @@ export const ErpTasksPage: React.FC = () => {
                   </Stack>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="ghost" mr={3} onClick={() => setQuickAddOpen(false)}>
+                  <Button
+                    variant="ghost"
+                    mr={3}
+                    onClick={() => setQuickAddOpen(false)}
+                  >
                     Cancelar
                   </Button>
                   <Button
@@ -731,6 +922,118 @@ export const ErpTasksPage: React.FC = () => {
                     isLoading={quickCreateTaskMutation.isPending}
                   >
                     Guardar
+                  </Button>
+                </ModalFooter>
+              </ModalContent>
+            </Modal>
+            <Modal
+              isOpen={editOpen}
+              onClose={() => setEditOpen(false)}
+              size="lg"
+            >
+              <ModalOverlay />
+              <ModalContent>
+                <ModalHeader>Editar tarea</ModalHeader>
+                <ModalCloseButton />
+                <ModalBody>
+                  <Stack spacing={3}>
+                    <FormControl>
+                      <FormLabel>Titulo</FormLabel>
+                      <Input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Descripcion</FormLabel>
+                      <Textarea
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        rows={3}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Estado</FormLabel>
+                      <Select
+                        value={editStatus}
+                        onChange={(e) =>
+                          setEditStatus(e.target.value as KanbanStatus)
+                        }
+                      >
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Proyecto</FormLabel>
+                      <Select
+                        placeholder="Sin proyecto"
+                        value={editProjectId}
+                        onChange={(e) => setEditProjectId(e.target.value)}
+                      >
+                        {(projects ?? []).map((project) => (
+                          <option key={project.id} value={String(project.id)}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Asignar a</FormLabel>
+                      <Select
+                        placeholder={
+                          isSuperAdmin
+                            ? "Selecciona usuario"
+                            : "Usuarios del tenant"
+                        }
+                        value={editAssigneeId}
+                        onChange={(e) => setEditAssigneeId(e.target.value)}
+                      >
+                        {(users ?? []).map((user) => (
+                          <option key={user.id} value={String(user.id)}>
+                            {user.full_name || user.email}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                      <FormControl>
+                        <FormLabel>Inicio</FormLabel>
+                        <Input
+                          type="date"
+                          value={editStartDate}
+                          onChange={(e) => setEditStartDate(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel>Fin</FormLabel>
+                        <Input
+                          type="date"
+                          value={editEndDate}
+                          onChange={(e) => setEditEndDate(e.target.value)}
+                        />
+                      </FormControl>
+                    </SimpleGrid>
+                  </Stack>
+                </ModalBody>
+                <ModalFooter>
+                  <Button
+                    variant="ghost"
+                    mr={3}
+                    onClick={() => setEditOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    colorScheme="green"
+                    onClick={() => updateTaskMutation.mutate()}
+                    isLoading={updateTaskMutation.isPending}
+                    isDisabled={!editTaskId || !editTitle.trim()}
+                  >
+                    Guardar cambios
                   </Button>
                 </ModalFooter>
               </ModalContent>
@@ -756,7 +1059,10 @@ export const ErpTasksPage: React.FC = () => {
                   <Heading size="md">{selectedTask.title}</Heading>
                   <Text fontSize="sm" color={subtleText}>
                     {selectedTask.project_id
-                      ? `Proyecto: ${projectMap.get(selectedTask.project_id) ?? "Sin nombre"}`
+                      ? `Proyecto: ${
+                          projectMap.get(selectedTask.project_id) ??
+                          "Sin nombre"
+                        }`
                       : "Sin proyecto"}
                   </Text>
                 </Box>

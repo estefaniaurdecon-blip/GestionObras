@@ -29,7 +29,49 @@ import { createErpProject } from "../api/erpManagement";
 import { fetchErpTasks, type ErpTask } from "../api/erpTimeTracking";
 import { AppShell } from "../components/layout/AppShell";
 
+// Cabecera personalizada del listado del Gantt (espanol).
+const GanttTaskListHeader: React.FC<{
+  headerHeight: number;
+  fontFamily: string;
+  fontSize: string;
+  rowWidth: string;
+}> = ({ headerHeight, fontFamily, fontSize, rowWidth }) => (
+  <div
+    style={{
+      fontFamily,
+      fontSize,
+      borderBottom: "1px solid rgba(0,0,0,0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        height: headerHeight - 2,
+      }}
+    >
+      {["Nombre", "Desde", "Hasta"].map((label, index) => (
+        <div
+          key={label}
+          style={{
+            minWidth: rowWidth,
+            paddingLeft: 8,
+            paddingRight: 8,
+            borderRight:
+              index < 2 ? "1px solid rgba(0,0,0,0.08)" : "none",
+            fontWeight: 600,
+          }}
+        >
+          {label}
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// Pantalla de proyectos: listado, creacion y Gantt.
 export const ErpProjectsPage: React.FC = () => {
+  // Utilidades y estilos base.
   const toast = useToast();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
@@ -41,12 +83,14 @@ export const ErpProjectsPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
+  // Estado del formulario de creacion de proyectos y vista Gantt.
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStartDate, setProjectStartDate] = useState("");
   const [projectEndDate, setProjectEndDate] = useState("");
   const [ganttView, setGanttView] = useState<ViewMode>(ViewMode.Week);
 
+  // Determina permisos del usuario actual.
   let isSuperAdmin = false;
   let isTenantAdmin = false;
   try {
@@ -64,21 +108,27 @@ export const ErpProjectsPage: React.FC = () => {
     isTenantAdmin = false;
   }
 
+  // Datos principales: proyectos y tareas del ERP.
+  // Queries: proyectos y tareas para KPIs y Gantt.
   const { data: projects, isLoading, error } = useQuery<ErpProject[]>({
     queryKey: ["erp-projects"],
     queryFn: fetchErpProjects,
   });
 
+  // Tareas para calcular progreso y cargar barras del Gantt.
   const { data: tasks } = useQuery<ErpTask[]>({
     queryKey: ["erp-tasks"],
     queryFn: fetchErpTasks,
   });
 
+  // KPIs del resumen.
   const projectCount = projects?.length ?? 0;
   const taskCount = tasks?.length ?? 0;
   const assignedCount = tasks?.filter((task) => task.assigned_to_id).length ?? 0;
   const canManageProjects = isSuperAdmin || isTenantAdmin;
 
+  // Mutacion para crear proyectos.
+  // Persistencia de nuevo proyecto en backend.
   const createProjectMutation = useMutation({
     mutationFn: () =>
       createErpProject({
@@ -104,6 +154,7 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
+  // Validacion y envio del formulario de proyecto.
   const handleCreateProject = () => {
     if (!projectName.trim()) {
       toast({ title: "Nombre requerido", status: "warning" });
@@ -112,6 +163,7 @@ export const ErpProjectsPage: React.FC = () => {
     createProjectMutation.mutate();
   };
 
+  // Normaliza el estado de tarea para el Gantt.
   const getTaskStatus = (task: ErpTask): "pending" | "in_progress" | "done" => {
     const raw = task.status?.toLowerCase();
     if (raw === "pending" || raw === "in_progress" || raw === "done") {
@@ -120,6 +172,7 @@ export const ErpProjectsPage: React.FC = () => {
     return task.is_completed ? "done" : "pending";
   };
 
+  // Convierte fecha en Date valido, con fallback seguro.
   const parseDateOrFallback = (value?: string | null, fallback?: Date): Date => {
     if (value) {
       const parsed = new Date(value);
@@ -128,6 +181,8 @@ export const ErpProjectsPage: React.FC = () => {
     return fallback ?? new Date();
   };
 
+  // Mapea proyectos y tareas al formato del componente Gantt.
+  // Construye la lista de barras para el componente Gantt.
   const ganttTasks = useMemo(() => {
     const taskEntries: GanttTask[] = (tasks ?? []).map((task) => {
       const start = parseDateOrFallback(task.start_date, new Date());
@@ -184,6 +239,7 @@ export const ErpProjectsPage: React.FC = () => {
     return [...projectEntries, ...taskEntries];
   }, [projects, tasks]);
 
+  // Render principal de la pagina.
   return (
     <AppShell>
       <Box
@@ -327,20 +383,61 @@ export const ErpProjectsPage: React.FC = () => {
                       borderRadius="xl"
                       p={4}
                       bg={cardBg}
+                      position="relative"
                       _hover={{ borderColor: accent, shadow: "md" }}
                     >
-                      <Heading size="sm" mb={1}>
+                      <Box
+                        position="absolute"
+                        top={3}
+                        right={3}
+                        px={2}
+                        py={1}
+                        borderRadius="full"
+                        fontSize="xs"
+                        bg="rgba(15, 61, 46, 0.08)"
+                        color={subtleText}
+                      >
+                        #{project.id}
+                      </Box>
+                      <Heading size="sm" mb={2}>
                         {project.name}
                       </Heading>
-                      <Stack spacing={1}>
-                        <Text fontSize="xs" color={subtleText}>
-                          ID: {project.id}
-                        </Text>
-                        {(project.start_date || project.end_date) && (
-                          <Text fontSize="xs" color={subtleText}>
-                            {project.start_date ?? "Sin inicio"} a {project.end_date ?? "Sin fin"}
+                      <Stack spacing={2}>
+                        {project.description && (
+                          <Text fontSize="sm" color={subtleText} noOfLines={2}>
+                            {project.description}
                           </Text>
                         )}
+                        <Stack
+                          direction="row"
+                          spacing={2}
+                          align="center"
+                          flexWrap="wrap"
+                        >
+                          <Box
+                            px={2}
+                            py={1}
+                            borderRadius="full"
+                            fontSize="xs"
+                            bg="rgba(0, 102, 43, 0.12)"
+                            color={subtleText}
+                          >
+                            {project.start_date ?? "Sin inicio"}
+                          </Box>
+                          <Text fontSize="xs" color={subtleText}>
+                            a
+                          </Text>
+                          <Box
+                            px={2}
+                            py={1}
+                            borderRadius="full"
+                            fontSize="xs"
+                            bg="rgba(202, 168, 91, 0.18)"
+                            color={subtleText}
+                          >
+                            {project.end_date ?? "Sin fin"}
+                          </Box>
+                        </Stack>
                       </Stack>
                     </Box>
                   ))}
@@ -405,7 +502,19 @@ export const ErpProjectsPage: React.FC = () => {
             <Heading size="md" mb={4}>
               Diagrama de Gantt
             </Heading>
-            <Box borderWidth="1px" borderRadius="xl" bg={cardBg} p={4}>
+            <Box
+              borderWidth="1px"
+              borderRadius="xl"
+              bg={cardBg}
+              p={4}
+              sx={{
+                ".today rect": {
+                  fill: "#dc2626",
+                  opacity: 0.9,
+                  width: "1px",
+                },
+              }}
+            >
               <Stack direction={{ base: "column", md: "row" }} justify="space-between" mb={4}>
                 <Text fontSize="sm" color={subtleText}>
                   Visualiza proyectos y tareas con sus fechas clave.
@@ -414,12 +523,11 @@ export const ErpProjectsPage: React.FC = () => {
                   variant="soft-rounded"
                   colorScheme="green"
                   onChange={(index) => {
-                    const modes = [ViewMode.Day, ViewMode.Week, ViewMode.Month];
+                    const modes = [ViewMode.Week, ViewMode.Month];
                     setGanttView(modes[index] ?? ViewMode.Week);
                   }}
                 >
                   <TabList>
-                    <Tab>Dia</Tab>
                     <Tab>Semana</Tab>
                     <Tab>Mes</Tab>
                   </TabList>
@@ -434,10 +542,12 @@ export const ErpProjectsPage: React.FC = () => {
                   tasks={ganttTasks}
                   viewMode={ganttView}
                   listCellWidth="200px"
-                  columnWidth={96}
+                  columnWidth={ganttView === ViewMode.Month ? 140 : 110}
                   rowHeight={42}
                   barCornerRadius={2}
-                  todayColor="rgba(220, 38, 38, 0.85)"
+                  todayColor="transparent"
+                  locale="es"
+                  TaskListHeader={GanttTaskListHeader}
                 />
               )}
             </Box>

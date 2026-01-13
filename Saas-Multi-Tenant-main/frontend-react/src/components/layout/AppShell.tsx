@@ -134,21 +134,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   <VStack align="stretch" spacing={1}>
                     <Button
                       as={Link}
-                      to="/erp/projects"
+                      to="/erp/time-report"
                       variant="ghost"
                       justifyContent="flex-start"
                       size="sm"
                     >
-                      Proyectos
-                    </Button>
-                    <Button
-                      as={Link}
-                      to="/erp/tasks"
-                      variant="ghost"
-                      justifyContent="flex-start"
-                      size="sm"
-                    >
-                      Tareas
+                      Informe de horas
                     </Button>
                     <Button
                       as={Link}
@@ -161,12 +152,21 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     </Button>
                     <Button
                       as={Link}
-                      to="/erp/time-report"
+                      to="/erp/tasks"
                       variant="ghost"
                       justifyContent="flex-start"
                       size="sm"
                     >
-                      Informe de horas
+                      Tareas
+                    </Button>
+                    <Button
+                      as={Link}
+                      to="/erp/projects"
+                      variant="ghost"
+                      justifyContent="flex-start"
+                      size="sm"
+                    >
+                      Proyectos
                     </Button>
                   </VStack>
                 </AccordionPanel>
