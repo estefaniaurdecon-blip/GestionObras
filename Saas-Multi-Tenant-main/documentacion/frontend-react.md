@@ -61,11 +61,17 @@ EstÃ¡ diseÃ±ado para estar desacoplado del backend y consumir exclusivamente API
     - Invocar el endpoint de lanzamiento SSO.
     - Mostrar las herramientas en iframe o redirect.
 
-## ConfiguraciÃ³n de entorno
+## ConfiguraciÇün de entorno
 
 - En desarrollo:
-  - `VITE_API_BASE_URL=http://backend-fastapi:8000` (definida en `docker-compose.yml`).
+  - `VITE_API_BASE_URL` debe apuntar a la API FastAPI (ej. `http://localhost:8000`).
+  - `VITE_DEV_HOST` controla el host del servidor Vite (ej. `0.0.0.0`).
 
-- En producciÃ³n (`frontend-react/.env`):
+- En producciÇün (`frontend-react/.env`):
   - `VITE_API_BASE_URL=https://api.mavico.shop`.
+  - `VITE_DEV_HOST` no se usa en producciÇün.
 
+## Notas recientes
+
+- Informe de horas: incluye columna `Coste/hora` en la tabla y el CSV.
+- RRHH: el selector de usuario en empleados muestra solo correos disponibles.

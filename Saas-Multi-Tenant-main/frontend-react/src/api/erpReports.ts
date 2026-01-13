@@ -3,6 +3,8 @@ import { apiClient } from "./client";
 export interface ErpProject {
   id: number;
   name: string;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface TimeReportRow {
@@ -13,6 +15,7 @@ export interface TimeReportRow {
   user_id: number | null;
   username: string | null;
   total_hours: string;
+  hourly_rate: string | null;
 }
 
 export interface TimeReportFilters {

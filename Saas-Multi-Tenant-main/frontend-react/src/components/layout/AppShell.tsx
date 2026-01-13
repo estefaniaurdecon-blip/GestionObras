@@ -70,10 +70,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       {/* SIDEBAR */}
       <Box
         as="nav"
-        w="260px"
+        w="300px"
         borderRightWidth="1px"
         bg={sidebarBg}
-        px={6}
+        px={5}
         py={6}
         display={{ base: "none", md: "block" }}
       >
@@ -120,7 +120,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             <Accordion allowToggle borderWidth="1px" borderRadius="md">
               <AccordionItem border="none">
                 <AccordionButton px={3} py={2}>
-                  <Box flex="1" textAlign="left" fontSize="sm" fontWeight="semibold">
+                  <Box
+                    flex="1"
+                    textAlign="left"
+                    fontSize="sm"
+                    fontWeight="semibold"
+                  >
                     ERP
                   </Box>
                   <AccordionIcon />
@@ -244,11 +249,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       {/* CONTENT */}
       <Flex direction="column" flex="1">
         {/* HEADER */}
-        <Flex as="header" bg={headerBg} borderBottomWidth="1px" px={8} py={4}>
+        <Flex as="header" bg={headerBg} borderBottomWidth="1px" px={6} py={4}>
           <Flex
             w="100%"
-            maxW="7xl"
-            mx="auto"
+            maxW="100%"
+            mx={0}
             align="center"
             justify="space-between"
           >
@@ -289,8 +294,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </Flex>
 
         {/* MAIN */}
-        <Box as="main" px={{ base: 4, md: 8 }} py={6} w="100%">
-          <Box maxW="7xl" mx="auto" w="100%">
+        <Box as="main" px={{ base: 4, md: 6 }} py={6} w="100%">
+          <Box maxW="100%" mx={0} w="100%">
             {children}
           </Box>
         </Box>

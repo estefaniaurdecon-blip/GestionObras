@@ -22,6 +22,7 @@ from app.services.hr_service import (
     create_employee_profile,
     list_employee_profiles,
     update_employee_profile,
+    delete_employee_profile,
     get_headcount_by_department,
 )
 
@@ -209,6 +210,34 @@ def api_update_employee(
             current_user=current_user,
             profile_id=profile_id,
             data=data,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.delete(
+    "/employees/{profile_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar perfil de empleado",
+)
+def api_delete_employee(
+    profile_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["hr:manage"])),
+) -> None:
+    try:
+        delete_employee_profile(
+            session=session,
+            current_user=current_user,
+            profile_id=profile_id,
         )
     except PermissionError as exc:
         raise HTTPException(

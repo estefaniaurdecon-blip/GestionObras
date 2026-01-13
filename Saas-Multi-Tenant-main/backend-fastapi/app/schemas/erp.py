@@ -9,6 +9,8 @@ class ProjectRead(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     is_active: bool
     created_at: datetime
 
@@ -16,6 +18,8 @@ class ProjectRead(BaseModel):
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     is_active: bool = True
 
 
@@ -25,6 +29,9 @@ class TaskRead(BaseModel):
     title: str
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: str
     is_completed: bool
     created_at: datetime
 
@@ -34,6 +41,9 @@ class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: Optional[str] = None
     is_completed: bool = False
 
 
@@ -42,6 +52,9 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: Optional[str] = None
     is_completed: Optional[bool] = None
 
 
@@ -83,3 +96,4 @@ class TimeReportRow(BaseModel):
     user_id: Optional[int] = None
     username: Optional[str] = None
     total_hours: Decimal
+    hourly_rate: Optional[Decimal] = None

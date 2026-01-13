@@ -64,6 +64,7 @@ def update_me(
 )
 def list_users_by_tenant(
     tenant_id: int,
+    exclude_assigned: bool = False,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["users:read"])),
 ) -> list[UserRead]:
@@ -76,6 +77,7 @@ def list_users_by_tenant(
             session=session,
             current_user=current_user,
             tenant_id=tenant_id,
+            exclude_assigned=exclude_assigned,
         )
     except PermissionError as exc:
         raise HTTPException(

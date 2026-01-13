@@ -10,7 +10,7 @@ def create_app() -> FastAPI:
     """
     Crea y configura la instancia principal de FastAPI.
 
-    Aquí se definen middlewares, rutas y cualquier configuración global.
+    Aqui se definen middlewares, rutas y cualquier configuracion global.
     """
 
     app = FastAPI(
@@ -20,11 +20,15 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
 
-    # Configuración CORS básica.
-    # En producción se deben restringir los orígenes permitidos.
+    cors_origins = settings.frontend_cors_origins
+    if not cors_origins and settings.frontend_base_url:
+        cors_origins = [settings.frontend_base_url]
+
+    # Configuracion CORS basica.
+    # En produccion se deben restringir los origenes permitidos.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],  # TODO: restringir en producción
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -42,4 +46,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

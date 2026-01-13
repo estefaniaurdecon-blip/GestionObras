@@ -18,6 +18,7 @@ from typing import Dict, Iterable, List
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db import session as db_session
 from app.models.permission import Permission
@@ -288,6 +289,11 @@ def _ensure_default_tenant_and_tools(session: Session) -> None:
         session.refresh(tenant)
 
     # Herramientas base de catálogo.
+    frontend_base = settings.frontend_base_url or ""
+    erp_base_url = (
+        f"{frontend_base.rstrip('/')}/erp/projects" if frontend_base else ""
+    )
+
     tools_def = [
         {
             "slug": "moodle",
@@ -298,7 +304,7 @@ def _ensure_default_tenant_and_tools(session: Session) -> None:
         {
             "slug": "erp",
             "name": "ERP Interno",
-            "base_url": "http://localhost:5173/erp/projects",
+            "base_url": erp_base_url,
             "description": "Modulo ERP integrado en el dashboard (FastAPI).",
         },
     ]

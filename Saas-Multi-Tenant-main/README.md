@@ -37,9 +37,9 @@ cd infra
 docker compose up --build
 ```
 
-Servicios expuestos en localhost:
-- FastAPI: `http://localhost:8000/api/v1/health/`
-- Frontend: `http://localhost:5173/`
+Servicios expuestos en el host configurado:
+- FastAPI: `http://<host>:8000/api/v1/health/`
+- Frontend: `http://<host>:5173/`
 
 ### Seed de RBAC y Super Admin
 
@@ -63,3 +63,4 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
 Más detalles en `documentacion/infraestructura.md` y `documentacion/seguridad.md`.
+

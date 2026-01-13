@@ -32,7 +32,9 @@ def send_tenant_admin_welcome_email(
     if not host or not username or not password or not from_email:
         return
 
-    frontend_url = getattr(settings, "frontend_base_url", "http://localhost:5173")
+    frontend_url = settings.frontend_base_url
+    if not frontend_url:
+        return
 
     subject = f"Bienvenido como administrador del tenant {tenant_name}"
     body = (
@@ -166,4 +168,3 @@ def send_user_invitation_email(
                 server.send_message(msg)
     except Exception as exc:
         logger.exception("Error enviando email de invitación a %s: %s", to_email, exc)
-

@@ -187,3 +187,41 @@ def require_permissions(required_codes: Iterable[str]) -> Callable[[User, Sessio
 
   return _dependency
 
+
+def require_any_permissions(required_codes: Iterable[str]) -> Callable[[User, Session], User]:
+  """
+  Valida que el usuario tenga al menos uno de los permisos requeridos.
+  """
+
+  required_set = set(required_codes)
+
+  def _dependency(
+      current_user: User = Depends(get_current_active_user),
+      session: Session = Depends(get_session),
+  ) -> User:
+    if current_user.is_super_admin:
+      return current_user
+
+    if not current_user.role_id:
+      raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="El usuario no tiene rol asignado",
+      )
+
+    statement = (
+      select(Permission)
+      .join(RolePermission, RolePermission.permission_id == Permission.id)
+      .where(RolePermission.role_id == current_user.role_id)
+    )
+    permissions = session.exec(statement).all()
+    role_permissions = {perm.code for perm in permissions}
+
+    if required_set.isdisjoint(role_permissions):
+      raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Permisos insuficientes para realizar esta acciИn",
+      )
+
+    return current_user
+
+  return _dependency

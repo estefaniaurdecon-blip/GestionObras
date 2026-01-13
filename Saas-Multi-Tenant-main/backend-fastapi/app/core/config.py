@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     # URL base del frontend para enlaces en correos
-    frontend_base_url: str = "http://localhost:5173"
+    frontend_base_url: str | None = None
 
     # IntegraciÑn con Moodle (Web Services)
     moodle_base_url: str | None = None

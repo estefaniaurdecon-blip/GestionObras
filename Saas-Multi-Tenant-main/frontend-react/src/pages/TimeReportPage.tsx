@@ -118,7 +118,7 @@ export const TimeReportPage: React.FC = () => {
       return;
     }
 
-    const header = ["Proyecto", "Tarea", "Usuario", "Horas"];
+    const header = ["Proyecto", "Tarea", "Usuario", "Coste/hora", "Horas"];
     const lines = [
       header.join(";"),
       ...filteredRows.map((row) =>
@@ -126,6 +126,7 @@ export const TimeReportPage: React.FC = () => {
           row.project_name,
           row.task_title,
           row.username ?? "",
+          row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "",
           Number(row.total_hours).toFixed(2),
         ].join(";"),
       ),
@@ -285,19 +286,20 @@ export const TimeReportPage: React.FC = () => {
         overflowY="hidden"
         borderColor={accent}
       >
-        <Table size="sm" minW="640px">
+        <Table size="sm" minW="760px">
           <Thead bg={tableHeadBg}>
             <Tr>
               <Th>Proyecto</Th>
               <Th>Tarea</Th>
               <Th>Usuario</Th>
+              <Th isNumeric>Coste/hora</Th>
               <Th isNumeric>Horas</Th>
             </Tr>
           </Thead>
           <Tbody>
             {filteredRows.length === 0 ? (
               <Tr>
-                <Td colSpan={4}>
+                <Td colSpan={5}>
                   <Text fontSize="sm" color="gray.500">
                     Aún no hay datos para los filtros seleccionados.
                   </Text>
@@ -309,6 +311,7 @@ export const TimeReportPage: React.FC = () => {
                   <Td>{row.project_name}</Td>
                   <Td>{row.task_title}</Td>
                   <Td>{row.username ?? "Usuario no asignado"}</Td>
+                  <Td isNumeric>{row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "-"}</Td>
                   <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
                 </Tr>
               ))
@@ -319,3 +322,7 @@ export const TimeReportPage: React.FC = () => {
     </AppShell>
   );
 };
+
+
+
+

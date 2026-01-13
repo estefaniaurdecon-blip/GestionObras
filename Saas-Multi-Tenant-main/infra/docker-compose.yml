@@ -42,9 +42,9 @@ services:
     links:
       - moodle-db:DB
     environment:
-      # URL p˙blica prevista para el sitio Moodle.
-      - MOODLE_URL=http://localhost:8080
-      # Estamos detr·s de Cloudflare (reverse proxy SSL).
+      # URL publica prevista para el sitio Moodle.
+      - MOODLE_URL=${MOODLE_URL}
+      # Estamos detras de Cloudflare (reverse proxy SSL).
       - SSL_PROXY=false
       # Variables que espera el config.php de esta imagen (simulando el antiguo
       # mecanismo de Docker links) para localizar la base de datos MySQL.
@@ -54,7 +54,7 @@ services:
       - DB_ENV_MYSQL_USER=moodle
       - DB_ENV_MYSQL_PASSWORD=moodle
     ports:
-      # Acceso local de desarrollo: http://localhost:8080
+      # Acceso local de desarrollo: http://<host>:8080
       - "8080:80"
 
   backend-fastapi:
@@ -79,9 +79,9 @@ services:
     container_name: saas-frontend-react
     restart: unless-stopped
     environment:
-      # En desarrollo, el frontend se sirve al navegador del host,
-      # así que debe hablar con FastAPI vía localhost.
-      VITE_API_BASE_URL: http://localhost:8000
+      # En desarrollo, el frontend se sirve al navegador del host
+      # y debe hablar con FastAPI via VITE_API_BASE_URL.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     depends_on:
       - backend-fastapi
     ports:
@@ -91,7 +91,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: saas-cloudflared
     restart: unless-stopped
-    # Arranca el túnel configurado con el token de Cloudflare.
+    # Arranca el tunel configurado con el token de Cloudflare.
     command: tunnel run plataforma-dev-saas
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}

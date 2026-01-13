@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import require_permissions
+from app.api.deps import require_any_permissions, require_permissions
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.erp import (
@@ -68,7 +68,7 @@ def api_list_tasks(
 def api_create_task(
     payload: TaskCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:manage"])),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
 ) -> TaskRead:
     try:
         return create_task(session, current_user, payload)
@@ -81,7 +81,7 @@ def api_update_task(
     task_id: int,
     payload: TaskUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:manage"])),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
 ) -> TaskRead:
     try:
         return update_task(session, current_user, task_id, payload)

@@ -138,6 +138,16 @@ export const TimeControlPage: React.FC = () => {
   `;
 
   const isRunning = Boolean(activeSession && activeSession.is_active);
+  const currentUserId = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("current_user");
+      if (!raw) return null;
+      const me = JSON.parse(raw) as { id?: number; user_id?: number };
+      return me.id ?? me.user_id ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)),
     [weekStart],
@@ -187,6 +197,17 @@ export const TimeControlPage: React.FC = () => {
     () => formatSeconds(elapsedSeconds),
     [elapsedSeconds],
   );
+  const recentTasks = useMemo(() => {
+    const scopedTasks = currentUserId
+      ? tasks.filter((task) => task.assigned_to_id === currentUserId)
+      : tasks;
+    return [...scopedTasks]
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )
+      .slice(0, 3);
+  }, [tasks, currentUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -404,6 +425,38 @@ export const TimeControlPage: React.FC = () => {
       return;
     }
 
+    try {
+      setIsLoading(true);
+      const session = await startTimeSession(taskId);
+      setActiveSession(session);
+      setTaskIdInput(String(taskId));
+      toast({
+        title: "Tracking iniciado",
+        description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
+        status: "success",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al iniciar tracking",
+        description:
+          error?.response?.data?.detail ??
+          "No se ha podido iniciar la sesion de tiempo.",
+        status: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleQuickStart = async (taskId: number) => {
+    if (isRunning) {
+      toast({
+        title: "Ya hay una sesion activa",
+        description: "Deten la sesion actual antes de iniciar otra.",
+        status: "warning",
+      });
+      return;
+    }
     try {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
@@ -713,6 +766,55 @@ export const TimeControlPage: React.FC = () => {
         <Text color="red.400" mb={4}>
           {sessionsError}
         </Text>
+      )}
+
+      {viewMode === "calendar" && (
+        <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={4}>
+          <HStack justify="space-between" align="center" mb={3}>
+            <Heading size="sm">Ultimas tareas</Heading>
+            <Text fontSize="xs" color={subtleText}>
+              {currentUserId ? "Asignadas a ti" : "Recientes"}
+            </Text>
+          </HStack>
+          {recentTasks.length === 0 ? (
+            <Text fontSize="sm" color={mutedText}>
+              No hay tareas recientes para mostrar.
+            </Text>
+          ) : (
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
+              {recentTasks.map((task) => (
+                <Box
+                  key={task.id}
+                  borderWidth="1px"
+                  borderRadius="lg"
+                  p={3}
+                  bg={cardBg}
+                  minW={0}
+                >
+                  <Stack spacing={2}>
+                    <Box>
+                      <Text fontSize="sm" fontWeight="semibold" noOfLines={1}>
+                        {task.title}
+                      </Text>
+                      <Text fontSize="xs" color={subtleText}>
+                        #{task.id}
+                      </Text>
+                    </Box>
+                    <Button
+                      size="xs"
+                      colorScheme="green"
+                      alignSelf="flex-start"
+                      onClick={() => handleQuickStart(task.id)}
+                      isDisabled={isRunning}
+                    >
+                      Play
+                    </Button>
+                  </Stack>
+                </Box>
+              ))}
+            </SimpleGrid>
+          )}
+        </Box>
       )}
 
       {viewMode === "calendar" && (

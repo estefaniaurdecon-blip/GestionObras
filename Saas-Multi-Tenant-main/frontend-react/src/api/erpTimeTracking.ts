@@ -17,6 +17,9 @@ export interface ErpTask {
   title: string;
   description?: string | null;
   assigned_to_id?: number | null;
+  status: string;
+  start_date?: string | null;
+  end_date?: string | null;
   is_completed: boolean;
   created_at: string;
 }

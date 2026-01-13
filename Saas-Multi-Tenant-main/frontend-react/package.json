@@ -17,6 +17,7 @@
     "@tanstack/react-router": "^1.79.0",
     "axios": "^1.7.9",
     "framer-motion": "^11.15.0",
+    "gantt-task-react": "^0.3.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

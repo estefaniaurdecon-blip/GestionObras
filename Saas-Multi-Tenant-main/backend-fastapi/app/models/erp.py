@@ -12,6 +12,8 @@ class Project(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -24,6 +26,9 @@ class Task(SQLModel, table=True):
     title: str
     description: Optional[str] = None
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: str = Field(default="pending", max_length=20)
     is_completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

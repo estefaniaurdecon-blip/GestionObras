@@ -25,10 +25,14 @@ export interface TenantUserSummary {
 
 export async function fetchUsersByTenant(
   tenantId: number,
+  options?: { excludeAssigned?: boolean },
 ): Promise<TenantUserSummary[]> {
   const response = await apiClient.get<TenantUserSummary[]>(
     `/api/v1/users/by-tenant/${tenantId}`,
     {
+      params: {
+        exclude_assigned: options?.excludeAssigned ?? false,
+      },
       headers: {
         "X-Tenant-Id": tenantId.toString(),
       },

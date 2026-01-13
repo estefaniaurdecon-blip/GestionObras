@@ -22,6 +22,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keyframes } from "@emotion/react";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -81,6 +82,12 @@ export const UsersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
+  const panelBg = useColorModeValue("gray.50", "gray.800");
+  const subtleText = useColorModeValue("gray.500", "gray.300");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   let isSuperAdmin = false;
   let currentTenantId: number | null = null;
@@ -278,14 +285,36 @@ export const UsersPage: React.FC = () => {
 
   return (
     <AppShell>
-      <Heading mb={4}>Usuarios</Heading>
-      <Text mb={6}>
-        Gestión de usuarios internos de la organización por tenant (datos
-        obtenidos del backend SaaS).
-      </Text>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <VStack position="relative" align="flex-start" spacing={3}>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            Usuarios
+          </Text>
+          <Heading size="lg">Gestiona accesos y perfiles del tenant</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            Invita usuarios, controla roles y activa o desactiva cuentas.
+          </Text>
+        </VStack>
+      </Box>
 
       {isSuperAdmin ? (
-        <Box mb={4}>
+        <Box mb={6}>
           <FormControl maxW="320px">
             <FormLabel>Tenant</FormLabel>
             <Select
@@ -311,9 +340,9 @@ export const UsersPage: React.FC = () => {
         onSubmit={handleSubmit}
         mb={8}
         borderWidth="1px"
-        borderRadius="md"
+        borderRadius="xl"
         p={6}
-        bg={cardBg}
+        bg={panelBg}
       >
         <Heading as="h3" size="sm" mb={4}>
           Invitar usuario por correo
@@ -347,7 +376,7 @@ export const UsersPage: React.FC = () => {
           </FormControl>
           <Button
             type="submit"
-            colorScheme="blue"
+            colorScheme="green"
             alignSelf="flex-start"
             isLoading={createInvitationMutation.isPending}
             isDisabled={!selectedTenantId}
@@ -366,7 +395,7 @@ export const UsersPage: React.FC = () => {
 
       {!isLoadingUsers && users && (
         <>
-          <Box mb={4}>
+          <Box mb={6} borderWidth="1px" borderRadius="xl" p={4} bg={panelBg}>
             <HStack spacing={4} align="flex-end" flexWrap="wrap">
               <FormControl maxW="260px">
                 <FormLabel>Buscar</FormLabel>
@@ -406,8 +435,9 @@ export const UsersPage: React.FC = () => {
             </HStack>
           </Box>
 
-          <Box borderWidth="1px" borderRadius="md" overflow="hidden" bg={cardBg}>
-            <Table size="sm">
+          <Box borderWidth="1px" borderRadius="xl" overflow="hidden" bg={cardBg}>
+            <Box overflowX="auto">
+              <Table size="sm" minW="760px">
               <Thead bg={tableHeadBg}>
                 <Tr>
                   <Th>Nombre</Th>
@@ -421,7 +451,7 @@ export const UsersPage: React.FC = () => {
                 {filteredUsers.length === 0 ? (
                   <Tr>
                     <Td colSpan={5}>
-                      <Text fontSize="sm" color="gray.500">
+                      <Text fontSize="sm" color={subtleText}>
                         No hay usuarios que coincidan con los filtros.
                       </Text>
                     </Td>
@@ -460,11 +490,13 @@ export const UsersPage: React.FC = () => {
                   ))
                 )}
               </Tbody>
-            </Table>
+              </Table>
+            </Box>
           </Box>
         </>
       )}
     </AppShell>
   );
 };
+
 

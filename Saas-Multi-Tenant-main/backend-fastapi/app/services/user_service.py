@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.audit import log_action
 from app.core.security import hash_password
 from app.core.email import send_tenant_admin_welcome_email
+from app.models.hr import EmployeeProfile
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.role import Role
@@ -39,6 +40,7 @@ def list_users_by_tenant(
     session: Session,
     current_user: User,
     tenant_id: int,
+    exclude_assigned: bool = False,
 ) -> List[UserRead]:
     """
     Lista usuarios de un tenant concreto, aplicando reglas de acceso.
@@ -51,7 +53,19 @@ def list_users_by_tenant(
     if not tenant_exists:
         raise LookupError("Tenant no encontrado")
 
-    users = session.exec(select(User).where(User.tenant_id == tenant_id)).all()
+    stmt = select(User).where(User.tenant_id == tenant_id)
+    if exclude_assigned:
+        assigned_user_ids = session.exec(
+            select(EmployeeProfile.user_id).where(
+                EmployeeProfile.tenant_id == tenant_id,
+                EmployeeProfile.user_id.is_not(None),
+            ),
+        ).all()
+        assigned_set = {user_id for user_id in assigned_user_ids if user_id is not None}
+        if assigned_set:
+            stmt = stmt.where(User.id.notin_(assigned_set))
+
+    users = session.exec(stmt).all()
 
     log_action(
         session,

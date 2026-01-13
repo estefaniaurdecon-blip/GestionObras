@@ -28,9 +28,9 @@ docker compose up --build
 Esto levanta:
 
 - `saas-db` → PostgreSQL 16 (puerto host `5433`).
-- `saas-backend-fastapi` → API principal FastAPI (`http://localhost:8000`).
-- `saas-frontend-react` → frontend React (`http://localhost:5173`).
-- `saas-moodle-db` + `saas-moodle` → Moodle (`http://localhost:8080`).
+- `saas-backend-fastapi` → API principal FastAPI (`http://<host>:8000`).
+- `saas-frontend-react` → frontend React (`http://<host>:5173`).
+- `saas-moodle-db` + `saas-moodle` → Moodle (`http://<host>:8080`).
 - `saas-cloudflared` → túnel Cloudflare (si está configurado).
 
 Para parar todos los servicios:
@@ -46,10 +46,12 @@ docker compose down
 
 ### FastAPI (`backend-fastapi/.env`)
 
-- `DATABASE_URL` → conexión a PostgreSQL (ya apuntando a `db` en Docker).
-- `SECRET_KEY` → clave JWT.
-- `PRIMARY_DOMAIN` → dominio base para subdominios de tenants.
-- SMTP (para correos de invitación y MFA):
+- `DATABASE_URL` - conexion a PostgreSQL (apunta a `db` en Docker).
+- `SECRET_KEY` - clave JWT.
+- `PRIMARY_DOMAIN` - dominio base para subdominios de tenants.
+- `FRONTEND_BASE_URL` - URL base del frontend (links en correos y CORS).
+- `FRONTEND_CORS_ORIGINS` - lista JSON de origenes permitidos.
+- SMTP (para correos de invitacion y MFA):
   - `SMTP_HOST`
   - `SMTP_PORT`
   - `SMTP_USERNAME`
@@ -57,17 +59,24 @@ docker compose down
   - `SMTP_FROM`
   - `SMTP_USE_TLS`
 
+### Frontend (`frontend-react/.env`)
+
+- `VITE_API_BASE_URL` - URL base de la API FastAPI.
+- `VITE_DEV_HOST` - host de Vite para desarrollo (ej. `0.0.0.0`).
+
 ### Infraestructura (`infra/.env`)
 
-- `TUNNEL_TOKEN` → token de Cloudflare Tunnel (solo si se usa acceso externo).
+- `TUNNEL_TOKEN` - token de Cloudflare Tunnel (solo si se usa acceso externo).
+- `MOODLE_URL` - URL publica de Moodle (ej. `http://localhost:8080`).
+- `VITE_API_BASE_URL` - URL base de la API usada por el frontend en Docker.
 
 ---
 
 ## 4. URLs de servicios en local
 
-- **Frontend plataforma**: `http://localhost:5173`
-- **API FastAPI**: `http://localhost:8000/api/v1`
-- **Moodle**: `http://localhost:8080`
+- **Frontend plataforma**: `http://<host>:5173`
+- **API FastAPI**: `http://<host>:8000/api/v1`
+- **Moodle**: `http://<host>:8080`
 
 Credenciales iniciales relevantes:
 
@@ -82,7 +91,7 @@ El Super Admin se crea automáticamente por el seed de RBAC en FastAPI.
 ## 5. Flujo típico tras el arranque
 
 1. Acceder al frontend:
-   - `http://localhost:5173`
+   - `http://<host>:5173`
    - Login como Super Admin (`dios@cortecelestial.god` / `temporal`).
 
 2. Crear tenants y sus administradores:
@@ -99,7 +108,7 @@ El Super Admin se crea automáticamente por el seed de RBAC en FastAPI.
 
 5. Usar ERP y Moodle:
    - Desde el Dashboard o `Herramientas`:
-     - Moodle se abre en `http://localhost:8080`.
+     - Moodle se abre en `http://<host>:8080`.
      - El ERP se integra en el frontend como módulo interno.
 
 ---
@@ -128,3 +137,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
      - `*.midominio.com` → tenants.
 
 La configuración detallada de dominios y túnel está ampliada en `documentacion/infraestructura.md`.
+
+
+

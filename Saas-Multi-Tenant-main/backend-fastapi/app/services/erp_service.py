@@ -6,10 +6,13 @@ from sqlmodel import Session, select
 from sqlalchemy import func
 
 from app.models.erp import Project, Task, TimeEntry, TimeSession
+from app.models.hr import EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.erp import ProjectCreate, TaskCreate, TaskUpdate
 from app.services.notification_service import create_notification
+
+TASK_STATUSES = {"pending", "in_progress", "done"}
 
 
 def _as_aware(value: datetime) -> datetime:
@@ -31,9 +34,12 @@ def list_tasks(session: Session) -> list[Task]:
 
 
 def create_project(session: Session, data: ProjectCreate) -> Project:
+    _validate_date_range(data.start_date, data.end_date)
     project = Project(
         name=data.name,
         description=data.description,
+        start_date=data.start_date,
+        end_date=data.end_date,
         is_active=data.is_active,
     )
     session.add(project)
@@ -59,18 +65,43 @@ def _resolve_assignee(session: Session, current_user: User, assigned_to_id: Opti
     return assignee
 
 
+def _normalize_task_status(
+    status: Optional[str],
+    is_completed: Optional[bool],
+) -> str:
+    if status:
+        normalized = status.strip().lower()
+        if normalized not in TASK_STATUSES:
+            raise ValueError("Estado de tarea no valido.")
+        return normalized
+    if is_completed:
+        return "done"
+    return "pending"
+
+
+def _validate_date_range(start_date: Optional[datetime], end_date: Optional[datetime]) -> None:
+    # Evita rangos inconsistentes en proyectos/tareas.
+    if start_date and end_date and end_date < start_date:
+        raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
+
+
 def create_task(session: Session, current_user: User, data: TaskCreate) -> Task:
     if data.project_id is not None and not session.get(Project, data.project_id):
         raise ValueError("Proyecto no encontrado.")
 
     assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
+    _validate_date_range(data.start_date, data.end_date)
 
+    status = _normalize_task_status(data.status, data.is_completed)
     task = Task(
         project_id=data.project_id,
         title=data.title,
         description=data.description,
         assigned_to_id=assignee.id if assignee else None,
-        is_completed=data.is_completed,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        status=status,
+        is_completed=status == "done",
     )
     session.add(task)
     session.commit()
@@ -108,8 +139,13 @@ def update_task(
         if data.project_id is not None and not session.get(Project, data.project_id):
             raise ValueError("Proyecto no encontrado.")
         task.project_id = data.project_id
-    if data.is_completed is not None:
+    if data.status is not None:
+        status = _normalize_task_status(data.status, None)
+        task.status = status
+        task.is_completed = status == "done"
+    elif data.is_completed is not None:
         task.is_completed = data.is_completed
+        task.status = "done" if data.is_completed else "pending"
     if data.assigned_to_id is not None:
         assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
         task.assigned_to_id = assignee.id if assignee else None
@@ -123,6 +159,13 @@ def update_task(
                 body="Se te ha asignado una nueva tarea en el ERP.",
                 reference=f"task_id={task.id}",
             )
+
+    if data.start_date is not None or data.end_date is not None:
+        start_date = data.start_date if data.start_date is not None else task.start_date
+        end_date = data.end_date if data.end_date is not None else task.end_date
+        _validate_date_range(start_date, end_date)
+        task.start_date = start_date
+        task.end_date = end_date
 
     session.add(task)
     session.commit()
@@ -231,12 +274,22 @@ def get_time_report(
             User.id.label("user_id"),
             User.email.label("username"),
             func.sum(TimeEntry.hours).label("total_hours"),
+            EmployeeProfile.hourly_rate.label("hourly_rate"),
         )
         .select_from(TimeEntry)
         .join(Task, Task.id == TimeEntry.task_id)
         .outerjoin(Project, Project.id == Task.project_id)
         .outerjoin(User, User.id == TimeEntry.user_id)
-        .group_by(Task.project_id, Project.name, Task.id, Task.title, User.id, User.email)
+        .outerjoin(EmployeeProfile, EmployeeProfile.user_id == User.id)
+        .group_by(
+            Task.project_id,
+            Project.name,
+            Task.id,
+            Task.title,
+            User.id,
+            User.email,
+            EmployeeProfile.hourly_rate,
+        )
         .order_by(Project.name, Task.title, User.email)
     )
 
@@ -259,6 +312,7 @@ def get_time_report(
             "user_id": row.user_id,
             "username": row.username,
             "total_hours": row.total_hours,
+            "hourly_rate": row.hourly_rate,
         }
         for row in rows
     ]
@@ -393,3 +447,5 @@ def delete_time_session(session: Session, user: User, session_id: int) -> None:
         session.delete(entry)
     session.delete(ts)
     session.commit()
+
+

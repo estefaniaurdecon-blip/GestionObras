@@ -171,19 +171,23 @@ def create_employee_profile(
         if not data.full_name:
             raise ValueError("El nombre completo es obligatorio si no hay usuario asociado")
 
-    email = (data.email or "").strip() or None
+    email_value = data.email or (user.email if user else None)
+    email = (email_value or "").strip().lower() or None
     if email:
         existing_email = session.exec(
             select(EmployeeProfile).where(
                 EmployeeProfile.tenant_id == tenant_id,
-                EmployeeProfile.email == email,
+                func.lower(EmployeeProfile.email) == email,
             ),
         ).one_or_none()
         if existing_email:
             raise ValueError("Ya existe un empleado con ese correo en este tenant")
 
         existing_user_email = session.exec(
-            select(User).where(User.tenant_id == tenant_id, User.email == email),
+            select(User).where(
+                User.tenant_id == tenant_id,
+                func.lower(User.email) == email,
+            ),
         ).one_or_none()
         if existing_user_email and (not user or existing_user_email.id != user.id):
             raise ValueError("El correo ya pertenece a un usuario del tenant")
@@ -192,7 +196,7 @@ def create_employee_profile(
         tenant_id=tenant_id,
         user_id=user.id if user else None,
         full_name=data.full_name or (user.full_name if user else None),
-        email=email or (user.email if user else None),
+        email=email,
         hourly_rate=data.hourly_rate,
         position=data.position,
         employment_type=data.employment_type,
@@ -322,25 +326,26 @@ def update_employee_profile(
     _ensure_same_tenant(profile.tenant_id, current_user)
 
     if data.email is not None:
-        email = data.email.strip() or None
-        if email:
+        email = data.email.strip().lower() or None
+        current_email = (profile.email or "").strip().lower() or None
+        if email != current_email and email:
             existing_email = session.exec(
                 select(EmployeeProfile).where(
                     EmployeeProfile.tenant_id == profile.tenant_id,
-                    EmployeeProfile.email == email,
+                    func.lower(EmployeeProfile.email) == email,
                     EmployeeProfile.id != profile.id,
                 ),
-            ).one_or_none()
+            ).first()
             if existing_email:
                 raise ValueError("Ya existe un empleado con ese correo en este tenant")
 
             existing_user_email = session.exec(
                 select(User).where(
                     User.tenant_id == profile.tenant_id,
-                    User.email == email,
+                    func.lower(User.email) == email,
                     User.id != profile.user_id,
                 ),
-            ).one_or_none()
+            ).first()
             if existing_user_email:
                 raise ValueError("El correo ya pertenece a un usuario del tenant")
 
@@ -350,8 +355,6 @@ def update_employee_profile(
         profile.position = data.position
     if data.full_name is not None:
         profile.full_name = data.full_name
-    if data.email is not None:
-        profile.email = data.email
     if data.hourly_rate is not None:
         profile.hourly_rate = data.hourly_rate
     if data.employment_type is not None:
@@ -436,6 +439,37 @@ def update_employee_profile(
         is_active=profile.is_active,
         created_at=profile.created_at,
         primary_department_id=primary_department_id,
+    )
+
+
+def delete_employee_profile(
+    session: Session,
+    current_user: User,
+    profile_id: int,
+) -> None:
+    profile = session.get(EmployeeProfile, profile_id)
+    if not profile:
+        raise ValueError("Perfil de empleado no encontrado")
+
+    _ensure_same_tenant(profile.tenant_id, current_user)
+
+    links = session.exec(
+        select(EmployeeDepartment).where(
+            EmployeeDepartment.employee_id == profile.id,
+        ),
+    ).all()
+    for link in links:
+        session.delete(link)
+
+    session.delete(profile)
+    session.commit()
+
+    log_action(
+        session,
+        user_id=current_user.id,
+        tenant_id=profile.tenant_id,
+        action="hr.employee.delete",
+        details=f"Perfil empleado eliminado id={profile.id}",
     )
 
 

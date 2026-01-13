@@ -9,7 +9,11 @@ import axios from "axios";
  * - Interceptores para errores globales.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  throw new Error("VITE_API_BASE_URL is required");
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -32,4 +36,3 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
-

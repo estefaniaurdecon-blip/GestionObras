@@ -87,7 +87,9 @@ def create_user_invitation(
     session.refresh(invitation)
 
     # Enviar email de invitación
-    frontend_url = getattr(settings, "frontend_base_url", "http://localhost:5173")
+    frontend_url = settings.frontend_base_url
+    if not frontend_url:
+        raise ValueError("FRONTEND_BASE_URL no configurado.")
     accept_url = f"{frontend_url}/accept-invitation?token={token}"
 
     try:

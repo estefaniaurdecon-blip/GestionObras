@@ -135,6 +135,10 @@ export async function updateEmployee(
   return response.data;
 }
 
+export async function deleteEmployee(profileId: number): Promise<void> {
+  await apiClient.delete(`/api/v1/hr/employees/${profileId}`);
+}
+
 export async function fetchHeadcount(
   tenantId?: number,
 ): Promise<HeadcountItem[]> {
