@@ -139,7 +139,16 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       justifyContent="flex-start"
                       size="sm"
                     >
-                      Proyectos y tareas
+                      Proyectos
+                    </Button>
+                    <Button
+                      as={Link}
+                      to="/erp/tasks"
+                      variant="ghost"
+                      justifyContent="flex-start"
+                      size="sm"
+                    >
+                      Tareas
                     </Button>
                     <Button
                       as={Link}

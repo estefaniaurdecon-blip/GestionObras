@@ -96,6 +96,8 @@ export const TimeControlPage: React.FC = () => {
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [now, setNow] = useState<Date>(new Date());
+  const [dragTaskId, setDragTaskId] = useState<number | null>(null);
 
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "timesheet">(
     "calendar",
@@ -265,6 +267,13 @@ export const TimeControlPage: React.FC = () => {
   }, [activeSession]);
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
     if (activeSession?.task_id) {
       setTaskIdInput(String(activeSession.task_id));
     }
@@ -430,6 +439,7 @@ export const TimeControlPage: React.FC = () => {
       const session = await startTimeSession(taskId);
       setActiveSession(session);
       setTaskIdInput(String(taskId));
+      setWeekStart(startOfWeek(new Date()));
       toast({
         title: "Tracking iniciado",
         description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
@@ -462,6 +472,7 @@ export const TimeControlPage: React.FC = () => {
       const session = await startTimeSession(taskId);
       setActiveSession(session);
       setTaskIdInput(String(taskId));
+      setWeekStart(startOfWeek(new Date()));
       toast({
         title: "Tracking iniciado",
         description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
@@ -609,6 +620,51 @@ export const TimeControlPage: React.FC = () => {
         description: error?.response?.data?.detail ?? "Revisa los datos.",
         status: "error",
       });
+    }
+  };
+
+  const handleTaskDragStart = (
+    event: React.DragEvent<HTMLDivElement>,
+    taskId: number,
+  ) => {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("text/plain", String(taskId));
+    setDragTaskId(taskId);
+  };
+
+  const handleCalendarDrop = async (
+    event: React.DragEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    const rawId = event.dataTransfer.getData("text/plain");
+    const taskId = Number(rawId);
+    if (!taskId) return;
+
+    const minutes = getMinutesFromClientY(event.clientY);
+    const dayIndex = getDayIndexFromClientX(event.clientX);
+    const startDate = minutesToDate(dayIndex, minutes);
+    const endDate = minutesToDate(
+      dayIndex,
+      minutes + MIN_SESSION_MINUTES,
+    );
+
+    try {
+      const created = await createTimeSession({
+        task_id: taskId,
+        description: null,
+        started_at: startDate.toISOString(),
+        ended_at: endDate.toISOString(),
+      });
+      setSessions((prev) => [created, ...prev]);
+      toast({ title: "Sesion creada", status: "success" });
+    } catch (error: any) {
+      toast({
+        title: "Error al crear sesion",
+        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        status: "error",
+      });
+    } finally {
+      setDragTaskId(null);
     }
   };
 
@@ -790,6 +846,11 @@ export const TimeControlPage: React.FC = () => {
                   p={3}
                   bg={cardBg}
                   minW={0}
+                  draggable
+                  cursor="grab"
+                  opacity={dragTaskId === task.id ? 0.6 : 1}
+                  onDragStart={(event) => handleTaskDragStart(event, task.id)}
+                  onDragEnd={() => setDragTaskId(null)}
                 >
                   <Stack spacing={2}>
                     <Box>
@@ -818,7 +879,14 @@ export const TimeControlPage: React.FC = () => {
       )}
 
       {viewMode === "calendar" && (
-        <Box borderWidth="1px" borderRadius="xl" bg={cardBg} overflow="hidden">
+        <Box
+          borderWidth="1px"
+          borderRadius="xl"
+          bg={cardBg}
+          overflow="hidden"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleCalendarDrop}
+        >
           <SimpleGrid columns={8} gap={0} borderBottomWidth="1px">
             <Box p={3} borderRightWidth="1px">
               <Text fontSize="xs" color={subtleText}>
@@ -861,6 +929,34 @@ export const TimeControlPage: React.FC = () => {
                 ))}
               </SimpleGrid>
             ))}
+            {weekDays.some(
+              (day) => day.toDateString() === now.toDateString(),
+            ) && (
+              <Box
+                position="absolute"
+                left="0"
+                top={`${((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT}px`}
+                width="100%"
+                height="2px"
+                bg="red.400"
+                boxShadow="sm"
+                zIndex={2}
+              >
+                <Box
+                  position="absolute"
+                  top="-8px"
+                  left="calc(12.5% + 8px)"
+                  bg="red.400"
+                  color="white"
+                  px={2}
+                  py={0.5}
+                  borderRadius="full"
+                  fontSize="xs"
+                >
+                  Ahora
+                </Box>
+              </Box>
+            )}
             {selection && (
               <Box
                 position="absolute"
@@ -1041,6 +1137,17 @@ export const TimeControlPage: React.FC = () => {
                         {formatSeconds(session.duration_seconds)}
                       </Badge>
                       <HStack>
+                        <Button
+                          size="xs"
+                          colorScheme="green"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleQuickStart(session.task_id);
+                          }}
+                          isDisabled={isRunning}
+                        >
+                          Play
+                        </Button>
                         <Button
                           size="xs"
                           variant="outline"
