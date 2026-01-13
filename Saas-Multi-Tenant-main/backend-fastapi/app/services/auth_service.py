@@ -42,13 +42,10 @@ def login_step1(session: Session, email: str, password: str) -> LoginResponse:
 
     # Super Admin nunca usa MFA.
     if user.is_super_admin:
+        # Access token is minimal; roles are always read from the database.
         access_token = create_access_token(
             subject=str(user.id),
             expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
-            extra_claims={
-                "tenant_id": user.tenant_id,
-                "is_super_admin": user.is_super_admin,
-            },
         )
 
         log_action(
@@ -168,13 +165,10 @@ def login_step2_verify_mfa(
     session.delete(mfa_record)
     session.commit()
 
+    # Access token is minimal; roles are always read from the database.
     access_token = create_access_token(
         subject=str(user.id),
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
-        extra_claims={
-            "tenant_id": user.tenant_id,
-            "is_super_admin": user.is_super_admin,
-        },
     )
 
     log_action(

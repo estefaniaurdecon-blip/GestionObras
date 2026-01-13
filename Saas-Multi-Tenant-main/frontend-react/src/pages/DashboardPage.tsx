@@ -38,7 +38,7 @@ import {
 } from "../api/erpReports";
 import { AppShell } from "../components/layout/AppShell";
 import { ToolGrid } from "../components/tools/ToolGrid";
-import type { CurrentUser } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 const formatDate = (value: Date) => value.toISOString().slice(0, 10);
 
@@ -63,21 +63,9 @@ export const DashboardPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
-  let tenantId = 1;
-  let isSuperAdmin = false;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      if (me.tenant_id) {
-        tenantId = me.tenant_id;
-      }
-      isSuperAdmin = Boolean(me.is_super_admin);
-    }
-  } catch {
-    tenantId = 1;
-    isSuperAdmin = false;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const tenantId = currentUser?.tenant_id ?? 1;
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
 
   const { data: summary } = useQuery<DashboardSummary>({
     queryKey: ["dashboard-summary"],

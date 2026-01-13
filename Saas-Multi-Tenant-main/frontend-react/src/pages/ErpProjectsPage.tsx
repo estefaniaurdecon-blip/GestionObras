@@ -28,6 +28,7 @@ import { fetchErpProjects, type ErpProject } from "../api/erpReports";
 import { createErpProject } from "../api/erpManagement";
 import { fetchErpTasks, type ErpTask } from "../api/erpTimeTracking";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 // Cabecera personalizada del listado del Gantt (espanol).
 const GanttTaskListHeader: React.FC<{
@@ -91,22 +92,9 @@ export const ErpProjectsPage: React.FC = () => {
   const [ganttView, setGanttView] = useState<ViewMode>(ViewMode.Week);
 
   // Determina permisos del usuario actual.
-  let isSuperAdmin = false;
-  let isTenantAdmin = false;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as {
-        is_super_admin?: boolean;
-        role_id?: number | null;
-      };
-      isSuperAdmin = Boolean(me.is_super_admin);
-      isTenantAdmin = Boolean(me.role_id) && !isSuperAdmin;
-    }
-  } catch {
-    isSuperAdmin = false;
-    isTenantAdmin = false;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isTenantAdmin = Boolean(currentUser?.role_id) && !isSuperAdmin;
 
   // Datos principales: proyectos y tareas del ERP.
   // Queries: proyectos y tareas para KPIs y Gantt.

@@ -23,17 +23,10 @@ import {
 import { Link, useRouter } from "@tanstack/react-router";
 
 import { NotificationsBell } from "../NotificationsBell";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 
 interface AppShellProps {
   children: React.ReactNode;
-}
-
-interface CurrentUser {
-  email: string;
-  full_name?: string | null;
-  is_super_admin?: boolean;
-  tenant_id?: number | null;
-  role_id?: number | null;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
@@ -42,22 +35,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const pageBg = useColorModeValue("gray.50", "gray.800");
   const router = useRouter();
 
-  let currentUser: CurrentUser | null = null;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) currentUser = JSON.parse(raw);
-  } catch {
-    currentUser = null;
-  }
+  const { data: currentUser } = useCurrentUser();
 
-  const email = currentUser?.email ?? "dios@cortecelestial.god";
-  const fullName = currentUser?.full_name ?? "Super Admin";
+  const email = currentUser?.email ?? "usuario@local";
+  const fullName = currentUser?.full_name ?? "Usuario";
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
-    localStorage.removeItem("current_user");
     router.history.push("/");
   };
 

@@ -46,6 +46,7 @@ import {
 import { fetchErpTasks, type ErpTask } from "../api/erpTimeTracking";
 import { fetchUsersByTenant, type TenantUserSummary } from "../api/users";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 // Pantalla de tareas: resumen, creacion, Kanban y detalle.
 export const ErpTasksPage: React.FC = () => {
@@ -114,24 +115,9 @@ export const ErpTasksPage: React.FC = () => {
   >({});
 
   // Determina permisos y tenant del usuario actual.
-  let tenantId = 1;
-  let isSuperAdmin = false;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as {
-        tenant_id?: number | null;
-        is_super_admin?: boolean;
-      };
-      if (me.tenant_id) {
-        tenantId = me.tenant_id;
-      }
-      isSuperAdmin = Boolean(me.is_super_admin);
-    }
-  } catch {
-    tenantId = 1;
-    isSuperAdmin = false;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const tenantId = currentUser?.tenant_id ?? 1;
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
 
   // Datos principales del ERP.
   const { data: projects } = useQuery<ErpProject[]>({
@@ -167,16 +153,7 @@ export const ErpTasksPage: React.FC = () => {
   }, [projects]);
 
   // Identifica al usuario actual para tareas asignadas.
-  const currentUserId = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("current_user");
-      if (!raw) return null;
-      const me = JSON.parse(raw) as { id?: number; user_id?: number };
-      return me.id ?? me.user_id ?? null;
-    } catch {
-      return null;
-    }
-  }, []);
+  const currentUserId = currentUser?.id ?? null;
 
   // Lista de tareas asignadas al usuario actual.
   const assignedTasks = useMemo(() => {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -27,13 +27,13 @@ import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
-import type { CurrentUser } from "../api/users";
 import {
   fetchAllTenants,
   fetchUsersByTenant,
   type TenantOption,
   type TenantUserSummary,
 } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import {
   Ticket,
   TicketPriority,
@@ -97,25 +97,22 @@ export const SupportTicketsPage: React.FC = () => {
   const [assigneeId, setAssigneeId] = useState<number | "">("");
 
   // Datos del usuario actual
-  let isSuperAdmin = false;
-  let currentTenantId: number | null = null;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      isSuperAdmin =
-        Boolean(me.is_super_admin) || me.email === "dios@cortecelestial.god";
-      currentTenantId = me.tenant_id;
-    }
-  } catch {
-    isSuperAdmin = false;
-    currentTenantId = null;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin =
+    Boolean(currentUser?.is_super_admin) ||
+    currentUser?.email === "dios@cortecelestial.god";
+  const currentTenantId = currentUser?.tenant_id ?? null;
 
   // Filtro de tenant solo para Super Admin
-  const [tenantFilterId, setTenantFilterId] = useState<number | null>(
-    isSuperAdmin ? currentTenantId : null,
-  );
+  const [tenantFilterId, setTenantFilterId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    if (tenantFilterId !== null) return;
+    if (currentTenantId) {
+      setTenantFilterId(currentTenantId);
+    }
+  }, [currentTenantId, isSuperAdmin, tenantFilterId]);
 
   // Carga de tickets segun filtros.
   const ticketsQuery = useQuery<Ticket[]>({

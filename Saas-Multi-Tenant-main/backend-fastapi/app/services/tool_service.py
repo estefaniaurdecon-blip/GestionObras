@@ -121,6 +121,7 @@ def launch_tool_for_tenant(
             "tool_id": tool.id,
             "email": current_user.email,
         },
+        token_type="sso",
     )
 
     launch_url = f"{tool.base_url}?sso_token={sso_token}"

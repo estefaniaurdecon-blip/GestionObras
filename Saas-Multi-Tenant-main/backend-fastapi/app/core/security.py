@@ -35,12 +35,14 @@ def create_access_token(
   subject: str,
   expires_delta: Optional[timedelta] = None,
   extra_claims: Optional[Dict[str, Any]] = None,
+  token_type: str = "access",
 ) -> str:
   """
-  Crea un JWT de acceso con:
+  Crea un JWT con:
   - `sub`: identificador principal (generalmente el ID de usuario).
   - `exp`: fecha de expiración.
   - `iat`: fecha de emisión.
+  - `typ`: tipo de token (por defecto "access").
 
   `extra_claims` permite incluir información adicional (tenant_id, roles, etc.).
   """
@@ -55,6 +57,7 @@ def create_access_token(
     "sub": subject,
     "iat": int(now.timestamp()),
     "exp": int(expire.timestamp()),
+    "typ": token_type,
   }
 
   if extra_claims:

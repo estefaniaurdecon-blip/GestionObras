@@ -23,7 +23,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
-import type { CurrentUser } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface Tenant {
   id: number;
@@ -64,16 +64,8 @@ export const TenantSettingsPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
-  let isSuperAdmin = false;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      isSuperAdmin = Boolean(me.is_super_admin);
-    }
-  } catch {
-    isSuperAdmin = false;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
 
   // Estado del formulario de alta de tenant.
   const [form, setForm] = useState<NewTenantFormState>({

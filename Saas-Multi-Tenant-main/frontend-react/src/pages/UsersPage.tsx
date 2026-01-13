@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -26,8 +26,8 @@ import { keyframes } from "@emotion/react";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
-import type { CurrentUser } from "../api/users";
 import { createUserInvitation } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface TenantOption {
   id: number;
@@ -91,23 +91,18 @@ export const UsersPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
-  let isSuperAdmin = false;
-  let currentTenantId: number | null = null;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      isSuperAdmin = Boolean(me.is_super_admin);
-      currentTenantId = me.tenant_id ?? null;
-    }
-  } catch {
-    isSuperAdmin = false;
-    currentTenantId = null;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const currentTenantId = currentUser?.tenant_id ?? null;
 
-  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(
-    isSuperAdmin ? null : currentTenantId,
-  );
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    if (!currentTenantId) return;
+    if (selectedTenantId !== null) return;
+    setSelectedTenantId(currentTenantId);
+  }, [currentTenantId, isSuperAdmin, selectedTenantId]);
 
   const [form, setForm] = useState<NewUserFormState>({
     email: "",

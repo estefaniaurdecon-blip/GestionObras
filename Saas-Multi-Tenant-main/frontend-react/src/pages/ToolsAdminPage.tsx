@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Heading,
@@ -22,7 +22,7 @@ import {
   setTenantToolEnabled,
   Tool,
 } from "../api/tools";
-import type { CurrentUser } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface TenantOption {
   id: number;
@@ -56,24 +56,18 @@ export const ToolsAdminPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
-  let isSuperAdmin = false;
-  let initialTenantId: number | null = null;
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
 
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      isSuperAdmin = Boolean(me.is_super_admin);
-      if (me.tenant_id) {
-        initialTenantId = me.tenant_id;
-      }
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.tenant_id) return;
+    if (selectedTenantId !== null) return;
+    if (!isSuperAdmin) {
+      setSelectedTenantId(currentUser.tenant_id);
     }
-  } catch {
-    isSuperAdmin = false;
-    initialTenantId = null;
-  }
-
-  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(initialTenantId);
+  }, [currentUser?.tenant_id, isSuperAdmin, selectedTenantId]);
 
   // Catalogo global de herramientas.
   const { data: catalog, isLoading: isCatalogLoading } = useQuery<Tool[]>({

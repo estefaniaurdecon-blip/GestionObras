@@ -44,6 +44,7 @@ import {
 } from "../api/erpSessions";
 import { updateErpTask } from "../api/erpManagement";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 // Horas visibles en el calendario (0-23).
 const HOURS = Array.from({ length: 24 }, (_, idx) => idx);
@@ -181,18 +182,11 @@ export const TimeControlPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
+  const { data: currentUser } = useCurrentUser();
+
   // Flags y derivados del estado actual.
   const isRunning = Boolean(activeSession && activeSession.is_active);
-  const currentUserId = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("current_user");
-      if (!raw) return null;
-      const me = JSON.parse(raw) as { id?: number; user_id?: number };
-      return me.id ?? me.user_id ?? null;
-    } catch {
-      return null;
-    }
-  }, []);
+  const currentUserId = currentUser?.id ?? null;
   // Dias visibles en la semana actual.
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)),

@@ -67,7 +67,6 @@ export const UserSettingsPage: React.FC = () => {
         full_name: fullName,
       });
 
-      localStorage.setItem("current_user", JSON.stringify(response.data));
 
       toast({
         title: "Perfil actualizado",

@@ -11,7 +11,6 @@ import {
 import { useRouter } from "@tanstack/react-router";
 
 import { verifyMFA } from "../api/auth";
-import { fetchCurrentUser } from "../api/users";
 
 /**
  * Pantalla para introducir el código MFA enviado por correo.
@@ -34,12 +33,6 @@ export const MFAVerifyPage: React.FC = () => {
       const result = await verifyMFA(username, code);
       localStorage.setItem("access_token", result.access_token);
       sessionStorage.removeItem("mfa_username");
-      try {
-        const me = await fetchCurrentUser();
-        localStorage.setItem("current_user", JSON.stringify(me));
-      } catch {
-        // Ignoramos errores al cargar el usuario actual en este punto.
-      }
       router.history.push("/dashboard");
     } catch (error) {
       toast({

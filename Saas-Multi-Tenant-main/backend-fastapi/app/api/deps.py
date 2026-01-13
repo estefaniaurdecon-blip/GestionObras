@@ -40,6 +40,14 @@ def get_current_user(
       detail="Token no válido o expirado",
     )
 
+  # Only accept access tokens and never trust role claims from the client.
+  token_type = payload.get("typ")
+  if token_type != "access":
+    raise HTTPException(
+      status_code=status.HTTP_401_UNAUTHORIZED,
+      detail="Tipo de token no permitido",
+    )
+
   user_id = payload.get("sub")
   if user_id is None:
     raise HTTPException(

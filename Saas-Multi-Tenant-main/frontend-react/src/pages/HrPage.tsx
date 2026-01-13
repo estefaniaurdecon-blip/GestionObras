@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogBody,
@@ -53,10 +53,10 @@ import {
 import {
   fetchAllTenants,
   fetchUsersByTenant,
-  type CurrentUser,
   type TenantOption,
   type TenantUserSummary,
 } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface DepartmentFormState {
   name: string;
@@ -103,23 +103,18 @@ export const HrPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
-  let isSuperAdmin = false;
-  let currentTenantId: number | null = null;
-  try {
-    const raw = localStorage.getItem("current_user");
-    if (raw) {
-      const me = JSON.parse(raw) as CurrentUser;
-      isSuperAdmin = Boolean(me.is_super_admin);
-      currentTenantId = me.tenant_id ?? null;
-    }
-  } catch {
-    isSuperAdmin = false;
-    currentTenantId = null;
-  }
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const currentTenantId = currentUser?.tenant_id ?? null;
 
-  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(
-    isSuperAdmin ? null : currentTenantId
-  );
+  const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    if (!currentTenantId) return;
+    if (selectedTenantId !== null) return;
+    setSelectedTenantId(currentTenantId);
+  }, [currentTenantId, isSuperAdmin, selectedTenantId]);
 
   const [deptForm, setDeptForm] = useState<DepartmentFormState>({
     name: "",

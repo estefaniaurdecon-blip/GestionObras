@@ -15,7 +15,6 @@ import {
 import { useRouter } from "@tanstack/react-router";
 
 import { login } from "../api/auth";
-import { fetchCurrentUser } from "../api/users";
 
 /**
  * Pantalla de login inicial.
@@ -53,14 +52,6 @@ export const LoginPage: React.FC = () => {
 
       if (result.access_token) {
         localStorage.setItem("access_token", result.access_token);
-
-        // Obtenemos datos del usuario actual y los guardamos para el layout.
-        try {
-          const me = await fetchCurrentUser();
-          localStorage.setItem("current_user", JSON.stringify(me));
-        } catch {
-          // Si falla, seguimos pero el layout mostrará valores por defecto.
-        }
 
         router.history.push("/dashboard");
         return;
