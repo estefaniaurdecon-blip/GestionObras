@@ -23,6 +23,7 @@ import {
 import { Link, useRouter } from "@tanstack/react-router";
 
 import { NotificationsBell } from "../NotificationsBell";
+import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 
 interface AppShellProps {
@@ -43,6 +44,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
 
   const handleLogout = () => {
+    void apiClient.post("/api/v1/auth/logout").catch(() => undefined);
     localStorage.removeItem("access_token");
     router.history.push("/");
   };

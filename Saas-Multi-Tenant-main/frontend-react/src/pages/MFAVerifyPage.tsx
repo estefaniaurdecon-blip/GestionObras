@@ -30,8 +30,7 @@ export const MFAVerifyPage: React.FC = () => {
     event.preventDefault();
     setIsLoading(true);
     try {
-      const result = await verifyMFA(username, code);
-      localStorage.setItem("access_token", result.access_token);
+      await verifyMFA(username, code);
       sessionStorage.removeItem("mfa_username");
       router.history.push("/dashboard");
     } catch (error) {

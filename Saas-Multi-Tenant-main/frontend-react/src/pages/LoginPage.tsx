@@ -51,8 +51,6 @@ export const LoginPage: React.FC = () => {
       }
 
       if (result.access_token) {
-        localStorage.setItem("access_token", result.access_token);
-
         router.history.push("/dashboard");
         return;
       }

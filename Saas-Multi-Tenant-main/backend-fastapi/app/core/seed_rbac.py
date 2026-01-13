@@ -73,11 +73,6 @@ ROLE_PERMISSIONS: Dict[str, Iterable[str]] = {
 }
 
 
-# Datos del Super Admin global por defecto.
-SUPERADMIN_EMAIL = "dios@cortecelestial.god"
-SUPERADMIN_PASSWORD = "temporal"
-
-
 def _get_or_create_permissions(session: Session) -> Dict[str, Permission]:
     """
     Crea (si no existen) los permisos base y devuelve un dict `code -> Permission`.
@@ -227,10 +222,15 @@ def _ensure_super_admin_user(session: Session, roles: Dict[str, Role]) -> None:
     provisión de credenciales.
     """
 
+    if settings.env == "production":
+        return
+    if not settings.allow_bootstrap_superadmin:
+        return
+
     superadmin_role = roles.get("super_admin")
 
     existing = session.exec(
-        select(User).where(User.email == SUPERADMIN_EMAIL),
+        select(User).where(User.email == settings.superadmin_email),
     ).one_or_none()
 
     if existing:
@@ -249,10 +249,10 @@ def _ensure_super_admin_user(session: Session, roles: Dict[str, Role]) -> None:
         return
 
     # Creamos el usuario Super Admin inicial.
-    hashed_password = hash_password(SUPERADMIN_PASSWORD)
+    hashed_password = hash_password(settings.superadmin_password)
 
     user = User(
-        email=SUPERADMIN_EMAIL,
+        email=settings.superadmin_email,
         full_name="Super Admin",
         hashed_password=hashed_password,
         is_active=True,

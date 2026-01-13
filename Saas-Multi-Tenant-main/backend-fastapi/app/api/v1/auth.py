@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.db.session import get_session
 from app.schemas.auth import LoginResponse, MFAVerifyRequest, MFAVerifyResponse
 from app.schemas.password import ChangePasswordRequest
@@ -23,6 +24,7 @@ router = APIRouter()
 )
 def login(
     request: Request,
+    response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: Session = Depends(get_session),
 ) -> LoginResponse:
@@ -36,7 +38,17 @@ def login(
     enforce_rate_limit(request, key="auth_login", limit=20, window_seconds=60)
 
     try:
-        return login_step1(session, email=form_data.username, password=form_data.password)
+        result = login_step1(session, email=form_data.username, password=form_data.password)
+        if result.access_token:
+            response.set_cookie(
+                settings.auth_cookie_name,
+                result.access_token,
+                httponly=True,
+                secure=settings.auth_cookie_secure,
+                samesite=settings.auth_cookie_samesite,
+                max_age=settings.access_token_expire_minutes * 60,
+            )
+        return result
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -51,6 +63,7 @@ def login(
 )
 def verify_mfa(
     request: Request,
+    response: Response,
     body: MFAVerifyRequest,
     session: Session = Depends(get_session),
 ) -> MFAVerifyResponse:
@@ -64,11 +77,20 @@ def verify_mfa(
     enforce_rate_limit(request, key="auth_mfa_verify", limit=30, window_seconds=300)
 
     try:
-        return login_step2_verify_mfa(
+        result = login_step2_verify_mfa(
             session,
             username=body.username,
             mfa_code=body.mfa_code,
         )
+        response.set_cookie(
+            settings.auth_cookie_name,
+            result.access_token,
+            httponly=True,
+            secure=settings.auth_cookie_secure,
+            samesite=settings.auth_cookie_samesite,
+            max_age=settings.access_token_expire_minutes * 60,
+        )
+        return result
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -98,3 +120,16 @@ def change_my_password(
             detail=str(exc),
         ) from exc
 
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cerrar sesion y limpiar cookie",
+)
+def logout(response: Response) -> None:
+    response.delete_cookie(
+        settings.auth_cookie_name,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite,
+    )

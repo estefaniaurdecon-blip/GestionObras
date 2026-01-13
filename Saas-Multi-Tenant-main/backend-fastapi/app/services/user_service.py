@@ -139,6 +139,21 @@ def create_user(
     se aplica en la capa de rutas.
     """
 
+    if not current_user.is_super_admin:
+        if user_in.is_super_admin:
+            raise PermissionError("Solo el Super Admin puede crear otro Super Admin")
+        if user_in.tenant_id is None:
+            raise PermissionError("Debes indicar un tenant para crear usuarios")
+        if current_user.tenant_id != user_in.tenant_id:
+            raise PermissionError("No tienes permisos para crear usuarios en otro tenant")
+        if user_in.role_name == "super_admin":
+            raise PermissionError("No tienes permisos para asignar rol Super Admin")
+
+    allowed_roles = {"tenant_admin", "manager", "user", "hr_manager"}
+    if not current_user.is_super_admin and user_in.role_name:
+        if user_in.role_name not in allowed_roles:
+            raise ValueError("Rol no permitido para este usuario")
+
     existing = session.exec(
         select(User).where(User.email == user_in.email),
     ).one_or_none()

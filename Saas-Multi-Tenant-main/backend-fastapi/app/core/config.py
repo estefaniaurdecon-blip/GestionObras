@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 30
     algorithm: str = "HS256"
+    auth_cookie_name: str = "access_token"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    allow_bootstrap_superadmin: bool = False
+    superadmin_email: str = "dios@cortecelestial.god"
+    superadmin_password: str = "temporal"
 
     # Config multi-tenant (por subdominio)
     primary_domain: str = "empresa.local"

@@ -18,6 +18,9 @@ if str(ROOT_DIR) not in sys.path:
 TEST_DATABASE_URL = "sqlite://"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["SECRET_KEY"] = "test-secret-key"
+os.environ["ALLOW_BOOTSTRAP_SUPERADMIN"] = "true"
+os.environ["SUPERADMIN_EMAIL"] = "dios@cortecelestial.god"
+os.environ["SUPERADMIN_PASSWORD"] = "temporal"
 # Fuerza un valor booleano válido para evitar conflictos
 # con variables de entorno existentes (por ejemplo DEBUG=WARN).
 os.environ["DEBUG"] = "false"

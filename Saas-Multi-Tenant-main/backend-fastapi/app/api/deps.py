@@ -14,6 +14,7 @@ from app.models.user import User
 
 
 def get_current_user(
+    request: Request,
     authorization: Annotated[Optional[str], Header(alias="Authorization")] = None,
     session: Session = Depends(get_session),
 ) -> User:
@@ -24,13 +25,22 @@ def get_current_user(
   - `Authorization: Bearer <token>`
   """
 
-  if not authorization or not authorization.startswith("Bearer "):
+  token: Optional[str] = None
+  if authorization:
+    if not authorization.startswith("Bearer "):
+      raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token de autenticación no proporcionado",
+      )
+    token = authorization.split(" ", 1)[1]
+  else:
+    token = request.cookies.get(settings.auth_cookie_name)
+
+  if not token:
     raise HTTPException(
       status_code=status.HTTP_401_UNAUTHORIZED,
       detail="Token de autenticación no proporcionado",
     )
-
-  token = authorization.split(" ", 1)[1]
 
   try:
     payload = decode_token(token)

@@ -17,22 +17,7 @@ if (!API_BASE_URL) {
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
-// Helper para obtener el token guardado de forma segura.
-// En un sistema real se recomienda usar cookies httpOnly o secure storage.
-function getAccessToken(): string | null {
-  return localStorage.getItem("access_token");
-}
-
-// Interceptor para adjuntar el token JWT en cada petición.
-apiClient.interceptors.request.use((config) => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${token}`,
-    };
-  }
-  return config;
-});
+// Las credenciales se envian via cookie httpOnly configurada en el backend.
