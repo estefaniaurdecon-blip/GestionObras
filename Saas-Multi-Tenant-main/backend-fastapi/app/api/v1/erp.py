@@ -8,10 +8,25 @@ from app.api.deps import require_any_permissions, require_permissions
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.erp import (
+    ActivityCreate,
+    ActivityRead,
+    ActivityUpdate,
+    DeliverableCreate,
+    DeliverableRead,
+    DeliverableUpdate,
+    MilestoneCreate,
+    MilestoneRead,
+    MilestoneUpdate,
     ProjectCreate,
     ProjectRead,
+    ProjectUpdate,
+    SubActivityCreate,
+    SubActivityRead,
+    SubActivityUpdate,
     TaskCreate,
     TaskRead,
+    TaskTemplateCreate,
+    TaskTemplateRead,
     TaskUpdate,
     TimeReportRow,
     TimeSessionCreate,
@@ -20,18 +35,34 @@ from app.schemas.erp import (
     TimeTrackingStart,
 )
 from app.services.erp_service import (
+    create_activity,
+    create_deliverable,
+    create_milestone,
     create_project,
+    create_subactivity,
     create_task,
+    create_task_template,
     create_manual_time_session,
     delete_time_session,
     get_active_time_session,
+    get_project,
     get_time_report,
+    list_activities,
+    list_deliverables,
+    list_milestones,
     list_projects,
+    list_subactivities,
     list_tasks,
+    list_task_templates,
     list_time_sessions,
     start_time_session,
     stop_time_session,
+    update_activity,
+    update_deliverable,
+    update_milestone,
     update_task,
+    update_project,
+    update_subactivity,
     update_time_session,
 )
 
@@ -47,6 +78,18 @@ def api_list_projects(
     return list_projects(session)
 
 
+@router.get("/projects/{project_id}", response_model=ProjectRead)
+def api_get_project(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> ProjectRead:
+    try:
+        return get_project(session, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 def api_create_project(
     payload: ProjectCreate,
@@ -54,6 +97,19 @@ def api_create_project(
     current_user: User = Depends(require_permissions(["erp:manage"])),
 ) -> ProjectRead:
     return create_project(session, payload)
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectRead)
+def api_update_project(
+    project_id: int,
+    payload: ProjectUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ProjectRead:
+    try:
+        return update_project(session, project_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("/tasks", response_model=list[TaskRead])
@@ -74,6 +130,161 @@ def api_create_task(
         return create_task(session, current_user, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/task-templates", response_model=list[TaskTemplateRead])
+def api_list_task_templates(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[TaskTemplateRead]:
+    return list_task_templates(session)
+
+
+@router.post("/task-templates", response_model=TaskTemplateRead, status_code=status.HTTP_201_CREATED)
+def api_create_task_template(
+    payload: TaskTemplateCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> TaskTemplateRead:
+    return create_task_template(session, payload)
+
+
+@router.get("/activities", response_model=list[ActivityRead])
+def api_list_activities(
+    project_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[ActivityRead]:
+    return list_activities(session, project_id=project_id)
+
+
+@router.post("/activities", response_model=ActivityRead, status_code=status.HTTP_201_CREATED)
+def api_create_activity(
+    payload: ActivityCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ActivityRead:
+    try:
+        return create_activity(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/activities/{activity_id}", response_model=ActivityRead)
+def api_update_activity(
+    activity_id: int,
+    payload: ActivityUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ActivityRead:
+    try:
+        return update_activity(session, activity_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/subactivities", response_model=list[SubActivityRead])
+def api_list_subactivities(
+    project_id: Optional[int] = Query(default=None),
+    activity_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[SubActivityRead]:
+    return list_subactivities(session, project_id=project_id, activity_id=activity_id)
+
+
+@router.post("/subactivities", response_model=SubActivityRead, status_code=status.HTTP_201_CREATED)
+def api_create_subactivity(
+    payload: SubActivityCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> SubActivityRead:
+    try:
+        return create_subactivity(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/subactivities/{subactivity_id}", response_model=SubActivityRead)
+def api_update_subactivity(
+    subactivity_id: int,
+    payload: SubActivityUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> SubActivityRead:
+    try:
+        return update_subactivity(session, subactivity_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/milestones", response_model=list[MilestoneRead])
+def api_list_milestones(
+    project_id: Optional[int] = Query(default=None),
+    activity_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[MilestoneRead]:
+    return list_milestones(session, project_id=project_id, activity_id=activity_id)
+
+
+@router.post("/milestones", response_model=MilestoneRead, status_code=status.HTTP_201_CREATED)
+def api_create_milestone(
+    payload: MilestoneCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> MilestoneRead:
+    try:
+        return create_milestone(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/milestones/{milestone_id}", response_model=MilestoneRead)
+def api_update_milestone(
+    milestone_id: int,
+    payload: MilestoneUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> MilestoneRead:
+    try:
+        return update_milestone(session, milestone_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/deliverables", response_model=list[DeliverableRead])
+def api_list_deliverables(
+    milestone_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[DeliverableRead]:
+    return list_deliverables(session, milestone_id=milestone_id)
+
+
+@router.post("/deliverables", response_model=DeliverableRead, status_code=status.HTTP_201_CREATED)
+def api_create_deliverable(
+    payload: DeliverableCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> DeliverableRead:
+    try:
+        return create_deliverable(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/deliverables/{deliverable_id}", response_model=DeliverableRead)
+def api_update_deliverable(
+    deliverable_id: int,
+    payload: DeliverableUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> DeliverableRead:
+    try:
+        return update_deliverable(session, deliverable_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)

@@ -1,11 +1,18 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  Accordion,
+  AccordionButton,
+  AccordionIcon,
+  AccordionItem,
+  AccordionPanel,
   Box,
   Button,
+  Checkbox,
   FormControl,
   FormLabel,
   Heading,
   Input,
+  Select,
   SimpleGrid,
   Stack,
   Tab,
@@ -20,13 +27,21 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
 
 import { fetchErpProjects, type ErpProject } from "../api/erpReports";
-import { createErpProject } from "../api/erpManagement";
+import { createErpProject, createErpTask } from "../api/erpManagement";
 import { fetchErpTasks, type ErpTask } from "../api/erpTimeTracking";
+import {
+  createActivity,
+  createDeliverable,
+  createMilestone,
+  createSubActivity,
+  fetchTaskTemplates,
+  type ErpTaskTemplate,
+} from "../api/erpStructure";
 import { AppShell } from "../components/layout/AppShell";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
@@ -70,6 +85,43 @@ const GanttTaskListHeader: React.FC<{
   </div>
 );
 
+type DraftTask = {
+  id: string;
+  type: "template" | "manual";
+  templateId?: number;
+  title: string;
+};
+
+type DraftSubActivity = {
+  id: string;
+  name: string;
+  start_date?: string;
+  end_date?: string;
+  tasks: DraftTask[];
+};
+
+type DraftActivity = {
+  id: string;
+  name: string;
+  weight: number;
+  subactivities: DraftSubActivity[];
+};
+
+type DraftDeliverable = {
+  id: string;
+  title: string;
+  kind: "text" | "link";
+  value: string;
+};
+
+type DraftMilestone = {
+  id: string;
+  title: string;
+  due_date?: string;
+  allow_late: boolean;
+  deliverables: DraftDeliverable[];
+};
+
 // Pantalla de proyectos: listado, creacion y Gantt.
 export const ErpProjectsPage: React.FC = () => {
   // Utilidades y estilos base.
@@ -90,6 +142,15 @@ export const ErpProjectsPage: React.FC = () => {
   const [projectStartDate, setProjectStartDate] = useState("");
   const [projectEndDate, setProjectEndDate] = useState("");
   const [ganttView, setGanttView] = useState<ViewMode>(ViewMode.Week);
+  const [showActivities, setShowActivities] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
+  const [activityDrafts, setActivityDrafts] = useState<DraftActivity[]>([]);
+  const [milestoneDrafts, setMilestoneDrafts] = useState<DraftMilestone[]>([]);
+  const [taskTemplateSelections, setTaskTemplateSelections] = useState<
+    Record<string, string>
+  >({});
+  const [projectSaving, setProjectSaving] = useState(false);
+  const draftIdRef = useRef(1);
 
   // Determina permisos del usuario actual.
   const { data: currentUser } = useCurrentUser();
@@ -109,49 +170,364 @@ export const ErpProjectsPage: React.FC = () => {
     queryFn: fetchErpTasks,
   });
 
+  // Catalogo de plantillas para tareas.
+  const { data: taskTemplates } = useQuery<ErpTaskTemplate[]>({
+    queryKey: ["erp-task-templates"],
+    queryFn: fetchTaskTemplates,
+  });
+
   // KPIs del resumen.
   const projectCount = projects?.length ?? 0;
   const taskCount = tasks?.length ?? 0;
   const assignedCount = tasks?.filter((task) => task.assigned_to_id).length ?? 0;
   const canManageProjects = isSuperAdmin || isTenantAdmin;
 
-  // Mutacion para crear proyectos.
-  // Persistencia de nuevo proyecto en backend.
-  const createProjectMutation = useMutation({
-    mutationFn: () =>
-      createErpProject({
-        name: projectName.trim(),
-        description: projectDescription.trim() || null,
-        start_date: projectStartDate || null,
-        end_date: projectEndDate || null,
-      }),
-    onSuccess: async () => {
-      setProjectName("");
-      setProjectDescription("");
-      setProjectStartDate("");
-      setProjectEndDate("");
-      await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
-      toast({ title: "Proyecto creado", status: "success" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "No se pudo crear el proyecto",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
-        status: "error",
-      });
-    },
-  });
+  const nextDraftId = () => `draft-${draftIdRef.current++}`;
 
-  // Validacion y envio del formulario de proyecto.
-  const handleCreateProject = () => {
+  const totalActivityWeight = useMemo(
+    () => activityDrafts.reduce((acc, activity) => acc + activity.weight, 0),
+    [activityDrafts],
+  );
+
+  const handleAddActivityDraft = () => {
+    const newActivity: DraftActivity = {
+      id: nextDraftId(),
+      name: `Actividad ${activityDrafts.length + 1}`,
+      weight: 0,
+      subactivities: [],
+    };
+    setActivityDrafts((prev) => [...prev, newActivity]);
+    setShowActivities(true);
+  };
+
+  const handleRemoveActivityDraft = (activityId: string) => {
+    setActivityDrafts((prev) => prev.filter((activity) => activity.id != activityId));
+  };
+
+  const handleUpdateActivityDraft = (
+    activityId: string,
+    changes: Partial<DraftActivity>,
+  ) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) =>
+        activity.id === activityId ? { ...activity, ...changes } : activity,
+      ),
+    );
+  };
+
+  const handleAddSubActivityDraft = (activityId: string) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        const newSub: DraftSubActivity = {
+          id: nextDraftId(),
+          name: `Subactividad ${activity.subactivities.length + 1}`,
+          start_date: "",
+          end_date: "",
+          tasks: [],
+        };
+        return { ...activity, subactivities: [...activity.subactivities, newSub] };
+      }),
+    );
+  };
+
+  const handleRemoveSubActivityDraft = (activityId: string, subId: string) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.filter((sub) => sub.id != subId),
+        };
+      }),
+    );
+  };
+
+  const handleUpdateSubActivityDraft = (
+    activityId: string,
+    subId: string,
+    changes: Partial<DraftSubActivity>,
+  ) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.map((sub) =>
+            sub.id === subId ? { ...sub, ...changes } : sub,
+          ),
+        };
+      }),
+    );
+  };
+
+  const handleAddTaskFromTemplate = (
+    activityId: string,
+    subId: string,
+    templateId: number,
+  ) => {
+    const template = taskTemplates?.find((item) => item.id === templateId);
+    if (!template) return;
+    const task: DraftTask = {
+      id: nextDraftId(),
+      type: "template",
+      templateId,
+      title: template.title,
+    };
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.map((sub) =>
+            sub.id === subId ? { ...sub, tasks: [...sub.tasks, task] } : sub,
+          ),
+        };
+      }),
+    );
+  };
+
+  const handleAddManualTask = (activityId: string, subId: string) => {
+    const task: DraftTask = {
+      id: nextDraftId(),
+      type: "manual",
+      title: "",
+    };
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.map((sub) =>
+            sub.id === subId ? { ...sub, tasks: [...sub.tasks, task] } : sub,
+          ),
+        };
+      }),
+    );
+  };
+
+  const handleRemoveTask = (
+    activityId: string,
+    subId: string,
+    taskId: string,
+  ) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.map((sub) =>
+            sub.id === subId
+              ? { ...sub, tasks: sub.tasks.filter((task) => task.id != taskId) }
+              : sub,
+          ),
+        };
+      }),
+    );
+  };
+
+  const handleUpdateTask = (
+    activityId: string,
+    subId: string,
+    taskId: string,
+    changes: Partial<DraftTask>,
+  ) => {
+    setActivityDrafts((prev) =>
+      prev.map((activity) => {
+        if (activity.id !== activityId) return activity;
+        return {
+          ...activity,
+          subactivities: activity.subactivities.map((sub) =>
+            sub.id === subId
+              ? {
+                  ...sub,
+                  tasks: sub.tasks.map((task) =>
+                    task.id === taskId ? { ...task, ...changes } : task,
+                  ),
+                }
+              : sub,
+          ),
+        };
+      }),
+    );
+  };
+
+  const handleAddMilestoneDraft = () => {
+    const milestone: DraftMilestone = {
+      id: nextDraftId(),
+      title: `Hito ${milestoneDrafts.length + 1}`,
+      due_date: "",
+      allow_late: false,
+      deliverables: [],
+    };
+    setMilestoneDrafts((prev) => [...prev, milestone]);
+    setShowMilestones(true);
+  };
+
+  const handleRemoveMilestoneDraft = (milestoneId: string) => {
+    setMilestoneDrafts((prev) =>
+      prev.filter((milestone) => milestone.id != milestoneId),
+    );
+  };
+
+  const handleUpdateMilestoneDraft = (
+    milestoneId: string,
+    changes: Partial<DraftMilestone>,
+  ) => {
+    setMilestoneDrafts((prev) =>
+      prev.map((milestone) =>
+        milestone.id === milestoneId ? { ...milestone, ...changes } : milestone,
+      ),
+    );
+  };
+
+  const handleAddDeliverableDraft = (milestoneId: string) => {
+    const deliverable: DraftDeliverable = {
+      id: nextDraftId(),
+      title: "",
+      kind: "link",
+      value: "",
+    };
+    setMilestoneDrafts((prev) =>
+      prev.map((milestone) =>
+        milestone.id === milestoneId
+          ? { ...milestone, deliverables: [...milestone.deliverables, deliverable] }
+          : milestone,
+      ),
+    );
+  };
+
+  const handleRemoveDeliverableDraft = (milestoneId: string, deliverableId: string) => {
+    setMilestoneDrafts((prev) =>
+      prev.map((milestone) =>
+        milestone.id === milestoneId
+          ? {
+              ...milestone,
+              deliverables: milestone.deliverables.filter(
+                (deliverable) => deliverable.id != deliverableId,
+              ),
+            }
+          : milestone,
+      ),
+    );
+  };
+
+  const handleUpdateDeliverableDraft = (
+    milestoneId: string,
+    deliverableId: string,
+    changes: Partial<DraftDeliverable>,
+  ) => {
+    setMilestoneDrafts((prev) =>
+      prev.map((milestone) =>
+        milestone.id === milestoneId
+          ? {
+              ...milestone,
+              deliverables: milestone.deliverables.map((deliverable) =>
+                deliverable.id === deliverableId
+                  ? { ...deliverable, ...changes }
+                  : deliverable,
+              ),
+            }
+          : milestone,
+      ),
+    );
+  };
+
+  const handleSaveProject = async () => {
     if (!projectName.trim()) {
       toast({ title: "Nombre requerido", status: "warning" });
       return;
     }
-    createProjectMutation.mutate();
+    setProjectSaving(true);
+    try {
+      const createdProject = await createErpProject({
+        name: projectName.trim(),
+        description: projectDescription.trim() || null,
+        start_date: projectStartDate || null,
+        end_date: projectEndDate || null,
+      });
+
+      for (const activity of activityDrafts) {
+        const createdActivity = await createActivity({
+          project_id: createdProject.id,
+          name: activity.name.trim(),
+          description: null,
+          start_date: null,
+          end_date: null,
+        });
+
+        for (const subactivity of activity.subactivities) {
+          const createdSubactivity = await createSubActivity({
+            activity_id: createdActivity.id,
+            name: subactivity.name.trim(),
+            description: null,
+            start_date: subactivity.start_date || null,
+            end_date: subactivity.end_date || null,
+          });
+
+          for (const task of subactivity.tasks) {
+            const templateId = task.type === "template" ? task.templateId : undefined;
+            const title = task.title.trim();
+            if (!title) continue;
+            await createErpTask({
+              project_id: createdProject.id,
+              subactivity_id: createdSubactivity.id,
+              task_template_id: templateId,
+              title,
+              description: null,
+              start_date: subactivity.start_date || null,
+              end_date: subactivity.end_date || null,
+            });
+          }
+        }
+      }
+
+      for (const milestone of milestoneDrafts) {
+        const createdMilestone = await createMilestone({
+          project_id: createdProject.id,
+          title: milestone.title.trim(),
+          description: null,
+          due_date: milestone.due_date || null,
+          allow_late_submission: milestone.allow_late,
+        });
+
+        for (const deliverable of milestone.deliverables) {
+          const title = deliverable.title.trim();
+          if (!title) continue;
+          await createDeliverable({
+            milestone_id: createdMilestone.id,
+            title,
+            notes: deliverable.kind === "text" ? deliverable.value : null,
+            link_url: deliverable.kind === "link" ? deliverable.value : null,
+          });
+        }
+      }
+
+      setProjectName("");
+      setProjectDescription("");
+      setProjectStartDate("");
+      setProjectEndDate("");
+      setActivityDrafts([]);
+      setMilestoneDrafts([]);
+      setShowActivities(false);
+      setShowMilestones(false);
+
+      await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+      toast({ title: "Proyecto guardado", status: "success" });
+    } catch (error: any) {
+      toast({
+        title: "No se pudo guardar el proyecto",
+        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        status: "error",
+      });
+    } finally {
+      setProjectSaving(false);
+    }
   };
 
   // Normaliza el estado de tarea para el Gantt.
+
   const getTaskStatus = (task: ErpTask): "pending" | "in_progress" | "done" => {
     const raw = task.status?.toLowerCase();
     if (raw === "pending" || raw === "in_progress" || raw === "done") {
@@ -367,6 +743,8 @@ export const ErpProjectsPage: React.FC = () => {
                   {projects.map((project) => (
                     <Box
                       key={project.id}
+                      as={Link}
+                      to={`/erp/projects/${project.id}`}
                       borderWidth="1px"
                       borderRadius="xl"
                       p={4}
@@ -435,51 +813,489 @@ export const ErpProjectsPage: React.FC = () => {
           </TabPanel>
           <TabPanel px={0}>
             {canManageProjects ? (
-              <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg} maxW="640px">
-                <Heading size="sm" mb={4}>
-                  Crear proyecto
-                </Heading>
-                <Stack spacing={3}>
-                  <FormControl>
-                    <FormLabel>Nombre del proyecto</FormLabel>
-                    <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel>Descripcion</FormLabel>
-                    <Textarea
-                      value={projectDescription}
-                      onChange={(e) => setProjectDescription(e.target.value)}
-                      rows={3}
-                    />
-                  </FormControl>
-                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-                    <FormControl>
-                      <FormLabel>Inicio</FormLabel>
-                      <Input
-                        type="date"
-                        value={projectStartDate}
-                        onChange={(e) => setProjectStartDate(e.target.value)}
-                      />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Fin</FormLabel>
-                      <Input
-                        type="date"
-                        value={projectEndDate}
-                        onChange={(e) => setProjectEndDate(e.target.value)}
-                      />
-                    </FormControl>
-                  </SimpleGrid>
-                  <Button
-                    colorScheme="green"
-                    onClick={handleCreateProject}
-                    isLoading={createProjectMutation.isPending}
-                    alignSelf="flex-start"
-                  >
+              <Stack spacing={6}>
+                <Box borderWidth="1px" borderRadius="xl" p={5} bg={panelBg}>
+                  <Heading size="sm" mb={3}>
                     Crear proyecto
-                  </Button>
-                </Stack>
-              </Box>
+                  </Heading>
+                  <Stack spacing={3}>
+                    <FormControl>
+                      <FormLabel>Nombre</FormLabel>
+                      <Input
+                        value={projectName}
+                        onChange={(e) => setProjectName(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Descripcion</FormLabel>
+                      <Textarea
+                        value={projectDescription}
+                        onChange={(e) => setProjectDescription(e.target.value)}
+                        rows={2}
+                      />
+                    </FormControl>
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                      <FormControl>
+                        <FormLabel>Inicio</FormLabel>
+                        <Input
+                          type="date"
+                          value={projectStartDate}
+                          onChange={(e) => setProjectStartDate(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel>Fin</FormLabel>
+                        <Input
+                          type="date"
+                          value={projectEndDate}
+                          onChange={(e) => setProjectEndDate(e.target.value)}
+                        />
+                      </FormControl>
+                    </SimpleGrid>
+                    <Stack direction={{ base: "column", md: "row" }} spacing={3}>
+                      <Button
+                        variant="outline"
+                        onClick={handleAddActivityDraft}
+                      >
+                        + Anadir actividad
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleAddMilestoneDraft}
+                      >
+                        + Anadir hito
+                      </Button>
+                      <Button
+                        colorScheme="green"
+                        onClick={handleSaveProject}
+                        isLoading={projectSaving}
+                        alignSelf={{ base: "stretch", md: "center" }}
+                      >
+                        Guardar proyecto
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+
+                {showActivities && (
+                  <Box borderWidth="1px" borderRadius="xl" p={5} bg={panelBg}>
+                    <Heading size="sm" mb={2}>
+                      Actividades
+                    </Heading>
+                    <Text fontSize="xs" color={subtleText} mb={4}>
+                      Suma pesos: {totalActivityWeight}% (objetivo 100%)
+                    </Text>
+                    <Accordion allowMultiple>
+                      {activityDrafts.map((activity, index) => (
+                        <AccordionItem key={activity.id} border="none">
+                          <AccordionButton px={0}>
+                            <Box flex="1" textAlign="left">
+                              <Text fontSize="sm" fontWeight="semibold">
+                                Actividad #{index + 1}
+                              </Text>
+                            </Box>
+                            <AccordionIcon />
+                          </AccordionButton>
+                          <AccordionPanel px={0} pt={3}>
+                            <Stack spacing={3}>
+                              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                                <FormControl>
+                                  <FormLabel>Nombre</FormLabel>
+                                  <Input
+                                    value={activity.name}
+                                    onChange={(e) =>
+                                      handleUpdateActivityDraft(activity.id, {
+                                        name: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </FormControl>
+                                <FormControl>
+                                  <FormLabel>Peso (%)</FormLabel>
+                                  <Input
+                                    type="number"
+                                    value={activity.weight}
+                                    onChange={(e) =>
+                                      handleUpdateActivityDraft(activity.id, {
+                                        weight: Number(e.target.value || 0),
+                                      })
+                                    }
+                                  />
+                                </FormControl>
+                              </SimpleGrid>
+                              <Button
+                                variant="outline"
+                                alignSelf="flex-start"
+                                onClick={() => handleAddSubActivityDraft(activity.id)}
+                              >
+                                + Anadir subactividad
+                              </Button>
+                              {activity.subactivities.length === 0 ? (
+                                <Text fontSize="sm" color={subtleText}>
+                                  Aun no hay subactividades.
+                                </Text>
+                              ) : (
+                                <Accordion allowMultiple>
+                                  {activity.subactivities.map((subactivity, subIndex) => (
+                                    <AccordionItem key={subactivity.id} border="none">
+                                      <AccordionButton px={0}>
+                                        <Box flex="1" textAlign="left">
+                                          <Text fontSize="sm" fontWeight="semibold">
+                                            Subactividad #{subIndex + 1}
+                                          </Text>
+                                        </Box>
+                                        <AccordionIcon />
+                                      </AccordionButton>
+                                      <AccordionPanel px={0} pt={3}>
+                                        <Stack spacing={3}>
+                                          <FormControl>
+                                            <FormLabel>Nombre</FormLabel>
+                                            <Input
+                                              value={subactivity.name}
+                                              onChange={(e) =>
+                                                handleUpdateSubActivityDraft(
+                                                  activity.id,
+                                                  subactivity.id,
+                                                  { name: e.target.value },
+                                                )
+                                              }
+                                            />
+                                          </FormControl>
+                                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                                            <FormControl>
+                                              <FormLabel>Inicio</FormLabel>
+                                              <Input
+                                                type="date"
+                                                value={subactivity.start_date}
+                                                onChange={(e) =>
+                                                  handleUpdateSubActivityDraft(
+                                                    activity.id,
+                                                    subactivity.id,
+                                                    { start_date: e.target.value },
+                                                  )
+                                                }
+                                              />
+                                            </FormControl>
+                                            <FormControl>
+                                              <FormLabel>Fin</FormLabel>
+                                              <Input
+                                                type="date"
+                                                value={subactivity.end_date}
+                                                onChange={(e) =>
+                                                  handleUpdateSubActivityDraft(
+                                                    activity.id,
+                                                    subactivity.id,
+                                                    { end_date: e.target.value },
+                                                  )
+                                                }
+                                              />
+                                            </FormControl>
+                                          </SimpleGrid>
+                                          <FormControl>
+                                            <FormLabel>Tareas del catalogo</FormLabel>
+                                            <Select
+                                              placeholder="Selecciona una tarea"
+                                              value={taskTemplateSelections[subactivity.id] ?? ""}
+                                              onChange={(e) =>
+                                                setTaskTemplateSelections((prev) => ({
+                                                  ...prev,
+                                                  [subactivity.id]: e.target.value,
+                                                }))
+                                              }
+                                            >
+                                              {(taskTemplates ?? []).map((template) => (
+                                                <option
+                                                  key={template.id}
+                                                  value={String(template.id)}
+                                                >
+                                                  {template.title}
+                                                </option>
+                                              ))}
+                                            </Select>
+                                          </FormControl>
+                                          <Stack direction={{ base: "column", md: "row" }} spacing={3}>
+                                            <Button
+                                              variant="outline"
+                                              onClick={() => {
+                                                const selected = taskTemplateSelections[subactivity.id];
+                                                if (!selected) return;
+                                                handleAddTaskFromTemplate(
+                                                  activity.id,
+                                                  subactivity.id,
+                                                  Number(selected),
+                                                );
+                                                setTaskTemplateSelections((prev) => ({
+                                                  ...prev,
+                                                  [subactivity.id]: "",
+                                                }));
+                                              }}
+                                            >
+                                              Anadir tarea
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              onClick={() =>
+                                                handleAddManualTask(activity.id, subactivity.id)
+                                              }
+                                            >
+                                              + Tarea manual
+                                            </Button>
+                                          </Stack>
+                                          {subactivity.tasks.length === 0 ? (
+                                            <Text fontSize="sm" color={subtleText}>
+                                              Aun no hay tareas agregadas.
+                                            </Text>
+                                          ) : (
+                                            <Stack spacing={2}>
+                                              {subactivity.tasks.map((task) => (
+                                                <Box
+                                                  key={task.id}
+                                                  borderWidth="1px"
+                                                  borderRadius="md"
+                                                  p={2}
+                                                >
+                                                  <Stack spacing={2}>
+                                                    {task.type === "manual" ? (
+                                                      <Input
+                                                        placeholder="Titulo de tarea"
+                                                        value={task.title}
+                                                        onChange={(e) =>
+                                                          handleUpdateTask(
+                                                            activity.id,
+                                                            subactivity.id,
+                                                            task.id,
+                                                            { title: e.target.value },
+                                                          )
+                                                        }
+                                                      />
+                                                    ) : (
+                                                      <Text fontSize="sm" fontWeight="semibold">
+                                                        {task.title}
+                                                      </Text>
+                                                    )}
+                                                    <Button
+                                                      size="xs"
+                                                      variant="ghost"
+                                                      alignSelf="flex-start"
+                                                      onClick={() =>
+                                                        handleRemoveTask(
+                                                          activity.id,
+                                                          subactivity.id,
+                                                          task.id,
+                                                        )
+                                                      }
+                                                    >
+                                                      Quitar
+                                                    </Button>
+                                                  </Stack>
+                                                </Box>
+                                              ))}
+                                            </Stack>
+                                          )}
+                                          <Button
+                                            size="xs"
+                                            variant="ghost"
+                                            alignSelf="flex-start"
+                                            onClick={() =>
+                                              handleRemoveSubActivityDraft(
+                                                activity.id,
+                                                subactivity.id,
+                                              )
+                                            }
+                                          >
+                                            Eliminar subactividad
+                                          </Button>
+                                        </Stack>
+                                      </AccordionPanel>
+                                    </AccordionItem>
+                                  ))}
+                                </Accordion>
+                              )}
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                alignSelf="flex-start"
+                                onClick={() => handleRemoveActivityDraft(activity.id)}
+                              >
+                                Eliminar actividad
+                              </Button>
+                            </Stack>
+                          </AccordionPanel>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                    <Button
+                      variant="outline"
+                      onClick={handleAddActivityDraft}
+                      mt={4}
+                    >
+                      + Anadir actividad
+                    </Button>
+                  </Box>
+                )}
+
+                {showMilestones && (
+                  <Box borderWidth="1px" borderRadius="xl" p={5} bg={panelBg}>
+                    <Heading size="sm" mb={3}>
+                      Hitos y entregables
+                    </Heading>
+                    <Accordion allowMultiple>
+                      {milestoneDrafts.map((milestone, index) => (
+                        <AccordionItem key={milestone.id} border="none">
+                          <AccordionButton px={0}>
+                            <Box flex="1" textAlign="left">
+                              <Text fontSize="sm" fontWeight="semibold">
+                                Hito #{index + 1}
+                              </Text>
+                            </Box>
+                            <AccordionIcon />
+                          </AccordionButton>
+                          <AccordionPanel px={0} pt={3}>
+                            <Stack spacing={3}>
+                              <FormControl>
+                                <FormLabel>Nombre del hito</FormLabel>
+                                <Input
+                                  value={milestone.title}
+                                  onChange={(e) =>
+                                    handleUpdateMilestoneDraft(milestone.id, {
+                                      title: e.target.value,
+                                    })
+                                  }
+                                />
+                              </FormControl>
+                              <FormControl>
+                                <FormLabel>Fecha limite</FormLabel>
+                                <Input
+                                  type="date"
+                                  value={milestone.due_date}
+                                  onChange={(e) =>
+                                    handleUpdateMilestoneDraft(milestone.id, {
+                                      due_date: e.target.value,
+                                    })
+                                  }
+                                />
+                              </FormControl>
+                              <Checkbox
+                                isChecked={milestone.allow_late}
+                                onChange={(e) =>
+                                  handleUpdateMilestoneDraft(milestone.id, {
+                                    allow_late: e.target.checked,
+                                  })
+                                }
+                              >
+                                Permitir entregas fuera de plazo
+                              </Checkbox>
+                              <Text fontSize="sm" color={subtleText}>
+                                Entregables
+                              </Text>
+                              {milestone.deliverables.length === 0 ? (
+                                <Text fontSize="sm" color={subtleText}>
+                                  Aun no hay entregables.
+                                </Text>
+                              ) : (
+                                <Stack spacing={2}>
+                                  {milestone.deliverables.map((deliverable) => (
+                                    <Box
+                                      key={deliverable.id}
+                                      borderWidth="1px"
+                                      borderRadius="md"
+                                      p={2}
+                                    >
+                                      <Stack spacing={2}>
+                                        <FormControl>
+                                          <FormLabel>Titulo</FormLabel>
+                                          <Input
+                                            value={deliverable.title}
+                                            onChange={(e) =>
+                                              handleUpdateDeliverableDraft(
+                                                milestone.id,
+                                                deliverable.id,
+                                                { title: e.target.value },
+                                              )
+                                            }
+                                          />
+                                        </FormControl>
+                                        <FormControl>
+                                          <FormLabel>Tipo</FormLabel>
+                                          <Select
+                                            value={deliverable.kind}
+                                            onChange={(e) =>
+                                              handleUpdateDeliverableDraft(
+                                                milestone.id,
+                                                deliverable.id,
+                                                {
+                                                  kind: e.target.value as
+                                                    | "text"
+                                                    | "link",
+                                                },
+                                              )
+                                            }
+                                          >
+                                            <option value="link">LINK</option>
+                                            <option value="text">TEXT</option>
+                                          </Select>
+                                        </FormControl>
+                                        <FormControl>
+                                          <FormLabel>Valor</FormLabel>
+                                          <Input
+                                            value={deliverable.value}
+                                            onChange={(e) =>
+                                              handleUpdateDeliverableDraft(
+                                                milestone.id,
+                                                deliverable.id,
+                                                { value: e.target.value },
+                                              )
+                                            }
+                                          />
+                                        </FormControl>
+                                        <Button
+                                          size="xs"
+                                          variant="ghost"
+                                          alignSelf="flex-start"
+                                          onClick={() =>
+                                            handleRemoveDeliverableDraft(
+                                              milestone.id,
+                                              deliverable.id,
+                                            )
+                                          }
+                                        >
+                                          Quitar entregable
+                                        </Button>
+                                      </Stack>
+                                    </Box>
+                                  ))}
+                                </Stack>
+                              )}
+                              <Button
+                                variant="outline"
+                                alignSelf="flex-start"
+                                onClick={() => handleAddDeliverableDraft(milestone.id)}
+                              >
+                                + Anadir entregable
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                alignSelf="flex-start"
+                                onClick={() => handleRemoveMilestoneDraft(milestone.id)}
+                              >
+                                Eliminar hito
+                              </Button>
+                            </Stack>
+                          </AccordionPanel>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                    <Button
+                      variant="outline"
+                      onClick={handleAddMilestoneDraft}
+                      mt={4}
+                    >
+                      + Anadir hito
+                    </Button>
+                  </Box>
+                )}
+              </Stack>
             ) : (
               <Text fontSize="sm" color={subtleText}>
                 No tienes permisos para crear proyectos.

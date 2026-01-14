@@ -14,6 +14,8 @@ export interface TimeSession {
 export interface ErpTask {
   id: number;
   project_id: number | null;
+  subactivity_id?: number | null;
+  task_template_id?: number | null;
   title: string;
   description?: string | null;
   assigned_to_id?: number | null;

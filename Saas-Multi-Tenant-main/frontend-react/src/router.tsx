@@ -21,6 +21,7 @@ import { SupportTicketsPage } from "./pages/SupportTicketsPage";
 import { HrPage } from "./pages/HrPage";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { ErpProjectsPage } from "./pages/ErpProjectsPage";
+import { ErpProjectDetailPage } from "./pages/ErpProjectDetailPage";
 import { ErpTasksPage } from "./pages/ErpTasksPage";
 
 // Layout raíz muy simple: delega en cada página.
@@ -78,6 +79,12 @@ const erpProjectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/erp/projects",
   component: ErpProjectsPage,
+});
+
+const erpProjectDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/projects/$projectId",
+  component: ErpProjectDetailPage,
 });
 
 const erpTasksRoute = createRoute({
@@ -146,6 +153,7 @@ const routeTree = rootRoute.addChildren([
   tenantSettingsRoute,
   timeControlRoute,
   erpProjectsRoute,
+  erpProjectDetailRoute,
   erpTasksRoute,
   erpTimeControlRoute,
   erpTimeReportRoute,

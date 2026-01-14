@@ -3,8 +3,11 @@ import { apiClient } from "./client";
 export interface ErpProject {
   id: number;
   name: string;
+  description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  is_active?: boolean;
+  created_at?: string;
 }
 
 export interface TimeReportRow {
@@ -26,6 +29,13 @@ export interface TimeReportFilters {
 
 export async function fetchErpProjects(): Promise<ErpProject[]> {
   const response = await apiClient.get<ErpProject[]>("/api/v1/erp/projects");
+  return response.data;
+}
+
+export async function fetchErpProject(projectId: number): Promise<ErpProject> {
+  const response = await apiClient.get<ErpProject>(
+    `/api/v1/erp/projects/${projectId}`,
+  );
   return response.data;
 }
 

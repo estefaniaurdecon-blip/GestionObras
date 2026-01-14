@@ -5,11 +5,35 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import func
 
-from app.models.erp import Project, Task, TimeEntry, TimeSession
+from app.models.erp import (
+    Activity,
+    Deliverable,
+    Milestone,
+    Project,
+    SubActivity,
+    Task,
+    TaskTemplate,
+    TimeEntry,
+    TimeSession,
+)
 from app.models.hr import EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
-from app.schemas.erp import ProjectCreate, TaskCreate, TaskUpdate
+from app.schemas.erp import (
+    ActivityCreate,
+    ActivityUpdate,
+    DeliverableCreate,
+    DeliverableUpdate,
+    MilestoneCreate,
+    MilestoneUpdate,
+    ProjectCreate,
+    ProjectUpdate,
+    SubActivityCreate,
+    SubActivityUpdate,
+    TaskCreate,
+    TaskTemplateCreate,
+    TaskUpdate,
+)
 from app.services.notification_service import create_notification
 
 TASK_STATUSES = {"pending", "in_progress", "done"}
@@ -27,6 +51,13 @@ def list_projects(session: Session) -> list[Project]:
     ).all()
 
 
+def get_project(session: Session, project_id: int) -> Project:
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+    return project
+
+
 def list_tasks(session: Session) -> list[Task]:
     return session.exec(
         select(Task).order_by(Task.created_at.desc()),
@@ -42,6 +73,30 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
         end_date=data.end_date,
         is_active=data.is_active,
     )
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    return project
+
+
+def update_project(session: Session, project_id: int, data: ProjectUpdate) -> Project:
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+
+    if data.name is not None:
+        project.name = data.name
+    if data.description is not None:
+        project.description = data.description
+    if data.start_date is not None or data.end_date is not None:
+        start_date = data.start_date if data.start_date is not None else project.start_date
+        end_date = data.end_date if data.end_date is not None else project.end_date
+        _validate_date_range(start_date, end_date)
+        project.start_date = start_date
+        project.end_date = end_date
+    if data.is_active is not None:
+        project.is_active = data.is_active
+
     session.add(project)
     session.commit()
     session.refresh(project)
@@ -85,16 +140,84 @@ def _validate_date_range(start_date: Optional[datetime], end_date: Optional[date
         raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
 
 
+def _resolve_activity(
+    session: Session,
+    project_id: Optional[int],
+    activity_id: Optional[int],
+) -> Optional[Activity]:
+    if activity_id is None:
+        return None
+    activity = session.get(Activity, activity_id)
+    if not activity:
+        raise ValueError("Actividad no encontrada.")
+    if project_id and activity.project_id != project_id:
+        raise ValueError("La actividad no pertenece al proyecto indicado.")
+    return activity
+
+
+def _resolve_subactivity(
+    session: Session,
+    project_id: Optional[int],
+    subactivity_id: Optional[int],
+) -> Optional[SubActivity]:
+    if subactivity_id is None:
+        return None
+    subactivity = session.get(SubActivity, subactivity_id)
+    if not subactivity:
+        raise ValueError("Subactividad no encontrada.")
+    activity = session.get(Activity, subactivity.activity_id)
+    if not activity:
+        raise ValueError("Actividad asociada no encontrada.")
+    if project_id and activity.project_id != project_id:
+        raise ValueError("La subactividad no pertenece al proyecto indicado.")
+    return subactivity
+
+
+def _resolve_task_template(
+    session: Session,
+    task_template_id: Optional[int],
+) -> Optional[TaskTemplate]:
+    if task_template_id is None:
+        return None
+    template = session.get(TaskTemplate, task_template_id)
+    if not template:
+        raise ValueError("Plantilla de tarea no encontrada.")
+    if not template.is_active:
+        raise ValueError("La plantilla de tarea no esta activa.")
+    return template
+
+
+def _resolve_milestone(
+    session: Session,
+    milestone_id: int,
+) -> Milestone:
+    milestone = session.get(Milestone, milestone_id)
+    if not milestone:
+        raise ValueError("Hito no encontrado.")
+    return milestone
+
+
 def create_task(session: Session, current_user: User, data: TaskCreate) -> Task:
-    if data.project_id is not None and not session.get(Project, data.project_id):
+    project_id = data.project_id
+    if project_id is not None and not session.get(Project, project_id):
         raise ValueError("Proyecto no encontrado.")
+
+    # Resolver dependencias jerarquicas si se proporcionan.
+    subactivity = _resolve_subactivity(session, project_id, data.subactivity_id)
+    if subactivity:
+        activity = session.get(Activity, subactivity.activity_id)
+        if activity and not project_id:
+            project_id = activity.project_id
+    _resolve_task_template(session, data.task_template_id)
 
     assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
     _validate_date_range(data.start_date, data.end_date)
 
     status = _normalize_task_status(data.status, data.is_completed)
     task = Task(
-        project_id=data.project_id,
+        project_id=project_id,
+        subactivity_id=data.subactivity_id,
+        task_template_id=data.task_template_id,
         title=data.title,
         description=data.description,
         assigned_to_id=assignee.id if assignee else None,
@@ -139,6 +262,12 @@ def update_task(
         if data.project_id is not None and not session.get(Project, data.project_id):
             raise ValueError("Proyecto no encontrado.")
         task.project_id = data.project_id
+    if data.subactivity_id is not None:
+        _resolve_subactivity(session, task.project_id, data.subactivity_id)
+        task.subactivity_id = data.subactivity_id
+    if data.task_template_id is not None:
+        _resolve_task_template(session, data.task_template_id)
+        task.task_template_id = data.task_template_id
     if data.status is not None:
         status = _normalize_task_status(data.status, None)
         task.status = status
@@ -171,6 +300,243 @@ def update_task(
     session.commit()
     session.refresh(task)
     return task
+
+
+def list_task_templates(session: Session) -> list[TaskTemplate]:
+    return session.exec(
+        select(TaskTemplate).order_by(TaskTemplate.created_at.desc()),
+    ).all()
+
+
+def create_task_template(session: Session, data: TaskTemplateCreate) -> TaskTemplate:
+    template = TaskTemplate(
+        title=data.title,
+        description=data.description,
+        is_active=data.is_active,
+    )
+    session.add(template)
+    session.commit()
+    session.refresh(template)
+    return template
+
+
+def list_activities(session: Session, project_id: Optional[int] = None) -> list[Activity]:
+    stmt = select(Activity)
+    if project_id is not None:
+        stmt = stmt.where(Activity.project_id == project_id)
+    return session.exec(stmt.order_by(Activity.created_at.desc())).all()
+
+
+def create_activity(session: Session, data: ActivityCreate) -> Activity:
+    if not session.get(Project, data.project_id):
+        raise ValueError("Proyecto no encontrado.")
+    _validate_date_range(data.start_date, data.end_date)
+    activity = Activity(
+        project_id=data.project_id,
+        name=data.name,
+        description=data.description,
+        start_date=data.start_date,
+        end_date=data.end_date,
+    )
+    session.add(activity)
+    session.commit()
+    session.refresh(activity)
+    return activity
+
+
+def update_activity(session: Session, activity_id: int, data: ActivityUpdate) -> Activity:
+    activity = session.get(Activity, activity_id)
+    if not activity:
+        raise ValueError("Actividad no encontrada.")
+
+    if data.name is not None:
+        activity.name = data.name
+    if data.description is not None:
+        activity.description = data.description
+    if data.start_date is not None or data.end_date is not None:
+        start_date = data.start_date if data.start_date is not None else activity.start_date
+        end_date = data.end_date if data.end_date is not None else activity.end_date
+        _validate_date_range(start_date, end_date)
+        activity.start_date = start_date
+        activity.end_date = end_date
+
+    session.add(activity)
+    session.commit()
+    session.refresh(activity)
+    return activity
+
+
+def list_subactivities(
+    session: Session,
+    project_id: Optional[int] = None,
+    activity_id: Optional[int] = None,
+) -> list[SubActivity]:
+    stmt = select(SubActivity)
+    if activity_id is not None:
+        stmt = stmt.where(SubActivity.activity_id == activity_id)
+    if project_id is not None:
+        stmt = (
+            stmt.join(Activity, Activity.id == SubActivity.activity_id)
+            .where(Activity.project_id == project_id)
+        )
+    return session.exec(stmt.order_by(SubActivity.created_at.desc())).all()
+
+
+def create_subactivity(session: Session, data: SubActivityCreate) -> SubActivity:
+    activity = session.get(Activity, data.activity_id)
+    if not activity:
+        raise ValueError("Actividad no encontrada.")
+    _validate_date_range(data.start_date, data.end_date)
+    subactivity = SubActivity(
+        activity_id=data.activity_id,
+        name=data.name,
+        description=data.description,
+        start_date=data.start_date,
+        end_date=data.end_date,
+    )
+    session.add(subactivity)
+    session.commit()
+    session.refresh(subactivity)
+    return subactivity
+
+
+def update_subactivity(session: Session, subactivity_id: int, data: SubActivityUpdate) -> SubActivity:
+    subactivity = session.get(SubActivity, subactivity_id)
+    if not subactivity:
+        raise ValueError("Subactividad no encontrada.")
+
+    if data.name is not None:
+        subactivity.name = data.name
+    if data.description is not None:
+        subactivity.description = data.description
+    if data.start_date is not None or data.end_date is not None:
+        start_date = data.start_date if data.start_date is not None else subactivity.start_date
+        end_date = data.end_date if data.end_date is not None else subactivity.end_date
+        _validate_date_range(start_date, end_date)
+        subactivity.start_date = start_date
+        subactivity.end_date = end_date
+
+    session.add(subactivity)
+    session.commit()
+    session.refresh(subactivity)
+    return subactivity
+
+
+def list_milestones(
+    session: Session,
+    project_id: Optional[int] = None,
+    activity_id: Optional[int] = None,
+) -> list[Milestone]:
+    stmt = select(Milestone)
+    if project_id is not None:
+        stmt = stmt.where(Milestone.project_id == project_id)
+    if activity_id is not None:
+        stmt = stmt.where(Milestone.activity_id == activity_id)
+    return session.exec(stmt.order_by(Milestone.created_at.desc())).all()
+
+
+def create_milestone(session: Session, data: MilestoneCreate) -> Milestone:
+    if not session.get(Project, data.project_id):
+        raise ValueError("Proyecto no encontrado.")
+    _resolve_activity(session, data.project_id, data.activity_id)
+    milestone = Milestone(
+        project_id=data.project_id,
+        activity_id=data.activity_id,
+        title=data.title,
+        description=data.description,
+        due_date=data.due_date,
+        allow_late_submission=data.allow_late_submission,
+    )
+    session.add(milestone)
+    session.commit()
+    session.refresh(milestone)
+    return milestone
+
+
+def update_milestone(session: Session, milestone_id: int, data: MilestoneUpdate) -> Milestone:
+    milestone = session.get(Milestone, milestone_id)
+    if not milestone:
+        raise ValueError("Hito no encontrado.")
+
+    if data.title is not None:
+        milestone.title = data.title
+    if data.description is not None:
+        milestone.description = data.description
+    if data.due_date is not None:
+        milestone.due_date = data.due_date
+    if data.allow_late_submission is not None:
+        milestone.allow_late_submission = data.allow_late_submission
+
+    session.add(milestone)
+    session.commit()
+    session.refresh(milestone)
+    return milestone
+
+
+def list_deliverables(
+    session: Session,
+    milestone_id: Optional[int] = None,
+) -> list[Deliverable]:
+    stmt = select(Deliverable)
+    if milestone_id is not None:
+        stmt = stmt.where(Deliverable.milestone_id == milestone_id)
+    return session.exec(stmt.order_by(Deliverable.created_at.desc())).all()
+
+
+def create_deliverable(session: Session, data: DeliverableCreate) -> Deliverable:
+    milestone = _resolve_milestone(session, data.milestone_id)
+    submitted_at = _as_aware(data.submitted_at or datetime.now(timezone.utc))
+    is_late = False
+    if milestone.due_date and submitted_at > _as_aware(milestone.due_date):
+        is_late = True
+        if not milestone.allow_late_submission:
+            raise ValueError("Entrega fuera de plazo para este hito.")
+
+    deliverable = Deliverable(
+        milestone_id=data.milestone_id,
+        title=data.title,
+        notes=data.notes,
+        link_url=data.link_url,
+        file_id=data.file_id,
+        submitted_at=submitted_at,
+        is_late=is_late,
+    )
+    session.add(deliverable)
+    session.commit()
+    session.refresh(deliverable)
+    return deliverable
+
+
+def update_deliverable(session: Session, deliverable_id: int, data: DeliverableUpdate) -> Deliverable:
+    deliverable = session.get(Deliverable, deliverable_id)
+    if not deliverable:
+        raise ValueError("Entregable no encontrado.")
+
+    if data.title is not None:
+        deliverable.title = data.title
+    if data.notes is not None:
+        deliverable.notes = data.notes
+    if data.link_url is not None:
+        deliverable.link_url = data.link_url
+    if data.file_id is not None:
+        deliverable.file_id = data.file_id
+    if data.submitted_at is not None:
+        deliverable.submitted_at = _as_aware(data.submitted_at)
+
+    milestone = _resolve_milestone(session, deliverable.milestone_id)
+    if deliverable.submitted_at and milestone.due_date:
+        deliverable.is_late = _as_aware(deliverable.submitted_at) > _as_aware(
+            milestone.due_date,
+        )
+        if deliverable.is_late and not milestone.allow_late_submission:
+            raise ValueError("Entrega fuera de plazo para este hito.")
+    else:
+        deliverable.is_late = False
+
+    session.add(deliverable)
+    session.commit()
+    session.refresh(deliverable)
+    return deliverable
 
 
 def get_active_time_session(session: Session, user: User) -> Optional[TimeSession]:

@@ -61,6 +61,20 @@ def init_db() -> None:
                         "ADD COLUMN end_date TIMESTAMP NULL"
                     )
                 )
+            if "subactivity_id" not in task_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE erp_task "
+                        "ADD COLUMN subactivity_id INTEGER NULL"
+                    )
+                )
+            if "task_template_id" not in task_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE erp_task "
+                        "ADD COLUMN task_template_id INTEGER NULL"
+                    )
+                )
 
     if "erp_project" in table_names:
         project_columns = {col["name"] for col in inspector.get_columns("erp_project")}

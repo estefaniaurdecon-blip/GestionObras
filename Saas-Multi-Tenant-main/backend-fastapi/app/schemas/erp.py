@@ -23,9 +23,19 @@ class ProjectCreate(BaseModel):
     is_active: bool = True
 
 
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
 class TaskRead(BaseModel):
     id: int
     project_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
+    task_template_id: Optional[int] = None
     title: str
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
@@ -38,6 +48,8 @@ class TaskRead(BaseModel):
 
 class TaskCreate(BaseModel):
     project_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
+    task_template_id: Optional[int] = None
     title: str
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
@@ -49,6 +61,8 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     project_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
+    task_template_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     assigned_to_id: Optional[int] = None
@@ -56,6 +70,126 @@ class TaskUpdate(BaseModel):
     end_date: Optional[datetime] = None
     status: Optional[str] = None
     is_completed: Optional[bool] = None
+
+
+class TaskTemplateRead(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+
+class TaskTemplateCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+
+class ActivityRead(BaseModel):
+    id: int
+    project_id: int
+    name: str
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    created_at: datetime
+
+
+class ActivityCreate(BaseModel):
+    project_id: int
+    name: str
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class ActivityUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class SubActivityRead(BaseModel):
+    id: int
+    activity_id: int
+    name: str
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    created_at: datetime
+
+
+class SubActivityCreate(BaseModel):
+    activity_id: int
+    name: str
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class SubActivityUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class MilestoneRead(BaseModel):
+    id: int
+    project_id: int
+    activity_id: Optional[int] = None
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    allow_late_submission: bool
+    created_at: datetime
+
+
+class MilestoneCreate(BaseModel):
+    project_id: int
+    activity_id: Optional[int] = None
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    allow_late_submission: bool = False
+
+
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    allow_late_submission: Optional[bool] = None
+
+
+class DeliverableRead(BaseModel):
+    id: int
+    milestone_id: int
+    title: str
+    notes: Optional[str] = None
+    link_url: Optional[str] = None
+    file_id: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    is_late: bool
+    created_at: datetime
+
+
+class DeliverableCreate(BaseModel):
+    milestone_id: int
+    title: str
+    notes: Optional[str] = None
+    link_url: Optional[str] = None
+    file_id: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+
+
+class DeliverableUpdate(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    link_url: Optional[str] = None
+    file_id: Optional[str] = None
+    submitted_at: Optional[datetime] = None
 
 
 class TimeSessionRead(BaseModel):
