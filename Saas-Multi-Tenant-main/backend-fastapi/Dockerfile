@@ -17,11 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiamos el código de la aplicación
 COPY app ./app
-COPY .env.example ./.env
 
 # Variables de entorno básicas
 ENV PYTHONUNBUFFERED=1
 
 # Comando por defecto: levantar API con uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

@@ -162,11 +162,11 @@ export const ErpTasksPage: React.FC = () => {
       (task) => task.assigned_to_id === currentUserId
     );
   }, [tasks, currentUserId]);
+  const allTasks = tasks ?? [];
 
   // KPIs del resumen.
   const taskCount = tasks?.length ?? 0;
-  const assignedCount =
-    tasks?.filter((task) => task.assigned_to_id).length ?? 0;
+  const assignedCount = assignedTasks.length;
 
   // Mutaciones para crear y editar tareas.
   const createTaskMutation = useMutation({
@@ -433,230 +433,196 @@ export const ErpTasksPage: React.FC = () => {
             spacing={4}
             pt={2}
             maxW="420px"
-          >
-            <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
-              <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
-                Tareas totales
-              </Text>
-              <Text fontSize="2xl" fontWeight="semibold">
-                {taskCount}
-              </Text>
-            </Box>
-            <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
-              <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
-                Tareas asignadas
-              </Text>
-              <Text fontSize="2xl" fontWeight="semibold">
-                {assignedCount}
-              </Text>
-            </Box>
-          </SimpleGrid>
+          ></SimpleGrid>
         </Stack>
       </Box>
 
       <Tabs variant="enclosed" colorScheme="green" isLazy>
         <TabList flexWrap="wrap" gap={2}>
           <Tab>Resumen</Tab>
-          <Tab>Crear</Tab>
           <Tab>Kanban</Tab>
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
-              <Box
-                as={Link}
-                to="/erp/projects"
-                borderWidth="1px"
-                borderRadius="xl"
-                p={4}
-                bg={cardBg}
-                _hover={{ shadow: "md", borderColor: accent }}
-              >
-                <Text
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  color={subtleText}
-                >
-                  Proyectos
-                </Text>
-                <Heading size="sm" mb={1}>
-                  Gestion de proyectos
-                </Heading>
-                <Text fontSize="sm" color={subtleText}>
-                  Crea proyectos, asigna fechas y revisa el Gantt.
-                </Text>
-              </Box>
-              <Box
-                as={Link}
-                to="/erp/time-control"
-                borderWidth="1px"
-                borderRadius="xl"
-                p={4}
-                bg={cardBg}
-                _hover={{ shadow: "md", borderColor: accent }}
-              >
-                <Text
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  color={subtleText}
-                >
-                  Tiempo en vivo
-                </Text>
-                <Heading size="sm" mb={1}>
-                  Control de tiempo
-                </Heading>
-                <Text fontSize="sm" color={subtleText}>
-                  Inicia y detiene sesiones sin salir del tablero.
-                </Text>
-              </Box>
-              <Box
-                as={Link}
-                to="/erp/time-report"
-                borderWidth="1px"
-                borderRadius="xl"
-                p={4}
-                bg={cardBg}
-                _hover={{ shadow: "md", borderColor: accent }}
-              >
-                <Text
-                  fontSize="xs"
-                  textTransform="uppercase"
-                  color={subtleText}
-                >
-                  Analitica
-                </Text>
-                <Heading size="sm" mb={1}>
-                  Informe de horas
-                </Heading>
-                <Text fontSize="sm" color={subtleText}>
-                  Controla coste y rendimiento por usuario.
-                </Text>
-              </Box>
-            </SimpleGrid>
-            <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+            <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
               <Heading size="sm" mb={3}>
-                Mis tareas asignadas
-              </Heading>
-              {assignedTasks.length === 0 ? (
-                <Text fontSize="sm" color={subtleText}>
-                  No tienes tareas asignadas ahora mismo.
-                </Text>
-              ) : (
-                <Stack spacing={3}>
-                  {assignedTasks.slice(0, 10).map((task) => (
-                    <Box
-                      key={task.id}
-                      borderWidth="1px"
-                      borderRadius="lg"
-                      p={3}
-                    >
-                      <Text fontWeight="semibold">{task.title}</Text>
-                      <Text fontSize="xs" color={subtleText}>
-                        {task.project_id
-                          ? `Proyecto: ${
-                              projectMap.get(task.project_id) ?? task.project_id
-                            }`
-                          : "Sin proyecto"}
-                      </Text>
-                      <Badge
-                        mt={2}
-                        colorScheme={kanbanStyles[getTaskStatus(task)].accent}
-                      >
-                        {statusLabels[getTaskStatus(task)]}
-                      </Badge>
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Box>
-          </TabPanel>
-          <TabPanel px={0}>
-            <Box
-              borderWidth="1px"
-              borderRadius="xl"
-              p={6}
-              bg={panelBg}
-              maxW="640px"
-            >
-              <Heading size="sm" mb={4}>
                 Crear tarea
               </Heading>
-              <Stack spacing={3}>
-                <FormControl>
-                  <FormLabel>Titulo de la tarea</FormLabel>
-                  <Input
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>Descripcion</FormLabel>
-                  <Textarea
-                    value={taskDescription}
-                    onChange={(e) => setTaskDescription(e.target.value)}
-                    rows={3}
-                  />
-                </FormControl>
-                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-                  <FormControl>
-                    <FormLabel>Inicio</FormLabel>
-                    <Input
-                      type="date"
-                      value={taskStartDate}
-                      onChange={(e) => setTaskStartDate(e.target.value)}
-                    />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel>Fin</FormLabel>
-                    <Input
-                      type="date"
-                      value={taskEndDate}
-                      onChange={(e) => setTaskEndDate(e.target.value)}
-                    />
-                  </FormControl>
+              <Stack spacing={2}>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+                  <Stack spacing={2}>
+                    <FormControl>
+                      <FormLabel>Titulo de la tarea</FormLabel>
+                      <Input
+                        value={taskTitle}
+                        onChange={(e) => setTaskTitle(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Descripcion</FormLabel>
+                      <Textarea
+                        value={taskDescription}
+                        onChange={(e) => setTaskDescription(e.target.value)}
+                        rows={2}
+                      />
+                    </FormControl>
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
+                      <FormControl>
+                        <FormLabel>Inicio</FormLabel>
+                        <Input
+                          type="date"
+                          value={taskStartDate}
+                          onChange={(e) => setTaskStartDate(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel>Fin</FormLabel>
+                        <Input
+                          type="date"
+                          value={taskEndDate}
+                          onChange={(e) => setTaskEndDate(e.target.value)}
+                        />
+                      </FormControl>
+                    </SimpleGrid>
+                  </Stack>
+                  <Stack spacing={2}>
+                    <FormControl>
+                      <FormLabel>Proyecto</FormLabel>
+                      <Select
+                        placeholder="Sin proyecto"
+                        value={taskProjectId}
+                        onChange={(e) => setTaskProjectId(e.target.value)}
+                      >
+                        {(projects ?? []).map((project) => (
+                          <option key={project.id} value={String(project.id)}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Asignar a</FormLabel>
+                      <Select
+                        placeholder={
+                          isSuperAdmin
+                            ? "Selecciona usuario"
+                            : "Usuarios del tenant"
+                        }
+                        value={taskAssigneeId}
+                        onChange={(e) => setTaskAssigneeId(e.target.value)}
+                      >
+                        {(users ?? []).map((user) => (
+                          <option key={user.id} value={String(user.id)}>
+                            {user.full_name || user.email}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
                 </SimpleGrid>
-                <FormControl>
-                  <FormLabel>Proyecto</FormLabel>
-                  <Select
-                    placeholder="Sin proyecto"
-                    value={taskProjectId}
-                    onChange={(e) => setTaskProjectId(e.target.value)}
-                  >
-                    {(projects ?? []).map((project) => (
-                      <option key={project.id} value={String(project.id)}>
-                        {project.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl>
-                  <FormLabel>Asignar a</FormLabel>
-                  <Select
-                    placeholder={
-                      isSuperAdmin
-                        ? "Selecciona usuario"
-                        : "Usuarios del tenant"
-                    }
-                    value={taskAssigneeId}
-                    onChange={(e) => setTaskAssigneeId(e.target.value)}
-                  >
-                    {(users ?? []).map((user) => (
-                      <option key={user.id} value={String(user.id)}>
-                        {user.full_name || user.email}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
                 <Button
                   colorScheme="green"
                   onClick={handleCreateTask}
                   isLoading={createTaskMutation.isPending}
                   alignSelf="flex-start"
+                  size="sm"
                 >
                   Crear tarea
                 </Button>
               </Stack>
             </Box>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+              <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+                <Stack
+                  direction="row"
+                  justify="space-between"
+                  align="center"
+                  mb={3}
+                >
+                  <Heading size="sm">Todas las tareas</Heading>
+                  <Badge borderRadius="full" px={2}>
+                    {allTasks.length}
+                  </Badge>
+                </Stack>
+                {allTasks.length === 0 ? (
+                  <Text fontSize="sm" color={subtleText}>
+                    No hay tareas registradas.
+                  </Text>
+                ) : (
+                  <Stack spacing={3}>
+                    {allTasks.slice(0, 10).map((task) => (
+                      <Box
+                        key={task.id}
+                        borderWidth="1px"
+                        borderRadius="lg"
+                        p={3}
+                      >
+                        <Text fontWeight="semibold">{task.title}</Text>
+                        <Text fontSize="xs" color={subtleText}>
+                          {task.project_id
+                            ? `Proyecto: ${
+                                projectMap.get(task.project_id) ??
+                                task.project_id
+                              }`
+                            : "Sin proyecto"}
+                        </Text>
+                        <Badge
+                          mt={2}
+                          colorScheme={kanbanStyles[getTaskStatus(task)].accent}
+                        >
+                          {statusLabels[getTaskStatus(task)]}
+                        </Badge>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+              <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+                <Stack
+                  direction="row"
+                  justify="space-between"
+                  align="center"
+                  mb={3}
+                >
+                  <Heading size="sm">Mis tareas asignadas</Heading>
+                  <Badge borderRadius="full" px={2}>
+                    {assignedTasks.length}
+                  </Badge>
+                </Stack>
+                {assignedTasks.length === 0 ? (
+                  <Text fontSize="sm" color={subtleText}>
+                    No tienes tareas asignadas ahora mismo.
+                  </Text>
+                ) : (
+                  <Stack spacing={3}>
+                    {assignedTasks.slice(0, 10).map((task) => (
+                      <Box
+                        key={task.id}
+                        borderWidth="1px"
+                        borderRadius="lg"
+                        p={3}
+                      >
+                        <Text fontWeight="semibold">{task.title}</Text>
+                        <Text fontSize="xs" color={subtleText}>
+                          {task.project_id
+                            ? `Proyecto: ${
+                                projectMap.get(task.project_id) ??
+                                task.project_id
+                              }`
+                            : "Sin proyecto"}
+                        </Text>
+                        <Badge
+                          mt={2}
+                          colorScheme={kanbanStyles[getTaskStatus(task)].accent}
+                        >
+                          {statusLabels[getTaskStatus(task)]}
+                        </Badge>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+            </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
             <Heading size="md" mb={2}>

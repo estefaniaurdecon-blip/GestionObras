@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: saas
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      TZ: Europe/Madrid
     # Para desarrollo local; si ya tienes un PostgreSQL en 5432,
     # usamos 5433 en el host para evitar conflictos.
     ports:
@@ -26,6 +27,7 @@ services:
       - MYSQL_ROOT_PASSWORD=moodle
       - MYSQL_USER=moodle
       - MYSQL_PASSWORD=moodle
+      - TZ=Europe/Madrid
     volumes:
       - moodle_db_data:/var/lib/mysql
 
@@ -46,6 +48,7 @@ services:
       - MOODLE_URL=${MOODLE_URL}
       # Estamos detras de Cloudflare (reverse proxy SSL).
       - SSL_PROXY=false
+      - TZ=Europe/Madrid
       # Variables que espera el config.php de esta imagen (simulando el antiguo
       # mecanismo de Docker links) para localizar la base de datos MySQL.
       - DB_PORT_3306_TCP_ADDR=moodle-db
@@ -67,6 +70,7 @@ services:
       - ../backend-fastapi/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/saas
+      TZ: Europe/Madrid
     depends_on:
       - db
     ports:
@@ -82,6 +86,7 @@ services:
       # En desarrollo, el frontend se sirve al navegador del host
       # y debe hablar con FastAPI via VITE_API_BASE_URL.
       VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      TZ: Europe/Madrid
     depends_on:
       - backend-fastapi
     ports:
@@ -95,6 +100,7 @@ services:
     command: tunnel run plataforma-dev-saas
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TZ=Europe/Madrid
 
 volumes:
   db_data:

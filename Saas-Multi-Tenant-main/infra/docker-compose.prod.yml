@@ -13,6 +13,8 @@ services:
     # Usar un fichero .env real (no el .env.example).
     env_file:
       - ../backend-fastapi/.env
+    environment:
+      TZ: Europe/Madrid
     # No exponer el puerto directamente; se accede solo vía Cloudflare Tunnel.
     ports: []
 
@@ -26,3 +28,5 @@ services:
     # Montamos la configuración del túnel desde ./cloudflared.
     volumes:
       - ./cloudflared:/etc/cloudflared
+    environment:
+      - TZ=Europe/Madrid

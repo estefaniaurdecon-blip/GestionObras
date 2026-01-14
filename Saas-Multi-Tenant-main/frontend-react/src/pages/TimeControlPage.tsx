@@ -3,6 +3,7 @@ import {
   Badge,
   Box,
   Button,
+  IconButton,
   Divider,
   FormControl,
   FormLabel,
@@ -26,6 +27,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
+import { FaPlay, FaStop } from "react-icons/fa";
 
 import {
   ErpTask,
@@ -91,8 +93,7 @@ const formatDayLabel = (date: Date): string => {
 };
 
 // Formatea fecha para inputs datetime-local.
-const formatDateInput = (date: Date): string =>
-  date.toISOString().slice(0, 16);
+const formatDateInput = (date: Date): string => date.toISOString().slice(0, 16);
 
 // Limita un valor entre min y max.
 const clamp = (value: number, min: number, max: number): number =>
@@ -139,10 +140,10 @@ export const TimeControlPage: React.FC = () => {
 
   // Vista activa del modulo de tiempo.
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "timesheet">(
-    "calendar",
+    "calendar"
   );
   const [weekStart, setWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date()),
+    startOfWeek(new Date())
   );
   const [sessions, setSessions] = useState<TimeSessionBlock[]>([]);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -190,7 +191,7 @@ export const TimeControlPage: React.FC = () => {
   // Dias visibles en la semana actual.
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)),
-    [weekStart],
+    [weekStart]
   );
 
   // Convierte coordenadas Y en minutos dentro del calendario.
@@ -242,7 +243,7 @@ export const TimeControlPage: React.FC = () => {
   // Formato legible del tiempo activo.
   const formattedElapsed = useMemo(
     () => formatSeconds(elapsedSeconds),
-    [elapsedSeconds],
+    [elapsedSeconds]
   );
   // Ultimas tareas recientes para acceso rapido.
   const recentTasks = useMemo(() => {
@@ -258,7 +259,7 @@ export const TimeControlPage: React.FC = () => {
     return [...scopedTasks]
       .sort(
         (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
       .slice(0, 3);
   }, [tasks, currentUserId, recentTaskIds]);
@@ -291,7 +292,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setTasksError(
             error?.response?.data?.detail ??
-              "No se han podido cargar las tareas del ERP.",
+              "No se han podido cargar las tareas del ERP."
           );
         }
       }
@@ -344,7 +345,7 @@ export const TimeControlPage: React.FC = () => {
       try {
         const list = await fetchTimeSessions(
           weekRange.start.toISOString(),
-          weekRange.end.toISOString(),
+          weekRange.end.toISOString()
         );
         if (!cancelled) {
           setSessions(list);
@@ -354,7 +355,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setSessionsError(
             error?.response?.data?.detail ??
-              "No se han podido cargar las sesiones.",
+              "No se han podido cargar las sesiones."
           );
         }
       } finally {
@@ -391,7 +392,7 @@ export const TimeControlPage: React.FC = () => {
         const newStart = clamp(
           minutes - (dragState.offsetMinutes ?? 0),
           0,
-          24 * 60 - duration,
+          24 * 60 - duration
         );
         setDragState((prev) =>
           prev
@@ -401,20 +402,23 @@ export const TimeControlPage: React.FC = () => {
                 startMinutes: newStart,
                 endMinutes: newStart + duration,
               }
-            : prev,
+            : prev
         );
         return;
       }
 
       if (dragState.mode === "resize") {
-        const newEnd = Math.max(minutes, dragState.startMinutes + MIN_SESSION_MINUTES);
+        const newEnd = Math.max(
+          minutes,
+          dragState.startMinutes + MIN_SESSION_MINUTES
+        );
         setDragState((prev) =>
           prev
             ? {
                 ...prev,
                 endMinutes: clamp(newEnd, 0, 24 * 60),
               }
-            : prev,
+            : prev
         );
       }
     };
@@ -441,7 +445,10 @@ export const TimeControlPage: React.FC = () => {
         dragState.sessionId
       ) {
         setIsDraggingSession(false);
-        const startDate = minutesToDate(dragState.dayIndex, dragState.startMinutes);
+        const startDate = minutesToDate(
+          dragState.dayIndex,
+          dragState.startMinutes
+        );
         const endDate = minutesToDate(dragState.dayIndex, dragState.endMinutes);
         setSessions((prev) =>
           prev.map((session) =>
@@ -452,11 +459,11 @@ export const TimeControlPage: React.FC = () => {
                   ended_at: endDate.toISOString(),
                   duration_seconds: Math.max(
                     0,
-                    Math.floor((endDate.getTime() - startDate.getTime()) / 1000),
+                    Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
                   ),
                 }
-              : session,
-          ),
+              : session
+          )
         );
         try {
           await updateTimeSession(dragState.sessionId, {
@@ -525,8 +532,8 @@ export const TimeControlPage: React.FC = () => {
       setWeekStart(startOfWeek(new Date()));
       setTasks((prev) =>
         prev.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress" } : task,
-        ),
+          task.id === taskId ? { ...task, status: "in_progress" } : task
+        )
       );
       toast({
         title: "Tracking iniciado",
@@ -566,8 +573,8 @@ export const TimeControlPage: React.FC = () => {
       setWeekStart(startOfWeek(new Date()));
       setTasks((prev) =>
         prev.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress" } : task,
-        ),
+          task.id === taskId ? { ...task, status: "in_progress" } : task
+        )
       );
       toast({
         title: "Tracking iniciado",
@@ -650,8 +657,8 @@ export const TimeControlPage: React.FC = () => {
         const updated = await updateTimeSession(editingSessionId, payload);
         setSessions((prev) =>
           prev.map((session) =>
-            session.id === editingSessionId ? updated : session,
-          ),
+            session.id === editingSessionId ? updated : session
+          )
         );
         toast({ title: "Sesion actualizada", status: "success" });
       } else {
@@ -684,7 +691,9 @@ export const TimeControlPage: React.FC = () => {
     if (!editingSessionId) return;
     try {
       await deleteTimeSession(editingSessionId);
-      setSessions((prev) => prev.filter((session) => session.id !== editingSessionId));
+      setSessions((prev) =>
+        prev.filter((session) => session.id !== editingSessionId)
+      );
       toast({ title: "Sesion eliminada", status: "success" });
       handleCloseModal();
     } catch (error: any) {
@@ -730,7 +739,7 @@ export const TimeControlPage: React.FC = () => {
   // Arrastre desde accesos rapidos hacia el calendario.
   const handleTaskDragStart = (
     event: React.DragEvent<HTMLDivElement>,
-    taskId: number,
+    taskId: number
   ) => {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("text/plain", String(taskId));
@@ -739,9 +748,7 @@ export const TimeControlPage: React.FC = () => {
 
   // Drop de una tarea sobre el calendario para crear sesion.
   // Crea sesion al soltar una tarea sobre el calendario.
-  const handleCalendarDrop = async (
-    event: React.DragEvent<HTMLDivElement>,
-  ) => {
+  const handleCalendarDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const rawId = event.dataTransfer.getData("text/plain");
     const taskId = Number(rawId);
@@ -750,10 +757,7 @@ export const TimeControlPage: React.FC = () => {
     const minutes = getMinutesFromClientY(event.clientY);
     const dayIndex = getDayIndexFromClientX(event.clientX);
     const startDate = minutesToDate(dayIndex, minutes);
-    const endDate = minutesToDate(
-      dayIndex,
-      minutes + MIN_SESSION_MINUTES,
-    );
+    const endDate = minutesToDate(dayIndex, minutes + MIN_SESSION_MINUTES);
 
     try {
       const created = await createTimeSession({
@@ -804,8 +808,21 @@ export const TimeControlPage: React.FC = () => {
       </Box>
 
       <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
-        <SimpleGrid columns={{ base: 1, lg: 3 }} spacing={4} alignItems="center">
+        <SimpleGrid
+          columns={{ base: 1, lg: 4 }}
+          spacing={4}
+          alignItems="center"
+        >
+          <Box>
+            <Text fontSize="xs" color={subtleText}>
+              Total Horas Semanal
+            </Text>
+            <Text fontSize="lg" fontWeight="semibold">
+              {formatSeconds(totalWeekSeconds)}
+            </Text>
+          </Box>
           <FormControl>
+            {/* Seleccion de la tarea para trabajar. */}
             <FormLabel>Que estas trabajando?</FormLabel>
             <Select
               value={taskIdInput}
@@ -825,34 +842,34 @@ export const TimeControlPage: React.FC = () => {
               </Text>
             )}
           </FormControl>
-          <HStack justify="space-between" spacing={4}>
-            <Box>
-              <Text fontSize="xs" color={subtleText}>
-                Total semana
-              </Text>
-              <Text fontSize="lg" fontWeight="semibold">
-                {formatSeconds(totalWeekSeconds)}
-              </Text>
-            </Box>
-            <HStack spacing={3}>
-              <Button
-                colorScheme="green"
-                onClick={handleStart}
-                isLoading={isLoading && !isRunning}
-                isDisabled={isRunning}
-              >
-                Iniciar
-              </Button>
-              <Button
-                variant="outline"
-                colorScheme="red"
-                onClick={handleStop}
-                isLoading={isLoading && isRunning}
-                isDisabled={!isRunning}
-              >
-                Detener
-              </Button>
-            </HStack>
+          <HStack spacing={3} justify="flex-end" w="100%">
+            {/* Boton de inicio: icono redondo con el mismo tamano que detener. */}
+            <IconButton
+              aria-label="Iniciar"
+              icon={<FaPlay />}
+              colorScheme="green"
+              isRound
+              size="lg"
+              w="48px"
+              h="48px"
+              onClick={handleStart}
+              isLoading={isLoading && !isRunning}
+              isDisabled={isRunning}
+            />
+            {/* Boton de detener: icono redondo, mismo tamano y conectado al handler. */}
+            <IconButton
+              aria-label="Detener"
+              icon={<FaStop />}
+              colorScheme="red"
+              variant="outline"
+              isRound
+              size="lg"
+              w="48px"
+              h="48px"
+              onClick={handleStop}
+              isLoading={isLoading && isRunning}
+              isDisabled={!isRunning}
+            />
           </HStack>
           <Box textAlign={{ base: "left", lg: "right" }}>
             <Badge colorScheme={isRunning ? "green" : "gray"}>
@@ -1022,7 +1039,12 @@ export const TimeControlPage: React.FC = () => {
           </SimpleGrid>
           <Box position="relative" ref={calendarRef}>
             {HOURS.map((hour) => (
-              <SimpleGrid key={hour} columns={8} gap={0} minH={`${HOUR_HEIGHT}px`}>
+              <SimpleGrid
+                key={hour}
+                columns={8}
+                gap={0}
+                minH={`${HOUR_HEIGHT}px`}
+              >
                 <Box
                   borderRightWidth="1px"
                   borderBottomWidth="1px"
@@ -1049,12 +1071,14 @@ export const TimeControlPage: React.FC = () => {
               </SimpleGrid>
             ))}
             {weekDays.some(
-              (day) => day.toDateString() === now.toDateString(),
+              (day) => day.toDateString() === now.toDateString()
             ) && (
               <Box
                 position="absolute"
                 left="0"
-                top={`${((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT}px`}
+                top={`${
+                  ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT
+                }px`}
                 width="100%"
                 height="2px"
                 bg="red.400"
@@ -1084,7 +1108,10 @@ export const TimeControlPage: React.FC = () => {
                   left={`calc(${(dragState.dayIndex + 1) * 12.5}% )`}
                   top={`${(dragState.startMinutes / 60) * HOUR_HEIGHT}px`}
                   width="12.5%"
-                  height={`${((dragState.endMinutes - dragState.startMinutes) / 60) * HOUR_HEIGHT}px`}
+                  height={`${
+                    ((dragState.endMinutes - dragState.startMinutes) / 60) *
+                    HOUR_HEIGHT
+                  }px`}
                   border="2px dashed"
                   borderColor={accent}
                   bg="rgba(0,102,43,0.08)"
@@ -1113,13 +1140,20 @@ export const TimeControlPage: React.FC = () => {
               <Box
                 position="absolute"
                 left={`calc(${(selection.dayIndex + 1) * 12.5}% )`}
-                top={`${(Math.min(selection.startMinutes, selection.endMinutes) / 60) * HOUR_HEIGHT}px`}
+                top={`${
+                  (Math.min(selection.startMinutes, selection.endMinutes) /
+                    60) *
+                  HOUR_HEIGHT
+                }px`}
                 width="12.5%"
-                height={`${(Math.max(
-                  MIN_SESSION_MINUTES,
-                  Math.abs(selection.endMinutes - selection.startMinutes),
-                ) /
-                  60) * HOUR_HEIGHT}px`}
+                height={`${
+                  (Math.max(
+                    MIN_SESSION_MINUTES,
+                    Math.abs(selection.endMinutes - selection.startMinutes)
+                  ) /
+                    60) *
+                  HOUR_HEIGHT
+                }px`}
                 bg="rgba(0,102,43,0.08)"
                 border="1px dashed"
                 borderColor={accent}
@@ -1132,17 +1166,15 @@ export const TimeControlPage: React.FC = () => {
                 ? new Date(session.ended_at)
                 : new Date(start.getTime() + MIN_SESSION_MINUTES * 60000);
               const dayIndex = weekDays.findIndex(
-                (day) =>
-                  day.toDateString() === start.toDateString(),
+                (day) => day.toDateString() === start.toDateString()
               );
               if (dayIndex < 0) return null;
               const startMinutes = start.getHours() * 60 + start.getMinutes();
-              const endMinutes =
-                end.getHours() * 60 + end.getMinutes();
+              const endMinutes = end.getHours() * 60 + end.getMinutes();
               const top = (startMinutes / 60) * HOUR_HEIGHT;
               const height = Math.max(
                 HOUR_HEIGHT * (MIN_SESSION_MINUTES / 60),
-                ((end.getTime() - start.getTime()) / 3600000) * HOUR_HEIGHT,
+                ((end.getTime() - start.getTime()) / 3600000) * HOUR_HEIGHT
               );
               const task = taskById.get(session.task_id);
               return (
@@ -1235,7 +1267,12 @@ export const TimeControlPage: React.FC = () => {
                       Mover
                     </Box>
                   )}
-                  <HStack spacing={2} justify="space-between" align="start" mb={1}>
+                  <HStack
+                    spacing={2}
+                    justify="space-between"
+                    align="start"
+                    mb={1}
+                  >
                     <Text
                       fontSize="xs"
                       fontWeight="semibold"
@@ -1327,17 +1364,36 @@ export const TimeControlPage: React.FC = () => {
                         {formatSeconds(session.duration_seconds)}
                       </Badge>
                       <HStack>
-                        <Button
-                          size="xs"
-                          colorScheme="green"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleQuickStart(session.task_id);
-                          }}
-                          isDisabled={isRunning}
-                        >
-                          Play
-                        </Button>
+                        {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
+                        {isRunning && activeSession?.task_id === session.task_id ? (
+                          <IconButton
+                            aria-label="Detener"
+                            icon={<FaStop />}
+                            size="sm"
+                            colorScheme="red"
+                            variant="outline"
+                            isRound
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleStop();
+                            }}
+                            isLoading={isLoading && isRunning}
+                            isDisabled={!isRunning}
+                          />
+                        ) : (
+                          <IconButton
+                            aria-label="Iniciar"
+                            icon={<FaPlay />}
+                            size="sm"
+                            colorScheme="green"
+                            isRound
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleQuickStart(session.task_id);
+                            }}
+                            isDisabled={isRunning}
+                          />
+                        )}
                         <Button
                           size="xs"
                           variant="outline"
@@ -1372,14 +1428,21 @@ export const TimeControlPage: React.FC = () => {
           {weekDays.map((day) => {
             const daySessions = sessions.filter(
               (session) =>
-                new Date(session.started_at).toDateString() === day.toDateString(),
+                new Date(session.started_at).toDateString() ===
+                day.toDateString()
             );
             const totalSeconds = daySessions.reduce(
               (acc, session) => acc + session.duration_seconds,
-              0,
+              0
             );
             return (
-              <Box key={day.toISOString()} borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+              <Box
+                key={day.toISOString()}
+                borderWidth="1px"
+                borderRadius="xl"
+                p={4}
+                bg={cardBg}
+              >
                 <HStack justify="space-between">
                   <Text fontWeight="semibold">{formatDayLabel(day)}</Text>
                   <Badge>{formatSeconds(totalSeconds)}</Badge>
@@ -1415,6 +1478,36 @@ export const TimeControlPage: React.FC = () => {
                           <Text fontSize="sm" color={subtleText}>
                             {formatSeconds(session.duration_seconds)}
                           </Text>
+                          {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
+                          {isRunning && activeSession?.task_id === session.task_id ? (
+                            <IconButton
+                              aria-label="Detener"
+                              icon={<FaStop />}
+                              size="sm"
+                              colorScheme="red"
+                              variant="outline"
+                              isRound
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleStop();
+                              }}
+                              isLoading={isLoading && isRunning}
+                              isDisabled={!isRunning}
+                            />
+                          ) : (
+                            <IconButton
+                              aria-label="Iniciar"
+                              icon={<FaPlay />}
+                              size="sm"
+                              colorScheme="green"
+                              isRound
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleQuickStart(session.task_id);
+                              }}
+                              isDisabled={isRunning}
+                            />
+                          )}
                           <Button
                             size="xs"
                             variant="outline"
@@ -1500,7 +1593,12 @@ export const TimeControlPage: React.FC = () => {
               Cancelar
             </Button>
             {editingSessionId && (
-              <Button colorScheme="red" variant="outline" mr={3} onClick={handleDeleteSession}>
+              <Button
+                colorScheme="red"
+                variant="outline"
+                mr={3}
+                onClick={handleDeleteSession}
+              >
                 Eliminar
               </Button>
             )}

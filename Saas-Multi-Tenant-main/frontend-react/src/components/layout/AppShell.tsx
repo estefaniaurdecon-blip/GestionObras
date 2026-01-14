@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Avatar,
   Box,
@@ -35,6 +35,18 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const headerBg = useColorModeValue("white", "gray.900");
   const pageBg = useColorModeValue("gray.50", "gray.800");
   const router = useRouter();
+  const pathname = router.state.location.pathname;
+  const isErpRoute = useMemo(() => pathname.startsWith("/erp/"), [pathname]);
+  const [erpAccordionIndex, setErpAccordionIndex] = useState(
+    isErpRoute ? 0 : -1
+  );
+  const isActive = (path: string) => pathname === path;
+
+  useEffect(() => {
+    if (isErpRoute) {
+      setErpAccordionIndex(0);
+    }
+  }, [isErpRoute]);
 
   const { data: currentUser } = useCurrentUser();
 
@@ -98,14 +110,24 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             <Button
               as={Link}
               to="/dashboard"
-              variant="ghost"
+              variant={isActive("/dashboard") ? "solid" : "ghost"}
               justifyContent="flex-start"
               size="sm"
             >
               Dashboard
             </Button>
 
-            <Accordion allowToggle borderWidth="1px" borderRadius="md">
+            <Accordion
+              allowToggle
+              index={erpAccordionIndex}
+              onChange={(nextIndex) => {
+                setErpAccordionIndex(
+                  typeof nextIndex === "number" ? nextIndex : nextIndex[0] ?? -1
+                );
+              }}
+              borderWidth="1px"
+              borderRadius="md"
+            >
               <AccordionItem border="none">
                 <AccordionButton px={3} py={2}>
                   <Box
@@ -123,7 +145,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/time-report"
-                      variant="ghost"
+                      variant={isActive("/erp/time-report") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
                     >
@@ -132,7 +154,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/time-control"
-                      variant="ghost"
+                      variant={isActive("/erp/time-control") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
                     >
@@ -141,7 +163,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/tasks"
-                      variant="ghost"
+                      variant={isActive("/erp/tasks") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
                     >
@@ -150,7 +172,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/projects"
-                      variant="ghost"
+                      variant={isActive("/erp/projects") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
                     >

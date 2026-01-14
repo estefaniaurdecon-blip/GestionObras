@@ -28,6 +28,7 @@ env/
 
 # Node / React (frontend-react)
 node_modules/
+node_modules/react-icons/
 dist/
 build/
 coverage/

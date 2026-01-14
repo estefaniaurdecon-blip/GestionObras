@@ -21,3 +21,16 @@ export const apiClient = axios.create({
 });
 
 // Las credenciales se envian via cookie httpOnly configurada en el backend.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem("access_token");
+      sessionStorage.removeItem("mfa_username");
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
