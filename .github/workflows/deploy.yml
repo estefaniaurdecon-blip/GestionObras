@@ -7,31 +7,18 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      # Debug inicial: verificar que los secrets se pasan correctamente
-      - name: Debug SSH Info
+      - name: Verificar ubicación del runner
+        run: pwd
+
+      - name: Actualizar código del proyecto
         run: |
-          echo "SSH_HOST=${{ secrets.SSH_HOST }}"
-          echo "SSH_USER=${{ secrets.SSH_USER }}"
-          echo "DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}"
-          echo "DOCKER_COMPOSE_FILE=${{ secrets.DOCKER_COMPOSE_FILE }}"
+          cd /home/server/projects/erp
+          git pull origin main
 
-      # Deploy usando SSH
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: 22  # cambia si usas otro puerto
-          script: |
-            # Entrar a la carpeta del proyecto con docker-compose
-            cd ${{ secrets.DEPLOY_PATH }}
-
-            # Actualizar código desde Git
-            git pull origin main
-
-            # Levantar contenedores en modo detached y reconstruir
-            docker compose up -d --build
+      - name: Levantar Docker Compose
+        run: |
+          cd /home/server/projects/erp/infra
+          docker compose up -d --build
