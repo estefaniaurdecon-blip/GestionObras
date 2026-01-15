@@ -13,6 +13,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -33,6 +34,7 @@ interface AuditLogItem {
  */
 // Pantalla de auditoria con el registro de acciones.
 export const AuditLogPage: React.FC = () => {
+  const { t } = useTranslation();
   // Estilos base de la tabla.
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
@@ -98,31 +100,29 @@ export const AuditLogPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Box position="relative">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Administracion
-          </Text>
-          <Heading size="lg">Auditoria</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("audit.header.eyebrow")}</Text>
+          <Heading size="lg">{t("audit.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Registro de acciones y eventos clave del sistema.
+            {t("audit.header.subtitle")}
           </Text>
         </Box>
       </Box>
       <Text mb={6}>
-        Registro de acciones relevantes en la plataforma para este tenant.
+        {t("audit.description")}
       </Text>
 
       {isLoading && (
         <Box mb={4}>
           <Spinner size="sm" mr={2} />
           <Text as="span" fontSize="sm">
-            Cargando registros de auditoria...
+            {t("audit.loading")}
           </Text>
         </Box>
       )}
 
       {isError && (
         <Text mb={4} fontSize="sm" color="red.500">
-          No se han podido cargar los registros de auditoria (comprueba permisos y
+          {t("audit.error")}
           conexión).
         </Text>
       )}
@@ -131,10 +131,10 @@ export const AuditLogPage: React.FC = () => {
         <Table size="sm">
           <Thead bg={tableHeadBg}>
             <Tr>
-              <Th>Fecha</Th>
-              <Th>Usuario</Th>
-              <Th>Accion</Th>
-              <Th>Detalles</Th>
+              <Th>{t("audit.table.date")}</Th>
+              <Th>{t("audit.table.user")}</Th>
+              <Th>{t("audit.table.action")}</Th>
+              <Th>{t("audit.table.details")}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -142,7 +142,7 @@ export const AuditLogPage: React.FC = () => {
               <Tr>
                 <Td colSpan={4}>
                   <Text fontSize="sm" color="gray.500">
-                    Todavia no hay registros de auditoria para mostrar.
+                    {t("audit.table.empty")}
                   </Text>
                 </Td>
               </Tr>

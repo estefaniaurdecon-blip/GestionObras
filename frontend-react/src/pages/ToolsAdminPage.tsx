@@ -14,6 +14,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import {
@@ -48,6 +49,7 @@ async function fetchTenants(): Promise<TenantOption[]> {
 export const ToolsAdminPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.600", "gray.300");
@@ -115,17 +117,17 @@ export const ToolsAdminPage: React.FC = () => {
         queryKey: ["tenant-tools-admin", variables.tenantId],
       });
       toast({
-        title: "Herramienta actualizada",
-        description: "El estado de la herramienta se ha actualizado correctamente.",
+        title: t("toolsAdmin.messages.updateSuccessTitle"),
+        description: t("toolsAdmin.messages.updateSuccessDesc"),
         status: "success",
       });
     },
     onError: (error: any) => {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido actualizar la herramienta (revisa permisos y datos).";
+        t("toolsAdmin.messages.updateErrorFallback");
       toast({
-        title: "Error al actualizar herramienta",
+        title: t("toolsAdmin.messages.updateErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -171,12 +173,10 @@ export const ToolsAdminPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Box position="relative">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Administracion
-          </Text>
-          <Heading size="lg">Herramientas</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("toolsAdmin.header.eyebrow")}</Text>
+          <Heading size="lg">{t("toolsAdmin.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Activa o desactiva modulos por tenant.
+            {t("toolsAdmin.header.subtitle")}
           </Text>
         </Box>
       </Box>
@@ -184,10 +184,12 @@ export const ToolsAdminPage: React.FC = () => {
       {isSuperAdmin && (
         <Box mb={4}>
           <FormControl maxW="320px">
-            <FormLabel>Tenant</FormLabel>
+            <FormLabel>{t("toolsAdmin.filters.tenant")}</FormLabel>
             <Select
               placeholder={
-                isLoadingTenants ? "Cargando tenants..." : "Selecciona un tenant"
+                isLoadingTenants
+                ? t("toolsAdmin.filters.loadingTenants")
+                : t("toolsAdmin.filters.selectTenant")
               }
               value={selectedTenantId ?? ""}
               onChange={handleTenantChange}
@@ -201,7 +203,7 @@ export const ToolsAdminPage: React.FC = () => {
             </Select>
             {isErrorTenants && (
               <Text mt={2} color="red.500" fontSize="sm">
-                No se han podido cargar los tenants (comprueba permisos y token).
+                {t("toolsAdmin.filters.loadTenantsError")}
               </Text>
             )}
           </FormControl>
@@ -214,7 +216,7 @@ export const ToolsAdminPage: React.FC = () => {
       </Text>
 
       {(isCatalogLoading || isTenantLoading || (isSuperAdmin && !selectedTenantId)) && (
-        <Text>Cargando herramientas...</Text>
+        <Text>{t("toolsAdmin.loading")}</Text>
       )}
 
       {!isCatalogLoading && catalog && selectedTenantId && (
@@ -227,10 +229,12 @@ export const ToolsAdminPage: React.FC = () => {
                   {tool.name}
                 </Heading>
                 <Text fontSize="sm" mb={2} color={subtleText}>
-                  {tool.description ?? "Herramienta integrada en la plataforma."}
+                  {tool.description ?? t("toolsAdmin.catalog.fallbackDescription")}
                 </Text>
                 <Badge colorScheme={enabled ? "green" : "gray"} mb={3}>
-                  {enabled ? "Habilitada para el tenant" : "No habilitada"}
+                  {enabled
+                  ? t("toolsAdmin.catalog.enabled")
+                  : t("toolsAdmin.catalog.disabled")}
                 </Badge>
                 <Button
                   size="sm"
@@ -239,7 +243,9 @@ export const ToolsAdminPage: React.FC = () => {
                   onClick={() => handleToggle(tool.id, enabled)}
                   isLoading={toggleMutation.isPending}
                 >
-                  {enabled ? "Deshabilitar" : "Habilitar"}
+                  {enabled
+                  ? t("toolsAdmin.actions.disable")
+                  : t("toolsAdmin.actions.enable")}
                 </Button>
               </Box>
             );

@@ -20,6 +20,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -56,6 +57,7 @@ interface NewTenantFormState {
 export const TenantSettingsPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
@@ -115,8 +117,8 @@ export const TenantSettingsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
       toast({
-        title: "Tenant creado",
-        description: "El tenant y su administrador se han creado correctamente.",
+        title: t("tenantSettings.messages.createSuccessTitle"),
+        description: t("tenantSettings.messages.createSuccessDesc"),
         status: "success",
       });
       setForm({
@@ -131,9 +133,9 @@ export const TenantSettingsPage: React.FC = () => {
       const detail =
         error?.response?.data?.detail ??
         error?.message ??
-        "No se ha podido crear el tenant o su administrador (revisa permisos y datos).";
+        t("tenantSettings.messages.createErrorFallback");
       toast({
-        title: "Error al crear tenant",
+        title: t("tenantSettings.messages.createErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -162,17 +164,17 @@ export const TenantSettingsPage: React.FC = () => {
       .then(() => {
         queryClient.invalidateQueries({ queryKey: ["tenants"] });
         toast({
-          title: "Tenant eliminado",
-          description: "El tenant se ha eliminado correctamente.",
+          title: t("tenantSettings.messages.deleteSuccessTitle"),
+          description: t("tenantSettings.messages.deleteSuccessDesc"),
           status: "success",
         });
       })
       .catch((error: any) => {
         const detail =
           error?.response?.data?.detail ??
-          "No se ha podido eliminar el tenant (revisa permisos y datos).";
+          t("tenantSettings.messages.deleteErrorFallback");
         toast({
-          title: "Error al eliminar tenant",
+          title: t("tenantSettings.messages.deleteErrorTitle"),
           description: detail,
           status: "error",
         });
@@ -200,24 +202,20 @@ export const TenantSettingsPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Stack position="relative" spacing={2} maxW="640px">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Administracion
-          </Text>
-          <Heading size="lg">Ajustes de tenants</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("tenantSettings.header.eyebrow")}</Text>
+          <Heading size="lg">{t("tenantSettings.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Configura empresas y credenciales de administracion.
+            {t("tenantSettings.header.subtitle")}
           </Text>
         </Stack>
       </Box>
       {!isSuperAdmin && (
         <Text mb={6}>
-          Solo el Super Admin global puede ver y gestionar la lista completa de tenants.
+          {t("tenantSettings.permissions.onlySuperAdmin")}
         </Text>
       )}
       {isSuperAdmin && (
-        <Text mb={6}>
-          Configuración general de empresas/tenants dentro de la plataforma. Al crear un
-          tenant, también se crea su administrador principal.
+        <Text mb={6}>          {t("tenantSettings.description")}
         </Text>
       )}
 
@@ -234,25 +232,25 @@ export const TenantSettingsPage: React.FC = () => {
           >
             <Stack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Nombre del tenant</FormLabel>
+                <FormLabel>{t("tenantSettings.fields.name")}</FormLabel>
                 <Input
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Nombre comercial"
+                  placeholder={t("tenantSettings.placeholders.name")}
                 />
               </FormControl>
               <FormControl isRequired>
-                <FormLabel>Subdominio</FormLabel>
+                <FormLabel>{t("tenantSettings.fields.subdomain")}</FormLabel>
                 <Input
                   name="subdomain"
                   value={form.subdomain}
                   onChange={handleChange}
-                  placeholder="acme, empresa, etc."
+                  placeholder={t("tenantSettings.placeholders.subdomain")}
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Activo</FormLabel>
+                <FormLabel>{t("tenantSettings.fields.active")}</FormLabel>
                 <Switch
                   name="is_active"
                   isChecked={form.is_active}
@@ -260,17 +258,17 @@ export const TenantSettingsPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl isRequired>
-                <FormLabel>Email del admin del tenant</FormLabel>
+                <FormLabel>{t("tenantSettings.fields.adminEmail")}</FormLabel>
                 <Input
                   name="admin_email"
                   type="email"
                   value={form.admin_email}
                   onChange={handleChange}
-                  placeholder="admin@empresa.com"
+                  placeholder={t("tenantSettings.placeholders.adminEmail")}
                 />
               </FormControl>
               <FormControl isRequired>
-                <FormLabel>Contraseña del admin del tenant</FormLabel>
+                <FormLabel>{t("tenantSettings.fields.adminPassword")}</FormLabel>
                 <Input
                   name="admin_password"
                   type="password"
@@ -282,21 +280,17 @@ export const TenantSettingsPage: React.FC = () => {
                 type="submit"
                 colorScheme="blue"
                 isLoading={createTenantMutation.isPending}
-              >
-                Crear tenant y admin
-              </Button>
+              >{t("tenantSettings.actions.create")}</Button>
             </Stack>
           </Box>
 
           <Box mt={10}>
-            <Heading as="h3" size="sm" mb={4}>
-              Tenants existentes
-            </Heading>
+            <Heading as="h3" size="sm" mb={4}>{t("tenantSettings.list.title")}</Heading>
 
-            {isLoading && <Text>Cargando tenants...</Text>}
+            {isLoading && <Text>{t("tenantSettings.list.loading")}</Text>}
             {isError && (
               <Text color="red.500">
-                No se han podido cargar los tenants (comprueba permisos y token).
+                {t("tenantSettings.list.error")}
               </Text>
             )}
 
@@ -305,10 +299,10 @@ export const TenantSettingsPage: React.FC = () => {
                 <Table size="sm">
                   <Thead bg={tableHeadBg}>
                     <Tr>
-                      <Th>Nombre</Th>
-                      <Th>Subdominio</Th>
-                      <Th>Activo</Th>
-                      <Th>Creado el</Th>
+                      <Th>{t("tenantSettings.list.name")}</Th>
+                      <Th>{t("tenantSettings.fields.subdomain")}</Th>
+                      <Th>{t("tenantSettings.fields.active")}</Th>
+                      <Th>{t("tenantSettings.list.createdAt")}</Th>
                       <Th></Th>
                     </Tr>
                   </Thead>
@@ -317,7 +311,9 @@ export const TenantSettingsPage: React.FC = () => {
                       <Tr key={tenant.id}>
                         <Td>{tenant.name}</Td>
                         <Td>{tenant.subdomain}</Td>
-                        <Td>{tenant.is_active ? "Sí" : "No"}</Td>
+                        <Td>{tenant.is_active
+                          ? t("tenantSettings.list.yes")
+                          : t("tenantSettings.list.no")}</Td>
                         <Td>{new Date(tenant.created_at).toLocaleString()}</Td>
                         <Td>
                           <Button
@@ -325,9 +321,7 @@ export const TenantSettingsPage: React.FC = () => {
                             colorScheme="red"
                             variant="outline"
                             onClick={() => handleDeleteTenant(tenant.id)}
-                          >
-                            Eliminar
-                          </Button>
+                          >{t("tenantSettings.actions.delete")}</Button>
                         </Td>
                       </Tr>
                     ))}

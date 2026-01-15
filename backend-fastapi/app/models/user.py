@@ -41,6 +41,8 @@ class User(SQLModel, table=True):
         description="Clave secreta TOTP para MFA. Solo se guarda si MFA está habilitado.",
     )
 
+    # Idioma preferido del usuario.
+    language: str = Field(default="en")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -58,4 +60,4 @@ class UserRead(SQLModel):
     is_super_admin: bool
     tenant_id: Optional[int]
     role_id: Optional[int]
-
+    language: str

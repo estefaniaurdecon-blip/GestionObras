@@ -1,0 +1,905 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar"
+  },
+  "settings": {
+    "title": "Ajustes de usuario",
+    "subtitle": "Configura tu perfil, contrasena y preferencias.",
+    "profile": "Perfil",
+    "email": "Correo electronico",
+    "fullName": "Nombre completo",
+    "darkMode": "Modo oscuro",
+    "saveProfile": "Guardar cambios",
+    "password": "Cambiar contrasena",
+    "currentPassword": "Contrasena actual",
+    "newPassword": "Nueva contrasena",
+    "confirmPassword": "Repetir nueva contrasena",
+    "updatePassword": "Actualizar contrasena",
+    "language": "Idioma",
+    "languageHelp": "Elige el idioma de la interfaz",
+    "languageOptions": {
+      "en": "Ingles",
+      "es": "Espanol"
+    },
+    "messages": {
+      "loadErrorTitle": "Error al cargar perfil",
+      "loadErrorFallback": "No se ha podido cargar la informacion de usuario.",
+      "profileUpdatedTitle": "Perfil actualizado",
+      "profileUpdatedDesc": "Tu informacion de usuario se ha guardado correctamente.",
+      "profileUpdateErrorTitle": "Error al actualizar perfil",
+      "profileUpdateErrorFallback": "No se ha podido actualizar tu perfil (revisa los datos).",
+      "passwordMissingTitle": "Datos incompletos",
+      "passwordMissingDesc": "Rellena todos los campos de contrasena.",
+      "passwordMismatchTitle": "Contrasena no coincide",
+      "passwordMismatchDesc": "La nueva contrasena y su confirmacion deben ser iguales.",
+      "passwordUpdatedTitle": "Contrasena actualizada",
+      "passwordUpdatedDesc": "Tu contrasena se ha cambiado correctamente.",
+      "passwordUpdateErrorTitle": "Error al cambiar contrasena",
+      "passwordUpdateErrorFallback": "No se ha podido cambiar la contrasena."
+    }
+  },
+  "auth": {
+    "logoAlt": "Logo de Urdecon",
+    "login": {
+      "title": "Acceso a URDECON INNOVA",
+      "subtitle": "Inicia sesion con tu usuario corporativo",
+      "email": "Correo electronico",
+      "password": "Contrasena",
+      "submit": "Entrar"
+    },
+    "messages": {
+      "unexpectedTitle": "Error",
+      "unexpectedDesc": "Respuesta de autenticacion inesperada",
+      "invalidFallback": "Credenciales incorrectas o error de servidor",
+      "loginErrorTitle": "Error de login"
+    }
+  },
+  "dashboard": {
+    "header": {
+      "eyebrow": "Panel principal",
+      "title": "Dashboard operativo",
+      "subtitle": "Resumen de actividad, accesos rapidos y seguimiento de horas clave."
+    },
+    "stats": {
+      "tenantsActive": "Tenants activos",
+      "usersActive": "Usuarios activos",
+      "toolsActive": "Herramientas activas",
+      "hoursToday": "Horas registradas hoy",
+      "ticketsOpen": "Tickets abiertos",
+      "ticketsInProgress": "Tickets en progreso"
+    },
+    "actions": {
+      "title": "Acciones rapidas",
+      "subtitle": "Gestiona tu organizacion y accede al ERP, Moodle y las herramientas clave de la plataforma.",
+      "manageTenants": "Crear / gestionar tenants",
+      "manageUsers": "Gestionar usuarios",
+      "viewTimeReport": "Ver informe de horas",
+      "viewTickets": "Ver tickets",
+      "viewTools": "Ver herramientas"
+    },
+    "report": {
+      "title": "Informe filtrable de horas",
+      "project": "Proyecto",
+      "from": "Desde",
+      "to": "Hasta",
+      "userContains": "Usuario (contiene)",
+      "userPlaceholder": "Ej: jmiralles",
+      "loadingProjects": "Cargando proyectos...",
+      "allProjects": "Todos los proyectos",
+      "refresh": "Actualizar informe",
+      "totalHours": "Total horas",
+      "entries": "Entradas",
+      "status": "Estado",
+      "statusReady": "Datos listos",
+      "statusEmpty": "Sin datos"
+    },
+    "table": {
+      "project": "Proyecto",
+      "task": "Tarea",
+      "user": "Usuario",
+      "rate": "Coste/hora",
+      "hours": "Horas",
+      "empty": "Aun no hay datos para los filtros seleccionados.",
+      "unassignedUser": "Usuario no asignado"
+    },
+    "tools": {
+      "title": "Herramientas disponibles",
+      "subtitle": "Accede a las aplicaciones corporativas vinculadas a tu tenant.",
+      "loading": "Cargando herramientas...",
+      "embeddedFallback": "Herramienta integrada en la plataforma.",
+      "erpNote": "ERP interno integrado en el dashboard para gestionar proyectos, tareas y control horario."
+    },
+    "messages": {
+      "reportLoadTitle": "Error al cargar informe",
+      "reportLoadFallback": "No se ha podido cargar el informe de horas.",
+      "toolLaunchTitle": "Error al lanzar herramienta",
+      "toolLaunchFallback": "No se ha podido lanzar la herramienta (revisa permisos y configuracion)."
+    }
+  },
+  "layout": {
+    "brand": {
+      "logoAlt": "Logo de Urdecon",
+      "title": "URDECON INNOVA",
+      "subtitle": "Plataforma SaaS corporativa"
+    },
+    "sections": {
+      "navigation": "Navegacion",
+      "administration": "Administracion"
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "erp": "ERP",
+      "timeReport": "Informe de horas",
+      "timeControl": "Control de tiempo",
+      "tasks": "Tareas",
+      "projects": "Proyectos",
+      "users": "Usuarios",
+      "hr": "Recursos humanos",
+      "support": "Soporte",
+      "tools": "Herramientas",
+      "audit": "Auditoria",
+      "tenantSettings": "Ajustes de tenants"
+    },
+    "header": {
+      "title": "Panel de control",
+      "subtitle": "Vista general de tu organizacion y herramientas"
+    },
+    "userMenu": {
+      "settings": "Ajustes de usuario",
+      "logout": "Cerrar sesion"
+    },
+    "user": {
+      "fallbackName": "Usuario",
+      "fallbackEmail": "usuario@local"
+    }
+  },
+  "timeReport": {
+    "header": {
+      "eyebrow": "Informe de horas",
+      "title": "Analiza productividad por proyecto y usuario",
+      "subtitle": "Filtra por fechas, proyectos y usuarios para tomar decisiones con datos."
+    },
+    "filters": {
+      "title": "Filtros del informe",
+      "project": "Proyecto",
+      "from": "Desde",
+      "to": "Hasta",
+      "userContains": "Usuario (contiene)",
+      "userPlaceholder": "Ej: jmiralles, usuario@...",
+      "loadingProjects": "Cargando proyectos...",
+      "allProjects": "Todos los proyectos",
+      "submit": "Generar informe",
+      "export": "Exportar CSV"
+    },
+    "stats": {
+      "totalHours": "Total de horas",
+      "entries": "Entradas encontradas",
+      "status": "Estado",
+      "statusReady": "Datos listos",
+      "statusEmpty": "Sin datos"
+    },
+    "table": {
+      "project": "Proyecto",
+      "task": "Tarea",
+      "user": "Usuario",
+      "rate": "Coste/hora",
+      "hours": "Horas",
+      "empty": "Aun no hay datos para los filtros seleccionados.",
+      "unassignedUser": "Usuario no asignado"
+    },
+    "export": {
+      "fileName": "informe_horas.csv"
+    },
+    "messages": {
+      "loadProjectsTitle": "Error al cargar proyectos",
+      "loadProjectsFallback": "No se han podido cargar los proyectos del ERP.",
+      "reportErrorTitle": "Error al generar informe",
+      "reportErrorFallback": "No se ha podido generar el informe de horas.",
+      "exportEmptyTitle": "Sin datos para exportar",
+      "exportEmptyDesc": "Genera primero un informe con resultados."
+    }
+  },
+  "timeControl": {
+    "header": {
+      "eyebrow": "Control de tiempo",
+      "title": "Calendario interactivo"
+    },
+    "stats": {
+      "totalWeeklyHours": "Total Horas Semanal"
+    },
+    "controls": {
+      "currentTask": "Que estas trabajando?",
+      "selectTask": "Selecciona una tarea",
+      "adjustment": "Ajuste",
+      "prevWeek": "Semana anterior",
+      "today": "Hoy",
+      "nextWeek": "Siguiente semana"
+    },
+    "status": {
+      "inProgress": "En progreso",
+      "idle": "Sin actividad"
+    },
+    "views": {
+      "calendar": "Calendario",
+      "list": "Vista de lista",
+      "timesheet": "Hoja de horas"
+    },
+    "recent": {
+      "title": "Ultimas tareas",
+      "assigned": "Asignadas a ti",
+      "recent": "Recientes",
+      "empty": "No hay tareas recientes para mostrar."
+    },
+    "calendar": {
+      "hour": "Hora"
+    },
+    "sessions": {
+      "loading": "Cargando sesiones...",
+      "empty": "Sin sesiones registradas."
+    },
+    "modal": {
+      "editTitle": "Editar sesion",
+      "createTitle": "Crear sesion"
+    },
+    "fields": {
+      "task": "Tarea",
+      "description": "Descripcion",
+      "optional": "Opcional",
+      "start": "Inicio",
+      "end": "Fin"
+    },
+    "actions": {
+      "start": "Iniciar",
+      "stop": "Detener",
+      "play": "Iniciar",
+      "edit": "Editar",
+      "delete": "Borrar",
+      "update": "Actualizar",
+      "move": "Mover"
+    },
+    "labels": {
+      "taskId": "Tarea #{{id}}"
+    },
+    "messages": {
+      "tasksLoadError": "No se han podido cargar las tareas del ERP.",
+      "sessionsLoadError": "No se han podido cargar las sesiones.",
+      "sessionUpdateErrorTitle": "Error al actualizar sesion",
+      "sessionCreateErrorTitle": "Error al crear sesion",
+      "sessionDeleteErrorTitle": "Error al eliminar sesion",
+      "genericErrorFallback": "Revisa los datos.",
+      "invalidTaskTitle": "Tarea no valida",
+      "invalidTaskDesc": "Selecciona una tarea del ERP.",
+      "trackingStartedTitle": "Tracking iniciado",
+      "trackingStartedDesc": "Sesion de tiempo iniciada para la tarea {{taskId}}.",
+      "trackingStartErrorTitle": "Error al iniciar tracking",
+      "trackingStartErrorFallback": "No se ha podido iniciar la sesion de tiempo.",
+      "sessionActiveTitle": "Ya hay una sesion activa",
+      "sessionActiveDesc": "Deten la sesion actual antes de iniciar otra.",
+      "trackingStopTitle": "Tracking detenido",
+      "trackingStopDesc": "Sesion finalizada. Duracion: {{duration}}.",
+      "trackingStopErrorTitle": "Error al detener tracking",
+      "trackingStopErrorFallback": "No se ha podido detener la sesion de tiempo activa.",
+      "selectTask": "Selecciona una tarea",
+      "selectRange": "Selecciona el rango horario",
+      "sessionUpdated": "Sesion actualizada",
+      "sessionCreated": "Sesion creada",
+      "sessionDeleted": "Sesion eliminada"
+    }
+  },
+  "invitation": {
+    "title": "Aceptar invitacion",
+    "subtitle": "Completa tus datos para activar tu usuario en la plataforma.",
+    "loading": "Cargando informacion de la invitacion...",
+    "invalid": "La invitacion no es valida (puede estar caducada o ya usada).",
+    "labels": {
+      "tenant": "Tenant:",
+      "email": "Email invitado:",
+      "role": "Rol:"
+    },
+    "fields": {
+      "fullName": "Nombre completo",
+      "password": "Contrasena"
+    },
+    "actions": {
+      "createAccount": "Crear cuenta"
+    },
+    "messages": {
+      "successTitle": "Cuenta creada",
+      "successDesc": "Ya puedes iniciar sesion con tus credenciales.",
+      "errorTitle": "Error al aceptar invitacion",
+      "errorFallback": "No se ha podido completar la invitacion."
+    }
+  },
+  "mfa": {
+    "title": "Verificacion MFA",
+    "subtitle": "Introduce el codigo de verificacion que hemos enviado a tu correo electronico.",
+    "codeLabel": "Codigo MFA",
+    "actions": {
+      "verify": "Verificar"
+    },
+    "messages": {
+      "errorTitle": "Error MFA",
+      "errorDesc": "Codigo incorrecto o expirado"
+    }
+  },
+  "audit": {
+    "header": {
+      "eyebrow": "Administracion",
+      "title": "Auditoria",
+      "subtitle": "Registro de acciones y eventos clave del sistema."
+    },
+    "description": "Registro de acciones relevantes en la plataforma para este tenant.",
+    "loading": "Cargando registros de auditoria...",
+    "error": "No se han podido cargar los registros de auditoria (comprueba permisos y conexion).",
+    "table": {
+      "date": "Fecha",
+      "user": "Usuario",
+      "action": "Accion",
+      "details": "Detalles",
+      "empty": "Todavia no hay registros de auditoria para mostrar."
+    }
+  },
+  "toolsAdmin": {
+    "header": {
+      "eyebrow": "Administracion",
+      "title": "Herramientas",
+      "subtitle": "Activa o desactiva modulos por tenant."
+    },
+    "filters": {
+      "tenant": "Tenant",
+      "loadingTenants": "Cargando tenants...",
+      "selectTenant": "Selecciona un tenant",
+      "loadTenantsError": "No se han podido cargar los tenants (comprueba permisos y token)."
+    },
+    "description": "Configuracion de herramientas externas (Moodle, ERP, BI, etc.) habilitadas para este tenant.",
+    "loading": "Cargando herramientas...",
+    "catalog": {
+      "fallbackDescription": "Herramienta integrada en la plataforma.",
+      "enabled": "Habilitada para el tenant",
+      "disabled": "No habilitada"
+    },
+    "actions": {
+      "enable": "Habilitar",
+      "disable": "Deshabilitar"
+    },
+    "messages": {
+      "updateSuccessTitle": "Herramienta actualizada",
+      "updateSuccessDesc": "El estado de la herramienta se ha actualizado correctamente.",
+      "updateErrorTitle": "Error al actualizar herramienta",
+      "updateErrorFallback": "No se ha podido actualizar la herramienta (revisa permisos y datos)."
+    }
+  },
+  "tenantSettings": {
+    "header": {
+      "eyebrow": "Administracion",
+      "title": "Ajustes de tenants",
+      "subtitle": "Configura empresas y credenciales de administracion."
+    },
+    "permissions": {
+      "onlySuperAdmin": "Solo el Super Admin global puede ver y gestionar la lista completa de tenants."
+    },
+    "description": "Configuracion general de empresas/tenants dentro de la plataforma. Al crear un tenant, tambien se crea su administrador principal.",
+    "fields": {
+      "name": "Nombre del tenant",
+      "subdomain": "Subdominio",
+      "active": "Activo",
+      "adminEmail": "Email del admin del tenant",
+      "adminPassword": "Contrasena del admin del tenant"
+    },
+    "placeholders": {
+      "name": "Nombre comercial",
+      "subdomain": "acme, empresa, etc.",
+      "adminEmail": "admin@empresa.com"
+    },
+    "actions": {
+      "create": "Crear tenant y admin",
+      "delete": "Eliminar"
+    },
+    "list": {
+      "title": "Tenants existentes",
+      "loading": "Cargando tenants...",
+      "error": "No se han podido cargar los tenants (comprueba permisos y token).",
+      "name": "Nombre",
+      "subdomain": "Subdominio",
+      "active": "Activo",
+      "createdAt": "Creado el",
+      "yes": "Si",
+      "no": "No"
+    },
+    "messages": {
+      "createSuccessTitle": "Tenant creado",
+      "createSuccessDesc": "El tenant y su administrador se han creado correctamente.",
+      "createErrorTitle": "Error al crear tenant",
+      "createErrorFallback": "No se ha podido crear el tenant o su administrador (revisa permisos y datos).",
+      "deleteSuccessTitle": "Tenant eliminado",
+      "deleteSuccessDesc": "El tenant se ha eliminado correctamente.",
+      "deleteErrorTitle": "Error al eliminar tenant",
+      "deleteErrorFallback": "No se ha podido eliminar el tenant (revisa permisos y datos)."
+    }
+  },
+  "support": {
+    "header": {
+      "eyebrow": "Soporte",
+      "title": "Tickets de soporte",
+      "subtitle": "Gestiona incidencias, responde y mantiene a los tenants informados."
+    },
+    "description": "Gestiona incidencias de la plataforma por tenant. Los tickets se ordenan por la ultima actividad.",
+    "filters": {
+      "title": "Filtros",
+      "tenant": "Tenant",
+      "loadingTenants": "Cargando tenants...",
+      "allTenants": "Todos los tenants",
+      "status": "Estado",
+      "priority": "Prioridad",
+      "mineOnly": "Solo los mios",
+      "all": "Todos"
+    },
+    "table": {
+      "tenant": "Tenant",
+      "subject": "Asunto",
+      "status": "Estado",
+      "priority": "Prioridad",
+      "lastActivity": "Ultima actividad",
+      "loading": "Cargando tickets...",
+      "loadError": "No se han podido cargar los tickets (revisa permisos y conexion).",
+      "empty": "Todavia no hay tickets para los filtros seleccionados."
+    },
+    "status": {
+      "open": "Abierto",
+      "inProgress": "En progreso",
+      "resolved": "Resuelto",
+      "closed": "Cerrado"
+    },
+    "priority": {
+      "low": "Baja",
+      "medium": "Media",
+      "high": "Alta",
+      "critical": "Critica"
+    },
+    "create": {
+      "title": "Crear ticket",
+      "subject": "Asunto",
+      "subjectPlaceholder": "Resumen breve",
+      "descriptionLabel": "Descripcion",
+      "descriptionPlaceholder": "Describe lo que ocurre, pasos para reproducir, etc.",
+      "toolOptional": "Herramienta (opcional)",
+      "toolPlaceholder": "ej: erp, moodle",
+      "submit": "Crear ticket"
+    },
+    "detail": {
+      "title": "Detalle y conversacion",
+      "selectPrompt": "Selecciona un ticket para ver el detalle.",
+      "statusLabel": "Estado:",
+      "priorityLabel": "Prioridad:",
+      "createdBy": "Creado por {{email}}.",
+      "assignedTo": "Asignado a",
+      "unassigned": "Sin asignar",
+      "createdAt": "Creado el: {{date}}",
+      "lastActivity": "Ultima actividad: {{date}}",
+      "firstResponse": "Primera respuesta: {{date}}",
+      "resolvedAt": "Resuelto el: {{date}}",
+      "closedAt": "Cerrado el: {{date}}"
+    },
+    "assign": {
+      "label": "Asignar a",
+      "placeholder": "Selecciona un usuario",
+      "inactive": "inactivo",
+      "submit": "Asignar"
+    },
+    "actions": {
+      "reopen": "Reabrir",
+      "close": "Cerrar"
+    },
+    "reply": {
+      "title": "Responder",
+      "placeholder": "Escribe una respuesta",
+      "internalLabel": "Nota interna",
+      "send": "Enviar respuesta"
+    },
+    "messages": {
+      "createSuccessTitle": "Ticket creado",
+      "createSuccessDesc": "El ticket se ha creado correctamente.",
+      "createErrorTitle": "Error al crear ticket",
+      "createErrorFallback": "No se ha podido crear el ticket.",
+      "replyErrorTitle": "Error al responder",
+      "replyErrorFallback": "No se ha podido enviar la respuesta.",
+      "closeSuccessTitle": "Ticket cerrado",
+      "closeErrorTitle": "Error al cerrar",
+      "closeErrorFallback": "No se ha podido cerrar el ticket.",
+      "reopenSuccessTitle": "Ticket reabierto",
+      "reopenErrorTitle": "Error al reabrir",
+      "reopenErrorFallback": "No se ha podido reabrir el ticket.",
+      "assignSuccessTitle": "Ticket asignado",
+      "assignErrorTitle": "Error al asignar",
+      "assignErrorFallback": "No se ha podido asignar el ticket.",
+      "missingDataTitle": "Datos incompletos",
+      "missingDataDesc": "Asunto y descripcion son obligatorios.",
+      "emptyMessageTitle": "Mensaje vacio",
+      "emptyMessageDesc": "Escribe un mensaje antes de enviarlo.",
+      "loadingConversation": "Cargando conversacion...",
+      "loadMessagesError": "No se han podido cargar los mensajes (revisa permisos y conexion).",
+      "emptyMessages": "Todavia no hay mensajes en este ticket.",
+      "internalNote": "Nota interna"
+    }
+  },
+  "users": {
+    "header": {
+      "eyebrow": "Usuarios",
+      "title": "Gestiona accesos y perfiles del tenant",
+      "subtitle": "Invita usuarios, controla roles y activa o desactiva cuentas."
+    },
+    "tenant": {
+      "label": "Tenant",
+      "loading": "Cargando tenants...",
+      "placeholder": "Selecciona un tenant"
+    },
+    "invite": {
+      "title": "Invitar usuario por correo",
+      "fullName": "Nombre completo",
+      "fullNamePlaceholder": "Nombre y apellidos",
+      "email": "Email",
+      "emailPlaceholder": "usuario@empresa.com",
+      "role": "Rol",
+      "submit": "Enviar invitacion"
+    },
+    "filters": {
+      "search": "Buscar",
+      "searchPlaceholder": "Nombre o email",
+      "role": "Rol",
+      "status": "Estado",
+      "all": "Todos",
+      "activeOnly": "Solo activos",
+      "inactiveOnly": "Solo inactivos"
+    },
+    "table": {
+      "name": "Nombre",
+      "email": "Email",
+      "role": "Rol",
+      "status": "Estado",
+      "empty": "No hay usuarios que coincidan con los filtros.",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "delete": "Eliminar"
+    },
+    "roles": {
+      "superAdmin": "Super admin",
+      "tenantAdmin": "Admin de tenant",
+      "standard": "Usuario estandar"
+    },
+    "list": {
+      "loading": "Cargando usuarios...",
+      "loadError": "No se han podido cargar los usuarios (comprueba permisos y token)."
+    },
+    "messages": {
+      "inviteSuccessTitle": "Invitacion enviada",
+      "inviteSuccessDesc": "Se ha enviado un correo de invitacion al usuario para que complete su alta.",
+      "inviteErrorTitle": "Error al enviar invitacion",
+      "inviteErrorFallback": "No se ha podido enviar la invitacion (revisa permisos y datos).",
+      "deleteSuccessTitle": "Usuario eliminado",
+      "deleteSuccessDesc": "El usuario se ha eliminado correctamente.",
+      "deleteErrorTitle": "Error al eliminar usuario",
+      "deleteErrorFallback": "No se ha podido eliminar el usuario (revisa permisos y datos).",
+      "statusErrorTitle": "Error al actualizar usuario",
+      "statusErrorFallback": "No se ha podido actualizar el estado del usuario."
+    }
+  },
+  "hr": {
+    "header": {
+      "eyebrow": "Recursos humanos",
+      "title": "Gestiona equipos y estructura interna",
+      "subtitle": "Controla departamentos, perfiles y costes desde un solo panel."
+    },
+    "tenant": {
+      "label": "Tenant",
+      "loading": "Cargando tenants...",
+      "loadError": "No se han podido cargar los tenants.",
+      "placeholder": "Selecciona un tenant"
+    },
+    "emptyTenant": "Selecciona un tenant para gestionar sus datos de RRHH.",
+    "departments": {
+      "title": "Departamentos",
+      "form": {
+        "name": "Nombre",
+        "description": "Descripcion",
+        "create": "Crear departamento"
+      },
+      "loading": "Cargando departamentos...",
+      "error": "No se han podido cargar los departamentos (revisa permisos).",
+      "table": {
+        "name": "Nombre",
+        "description": "Descripcion",
+        "status": "Estado",
+        "empty": "Aun no hay departamentos creados."
+      }
+    },
+    "employees": {
+      "title": "Empleados",
+      "form": {
+        "userOptional": "Usuario (opcional)",
+        "loadingUsers": "Cargando usuarios...",
+        "userPlaceholder": "Sin usuario asociado",
+        "noEmail": "sin correo",
+        "fullName": "Nombre completo",
+        "position": "Puesto",
+        "hourlyRate": "Coste por hora",
+        "hourlyRatePlaceholder": "Ej: 35.5",
+        "primaryDepartment": "Departamento principal",
+        "departmentPlaceholder": "Selecciona departamento",
+        "create": "Crear empleado"
+      },
+      "loading": "Cargando empleados...",
+      "error": "No se han podido cargar los empleados (revisa permisos).",
+      "table": {
+        "employee": "Empleado",
+        "email": "Correo",
+        "hourlyRate": "Coste/hora",
+        "position": "Puesto",
+        "department": "Departamento",
+        "status": "Estado",
+        "actions": "Acciones",
+        "empty": "Aun no hay empleados registrados.",
+        "noName": "Sin nombre",
+        "edit": "Editar"
+      }
+    },
+    "headcount": {
+      "title": "Headcount por departamento",
+      "loading": "Cargando informe...",
+      "table": {
+        "department": "Departamento",
+        "activeEmployees": "Empleados activos",
+        "empty": "Aun no hay datos de headcount para este tenant."
+      },
+      "totalActive": "Total empleados activos: {{total}}"
+    },
+    "modal": {
+      "title": "Editar empleado",
+      "fullName": "Nombre completo",
+      "email": "Correo",
+      "position": "Puesto",
+      "hourlyRate": "Coste por hora",
+      "primaryDepartment": "Departamento principal",
+      "departmentPlaceholder": "Selecciona departamento",
+      "status": "Estado",
+      "statusActive": "Activo",
+      "statusInactive": "Inactivo",
+      "cancel": "Cancelar",
+      "delete": "Eliminar",
+      "save": "Guardar cambios"
+    },
+    "alert": {
+      "title": "Eliminar empleado",
+      "body": "Esta accion no se puede deshacer. Quieres continuar?",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar"
+    },
+    "messages": {
+      "departmentCreated": "Departamento creado",
+      "departmentCreateErrorTitle": "Error al crear departamento",
+      "employeeCreated": "Empleado creado",
+      "employeeCreateErrorTitle": "Error al crear empleado",
+      "employeeCreateErrorDesc": "Revisa permisos, usuario y departamento.",
+      "employeeUpdated": "Empleado actualizado",
+      "employeeUpdateErrorTitle": "Error al actualizar empleado",
+      "employeeDeleted": "Empleado eliminado",
+      "employeeDeleteErrorTitle": "Error al eliminar empleado",
+      "departmentRequired": "Departamento obligatorio",
+      "nameRequired": "Nombre obligatorio",
+      "employeeNameRequiredDesc": "Indica el nombre completo si no seleccionas usuario.",
+      "selectTenant": "Selecciona un tenant",
+      "genericErrorDesc": "Revisa permisos y datos."
+    },
+    "status": {
+      "active": "Activo",
+      "inactive": "Inactivo"
+    }
+  },
+  "erp": {
+    "projectDetail": {
+      "title": "Detalles del proyecto",
+      "code": "Proyecto #{{id}}",
+      "noId": "sin id"
+    },
+    "projects": {
+      "header": {
+        "eyebrow": "ERP interno",
+        "title": "Proyectos y entregas",
+        "subtitle": "Gestiona proyectos, actividades, hitos y seguimiento de entregas."
+      },
+      "stats": {
+        "activeProjects": "Proyectos activos",
+        "totalTasks": "Tareas totales",
+        "assignedTasks": "Tareas asignadas"
+      },
+      "cards": {
+        "projectsEyebrow": "Proyectos",
+        "projectsTitle": "Portafolio de proyectos",
+        "projectsDesc": "Revisa proyectos activos y su estado.",
+        "tasksEyebrow": "Tareas",
+        "tasksTitle": "Seguimiento de tareas",
+        "tasksDesc": "Monitorea tareas del equipo y su progreso.",
+        "timeReportEyebrow": "Analitica",
+        "timeReportTitle": "Informe de horas",
+        "timeReportDesc": "Analiza horas registradas por proyecto y usuario."
+      },
+      "tabs": {
+        "summary": "Resumen",
+        "projects": "Proyectos",
+        "create": "Crear",
+        "gantt": "Gantt"
+      },
+      "list": {
+        "loading": "Cargando proyectos...",
+        "error": "No se pudieron cargar los proyectos.",
+        "noStart": "Sin inicio",
+        "noEnd": "Sin fin",
+        "to": "a"
+      },
+      "create": {
+        "title": "Crear proyecto",
+        "helper": "Define los datos generales antes de detallar actividades y hitos.",
+        "general": "General",
+        "dates": "Fechas"
+      },
+      "fields": {
+        "name": "Nombre",
+        "projectName": "Nombre del proyecto",
+        "description": "Descripcion",
+        "start": "Inicio",
+        "end": "Fin",
+        "weight": "Peso (%)"
+      },
+      "defaults": {
+        "activity": "Actividad {{index}}",
+        "subactivity": "Subactividad {{index}}",
+        "milestone": "Hito {{index}}"
+      },
+      "activities": {
+        "title": "Actividades",
+        "weightSum": "Suma de pesos: {{weight}}% (objetivo 100%)",
+        "itemLabel": "Actividad #{{index}}",
+        "addSubactivity": "+ Anadir subactividad",
+        "emptySubactivities": "Aun no hay subactividades.",
+        "subactivityLabel": "Subactividad #{{index}}",
+        "subactivityWeightSum": "Suma de subactividades: {{weight}}% (objetivo {{target}}%)",
+        "taskCatalog": "Tareas del catalogo",
+        "taskCatalogPlaceholder": "Selecciona una tarea",
+        "addTask": "Anadir tarea",
+        "addManualTask": "+ Tarea manual",
+        "emptyTasks": "Aun no hay tareas agregadas.",
+        "taskTitlePlaceholder": "Titulo de tarea",
+        "removeTask": "Quitar",
+        "removeSubactivity": "Eliminar subactividad",
+        "removeActivity": "Eliminar actividad"
+      },
+      "milestones": {
+        "title": "Hitos y entregables",
+        "itemLabel": "Hito #{{index}}",
+        "nameLabel": "Nombre del hito",
+        "dueDate": "Fecha limite",
+        "allowLate": "Permitir entrega tardia",
+        "deliverables": "Entregables",
+        "emptyDeliverables": "Aun no hay entregables.",
+        "deliverableTitle": "Titulo",
+        "type": "Tipo",
+        "typeLink": "Link",
+        "typeText": "Texto",
+        "value": "Valor",
+        "addDeliverable": "+ Anadir entregable",
+        "removeDeliverable": "Quitar entregable",
+        "removeMilestone": "Eliminar hito"
+      },
+      "validation": {
+        "nameRequired": "Nombre requerido",
+        "activityWeightsTitle": "Pesos de actividades incompletos",
+        "activityWeightsDesc": "Las actividades deben sumar 100% y ahora suman {{weight}}%.",
+        "subactivityWeightsTitle": "Pesos de subactividades incompletos",
+        "subactivityWeightsDesc": "La actividad \"{{activity}}\" debe sumar {{activityWeight}}% y ahora suma {{subWeight}}%."
+      },
+      "messages": {
+        "saveSuccess": "Proyecto guardado",
+        "saveErrorTitle": "No se pudo guardar el proyecto",
+        "saveErrorFallback": "Revisa los datos."
+      },
+      "gantt": {
+        "title": "Gantt",
+        "subtitle": "Sigue proyectos y tareas en el calendario.",
+        "week": "Semana",
+        "month": "Mes",
+        "empty": "No hay tareas programadas.",
+        "headers": {
+          "name": "Nombre",
+          "start": "Desde",
+          "end": "Hasta"
+        }
+      },
+      "permissions": {
+        "noCreate": "No tienes permisos para crear proyectos."
+      },
+      "actions": {
+        "saveProject": "Guardar proyecto"
+      }
+    },
+    "tasks": {
+      "header": {
+        "eyebrow": "ERP interno",
+        "title": "Tareas y seguimiento del equipo",
+        "subtitle": "Organiza trabajo diario, mueve prioridades y sigue el estado en vivo."
+      },
+      "tabs": {
+        "summary": "Resumen",
+        "kanban": "Kanban"
+      },
+      "create": {
+        "title": "Crear tarea"
+      },
+      "fields": {
+        "title": "Nombre de la tarea",
+        "titlePlaceholder": "Escribe el titulo",
+        "description": "Descripcion",
+        "start": "Inicio",
+        "end": "Fin",
+        "project": "Proyecto",
+        "assignee": "Asignar a",
+        "noProject": "Sin proyecto",
+        "selectUser": "Selecciona usuario",
+        "tenantUsers": "Usuarios del tenant",
+        "status": "Estado",
+        "statusLabel": "Estado: {{status}}"
+      },
+      "status": {
+        "pending": "Pendiente",
+        "inProgress": "En progreso",
+        "inProgressShort": "En curso",
+        "done": "Hecho",
+        "doneShort": "Completado"
+      },
+      "actions": {
+        "create": "Crear tarea",
+        "toggleCreate": "Crear tarea",
+        "hideForm": "Ocultar formulario",
+        "addQuick": "+ Anadir tarea",
+        "edit": "Editar",
+        "saveChanges": "Guardar cambios"
+      },
+      "summary": {
+        "allTasks": "Todas las tareas",
+        "assigned": "Mis tareas asignadas",
+        "emptyAll": "No hay tareas registradas.",
+        "emptyAssigned": "No tienes tareas asignadas ahora mismo.",
+        "projectLabel": "Proyecto: {{project}}",
+        "noProject": "Sin proyecto"
+      },
+      "kanban": {
+        "title": "Tareas",
+        "subtitle": "Arrastra las tarjetas para actualizar su estado de forma inmediata.",
+        "empty": "Sin tareas",
+        "projectLabel": "En {{project}}",
+        "projectFallback": "Proyecto",
+        "noProject": "Sin proyecto"
+      },
+      "messages": {
+        "createSuccess": "Tarea creada",
+        "createErrorTitle": "No se pudo crear la tarea",
+        "createErrorFallback": "Revisa los datos.",
+        "moveErrorTitle": "No se pudo mover la tarea",
+        "moveErrorFallback": "Revisa permisos y datos.",
+        "updateSuccess": "Tarea actualizada",
+        "updateErrorTitle": "No se pudo actualizar la tarea",
+        "updateErrorFallback": "Revisa los datos.",
+        "titleRequired": "Titulo requerido"
+      },
+      "drawer": {
+        "title": "Detalle de tarea",
+        "projectLabel": "Proyecto: {{project}}",
+        "projectFallback": "Sin nombre",
+        "noProject": "Sin proyecto",
+        "assigned": "Asignado",
+        "unassigned": "Sin asignar",
+        "noDate": "Sin fecha",
+        "noDescription": "Sin descripcion"
+      }
+    }
+  }
+}

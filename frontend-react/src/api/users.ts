@@ -8,6 +8,7 @@ export interface CurrentUser {
   is_super_admin: boolean;
   tenant_id: number | null;
   role_id: number | null;
+  language?: string | null;
   created_at: string;
 }
 

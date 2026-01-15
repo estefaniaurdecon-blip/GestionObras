@@ -28,6 +28,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { FaPlay, FaStop } from "react-icons/fa";
+import { useTranslation } from "react-i18next";
 
 import {
   ErpTask,
@@ -84,13 +85,11 @@ const addDays = (date: Date, days: number): Date => {
   return next;
 };
 
-const WEEKDAY_LABELS = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
-
-// Formatea el encabezado corto de dia (lun 12).
-const formatDayLabel = (date: Date): string => {
-  const day = WEEKDAY_LABELS[date.getDay()] ?? "";
-  return `${day} ${date.getDate()}`;
-};
+// Formatea el encabezado corto de dia usando el locale activo.
+const formatDayLabel = (date: Date, locale: string): string =>
+  new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(
+    date
+  );
 
 // Formatea fecha para inputs datetime-local.
 const padTimePart = (value: number): string => String(value).padStart(2, "0");
@@ -149,6 +148,7 @@ const formatMinutesLabel = (minutes: number): string => {
 export const TimeControlPage: React.FC = () => {
   // Utilidades globales (toasts y modal).
   const toast = useToast();
+  const { t, i18n } = useTranslation();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const calendarRef = useRef<HTMLDivElement | null>(null);
 
@@ -327,7 +327,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setTasksError(
             error?.response?.data?.detail ??
-              "No se han podido cargar las tareas del ERP."
+              t("timeControl.messages.tasksLoadError")
           );
         }
       }
@@ -390,7 +390,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setSessionsError(
             error?.response?.data?.detail ??
-              "No se han podido cargar las sesiones."
+              t("timeControl.messages.sessionsLoadError")
           );
         }
       } finally {
@@ -507,8 +507,10 @@ export const TimeControlPage: React.FC = () => {
           });
         } catch (error: any) {
           toast({
-            title: "No se pudo actualizar la sesion",
-            description: error?.response?.data?.detail ?? "Revisa los datos.",
+            title: t("timeControl.messages.sessionUpdateErrorTitle"),
+            description:
+              error?.response?.data?.detail ??
+              t("timeControl.messages.genericErrorFallback"),
             status: "error",
           });
         }
@@ -550,8 +552,8 @@ export const TimeControlPage: React.FC = () => {
     const taskId = Number(taskIdInput);
     if (!taskId || Number.isNaN(taskId)) {
       toast({
-        title: "Tarea no valida",
-        description: "Selecciona una tarea del ERP.",
+        title: t("timeControl.messages.invalidTaskTitle"),
+        description: t("timeControl.messages.invalidTaskDesc"),
         status: "warning",
       });
       return;
@@ -571,16 +573,18 @@ export const TimeControlPage: React.FC = () => {
         )
       );
       toast({
-        title: "Tracking iniciado",
-        description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
+        title: t("timeControl.messages.trackingStartedTitle"),
+        description: t("timeControl.messages.trackingStartedDesc", {
+          taskId,
+        }),
         status: "success",
       });
     } catch (error: any) {
       toast({
-        title: "Error al iniciar tracking",
+        title: t("timeControl.messages.trackingStartErrorTitle"),
         description:
           error?.response?.data?.detail ??
-          "No se ha podido iniciar la sesion de tiempo.",
+          t("timeControl.messages.trackingStartErrorFallback"),
         status: "error",
       });
     } finally {
@@ -592,8 +596,8 @@ export const TimeControlPage: React.FC = () => {
   const handleQuickStart = async (taskId: number) => {
     if (isRunning) {
       toast({
-        title: "Ya hay una sesion activa",
-        description: "Deten la sesion actual antes de iniciar otra.",
+        title: t("timeControl.messages.sessionActiveTitle"),
+        description: t("timeControl.messages.sessionActiveDesc"),
         status: "warning",
       });
       return;
@@ -612,16 +616,18 @@ export const TimeControlPage: React.FC = () => {
         )
       );
       toast({
-        title: "Tracking iniciado",
-        description: `Sesion de tiempo iniciada para la tarea ${taskId}.`,
+        title: t("timeControl.messages.trackingStartedTitle"),
+        description: t("timeControl.messages.trackingStartedDesc", {
+          taskId,
+        }),
         status: "success",
       });
     } catch (error: any) {
       toast({
-        title: "Error al iniciar tracking",
+        title: t("timeControl.messages.trackingStartErrorTitle"),
         description:
           error?.response?.data?.detail ??
-          "No se ha podido iniciar la sesion de tiempo.",
+          t("timeControl.messages.trackingStartErrorFallback"),
         status: "error",
       });
     } finally {
@@ -636,16 +642,18 @@ export const TimeControlPage: React.FC = () => {
       const session = await stopTimeSession();
       setActiveSession(session);
       toast({
-        title: "Tracking detenido",
-        description: `Sesion finalizada. Duracion: ${formattedElapsed}.`,
+        title: t("timeControl.messages.trackingStopTitle"),
+        description: t("timeControl.messages.trackingStopDesc", {
+          duration: formattedElapsed,
+        }),
         status: "info",
       });
     } catch (error: any) {
       toast({
-        title: "Error al detener tracking",
+        title: t("timeControl.messages.trackingStopErrorTitle"),
         description:
           error?.response?.data?.detail ??
-          "No se ha podido detener la sesion de tiempo activa.",
+          t("timeControl.messages.trackingStopErrorFallback"),
         status: "error",
       });
     } finally {
@@ -673,11 +681,14 @@ export const TimeControlPage: React.FC = () => {
   const handleSaveSession = async () => {
     const taskId = Number(draftTaskId);
     if (!taskId || Number.isNaN(taskId)) {
-      toast({ title: "Selecciona una tarea", status: "warning" });
+      toast({ title: t("timeControl.messages.selectTask"), status: "warning" });
       return;
     }
     if (!draftStart || !draftEnd) {
-      toast({ title: "Selecciona el rango horario", status: "warning" });
+      toast({
+        title: t("timeControl.messages.selectRange"),
+        status: "warning",
+      });
       return;
     }
     try {
@@ -695,20 +706,22 @@ export const TimeControlPage: React.FC = () => {
             session.id === editingSessionId ? updated : session
           )
         );
-        toast({ title: "Sesion actualizada", status: "success" });
+        toast({ title: t("timeControl.messages.sessionUpdated"), status: "success" });
       } else {
         const created = await createTimeSession(payload);
         setSessions((prev) => [created, ...prev]);
-        toast({ title: "Sesion creada", status: "success" });
+        toast({ title: t("timeControl.messages.sessionCreated"), status: "success" });
       }
 
       handleCloseModal();
     } catch (error: any) {
       toast({
         title: editingSessionId
-          ? "Error al actualizar sesion"
-          : "Error al crear sesion",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+          ? t("timeControl.messages.sessionUpdateErrorTitle")
+          : t("timeControl.messages.sessionCreateErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("timeControl.messages.genericErrorFallback"),
         status: "error",
       });
     }
@@ -729,12 +742,14 @@ export const TimeControlPage: React.FC = () => {
       setSessions((prev) =>
         prev.filter((session) => session.id !== editingSessionId)
       );
-      toast({ title: "Sesion eliminada", status: "success" });
+      toast({ title: t("timeControl.messages.sessionDeleted"), status: "success" });
       handleCloseModal();
     } catch (error: any) {
       toast({
-        title: "Error al eliminar sesion",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("timeControl.messages.sessionDeleteErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("timeControl.messages.genericErrorFallback"),
         status: "error",
       });
     }
@@ -760,11 +775,13 @@ export const TimeControlPage: React.FC = () => {
     try {
       await deleteTimeSession(sessionId);
       setSessions((prev) => prev.filter((session) => session.id !== sessionId));
-      toast({ title: "Sesion eliminada", status: "success" });
+      toast({ title: t("timeControl.messages.sessionDeleted"), status: "success" });
     } catch (error: any) {
       toast({
-        title: "Error al eliminar sesion",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("timeControl.messages.sessionDeleteErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("timeControl.messages.genericErrorFallback"),
         status: "error",
       });
     }
@@ -802,11 +819,13 @@ export const TimeControlPage: React.FC = () => {
         ended_at: toLocalIsoString(endDate),
       });
       setSessions((prev) => [created, ...prev]);
-      toast({ title: "Sesion creada", status: "success" });
+      toast({ title: t("timeControl.messages.sessionCreated"), status: "success" });
     } catch (error: any) {
       toast({
-        title: "Error al crear sesion",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("timeControl.messages.sessionCreateErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("timeControl.messages.genericErrorFallback"),
         status: "error",
       });
     } finally {
@@ -835,10 +854,8 @@ export const TimeControlPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Stack position="relative" spacing={1}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Control de tiempo
-          </Text>
-          <Heading size="lg">Calendario interactivo</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("timeControl.header.eyebrow")}</Text>
+          <Heading size="lg">{t("timeControl.header.title")}</Heading>
         </Stack>
       </Box>
 
@@ -849,20 +866,18 @@ export const TimeControlPage: React.FC = () => {
           alignItems="center"
         >
           <Box>
-            <Text fontSize="xs" color={subtleText}>
-              Total Horas Semanal
-            </Text>
+            <Text fontSize="xs" color={subtleText}>{t("timeControl.stats.totalWeeklyHours")}</Text>
             <Text fontSize="xl" fontWeight="semibold">
               {formatSeconds(totalWeekSeconds)}
             </Text>
           </Box>
           <FormControl>
             {/* Seleccion de la tarea para trabajar. */}
-            <FormLabel>Que estas trabajando?</FormLabel>
+            <FormLabel>{t("timeControl.controls.currentTask")}</FormLabel>
             <Select
               value={taskIdInput}
               onChange={(e) => handleTaskSelectionChange(e.target.value)}
-              placeholder="Selecciona una tarea"
+              placeholder={t("timeControl.controls.selectTask")}
               isDisabled={isLoading}
             >
               {tasks.map((task) => (
@@ -887,7 +902,9 @@ export const TimeControlPage: React.FC = () => {
           >
             <Box textAlign={{ base: "left", lg: "right" }}>
               <Badge colorScheme={isRunning ? "green" : "gray"}>
-                {isRunning ? "En progreso" : "Sin actividad"}
+                {isRunning
+                ? t("timeControl.status.inProgress")
+                : t("timeControl.status.idle")}
               </Badge>
               {isRunning && (
                 <Text fontSize="2xl" fontFamily="mono" mt={1}>
@@ -898,7 +915,7 @@ export const TimeControlPage: React.FC = () => {
             <HStack spacing={3}>
               {/* Boton de inicio: icono redondo con el mismo tamano que detener. */}
               <IconButton
-                aria-label="Iniciar"
+                aria-label={t("timeControl.actions.start")}
                 icon={<FaPlay />}
                 colorScheme="green"
                 isRound
@@ -911,7 +928,7 @@ export const TimeControlPage: React.FC = () => {
               />
               {/* Boton de detener: icono redondo, mismo tamano y conectado al handler. */}
               <IconButton
-                aria-label="Detener"
+                aria-label={t("timeControl.actions.stop")}
                 icon={<FaStop />}
                 colorScheme="red"
                 variant="outline"
@@ -932,26 +949,18 @@ export const TimeControlPage: React.FC = () => {
         <Button
           variant={viewMode === "calendar" ? "solid" : "outline"}
           onClick={() => setViewMode("calendar")}
-        >
-          Calendario
-        </Button>
+        >{t("timeControl.views.calendar")}</Button>
         <Button
           variant={viewMode === "list" ? "solid" : "outline"}
           onClick={() => setViewMode("list")}
-        >
-          Vista de lista
-        </Button>
+        >{t("timeControl.views.list")}</Button>
         <Button
           variant={viewMode === "timesheet" ? "solid" : "outline"}
           onClick={() => setViewMode("timesheet")}
-        >
-          Hoja de horas
-        </Button>
+        >{t("timeControl.views.timesheet")}</Button>
         <HStack marginLeft="auto" spacing={4} align="center">
           <HStack spacing={2}>
-            <Text fontSize="sm" color={subtleText}>
-              Ajuste
-            </Text>
+            <Text fontSize="sm" color={subtleText}>{t("timeControl.controls.adjustment")}</Text>
             <Select
               size="sm"
               value={minutesStep}
@@ -968,21 +977,15 @@ export const TimeControlPage: React.FC = () => {
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(addDays(weekStart, -7)))}
-            >
-              Semana anterior
-            </Button>
+            >{t("timeControl.controls.prevWeek")}</Button>
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(new Date()))}
-            >
-              Hoy
-            </Button>
+            >{t("timeControl.controls.today")}</Button>
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(addDays(weekStart, 7)))}
-            >
-              Siguiente semana
-            </Button>
+            >{t("timeControl.controls.nextWeek")}</Button>
           </HStack>
         </HStack>
       </HStack>
@@ -996,14 +999,16 @@ export const TimeControlPage: React.FC = () => {
       {viewMode === "calendar" && (
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={4}>
           <HStack justify="space-between" align="center" mb={3}>
-            <Heading size="sm">Ultimas tareas</Heading>
+            <Heading size="sm">{t("timeControl.recent.title")}</Heading>
             <Text fontSize="xs" color={subtleText}>
-              {currentUserId ? "Asignadas a ti" : "Recientes"}
+              {currentUserId
+                ? t("timeControl.recent.assigned")
+                : t("timeControl.recent.recent")}
             </Text>
           </HStack>
           {recentTasks.length === 0 ? (
             <Text fontSize="sm" color={mutedText}>
-              No hay tareas recientes para mostrar.
+              {t("timeControl.recent.empty")}
             </Text>
           ) : (
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
@@ -1036,9 +1041,7 @@ export const TimeControlPage: React.FC = () => {
                       alignSelf="flex-start"
                       onClick={() => handleQuickStart(task.id)}
                       isDisabled={isRunning}
-                    >
-                      Play
-                    </Button>
+                    >{t("timeControl.actions.play")}</Button>
                   </Stack>
                 </Box>
               ))}
@@ -1059,7 +1062,7 @@ export const TimeControlPage: React.FC = () => {
           <SimpleGrid columns={8} gap={0} borderBottomWidth="1px">
             <Box p={3} borderRightWidth="1px">
               <Text fontSize="xs" color={subtleText}>
-                Hora
+                {t("timeControl.calendar.hour")}
               </Text>
             </Box>
             {weekDays.map((day) => {
@@ -1078,7 +1081,7 @@ export const TimeControlPage: React.FC = () => {
                   letterSpacing="0.08em"
                   color={isToday ? calendarHeaderActiveText : calendarHeaderIdleText}
                 >
-                  {formatDayLabel(day)}
+                  {formatDayLabel(day, i18n.language)}
                 </Text>
               </Box>
               );
@@ -1311,7 +1314,7 @@ export const TimeControlPage: React.FC = () => {
                         });
                       }}
                     >
-                      Mover
+                      {t("timeControl.actions.move")}
                     </Box>
                   )}
                   <HStack
@@ -1326,16 +1329,20 @@ export const TimeControlPage: React.FC = () => {
                       noOfLines={1}
                       mt={!session.is_active ? 2 : 0}
                     >
-                      {task ? task.title : `Tarea #${session.task_id}`}
+                      {task
+                        ? task.title
+                        : t("timeControl.labels.taskId", {
+                            id: session.task_id,
+                          })}
                     </Text>
                   </HStack>
                   <Text fontSize="xs" color={subtleText}>
-                    {start.toLocaleTimeString("es-ES", {
+                    {start.toLocaleTimeString(i18n.language, {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}{" "}
                     -{" "}
-                    {end.toLocaleTimeString("es-ES", {
+                    {end.toLocaleTimeString(i18n.language, {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -1378,7 +1385,9 @@ export const TimeControlPage: React.FC = () => {
 
       {viewMode === "list" && (
         <Stack spacing={3}>
-          {isLoadingSessions && <Text>Cargando sesiones...</Text>}
+          {isLoadingSessions && (
+            <Text>{t("timeControl.sessions.loading")}</Text>
+          )}
           {!isLoadingSessions &&
             sessions.map((session) => {
               const task = taskById.get(session.task_id);
@@ -1395,10 +1404,16 @@ export const TimeControlPage: React.FC = () => {
                   <HStack justify="space-between" align="flex-start">
                     <Box>
                       <Text fontWeight="semibold">
-                        {task ? task.title : `Tarea #${session.task_id}`}
+                        {task
+                          ? task.title
+                          : t("timeControl.labels.taskId", {
+                              id: session.task_id,
+                            })}
                       </Text>
                       <Text fontSize="sm" color={subtleText}>
-                        {new Date(session.started_at).toLocaleString("es-ES")}
+                        {new Date(session.started_at).toLocaleString(
+                          i18n.language
+                        )}
                       </Text>
                       {session.description && (
                         <Text fontSize="xs" color={mutedText} mt={1}>
@@ -1414,7 +1429,7 @@ export const TimeControlPage: React.FC = () => {
                         {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
                         {isRunning && activeSession?.task_id === session.task_id ? (
                           <IconButton
-                            aria-label="Detener"
+                            aria-label={t("timeControl.actions.stop")}
                             icon={<FaStop />}
                             size="sm"
                             colorScheme="red"
@@ -1429,7 +1444,7 @@ export const TimeControlPage: React.FC = () => {
                           />
                         ) : (
                           <IconButton
-                            aria-label="Iniciar"
+                            aria-label={t("timeControl.actions.start")}
                             icon={<FaPlay />}
                             size="sm"
                             colorScheme="green"
@@ -1448,9 +1463,7 @@ export const TimeControlPage: React.FC = () => {
                             event.stopPropagation();
                             openEditSession(session);
                           }}
-                        >
-                          Editar
-                        </Button>
+                        >{t("timeControl.actions.edit")}</Button>
                         <Button
                           size="xs"
                           colorScheme="red"
@@ -1458,9 +1471,7 @@ export const TimeControlPage: React.FC = () => {
                             event.stopPropagation();
                             handleQuickDelete(session.id);
                           }}
-                        >
-                          Borrar
-                        </Button>
+                        >{t("timeControl.actions.delete")}</Button>
                       </HStack>
                     </VStack>
                   </HStack>
@@ -1491,14 +1502,16 @@ export const TimeControlPage: React.FC = () => {
                 bg={cardBg}
               >
                 <HStack justify="space-between">
-                  <Text fontWeight="semibold">{formatDayLabel(day)}</Text>
+                  <Text fontWeight="semibold">
+                    {formatDayLabel(day, i18n.language)}
+                  </Text>
                   <Badge>{formatSeconds(totalSeconds)}</Badge>
                 </HStack>
                 <Divider my={3} />
                 <Stack spacing={2}>
                   {daySessions.length === 0 && (
                     <Text fontSize="sm" color={mutedText}>
-                      Sin sesiones registradas.
+                      {t("timeControl.sessions.empty")}
                     </Text>
                   )}
                   {daySessions.map((session) => {
@@ -1513,7 +1526,11 @@ export const TimeControlPage: React.FC = () => {
                       >
                         <Box>
                           <Text fontSize="sm">
-                            {task ? task.title : `Tarea #${session.task_id}`}
+                            {task
+                              ? task.title
+                              : t("timeControl.labels.taskId", {
+                                  id: session.task_id,
+                                })}
                           </Text>
                           {session.description && (
                             <Text fontSize="xs" color={mutedText}>
@@ -1528,7 +1545,7 @@ export const TimeControlPage: React.FC = () => {
                           {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
                           {isRunning && activeSession?.task_id === session.task_id ? (
                             <IconButton
-                              aria-label="Detener"
+                              aria-label={t("timeControl.actions.stop")}
                               icon={<FaStop />}
                               size="sm"
                               colorScheme="red"
@@ -1543,7 +1560,7 @@ export const TimeControlPage: React.FC = () => {
                             />
                           ) : (
                             <IconButton
-                              aria-label="Iniciar"
+                              aria-label={t("timeControl.actions.start")}
                               icon={<FaPlay />}
                               size="sm"
                               colorScheme="green"
@@ -1562,9 +1579,7 @@ export const TimeControlPage: React.FC = () => {
                               event.stopPropagation();
                               openEditSession(session);
                             }}
-                          >
-                            Editar
-                          </Button>
+                          >{t("timeControl.actions.edit")}</Button>
                           <Button
                             size="xs"
                             colorScheme="red"
@@ -1572,9 +1587,7 @@ export const TimeControlPage: React.FC = () => {
                               event.stopPropagation();
                               handleQuickDelete(session.id);
                             }}
-                          >
-                            Borrar
-                          </Button>
+                          >{t("timeControl.actions.delete")}</Button>
                         </HStack>
                       </HStack>
                     );
@@ -1590,17 +1603,19 @@ export const TimeControlPage: React.FC = () => {
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>
-            {editingSessionId ? "Editar sesion" : "Crear sesion"}
+            {editingSessionId
+              ? t("timeControl.modal.editTitle")
+              : t("timeControl.modal.createTitle")}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <Stack spacing={3}>
               <FormControl>
-                <FormLabel>Tarea</FormLabel>
+                <FormLabel>{t("timeControl.fields.task")}</FormLabel>
                 <Select
                   value={draftTaskId}
                   onChange={(e) => setDraftTaskId(e.target.value)}
-                  placeholder="Selecciona una tarea"
+                  placeholder={t("timeControl.controls.selectTask")}
                 >
                   {tasks.map((task) => (
                     <option key={task.id} value={String(task.id)}>
@@ -1610,15 +1625,15 @@ export const TimeControlPage: React.FC = () => {
                 </Select>
               </FormControl>
               <FormControl>
-                <FormLabel>Descripcion</FormLabel>
+                <FormLabel>{t("timeControl.fields.description")}</FormLabel>
                 <Input
                   value={draftDescription}
                   onChange={(e) => setDraftDescription(e.target.value)}
-                  placeholder="Opcional"
+                  placeholder={t("timeControl.fields.optional")}
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Inicio</FormLabel>
+                <FormLabel>{t("timeControl.fields.start")}</FormLabel>
                 <Input
                   type="datetime-local"
                   value={draftStart}
@@ -1626,7 +1641,7 @@ export const TimeControlPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Fin</FormLabel>
+                <FormLabel>{t("timeControl.fields.end")}</FormLabel>
                 <Input
                   type="datetime-local"
                   value={draftEnd}
@@ -1637,7 +1652,7 @@ export const TimeControlPage: React.FC = () => {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={handleCloseModal}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
             {editingSessionId && (
               <Button
@@ -1646,11 +1661,13 @@ export const TimeControlPage: React.FC = () => {
                 mr={3}
                 onClick={handleDeleteSession}
               >
-                Eliminar
+                {t("timeControl.actions.delete")}
               </Button>
             )}
             <Button colorScheme="green" onClick={handleSaveSession}>
-              {editingSessionId ? "Actualizar" : "Guardar"}
+              {editingSessionId
+                ? t("timeControl.actions.update")
+                : t("common.save")}
             </Button>
           </ModalFooter>
         </ModalContent>

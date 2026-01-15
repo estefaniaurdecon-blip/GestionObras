@@ -9,6 +9,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useRouter } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 import { verifyMFA } from "../api/auth";
 
@@ -23,6 +24,7 @@ export const MFAVerifyPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const username = sessionStorage.getItem("mfa_username") ?? "";
 
@@ -35,8 +37,8 @@ export const MFAVerifyPage: React.FC = () => {
       router.history.push("/dashboard");
     } catch (error) {
       toast({
-        title: "Error MFA",
-        description: "Código incorrecto o expirado",
+        title: t("mfa.messages.errorTitle"),
+        description: t("mfa.messages.errorDesc"),
         status: "error",
       });
     } finally {
@@ -54,15 +56,15 @@ export const MFAVerifyPage: React.FC = () => {
     >
       <Box bg="white" p={8} rounded="md" shadow="md" width="100%" maxW="400px">
         <Heading mb={6} size="lg" textAlign="center">
-          Verificación MFA
+          {t("mfa.title")}
         </Heading>
         <Text mb={4} textAlign="center">
-          Introduce el código de verificación que hemos enviado a tu correo electrónico.
+          {t("mfa.subtitle")}
         </Text>
         <form onSubmit={handleSubmit}>
           <Stack spacing={4}>
             <Box>
-              <Text mb={1}>Código MFA</Text>
+              <Text mb={1}>{t("mfa.codeLabel")}</Text>
               <Input
                 type="text"
                 value={code}
@@ -71,7 +73,7 @@ export const MFAVerifyPage: React.FC = () => {
               />
             </Box>
             <Button type="submit" colorScheme="blue" isLoading={isLoading}>
-              Verificar
+              {t("mfa.actions.verify")}
             </Button>
           </Stack>
         </form>

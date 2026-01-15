@@ -21,6 +21,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { Link, useRouter } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 import { NotificationsBell } from "../NotificationsBell";
 import { apiClient } from "../../api/client";
@@ -31,6 +32,7 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
+  const { t } = useTranslation();
   const sidebarBg = useColorModeValue("white", "gray.900");
   const headerBg = useColorModeValue("white", "gray.900");
   const pageBg = useColorModeValue("gray.50", "gray.800");
@@ -50,8 +52,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   const { data: currentUser } = useCurrentUser();
 
-  const email = currentUser?.email ?? "usuario@local";
-  const fullName = currentUser?.full_name ?? "Usuario";
+  const email = currentUser?.email ?? t("layout.user.fallbackEmail");
+  const fullName = currentUser?.full_name ?? t("layout.user.fallbackName");
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
 
@@ -81,16 +83,16 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           <HStack spacing={3}>
             <Image
               src="/logo-urdecon.svg"
-              alt="Logo Urdecon"
+              alt={t("layout.brand.logoAlt")}
               boxSize="56px"
               objectFit="contain"
             />
             <Box>
               <Text fontSize="lg" fontWeight="bold">
-                URDECON INNOVA
+                {t("layout.brand.title")}
               </Text>
               <Text fontSize="xs" color="gray.500">
-                Plataforma SaaS corporativa
+                {t("layout.brand.subtitle")}
               </Text>
             </Box>
           </HStack>
@@ -104,7 +106,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               textTransform="uppercase"
               color="gray.500"
             >
-              Navegación
+              {t("layout.sections.navigation")}
             </Text>
 
             <Button
@@ -113,9 +115,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               variant={isActive("/dashboard") ? "solid" : "ghost"}
               justifyContent="flex-start"
               size="sm"
-            >
-              Dashboard
-            </Button>
+            >{t("layout.nav.dashboard")}</Button>
 
             <Accordion
               allowToggle
@@ -135,9 +135,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     textAlign="left"
                     fontSize="sm"
                     fontWeight="semibold"
-                  >
-                    ERP
-                  </Box>
+                  >{t("layout.nav.erp")}</Box>
                   <AccordionIcon />
                 </AccordionButton>
                 <AccordionPanel px={2} pb={3}>
@@ -148,36 +146,28 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       variant={isActive("/erp/time-report") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
-                    >
-                      Informe de horas
-                    </Button>
+                    >{t("layout.nav.timeReport")}</Button>
                     <Button
                       as={Link}
                       to="/erp/time-control"
                       variant={isActive("/erp/time-control") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
-                    >
-                      Control de tiempo
-                    </Button>
+                    >{t("layout.nav.timeControl")}</Button>
                     <Button
                       as={Link}
                       to="/erp/tasks"
                       variant={isActive("/erp/tasks") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
-                    >
-                      Tareas
-                    </Button>
+                    >{t("layout.nav.tasks")}</Button>
                     <Button
                       as={Link}
                       to="/erp/projects"
                       variant={isActive("/erp/projects") ? "solid" : "ghost"}
                       justifyContent="flex-start"
                       size="sm"
-                    >
-                      Proyectos
-                    </Button>
+                    >{t("layout.nav.projects")}</Button>
                   </VStack>
                 </AccordionPanel>
               </AccordionItem>
@@ -191,18 +181,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   variant="ghost"
                   justifyContent="flex-start"
                   size="sm"
-                >
-                  Usuarios
-                </Button>
+                >{t("layout.nav.users")}</Button>
                 <Button
                   as={Link}
                   to="/hr"
                   variant="ghost"
                   justifyContent="flex-start"
                   size="sm"
-                >
-                  Recursos humanos
-                </Button>
+                >{t("layout.nav.hr")}</Button>
               </>
             )}
 
@@ -212,9 +198,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               variant="ghost"
               justifyContent="flex-start"
               size="sm"
-            >
-              Soporte
-            </Button>
+            >{t("layout.nav.support")}</Button>
 
             <Button
               as={Link}
@@ -222,9 +206,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               variant="ghost"
               justifyContent="flex-start"
               size="sm"
-            >
-              Herramientas
-            </Button>
+            >{t("layout.nav.tools")}</Button>
 
             {isSuperAdmin && (
               <Button
@@ -233,9 +215,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 variant="ghost"
                 justifyContent="flex-start"
                 size="sm"
-              >
-                Auditoría
-              </Button>
+              >{t("layout.nav.audit")}</Button>
             )}
           </VStack>
 
@@ -249,7 +229,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 textTransform="uppercase"
                 color="gray.500"
               >
-                Administración
+                {t("layout.sections.administration")}
               </Text>
               <Button
                 as={Link}
@@ -257,9 +237,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 variant="ghost"
                 justifyContent="flex-start"
                 size="sm"
-              >
-                Ajustes de tenants
-              </Button>
+              >{t("layout.nav.tenantSettings")}</Button>
             </VStack>
           )}
         </VStack>
@@ -277,12 +255,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             justify="space-between"
           >
             <Box>
-              <Text fontSize="lg" fontWeight="semibold">
-                Panel de control
-              </Text>
-              <Text fontSize="sm" color="gray.500">
-                Vista general de tu organización y herramientas
-              </Text>
+              <Text fontSize="lg" fontWeight="semibold">{t("layout.header.title")}</Text>
+              <Text fontSize="sm" color="gray.500">{t("layout.header.subtitle")}</Text>
             </Box>
 
             <HStack spacing={4}>
@@ -302,10 +276,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   </HStack>
                 </MenuButton>
                 <MenuList>
-                  <MenuItem onClick={goToUserSettings}>
-                    Ajustes de usuario
-                  </MenuItem>
-                  <MenuItem onClick={handleLogout}>Cerrar sesión</MenuItem>
+                  <MenuItem onClick={goToUserSettings}>{t("layout.userMenu.settings")}</MenuItem>
+                  <MenuItem onClick={handleLogout}>{t("layout.userMenu.logout")}</MenuItem>
                 </MenuList>
               </Menu>
             </HStack>

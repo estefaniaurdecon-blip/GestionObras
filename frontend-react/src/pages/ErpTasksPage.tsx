@@ -36,6 +36,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchErpProjects, type ErpProject } from "../api/erpReports";
@@ -53,6 +54,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 export const ErpTasksPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.500", "gray.300");
@@ -73,16 +75,27 @@ export const ErpTasksPage: React.FC = () => {
   `;
 
   type KanbanStatus = "pending" | "in_progress" | "done";
-  const kanbanColumns: { id: KanbanStatus; label: string; color: string }[] = [
-    { id: "pending", label: "Pendiente", color: "gray" },
-    { id: "in_progress", label: "En progreso", color: "orange" },
-    { id: "done", label: "Hecho", color: "green" },
-  ];
-  const statusLabels: Record<KanbanStatus, string> = {
-    pending: "Pendiente",
-    in_progress: "En curso",
-    done: "Completado",
-  };
+  const kanbanColumns: { id: KanbanStatus; label: string; color: string }[] =
+    useMemo(
+      () => [
+        { id: "pending", label: t("erp.tasks.status.pending"), color: "gray" },
+        {
+          id: "in_progress",
+          label: t("erp.tasks.status.inProgress"),
+          color: "orange",
+        },
+        { id: "done", label: t("erp.tasks.status.done"), color: "green" },
+      ],
+      [t]
+    );
+  const statusLabels: Record<KanbanStatus, string> = useMemo(
+    () => ({
+      pending: t("erp.tasks.status.pending"),
+      in_progress: t("erp.tasks.status.inProgressShort"),
+      done: t("erp.tasks.status.doneShort"),
+    }),
+    [t]
+  );
 
   // Estado del formulario de tareas y modales.
   const [taskTitle, setTaskTitle] = useState("");
@@ -181,12 +194,14 @@ export const ErpTasksPage: React.FC = () => {
       setTaskStartDate("");
       setTaskEndDate("");
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
-      toast({ title: "Tarea creada", status: "success" });
+      toast({ title: t("erp.tasks.messages.createSuccess"), status: "success" });
     },
     onError: (error: any) => {
       toast({
-        title: "No se pudo crear la tarea",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("erp.tasks.messages.createErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("erp.tasks.messages.createErrorFallback"),
         status: "error",
       });
     },
@@ -203,12 +218,14 @@ export const ErpTasksPage: React.FC = () => {
       setQuickAddEndDate("");
       setQuickAddOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
-      toast({ title: "Tarea creada", status: "success" });
+      toast({ title: t("erp.tasks.messages.createSuccess"), status: "success" });
     },
     onError: (error: any) => {
       toast({
-        title: "No se pudo crear la tarea",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("erp.tasks.messages.createErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("erp.tasks.messages.createErrorFallback"),
         status: "error",
       });
     },
@@ -226,9 +243,10 @@ export const ErpTasksPage: React.FC = () => {
         return next;
       });
       toast({
-        title: "No se pudo mover la tarea",
+        title: t("erp.tasks.messages.moveErrorTitle"),
         description:
-          error?.response?.data?.detail ?? "Revisa permisos y datos.",
+          error?.response?.data?.detail ??
+          t("erp.tasks.messages.moveErrorFallback"),
         status: "error",
       });
     },
@@ -253,12 +271,14 @@ export const ErpTasksPage: React.FC = () => {
     onSuccess: async () => {
       setEditOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
-      toast({ title: "Tarea actualizada", status: "success" });
+      toast({ title: t("erp.tasks.messages.updateSuccess"), status: "success" });
     },
     onError: (error: any) => {
       toast({
-        title: "No se pudo actualizar la tarea",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("erp.tasks.messages.updateErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("erp.tasks.messages.updateErrorFallback"),
         status: "error",
       });
     },
@@ -267,7 +287,7 @@ export const ErpTasksPage: React.FC = () => {
   // Envia el formulario de creacion de tarea.
   const handleCreateTask = () => {
     if (!taskTitle.trim()) {
-      toast({ title: "Titulo requerido", status: "warning" });
+      toast({ title: t("erp.tasks.messages.titleRequired"), status: "warning" });
       return;
     }
 
@@ -292,7 +312,7 @@ export const ErpTasksPage: React.FC = () => {
   // Crea una tarea desde el modal rapido.
   const handleQuickAdd = () => {
     if (!quickAddTitle.trim()) {
-      toast({ title: "Titulo requerido", status: "warning" });
+      toast({ title: t("erp.tasks.messages.titleRequired"), status: "warning" });
       return;
     }
 
@@ -423,12 +443,11 @@ export const ErpTasksPage: React.FC = () => {
         />
         <Stack position="relative" spacing={4} maxW="680px">
           <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            ERP Interno
+            {t("erp.tasks.header.eyebrow")}
           </Text>
-          <Heading size="lg">Tareas y seguimiento del equipo</Heading>
+          <Heading size="lg">{t("erp.tasks.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Organiza trabajo diario, mueve prioridades y sigue el estado en
-            vivo.
+            {t("erp.tasks.header.subtitle")}
           </Text>
           <SimpleGrid
             columns={{ base: 1, md: 2 }}
@@ -441,8 +460,8 @@ export const ErpTasksPage: React.FC = () => {
 
       <Tabs variant="enclosed" colorScheme="green" isLazy>
         <TabList flexWrap="wrap" gap={2}>
-          <Tab>Resumen</Tab>
-          <Tab>Kanban</Tab>
+          <Tab>{t("erp.tasks.tabs.summary")}</Tab>
+          <Tab>{t("erp.tasks.tabs.kanban")}</Tab>
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
@@ -454,14 +473,14 @@ export const ErpTasksPage: React.FC = () => {
                   align="center"
                   mb={3}
                 >
-                  <Heading size="sm">Todas las tareas</Heading>
+                  <Heading size="sm">{t("erp.tasks.summary.allTasks")}</Heading>
                   <Badge borderRadius="full" px={2}>
                     {allTasks.length}
                   </Badge>
                 </Stack>
                 {allTasks.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
-                    No hay tareas registradas.
+                    {t("erp.tasks.summary.emptyAll")}
                   </Text>
                 ) : (
                   <Stack spacing={3}>
@@ -475,11 +494,12 @@ export const ErpTasksPage: React.FC = () => {
                         <Text fontWeight="semibold">{task.title}</Text>
                         <Text fontSize="xs" color={subtleText}>
                           {task.project_id
-                            ? `Proyecto: ${
-                                projectMap.get(task.project_id) ??
-                                task.project_id
-                              }`
-                            : "Sin proyecto"}
+                            ? t("erp.tasks.summary.projectLabel", {
+                                project:
+                                  projectMap.get(task.project_id) ??
+                                  task.project_id,
+                              })
+                            : t("erp.tasks.summary.noProject")}
                         </Text>
                         <Badge
                           mt={2}
@@ -499,14 +519,14 @@ export const ErpTasksPage: React.FC = () => {
                   align="center"
                   mb={3}
                 >
-                  <Heading size="sm">Mis tareas asignadas</Heading>
+                  <Heading size="sm">{t("erp.tasks.summary.assigned")}</Heading>
                   <Badge borderRadius="full" px={2}>
                     {assignedTasks.length}
                   </Badge>
                 </Stack>
                 {assignedTasks.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
-                    No tienes tareas asignadas ahora mismo.
+                    {t("erp.tasks.summary.emptyAssigned")}
                   </Text>
                 ) : (
                   <Stack spacing={3}>
@@ -520,11 +540,12 @@ export const ErpTasksPage: React.FC = () => {
                         <Text fontWeight="semibold">{task.title}</Text>
                         <Text fontSize="xs" color={subtleText}>
                           {task.project_id
-                            ? `Proyecto: ${
-                                projectMap.get(task.project_id) ??
-                                task.project_id
-                              }`
-                            : "Sin proyecto"}
+                            ? t("erp.tasks.summary.projectLabel", {
+                                project:
+                                  projectMap.get(task.project_id) ??
+                                  task.project_id,
+                              })
+                            : t("erp.tasks.summary.noProject")}
                         </Text>
                         <Badge
                           mt={2}
@@ -544,25 +565,27 @@ export const ErpTasksPage: React.FC = () => {
               colorScheme="green"
               onClick={() => setShowCreateForm((prev) => !prev)}
             >
-              {showCreateForm ? "Ocultar formulario" : "Crear tarea"}
+              {showCreateForm
+                ? t("erp.tasks.actions.hideForm")
+                : t("erp.tasks.actions.toggleCreate")}
             </Button>
             <Collapse in={showCreateForm} animateOpacity>
               <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mt={4}>
                 <Heading size="sm" mb={3}>
-                  Crear tarea
+                  {t("erp.tasks.create.title")}
                 </Heading>
                 <Stack spacing={2}>
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
                     <Stack spacing={2}>
                       <FormControl>
-                        <FormLabel>Titulo de la tarea</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.title")}</FormLabel>
                         <Input
                           value={taskTitle}
                           onChange={(e) => setTaskTitle(e.target.value)}
                         />
                       </FormControl>
                       <FormControl>
-                        <FormLabel>Descripcion</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.description")}</FormLabel>
                         <Textarea
                           value={taskDescription}
                           onChange={(e) => setTaskDescription(e.target.value)}
@@ -571,7 +594,7 @@ export const ErpTasksPage: React.FC = () => {
                       </FormControl>
                       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
                         <FormControl>
-                          <FormLabel>Inicio</FormLabel>
+                          <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                           <Input
                             type="date"
                             value={taskStartDate}
@@ -579,7 +602,7 @@ export const ErpTasksPage: React.FC = () => {
                           />
                         </FormControl>
                         <FormControl>
-                          <FormLabel>Fin</FormLabel>
+                          <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                           <Input
                             type="date"
                             value={taskEndDate}
@@ -590,9 +613,9 @@ export const ErpTasksPage: React.FC = () => {
                     </Stack>
                     <Stack spacing={2}>
                       <FormControl>
-                        <FormLabel>Proyecto</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.project")}</FormLabel>
                         <Select
-                          placeholder="Sin proyecto"
+                          placeholder={t("erp.tasks.fields.noProject")}
                           value={taskProjectId}
                           onChange={(e) => setTaskProjectId(e.target.value)}
                         >
@@ -604,12 +627,12 @@ export const ErpTasksPage: React.FC = () => {
                         </Select>
                       </FormControl>
                       <FormControl>
-                        <FormLabel>Asignar a</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.assignee")}</FormLabel>
                         <Select
                           placeholder={
                             isSuperAdmin
-                              ? "Selecciona usuario"
-                              : "Usuarios del tenant"
+                              ? t("erp.tasks.fields.selectUser")
+                              : t("erp.tasks.fields.tenantUsers")
                           }
                           value={taskAssigneeId}
                           onChange={(e) => setTaskAssigneeId(e.target.value)}
@@ -630,7 +653,7 @@ export const ErpTasksPage: React.FC = () => {
                     alignSelf="flex-start"
                     size="sm"
                   >
-                    Crear tarea
+                    {t("erp.tasks.actions.create")}
                   </Button>
                 </Stack>
               </Box>
@@ -638,11 +661,10 @@ export const ErpTasksPage: React.FC = () => {
           </TabPanel>
           <TabPanel px={0}>
             <Heading size="md" mb={2}>
-              Tareas
+              {t("erp.tasks.kanban.title")}
             </Heading>
             <Text fontSize="sm" color={subtleText} mb={4}>
-              Arrastra las tarjetas para actualizar su estado de forma
-              inmediata.
+              {t("erp.tasks.kanban.subtitle")}
             </Text>
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
               {kanbanColumns.map((column) => (
@@ -693,7 +715,7 @@ export const ErpTasksPage: React.FC = () => {
                   <Stack spacing={3} mb={3}>
                     {tasksByStatus[column.id].length === 0 ? (
                       <Text fontSize="sm" color={subtleText}>
-                        Sin tareas
+                        {t("erp.tasks.kanban.empty")}
                       </Text>
                     ) : (
                       tasksByStatus[column.id].map((task) => (
@@ -719,11 +741,12 @@ export const ErpTasksPage: React.FC = () => {
                               <Heading size="sm">{task.title}</Heading>
                               <Text fontSize="xs" color={subtleText}>
                                 {task.project_id
-                                  ? `En ${
-                                      projectMap.get(task.project_id) ??
-                                      "Proyecto"
-                                    }`
-                                  : "Sin proyecto"}
+                                  ? t("erp.tasks.kanban.projectLabel", {
+                                      project:
+                                        projectMap.get(task.project_id) ??
+                                        t("erp.tasks.kanban.projectFallback"),
+                                    })
+                                  : t("erp.tasks.kanban.noProject")}
                               </Text>
                             </Box>
                             <Stack
@@ -763,7 +786,7 @@ export const ErpTasksPage: React.FC = () => {
                                 openEditTask(task);
                               }}
                             >
-                              Editar
+                              {t("erp.tasks.actions.edit")}
                             </Button>
                           </Stack>
                         </Box>
@@ -776,7 +799,7 @@ export const ErpTasksPage: React.FC = () => {
                     colorScheme={kanbanStyles[column.id].accent}
                     onClick={() => openQuickAdd(column.id)}
                   >
-                    + Anadir tarea
+                    {t("erp.tasks.actions.addQuick")}
                   </Button>
                 </Box>
               ))}
@@ -788,23 +811,25 @@ export const ErpTasksPage: React.FC = () => {
             >
               <ModalOverlay />
               <ModalContent>
-                <ModalHeader>Crear tarea</ModalHeader>
+              <ModalHeader>{t("erp.tasks.create.title")}</ModalHeader>
                 <ModalCloseButton />
                 <ModalBody>
                   <Stack spacing={3}>
                     <Text fontSize="sm" color={subtleText}>
-                      Estado: {statusLabels[quickAddStatus]}
+                      {t("erp.tasks.fields.statusLabel", {
+                        status: statusLabels[quickAddStatus],
+                      })}
                     </Text>
                     <FormControl>
-                      <FormLabel>Nombre de la tarea</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.title")}</FormLabel>
                       <Input
-                        placeholder="Escribe el titulo"
+                        placeholder={t("erp.tasks.fields.titlePlaceholder")}
                         value={quickAddTitle}
                         onChange={(e) => setQuickAddTitle(e.target.value)}
                       />
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Descripcion</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.description")}</FormLabel>
                       <Textarea
                         value={quickAddDescription}
                         onChange={(e) => setQuickAddDescription(e.target.value)}
@@ -812,9 +837,9 @@ export const ErpTasksPage: React.FC = () => {
                       />
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Proyecto</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.project")}</FormLabel>
                       <Select
-                        placeholder="Sin proyecto"
+                        placeholder={t("erp.tasks.fields.noProject")}
                         value={quickAddProjectId}
                         onChange={(e) => setQuickAddProjectId(e.target.value)}
                       >
@@ -826,12 +851,12 @@ export const ErpTasksPage: React.FC = () => {
                       </Select>
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Asignar a</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.assignee")}</FormLabel>
                       <Select
                         placeholder={
                           isSuperAdmin
-                            ? "Selecciona usuario"
-                            : "Usuarios del tenant"
+                            ? t("erp.tasks.fields.selectUser")
+                            : t("erp.tasks.fields.tenantUsers")
                         }
                         value={quickAddAssigneeId}
                         onChange={(e) => setQuickAddAssigneeId(e.target.value)}
@@ -845,7 +870,7 @@ export const ErpTasksPage: React.FC = () => {
                     </FormControl>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                       <FormControl>
-                        <FormLabel>Inicio</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                         <Input
                           type="date"
                           value={quickAddStartDate}
@@ -853,7 +878,7 @@ export const ErpTasksPage: React.FC = () => {
                         />
                       </FormControl>
                       <FormControl>
-                        <FormLabel>Fin</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                         <Input
                           type="date"
                           value={quickAddEndDate}
@@ -869,14 +894,14 @@ export const ErpTasksPage: React.FC = () => {
                     mr={3}
                     onClick={() => setQuickAddOpen(false)}
                   >
-                    Cancelar
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     colorScheme="green"
                     onClick={handleQuickAdd}
                     isLoading={quickCreateTaskMutation.isPending}
                   >
-                    Guardar
+                    {t("common.save")}
                   </Button>
                 </ModalFooter>
               </ModalContent>
@@ -888,19 +913,19 @@ export const ErpTasksPage: React.FC = () => {
             >
               <ModalOverlay />
               <ModalContent>
-                <ModalHeader>Editar tarea</ModalHeader>
+              <ModalHeader>{t("erp.tasks.actions.edit")}</ModalHeader>
                 <ModalCloseButton />
                 <ModalBody>
                   <Stack spacing={3}>
                     <FormControl>
-                      <FormLabel>Titulo</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.title")}</FormLabel>
                       <Input
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                       />
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Descripcion</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.description")}</FormLabel>
                       <Textarea
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
@@ -908,7 +933,7 @@ export const ErpTasksPage: React.FC = () => {
                       />
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Estado</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.status")}</FormLabel>
                       <Select
                         value={editStatus}
                         onChange={(e) =>
@@ -923,9 +948,9 @@ export const ErpTasksPage: React.FC = () => {
                       </Select>
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Proyecto</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.project")}</FormLabel>
                       <Select
-                        placeholder="Sin proyecto"
+                        placeholder={t("erp.tasks.fields.noProject")}
                         value={editProjectId}
                         onChange={(e) => setEditProjectId(e.target.value)}
                       >
@@ -937,12 +962,12 @@ export const ErpTasksPage: React.FC = () => {
                       </Select>
                     </FormControl>
                     <FormControl>
-                      <FormLabel>Asignar a</FormLabel>
+                      <FormLabel>{t("erp.tasks.fields.assignee")}</FormLabel>
                       <Select
                         placeholder={
                           isSuperAdmin
-                            ? "Selecciona usuario"
-                            : "Usuarios del tenant"
+                            ? t("erp.tasks.fields.selectUser")
+                            : t("erp.tasks.fields.tenantUsers")
                         }
                         value={editAssigneeId}
                         onChange={(e) => setEditAssigneeId(e.target.value)}
@@ -956,7 +981,7 @@ export const ErpTasksPage: React.FC = () => {
                     </FormControl>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                       <FormControl>
-                        <FormLabel>Inicio</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                         <Input
                           type="date"
                           value={editStartDate}
@@ -964,7 +989,7 @@ export const ErpTasksPage: React.FC = () => {
                         />
                       </FormControl>
                       <FormControl>
-                        <FormLabel>Fin</FormLabel>
+                        <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                         <Input
                           type="date"
                           value={editEndDate}
@@ -980,7 +1005,7 @@ export const ErpTasksPage: React.FC = () => {
                     mr={3}
                     onClick={() => setEditOpen(false)}
                   >
-                    Cancelar
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -988,7 +1013,7 @@ export const ErpTasksPage: React.FC = () => {
                     isLoading={updateTaskMutation.isPending}
                     isDisabled={!editTaskId || !editTitle.trim()}
                   >
-                    Guardar cambios
+                    {t("erp.tasks.actions.saveChanges")}
                   </Button>
                 </ModalFooter>
               </ModalContent>
@@ -1006,7 +1031,7 @@ export const ErpTasksPage: React.FC = () => {
         <DrawerOverlay />
         <DrawerContent>
           <DrawerCloseButton />
-          <DrawerHeader>Detalle de tarea</DrawerHeader>
+          <DrawerHeader>{t("erp.tasks.drawer.title")}</DrawerHeader>
           <DrawerBody>
             {selectedTask ? (
               <Stack spacing={4}>
@@ -1014,11 +1039,12 @@ export const ErpTasksPage: React.FC = () => {
                   <Heading size="md">{selectedTask.title}</Heading>
                   <Text fontSize="sm" color={subtleText}>
                     {selectedTask.project_id
-                      ? `Proyecto: ${
-                          projectMap.get(selectedTask.project_id) ??
-                          "Sin nombre"
-                        }`
-                      : "Sin proyecto"}
+                      ? t("erp.tasks.drawer.projectLabel", {
+                          project:
+                            projectMap.get(selectedTask.project_id) ??
+                            t("erp.tasks.drawer.projectFallback"),
+                        })
+                      : t("erp.tasks.drawer.noProject")}
                   </Text>
                 </Box>
                 <Badge
@@ -1031,18 +1057,18 @@ export const ErpTasksPage: React.FC = () => {
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                   <Box>
                     <Text fontSize="xs" color={subtleText}>
-                      Asignado
+                      {t("erp.tasks.drawer.assigned")}
                     </Text>
                     <Text fontWeight="semibold">
                       {selectedTask.assigned_to_id
                         ? userMap.get(selectedTask.assigned_to_id) ??
                           selectedTask.assigned_to_id
-                        : "Sin asignar"}
+                        : t("erp.tasks.drawer.unassigned")}
                     </Text>
                   </Box>
                   <Box>
                     <Text fontSize="xs" color={subtleText}>
-                      Estado
+                      {t("erp.tasks.fields.status")}
                     </Text>
                     <Text fontWeight="semibold">
                       {statusLabels[getTaskStatus(selectedTask)]}
@@ -1050,29 +1076,29 @@ export const ErpTasksPage: React.FC = () => {
                   </Box>
                   <Box>
                     <Text fontSize="xs" color={subtleText}>
-                      Inicio
+                      {t("erp.tasks.fields.start")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {selectedTask.start_date ?? "Sin fecha"}
+                      {selectedTask.start_date ?? t("erp.tasks.drawer.noDate")}
                     </Text>
                   </Box>
                   <Box>
                     <Text fontSize="xs" color={subtleText}>
-                      Fin
+                      {t("erp.tasks.fields.end")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {selectedTask.end_date ?? "Sin fecha"}
+                      {selectedTask.end_date ?? t("erp.tasks.drawer.noDate")}
                     </Text>
                   </Box>
                 </SimpleGrid>
                 <Box>
                   <Text fontSize="xs" color={subtleText}>
-                    Descripcion
+                    {t("erp.tasks.fields.description")}
                   </Text>
                   <Text>
                     {selectedTask.description?.trim()
                       ? selectedTask.description
-                      : "Sin descripcion"}
+                      : t("erp.tasks.drawer.noDescription")}
                   </Text>
                 </Box>
               </Stack>

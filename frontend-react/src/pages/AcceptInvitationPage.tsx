@@ -12,6 +12,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useRouter } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 import {
   acceptInvitation,
@@ -33,6 +34,7 @@ export const AcceptInvitationPage: React.FC = () => {
 
   const toast = useToast();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const pageBg = useColorModeValue("gray.50", "gray.900");
   const cardBg = useColorModeValue("white", "gray.800");
@@ -66,17 +68,17 @@ export const AcceptInvitationPage: React.FC = () => {
         password,
       });
       toast({
-        title: "Cuenta creada",
-        description: "Ya puedes iniciar sesión con tus credenciales.",
+        title: t("invitation.messages.successTitle"),
+        description: t("invitation.messages.successDesc"),
         status: "success",
       });
       router.history.push("/");
     } catch (error: any) {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido completar la invitación.";
+        t("invitation.messages.errorFallback");
       toast({
-        title: "Error al aceptar invitación",
+        title: t("invitation.messages.errorTitle"),
         description: detail,
         status: "error",
       });
@@ -110,17 +112,17 @@ export const AcceptInvitationPage: React.FC = () => {
         maxW="480px"
       >
         <Heading size="lg" mb={2}>
-          Aceptar invitación
+          {t("invitation.title")}
         </Heading>
         <Text fontSize="sm" color={subtitleColor} mb={6}>
-          Completa tus datos para activar tu usuario en la plataforma.
+          {t("invitation.subtitle")}
         </Text>
 
-        {isLoading && <Text>Cargando información de la invitación…</Text>}
+        {isLoading && <Text>{t("invitation.loading")}</Text>}
 
         {!isLoading && invalid && (
           <Text color="red.400">
-            La invitación no es válida (puede estar caducada o ya usada).
+            {t("invitation.invalid")}
           </Text>
         )}
 
@@ -129,25 +131,28 @@ export const AcceptInvitationPage: React.FC = () => {
             <Stack spacing={4}>
               <Box fontSize="sm" mb={2}>
                 <Text>
-                  Tenant: <strong>{validation.tenant_name}</strong>
+                  {t("invitation.labels.tenant")}{" "}
+                  <strong>{validation.tenant_name}</strong>
                 </Text>
                 <Text>
-                  Email invitado: <strong>{validation.email}</strong>
+                  {t("invitation.labels.email")}{" "}
+                  <strong>{validation.email}</strong>
                 </Text>
                 <Text>
-                  Rol: <strong>{validation.role_name}</strong>
+                  {t("invitation.labels.role")}{" "}
+                  <strong>{validation.role_name}</strong>
                 </Text>
               </Box>
 
               <FormControl isRequired>
-                <FormLabel>Nombre completo</FormLabel>
+                <FormLabel>{t("invitation.fields.fullName")}</FormLabel>
                 <Input
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
               </FormControl>
               <FormControl isRequired>
-                <FormLabel>Contraseña</FormLabel>
+                <FormLabel>{t("invitation.fields.password")}</FormLabel>
                 <Input
                   type="password"
                   value={password}
@@ -158,9 +163,7 @@ export const AcceptInvitationPage: React.FC = () => {
                 type="submit"
                 colorScheme="green"
                 isLoading={isSubmitting}
-              >
-                Crear cuenta
-              </Button>
+              >{t("invitation.actions.createAccount")}</Button>
             </Stack>
           </form>
         )}
@@ -168,4 +171,3 @@ export const AcceptInvitationPage: React.FC = () => {
     </Box>
   );
 };
-

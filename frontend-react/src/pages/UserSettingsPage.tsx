@@ -6,6 +6,7 @@ import {
   FormLabel,
   Heading,
   Input,
+  Select,
   Stack,
   Switch,
   Text,
@@ -13,6 +14,7 @@ import {
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -24,11 +26,13 @@ interface MeResponse extends CurrentUser {
 
 export const UserSettingsPage: React.FC = () => {
   const toast = useToast();
+  const { t, i18n } = useTranslation();
   const { colorMode, setColorMode } = useColorMode();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [language, setLanguage] = useState("en");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
@@ -42,12 +46,16 @@ export const UserSettingsPage: React.FC = () => {
         const response = await apiClient.get<MeResponse>("/api/v1/users/me");
         setEmail(response.data.email);
         setFullName(response.data.full_name ?? "");
+        const preferredLanguage =
+          response.data.language ?? i18n.language ?? "en";
+        setLanguage(preferredLanguage);
+        i18n.changeLanguage(preferredLanguage);
       } catch (error: any) {
         const detail =
           error?.response?.data?.detail ??
-          "No se ha podido cargar la información de usuario.";
+          t("settings.messages.loadErrorFallback");
         toast({
-          title: "Error al cargar perfil",
+          title: t("settings.messages.loadErrorTitle"),
           description: detail,
           status: "error",
         });
@@ -65,20 +73,21 @@ export const UserSettingsPage: React.FC = () => {
     try {
       const response = await apiClient.patch<MeResponse>("/api/v1/users/me", {
         full_name: fullName,
+        language,
       });
 
 
       toast({
-        title: "Perfil actualizado",
-        description: "Tu información de usuario se ha guardado correctamente.",
+        title: t("settings.messages.profileUpdatedTitle"),
+        description: t("settings.messages.profileUpdatedDesc"),
         status: "success",
       });
     } catch (error: any) {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido actualizar tu perfil (revisa los datos).";
+        t("settings.messages.profileUpdateErrorFallback");
       toast({
-        title: "Error al actualizar perfil",
+        title: t("settings.messages.profileUpdateErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -94,16 +103,16 @@ export const UserSettingsPage: React.FC = () => {
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !newPasswordConfirm) {
       toast({
-        title: "Datos incompletos",
-        description: "Rellena todos los campos de contraseña.",
+        title: t("settings.messages.passwordMissingTitle"),
+        description: t("settings.messages.passwordMissingDesc"),
         status: "warning",
       });
       return;
     }
     if (newPassword !== newPasswordConfirm) {
       toast({
-        title: "Contraseña no coincide",
-        description: "La nueva contraseña y su confirmación deben ser iguales.",
+        title: t("settings.messages.passwordMismatchTitle"),
+        description: t("settings.messages.passwordMismatchDesc"),
         status: "warning",
       });
       return;
@@ -119,17 +128,16 @@ export const UserSettingsPage: React.FC = () => {
       setNewPassword("");
       setNewPasswordConfirm("");
       toast({
-        title: "Contraseña actualizada",
-        description:
-          "Tu contraseña se ha cambiado correctamente. Úsala en tu próximo inicio de sesión.",
+        title: t("settings.messages.passwordUpdatedTitle"),
+        description: t("settings.messages.passwordUpdatedDesc"),
         status: "success",
       });
     } catch (error: any) {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido cambiar la contraseña.";
+        t("settings.messages.passwordUpdateErrorFallback");
       toast({
-        title: "Error al cambiar contraseña",
+        title: t("settings.messages.passwordUpdateErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -138,11 +146,8 @@ export const UserSettingsPage: React.FC = () => {
 
   return (
     <AppShell>
-      <Heading mb={4}>Ajustes de usuario</Heading>
-      <Text mb={6}>
-        Configura tu información básica de perfil, tu contraseña y tus
-        preferencias de apariencia.
-      </Text>
+      <Heading mb={4}>{t("settings.title")}</Heading>
+      <Text mb={6}>{t("settings.subtitle")}</Text>
 
       <Stack spacing={8} maxW="640px">
         <Box
@@ -154,24 +159,42 @@ export const UserSettingsPage: React.FC = () => {
           bg={cardBg}
         >
           <Heading as="h3" size="sm" mb={4}>
-            Perfil
+            {t("settings.profile")}
           </Heading>
           <Stack spacing={4}>
             <FormControl>
-              <FormLabel color={labelColor}>Correo electrónico</FormLabel>
+              <FormLabel color={labelColor}>{t("settings.email")}</FormLabel>
               <Input value={email} isReadOnly />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel color={labelColor}>Nombre completo</FormLabel>
+              <FormLabel color={labelColor}>{t("settings.fullName")}</FormLabel>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 isDisabled={loading}
               />
             </FormControl>
+            {/* Preferencia de idioma sincronizada con i18n y backend. */}
+            <FormControl>
+              <FormLabel color={labelColor}>{t("settings.language")}</FormLabel>
+              <Select
+                value={language}
+                onChange={(e) => {
+                  const nextLanguage = e.target.value;
+                  setLanguage(nextLanguage);
+                  i18n.changeLanguage(nextLanguage);
+                }}
+              >
+                <option value="en">{t("settings.languageOptions.en")}</option>
+                <option value="es">{t("settings.languageOptions.es")}</option>
+              </Select>
+              <Text fontSize="xs" color={labelColor} mt={1}>
+                {t("settings.languageHelp")}
+              </Text>
+            </FormControl>
             <FormControl display="flex" alignItems="center">
               <FormLabel mb="0" color={labelColor}>
-                Modo oscuro
+                {t("settings.darkMode")}
               </FormLabel>
               <Switch
                 isChecked={colorMode === "dark"}
@@ -186,18 +209,18 @@ export const UserSettingsPage: React.FC = () => {
               isDisabled={loading}
               alignSelf="flex-start"
             >
-              Guardar cambios
+              {t("settings.saveProfile")}
             </Button>
           </Stack>
         </Box>
 
         <Box borderWidth="1px" borderRadius="md" p={6} bg={cardBg}>
           <Heading as="h3" size="sm" mb={4}>
-            Cambiar contraseña
+            {t("settings.password")}
           </Heading>
           <Stack spacing={4}>
             <FormControl isRequired>
-              <FormLabel color={labelColor}>Contraseña actual</FormLabel>
+              <FormLabel color={labelColor}>{t("settings.currentPassword")}</FormLabel>
               <Input
                 type="password"
                 value={currentPassword}
@@ -205,7 +228,7 @@ export const UserSettingsPage: React.FC = () => {
               />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel color={labelColor}>Nueva contraseña</FormLabel>
+              <FormLabel color={labelColor}>{t("settings.newPassword")}</FormLabel>
               <Input
                 type="password"
                 value={newPassword}
@@ -213,7 +236,7 @@ export const UserSettingsPage: React.FC = () => {
               />
             </FormControl>
             <FormControl isRequired>
-              <FormLabel color={labelColor}>Repetir nueva contraseña</FormLabel>
+              <FormLabel color={labelColor}>{t("settings.confirmPassword")}</FormLabel>
               <Input
                 type="password"
                 value={newPasswordConfirm}
@@ -227,7 +250,7 @@ export const UserSettingsPage: React.FC = () => {
               alignSelf="flex-start"
               onClick={handleChangePassword}
             >
-              Actualizar contraseña
+              {t("settings.updatePassword")}
             </Button>
           </Stack>
         </Box>

@@ -28,6 +28,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
@@ -46,13 +47,14 @@ import {
 import { AppShell } from "../components/layout/AppShell";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
-// Cabecera personalizada del listado del Gantt (espanol).
+// Cabecera personalizada del listado del Gantt.
 const GanttTaskListHeader: React.FC<{
   headerHeight: number;
   fontFamily: string;
   fontSize: string;
   rowWidth: string;
-}> = ({ headerHeight, fontFamily, fontSize, rowWidth }) => (
+  labels: string[];
+}> = ({ headerHeight, fontFamily, fontSize, rowWidth, labels }) => (
   <div
     style={{
       fontFamily,
@@ -67,7 +69,7 @@ const GanttTaskListHeader: React.FC<{
         height: headerHeight - 2,
       }}
     >
-      {["Nombre", "Desde", "Hasta"].map((label, index) => (
+      {labels.map((label, index) => (
         <div
           key={label}
           style={{
@@ -129,6 +131,7 @@ type DraftMilestone = {
 export const ErpProjectsPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.500", "gray.300");
@@ -190,6 +193,14 @@ export const ErpProjectsPage: React.FC = () => {
   const assignedCount =
     tasks?.filter((task) => task.assigned_to_id).length ?? 0;
   const canManageProjects = isSuperAdmin || isTenantAdmin;
+  const ganttHeaderLabels = useMemo(
+    () => [
+      t("erp.projects.gantt.headers.name"),
+      t("erp.projects.gantt.headers.start"),
+      t("erp.projects.gantt.headers.end"),
+    ],
+    [t]
+  );
 
   const nextDraftId = () => `draft-${draftIdRef.current++}`;
   const createInitialActivityDrafts = (): DraftActivity[] => {
@@ -198,14 +209,14 @@ export const ErpProjectsPage: React.FC = () => {
     return [
       {
         id: activityId,
-        name: "Actividad 1",
+        name: t("erp.projects.defaults.activity", { index: 1 }),
         weight: 0,
         start_date: "",
         end_date: "",
         subactivities: [
           {
             id: subactivityId,
-            name: "Subactividad 1",
+            name: t("erp.projects.defaults.subactivity", { index: 1 }),
             weight: 0,
             start_date: "",
             end_date: "",
@@ -219,7 +230,7 @@ export const ErpProjectsPage: React.FC = () => {
   const createInitialMilestoneDrafts = (): DraftMilestone[] => [
     {
       id: nextDraftId(),
-      title: "Hito 1",
+      title: t("erp.projects.defaults.milestone", { index: 1 }),
       due_date: "",
       allow_late: false,
       deliverables: [],
@@ -243,7 +254,9 @@ export const ErpProjectsPage: React.FC = () => {
   const handleAddActivityDraft = () => {
     const newActivity: DraftActivity = {
       id: nextDraftId(),
-      name: `Actividad ${activityDrafts.length + 1}`,
+      name: t("erp.projects.defaults.activity", {
+        index: activityDrafts.length + 1,
+      }),
       weight: 0,
       subactivities: [],
     };
@@ -274,7 +287,9 @@ export const ErpProjectsPage: React.FC = () => {
         if (activity.id !== activityId) return activity;
         const newSub: DraftSubActivity = {
           id: nextDraftId(),
-          name: `Subactividad ${activity.subactivities.length + 1}`,
+          name: t("erp.projects.defaults.subactivity", {
+            index: activity.subactivities.length + 1,
+          }),
           weight: 0,
           start_date: "",
           end_date: "",
@@ -414,7 +429,9 @@ export const ErpProjectsPage: React.FC = () => {
   const handleAddMilestoneDraft = () => {
     const milestone: DraftMilestone = {
       id: nextDraftId(),
-      title: `Hito ${milestoneDrafts.length + 1}`,
+      title: t("erp.projects.defaults.milestone", {
+        index: milestoneDrafts.length + 1,
+      }),
       due_date: "",
       allow_late: false,
       deliverables: [],
@@ -500,13 +517,18 @@ export const ErpProjectsPage: React.FC = () => {
 
   const handleSaveProject = async () => {
     if (!projectName.trim()) {
-      toast({ title: "Nombre requerido", status: "warning" });
+      toast({
+        title: t("erp.projects.validation.nameRequired"),
+        status: "warning",
+      });
       return;
     }
     if (totalActivityWeight !== 100) {
       toast({
-        title: "Pesos de actividades incompletos",
-        description: `Las actividades deben sumar 100% y ahora suman ${totalActivityWeight}%.`,
+        title: t("erp.projects.validation.activityWeightsTitle"),
+        description: t("erp.projects.validation.activityWeightsDesc", {
+          weight: totalActivityWeight,
+        }),
         status: "warning",
       });
       return;
@@ -518,8 +540,12 @@ export const ErpProjectsPage: React.FC = () => {
       );
       if (subWeight !== activity.weight) {
         toast({
-          title: "Pesos de subactividades incompletos",
-          description: `La actividad "${activity.name}" debe sumar ${activity.weight}% y ahora suma ${subWeight}%.`,
+          title: t("erp.projects.validation.subactivityWeightsTitle"),
+          description: t("erp.projects.validation.subactivityWeightsDesc", {
+            activity: activity.name,
+            activityWeight: activity.weight,
+            subWeight,
+          }),
           status: "warning",
         });
         return;
@@ -602,11 +628,13 @@ export const ErpProjectsPage: React.FC = () => {
 
       await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
-      toast({ title: "Proyecto guardado", status: "success" });
+      toast({ title: t("erp.projects.messages.saveSuccess"), status: "success" });
     } catch (error: any) {
       toast({
-        title: "No se pudo guardar el proyecto",
-        description: error?.response?.data?.detail ?? "Revisa los datos.",
+        title: t("erp.projects.messages.saveErrorTitle"),
+        description:
+          error?.response?.data?.detail ??
+          t("erp.projects.messages.saveErrorFallback"),
         status: "error",
       });
     } finally {
@@ -717,16 +745,16 @@ export const ErpProjectsPage: React.FC = () => {
         />
         <Stack position="relative" spacing={4} maxW="680px">
           <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            ERP Interno
+            {t("erp.projects.header.eyebrow")}
           </Text>
-          <Heading size="lg">Gestiona proyectos y fechas clave</Heading>
+          <Heading size="lg">{t("erp.projects.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Centraliza proyectos, define fechas y revisa el avance global.
+            {t("erp.projects.header.subtitle")}
           </Text>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} pt={2}>
             <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
               <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
-                Proyectos activos
+                {t("erp.projects.stats.activeProjects")}
               </Text>
               <Text fontSize="2xl" fontWeight="semibold">
                 {projectCount}
@@ -734,7 +762,7 @@ export const ErpProjectsPage: React.FC = () => {
             </Box>
             <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
               <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
-                Tareas totales
+                {t("erp.projects.stats.totalTasks")}
               </Text>
               <Text fontSize="2xl" fontWeight="semibold">
                 {taskCount}
@@ -742,7 +770,7 @@ export const ErpProjectsPage: React.FC = () => {
             </Box>
             <Box bg="rgba(255,255,255,0.12)" p={3} borderRadius="lg">
               <Text fontSize="xs" textTransform="uppercase" opacity={0.7}>
-                Tareas asignadas
+                {t("erp.projects.stats.assignedTasks")}
               </Text>
               <Text fontSize="2xl" fontWeight="semibold">
                 {assignedCount}
@@ -754,10 +782,10 @@ export const ErpProjectsPage: React.FC = () => {
 
       <Tabs variant="enclosed" colorScheme="green" isLazy>
         <TabList flexWrap="wrap" gap={2}>
-          <Tab>Resumen</Tab>
-          <Tab>Proyectos</Tab>
-          <Tab>Crear</Tab>
-          <Tab>Gantt</Tab>
+          <Tab>{t("erp.projects.tabs.summary")}</Tab>
+          <Tab>{t("erp.projects.tabs.projects")}</Tab>
+          <Tab>{t("erp.projects.tabs.create")}</Tab>
+          <Tab>{t("erp.projects.tabs.gantt")}</Tab>
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
@@ -776,13 +804,13 @@ export const ErpProjectsPage: React.FC = () => {
                   textTransform="uppercase"
                   color={subtleText}
                 >
-                  Proyectos
+                  {t("erp.projects.cards.projectsEyebrow")}
                 </Text>
                 <Heading size="sm" mb={1}>
-                  Gestion de proyectos
+                  {t("erp.projects.cards.projectsTitle")}
                 </Heading>
                 <Text fontSize="sm" color={subtleText}>
-                  Crea proyectos, asigna fechas y revisa el Gantt.
+                  {t("erp.projects.cards.projectsDesc")}
                 </Text>
               </Box>
               <Box
@@ -799,13 +827,13 @@ export const ErpProjectsPage: React.FC = () => {
                   textTransform="uppercase"
                   color={subtleText}
                 >
-                  Tareas
+                  {t("erp.projects.cards.tasksEyebrow")}
                 </Text>
                 <Heading size="sm" mb={1}>
-                  Kanban de tareas
+                  {t("erp.projects.cards.tasksTitle")}
                 </Heading>
                 <Text fontSize="sm" color={subtleText}>
-                  Organiza trabajo diario y mueve prioridades.
+                  {t("erp.projects.cards.tasksDesc")}
                 </Text>
               </Box>
               <Box
@@ -822,24 +850,24 @@ export const ErpProjectsPage: React.FC = () => {
                   textTransform="uppercase"
                   color={subtleText}
                 >
-                  Analitica
+                  {t("erp.projects.cards.timeReportEyebrow")}
                 </Text>
                 <Heading size="sm" mb={1}>
-                  Informe de horas
+                  {t("erp.projects.cards.timeReportTitle")}
                 </Heading>
                 <Text fontSize="sm" color={subtleText}>
-                  Analiza productividad por proyecto y usuario.
+                  {t("erp.projects.cards.timeReportDesc")}
                 </Text>
               </Box>
             </SimpleGrid>
           </TabPanel>
           <TabPanel px={0}>
             <Stack spacing={4}>
-              <Heading size="md">Proyectos activos</Heading>
-              {isLoading && <Text>Cargando proyectos...</Text>}
+              <Heading size="md">{t("erp.projects.stats.activeProjects")}</Heading>
+              {isLoading && <Text>{t("erp.projects.list.loading")}</Text>}
               {error && (
                 <Text color="red.400">
-                  No se pudieron cargar los proyectos del ERP.
+                  {t("erp.projects.list.error")}
                 </Text>
               )}
               {!isLoading && !error && projects && (
@@ -892,10 +920,10 @@ export const ErpProjectsPage: React.FC = () => {
                             bg="rgba(0, 102, 43, 0.12)"
                             color={subtleText}
                           >
-                            {project.start_date ?? "Sin inicio"}
+                            {project.start_date ?? t("erp.projects.list.noStart")}
                           </Box>
                           <Text fontSize="xs" color={subtleText}>
-                            a
+                            {t("erp.projects.list.to")}
                           </Text>
                           <Box
                             px={2}
@@ -905,7 +933,7 @@ export const ErpProjectsPage: React.FC = () => {
                             bg="rgba(202, 168, 91, 0.18)"
                             color={subtleText}
                           >
-                            {project.end_date ?? "Sin fin"}
+                            {project.end_date ?? t("erp.projects.list.noEnd")}
                           </Box>
                         </Stack>
                       </Stack>
@@ -927,10 +955,9 @@ export const ErpProjectsPage: React.FC = () => {
                 >
                   <Stack spacing={4}>
                     <Box>
-                      <Heading size="sm">Crear proyecto</Heading>
+                      <Heading size="sm">{t("erp.projects.create.title")}</Heading>
                       <Text fontSize="sm" color={subtleText}>
-                        Define los datos generales antes de detallar actividades
-                        y hitos.
+                        {t("erp.projects.create.helper")}
                       </Text>
                     </Box>
                     <Divider borderColor={panelBorder} />
@@ -943,18 +970,18 @@ export const ErpProjectsPage: React.FC = () => {
                         color={subtleText}
                         mb={2}
                       >
-                        Datos generales
+                        {t("erp.projects.create.general")}
                       </Text>
                       <Stack spacing={3}>
                         <FormControl>
-                          <FormLabel>Nombre del Proyecto</FormLabel>
+                        <FormLabel>{t("erp.projects.fields.projectName")}</FormLabel>
                           <Input
                             value={projectName}
                             onChange={(e) => setProjectName(e.target.value)}
                           />
                         </FormControl>
                         <FormControl>
-                          <FormLabel>Descripcion</FormLabel>
+                          <FormLabel>{t("erp.projects.fields.description")}</FormLabel>
                           <Textarea
                             value={projectDescription}
                             onChange={(e) =>
@@ -974,11 +1001,11 @@ export const ErpProjectsPage: React.FC = () => {
                         color={subtleText}
                         mb={2}
                       >
-                        Fechas clave
+                        {t("erp.projects.create.dates")}
                       </Text>
                       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                         <FormControl>
-                          <FormLabel>Inicio</FormLabel>
+                          <FormLabel>{t("erp.projects.fields.start")}</FormLabel>
                           <Input
                             type="date"
                             value={projectStartDate}
@@ -988,7 +1015,7 @@ export const ErpProjectsPage: React.FC = () => {
                           />
                         </FormControl>
                         <FormControl>
-                          <FormLabel>Fin</FormLabel>
+                          <FormLabel>{t("erp.projects.fields.end")}</FormLabel>
                           <Input
                             type="date"
                             value={projectEndDate}
@@ -1009,10 +1036,12 @@ export const ErpProjectsPage: React.FC = () => {
                     borderColor={panelBorder}
                   >
                     <Heading size="sm" mb={2}>
-                      Actividades
+                      {t("erp.projects.activities.title")}
                     </Heading>
                     <Text fontSize="xs" color={subtleText} mb={4}>
-                      Suma pesos: {totalActivityWeight}% (objetivo 100%)
+                      {t("erp.projects.activities.weightSum", {
+                        weight: totalActivityWeight,
+                      })}
                     </Text>
                     <Accordion
                       allowMultiple
@@ -1023,7 +1052,9 @@ export const ErpProjectsPage: React.FC = () => {
                           <AccordionButton px={0}>
                             <Box flex="1" textAlign="left">
                               <Text fontSize="sm" fontWeight="semibold">
-                                Actividad #{index + 1}
+                                {t("erp.projects.activities.itemLabel", {
+                                  index: index + 1,
+                                })}
                               </Text>
                             </Box>
                             <AccordionIcon />
@@ -1035,7 +1066,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 spacing={3}
                               >
                                 <FormControl>
-                                  <FormLabel>Nombre</FormLabel>
+                                  <FormLabel>{t("erp.projects.fields.name")}</FormLabel>
                                   <Input
                                     value={activity.name}
                                     onChange={(e) =>
@@ -1046,7 +1077,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   />
                                 </FormControl>
                                 <FormControl>
-                                  <FormLabel>Peso (%)</FormLabel>
+                                  <FormLabel>{t("erp.projects.fields.weight")}</FormLabel>
                                   <Input
                                     type="number"
                                     value={activity.weight}
@@ -1063,7 +1094,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 spacing={3}
                               >
                                 <FormControl>
-                                  <FormLabel>Inicio</FormLabel>
+                                  <FormLabel>{t("erp.projects.fields.start")}</FormLabel>
                                   <Input
                                     type="date"
                                     value={activity.start_date}
@@ -1075,7 +1106,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   />
                                 </FormControl>
                                 <FormControl>
-                                  <FormLabel>Fin</FormLabel>
+                                  <FormLabel>{t("erp.projects.fields.end")}</FormLabel>
                                   <Input
                                     type="date"
                                     value={activity.end_date}
@@ -1094,11 +1125,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   handleAddSubActivityDraft(activity.id)
                                 }
                               >
-                                + Anadir subactividad
+                                {t("erp.projects.activities.addSubactivity")}
                               </Button>
                               {activity.subactivities.length === 0 ? (
                                 <Text fontSize="sm" color={subtleText}>
-                                  Aun no hay subactividades.
+                                  {t("erp.projects.activities.emptySubactivities")}
                                 </Text>
                               ) : (
                                 <Accordion
@@ -1119,7 +1150,10 @@ export const ErpProjectsPage: React.FC = () => {
                                               fontSize="sm"
                                               fontWeight="semibold"
                                             >
-                                              Subactividad #{subIndex + 1}
+                                              {t(
+                                                "erp.projects.activities.subactivityLabel",
+                                                { index: subIndex + 1 }
+                                              )}
                                             </Text>
                                           </Box>
                                           <AccordionIcon />
@@ -1127,7 +1161,7 @@ export const ErpProjectsPage: React.FC = () => {
                                         <AccordionPanel px={0} pt={3}>
                                           <Stack spacing={3}>
                                             <FormControl>
-                                              <FormLabel>Nombre</FormLabel>
+                                              <FormLabel>{t("erp.projects.fields.name")}</FormLabel>
                                               <Input
                                                 value={subactivity.name}
                                                 onChange={(e) =>
@@ -1140,7 +1174,7 @@ export const ErpProjectsPage: React.FC = () => {
                                               />
                                             </FormControl>
                                             <FormControl>
-                                              <FormLabel>Peso (%)</FormLabel>
+                                              <FormLabel>{t("erp.projects.fields.weight")}</FormLabel>
                                               <Input
                                                 type="number"
                                                 value={subactivity.weight}
@@ -1161,20 +1195,25 @@ export const ErpProjectsPage: React.FC = () => {
                                               fontSize="xs"
                                               color={subtleText}
                                             >
-                                              Suma de subactividades:{" "}
-                                              {activity.subactivities.reduce(
-                                                (acc, sub) =>
-                                                  acc + (sub.weight || 0),
-                                                0
+                                              {t(
+                                                "erp.projects.activities.subactivityWeightSum",
+                                                {
+                                                  weight:
+                                                    activity.subactivities.reduce(
+                                                      (acc, sub) =>
+                                                        acc + (sub.weight || 0),
+                                                      0
+                                                    ),
+                                                  target: activity.weight,
+                                                }
                                               )}
-                                              % (objetivo {activity.weight}%)
                                             </Text>
                                             <SimpleGrid
                                               columns={{ base: 1, md: 2 }}
                                               spacing={3}
                                             >
                                               <FormControl>
-                                                <FormLabel>Inicio</FormLabel>
+                                                <FormLabel>{t("erp.projects.fields.start")}</FormLabel>
                                                 <Input
                                                   type="date"
                                                   value={subactivity.start_date}
@@ -1191,7 +1230,7 @@ export const ErpProjectsPage: React.FC = () => {
                                                 />
                                               </FormControl>
                                               <FormControl>
-                                                <FormLabel>Fin</FormLabel>
+                                                <FormLabel>{t("erp.projects.fields.end")}</FormLabel>
                                                 <Input
                                                   type="date"
                                                   value={subactivity.end_date}
@@ -1210,10 +1249,14 @@ export const ErpProjectsPage: React.FC = () => {
                                             </SimpleGrid>
                                             <FormControl>
                                               <FormLabel>
-                                                Tareas del catalogo
+                                                {t(
+                                                  "erp.projects.activities.taskCatalog"
+                                                )}
                                               </FormLabel>
                                               <Select
-                                                placeholder="Selecciona una tarea"
+                                                placeholder={t(
+                                                  "erp.projects.activities.taskCatalogPlaceholder"
+                                                )}
                                                 value={
                                                   taskTemplateSelections[
                                                     subactivity.id
@@ -1271,7 +1314,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                   );
                                                 }}
                                               >
-                                                Anadir tarea
+                                                {t(
+                                                  "erp.projects.activities.addTask"
+                                                )}
                                               </Button>
                                               <Button
                                                 variant="outline"
@@ -1282,7 +1327,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                   )
                                                 }
                                               >
-                                                + Tarea manual
+                                                {t(
+                                                  "erp.projects.activities.addManualTask"
+                                                )}
                                               </Button>
                                             </Stack>
                                             {subactivity.tasks.length === 0 ? (
@@ -1290,7 +1337,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                 fontSize="sm"
                                                 color={subtleText}
                                               >
-                                                Aun no hay tareas agregadas.
+                                                {t(
+                                                  "erp.projects.activities.emptyTasks"
+                                                )}
                                               </Text>
                                             ) : (
                                               <Stack spacing={2}>
@@ -1306,7 +1355,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                         {task.type ===
                                                         "manual" ? (
                                                           <Input
-                                                            placeholder="Titulo de tarea"
+                                                            placeholder={t(
+                                                              "erp.projects.activities.taskTitlePlaceholder"
+                                                            )}
                                                             value={task.title}
                                                             onChange={(e) =>
                                                               handleUpdateTask(
@@ -1341,7 +1392,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                             )
                                                           }
                                                         >
-                                                          Quitar
+                                                          {t(
+                                                            "erp.projects.activities.removeTask"
+                                                          )}
                                                         </Button>
                                                       </Stack>
                                                     </Box>
@@ -1360,7 +1413,9 @@ export const ErpProjectsPage: React.FC = () => {
                                                 )
                                               }
                                             >
-                                              Eliminar subactividad
+                                              {t(
+                                                "erp.projects.activities.removeSubactivity"
+                                              )}
                                             </Button>
                                           </Stack>
                                         </AccordionPanel>
@@ -1377,7 +1432,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   handleRemoveActivityDraft(activity.id)
                                 }
                               >
-                                Eliminar actividad
+                                {t("erp.projects.activities.removeActivity")}
                               </Button>
                             </Stack>
                           </AccordionPanel>
@@ -1396,7 +1451,7 @@ export const ErpProjectsPage: React.FC = () => {
                     borderColor={panelBorder}
                   >
                     <Heading size="sm" mb={3}>
-                      Hitos y entregables
+                      {t("erp.projects.milestones.title")}
                     </Heading>
                     <Accordion
                       allowMultiple
@@ -1407,7 +1462,9 @@ export const ErpProjectsPage: React.FC = () => {
                           <AccordionButton px={0}>
                             <Box flex="1" textAlign="left">
                               <Text fontSize="sm" fontWeight="semibold">
-                                Hito #{index + 1}
+                                {t("erp.projects.milestones.itemLabel", {
+                                  index: index + 1,
+                                })}
                               </Text>
                             </Box>
                             <AccordionIcon />
@@ -1415,7 +1472,9 @@ export const ErpProjectsPage: React.FC = () => {
                           <AccordionPanel px={0} pt={3}>
                             <Stack spacing={3}>
                               <FormControl>
-                                <FormLabel>Nombre del hito</FormLabel>
+                                <FormLabel>
+                                  {t("erp.projects.milestones.nameLabel")}
+                                </FormLabel>
                                 <Input
                                   value={milestone.title}
                                   onChange={(e) =>
@@ -1426,7 +1485,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 />
                               </FormControl>
                               <FormControl>
-                                <FormLabel>Fecha limite</FormLabel>
+                                <FormLabel>{t("erp.projects.milestones.dueDate")}</FormLabel>
                                 <Input
                                   type="date"
                                   value={milestone.due_date}
@@ -1445,14 +1504,14 @@ export const ErpProjectsPage: React.FC = () => {
                                   })
                                 }
                               >
-                                Permitir entregas fuera de plazo
+                                {t("erp.projects.milestones.allowLate")}
                               </Checkbox>
                               <Text fontSize="sm" color={subtleText}>
-                                Entregables
+                                {t("erp.projects.milestones.deliverables")}
                               </Text>
                               {milestone.deliverables.length === 0 ? (
                                 <Text fontSize="sm" color={subtleText}>
-                                  Aun no hay entregables.
+                                  {t("erp.projects.milestones.emptyDeliverables")}
                                 </Text>
                               ) : (
                                 <Stack spacing={2}>
@@ -1465,7 +1524,11 @@ export const ErpProjectsPage: React.FC = () => {
                                     >
                                       <Stack spacing={2}>
                                         <FormControl>
-                                          <FormLabel>Titulo</FormLabel>
+                                          <FormLabel>
+                                            {t(
+                                              "erp.projects.milestones.deliverableTitle"
+                                            )}
+                                          </FormLabel>
                                           <Input
                                             value={deliverable.title}
                                             onChange={(e) =>
@@ -1478,7 +1541,7 @@ export const ErpProjectsPage: React.FC = () => {
                                           />
                                         </FormControl>
                                         <FormControl>
-                                          <FormLabel>Tipo</FormLabel>
+                                          <FormLabel>{t("erp.projects.milestones.type")}</FormLabel>
                                           <Select
                                             value={deliverable.kind}
                                             onChange={(e) =>
@@ -1493,12 +1556,20 @@ export const ErpProjectsPage: React.FC = () => {
                                               )
                                             }
                                           >
-                                            <option value="link">LINK</option>
-                                            <option value="text">TEXT</option>
+                                            <option value="link">
+                                              {t(
+                                                "erp.projects.milestones.typeLink"
+                                              )}
+                                            </option>
+                                            <option value="text">
+                                              {t(
+                                                "erp.projects.milestones.typeText"
+                                              )}
+                                            </option>
                                           </Select>
                                         </FormControl>
                                         <FormControl>
-                                          <FormLabel>Valor</FormLabel>
+                                          <FormLabel>{t("erp.projects.milestones.value")}</FormLabel>
                                           <Input
                                             value={deliverable.value}
                                             onChange={(e) =>
@@ -1521,7 +1592,9 @@ export const ErpProjectsPage: React.FC = () => {
                                             )
                                           }
                                         >
-                                          Quitar entregable
+                                          {t(
+                                            "erp.projects.milestones.removeDeliverable"
+                                          )}
                                         </Button>
                                       </Stack>
                                     </Box>
@@ -1535,7 +1608,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   handleAddDeliverableDraft(milestone.id)
                                 }
                               >
-                                + Anadir entregable
+                                {t("erp.projects.milestones.addDeliverable")}
                               </Button>
                               <Button
                                 size="xs"
@@ -1545,7 +1618,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   handleRemoveMilestoneDraft(milestone.id)
                                 }
                               >
-                                Eliminar hito
+                                {t("erp.projects.milestones.removeMilestone")}
                               </Button>
                             </Stack>
                           </AccordionPanel>
@@ -1560,18 +1633,18 @@ export const ErpProjectsPage: React.FC = () => {
                   isLoading={projectSaving}
                   alignSelf={{ base: "stretch", md: "flex-start" }}
                 >
-                  Guardar proyecto
+                  {t("erp.projects.actions.saveProject")}
                 </Button>
               </Stack>
             ) : (
               <Text fontSize="sm" color={subtleText}>
-                No tienes permisos para crear proyectos.
+                {t("erp.projects.permissions.noCreate")}
               </Text>
             )}
           </TabPanel>
           <TabPanel px={0}>
             <Heading size="md" mb={4}>
-              Diagrama de Gantt
+              {t("erp.projects.gantt.title")}
             </Heading>
             <Box
               borderWidth="1px"
@@ -1592,7 +1665,7 @@ export const ErpProjectsPage: React.FC = () => {
                 mb={4}
               >
                 <Text fontSize="sm" color={subtleText}>
-                  Visualiza proyectos y tareas con sus fechas clave.
+                  {t("erp.projects.gantt.subtitle")}
                 </Text>
                 <Tabs
                   variant="soft-rounded"
@@ -1603,14 +1676,14 @@ export const ErpProjectsPage: React.FC = () => {
                   }}
                 >
                   <TabList>
-                    <Tab>Semana</Tab>
-                    <Tab>Mes</Tab>
+                    <Tab>{t("erp.projects.gantt.week")}</Tab>
+                    <Tab>{t("erp.projects.gantt.month")}</Tab>
                   </TabList>
                 </Tabs>
               </Stack>
               {ganttTasks.length === 0 ? (
                 <Text fontSize="sm" color={subtleText}>
-                  No hay tareas con fechas para mostrar.
+                  {t("erp.projects.gantt.empty")}
                 </Text>
               ) : (
                 <Gantt
@@ -1621,8 +1694,13 @@ export const ErpProjectsPage: React.FC = () => {
                   rowHeight={42}
                   barCornerRadius={2}
                   todayColor="transparent"
-                  locale="es"
-                  TaskListHeader={GanttTaskListHeader}
+                  locale={i18n.language}
+                  TaskListHeader={(props) => (
+                    <GanttTaskListHeader
+                      {...props}
+                      labels={ganttHeaderLabels}
+                    />
+                  )}
                 />
               )}
             </Box>

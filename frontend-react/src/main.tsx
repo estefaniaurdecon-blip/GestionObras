@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { router } from "./router";
 import { theme } from "./theme";
+import "./i18n";
 
 // Cliente de React Query para gestionar cache de peticiones.
 const queryClient = new QueryClient();

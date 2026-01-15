@@ -13,6 +13,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useRouter } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 import { login } from "../api/auth";
 
@@ -31,6 +32,7 @@ export const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const pageBg = useColorModeValue("gray.50", "gray.900");
   const cardBg = useColorModeValue("white", "gray.800");
@@ -56,16 +58,16 @@ export const LoginPage: React.FC = () => {
       }
 
       toast({
-        title: "Error",
-        description: "Respuesta de autenticación inesperada",
+        title: t("auth.messages.unexpectedTitle"),
+        description: t("auth.messages.unexpectedDesc"),
         status: "error",
       });
     } catch (error: any) {
       const backendMessage =
         error?.response?.data?.detail ??
-        "Credenciales incorrectas o error de servidor";
+        t("auth.messages.invalidFallback");
       toast({
-        title: "Error de login",
+        title: t("auth.messages.loginErrorTitle"),
         description: backendMessage,
         status: "error",
       });
@@ -94,16 +96,16 @@ export const LoginPage: React.FC = () => {
         <Stack spacing={6} align="center" mb={4}>
           <Image
             src="/logo-urdecon.svg"
-            alt="Logo Urdecon"
+            alt={t("auth.logoAlt")}
             boxSize="56px"
             objectFit="contain"
           />
           <Box textAlign="center">
             <Heading size="lg" mb={1}>
-              Acceso a URDECON INNOVA
+              {t("auth.login.title")}
             </Heading>
             <Text fontSize="sm" color={subtitleColor}>
-              Inicia sesión con tu usuario corporativo
+              {t("auth.login.subtitle")}
             </Text>
           </Box>
         </Stack>
@@ -112,7 +114,7 @@ export const LoginPage: React.FC = () => {
           <Stack spacing={4}>
             <FormControl isRequired>
               <FormLabel htmlFor="email" color={labelColor}>
-                Email
+                {t("auth.login.email")}
               </FormLabel>
               <Input
                 id="email"
@@ -123,7 +125,7 @@ export const LoginPage: React.FC = () => {
             </FormControl>
             <FormControl isRequired>
               <FormLabel htmlFor="password" color={labelColor}>
-                Contraseña
+                {t("auth.login.password")}
               </FormLabel>
               <Input
                 id="password"
@@ -133,7 +135,7 @@ export const LoginPage: React.FC = () => {
               />
             </FormControl>
             <Button type="submit" colorScheme="blue" isLoading={isLoading}>
-              Entrar
+              {t("auth.login.submit")}
             </Button>
           </Stack>
         </form>

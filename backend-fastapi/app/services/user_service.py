@@ -32,6 +32,7 @@ def get_user_me(current_user: User) -> UserRead:
         is_super_admin=current_user.is_super_admin,
         tenant_id=current_user.tenant_id,
         role_id=current_user.role_id,
+        language=current_user.language,
         created_at=current_user.created_at,
     )
 
@@ -86,6 +87,7 @@ def list_users_by_tenant(
                 is_super_admin=u.is_super_admin,
                 tenant_id=u.tenant_id,
                 role_id=u.role_id,
+                language=u.language,
                 created_at=u.created_at,
             ),
         )
@@ -103,6 +105,8 @@ def update_user_me(
     """
 
     current_user.full_name = data.full_name
+    if data.language is not None:
+        current_user.language = data.language
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -123,6 +127,7 @@ def update_user_me(
         is_super_admin=current_user.is_super_admin,
         tenant_id=current_user.tenant_id,
         role_id=current_user.role_id,
+        language=current_user.language,
         created_at=current_user.created_at,
     )
 
@@ -217,6 +222,7 @@ def create_user(
         is_super_admin=user.is_super_admin,
         tenant_id=user.tenant_id,
         role_id=user.role_id,
+        language=user.language,
         created_at=user.created_at,
     )
 
@@ -322,5 +328,6 @@ def update_user_status(
         is_super_admin=user.is_super_admin,
         tenant_id=user.tenant_id,
         role_id=user.role_id,
+        language=user.language,
         created_at=user.created_at,
     )

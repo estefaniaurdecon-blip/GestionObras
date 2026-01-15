@@ -36,6 +36,7 @@ import {
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { keyframes } from "@emotion/react";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import {
@@ -85,6 +86,7 @@ interface EmployeeEditFormState {
 export const HrPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -209,7 +211,7 @@ export const HrPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["hr-departments"] });
       setDeptForm({ name: "", description: "" });
       toast({
-        title: "Departamento creado",
+        title: t("hr.messages.departmentCreated"),
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -217,8 +219,8 @@ export const HrPage: React.FC = () => {
     },
     onError: () => {
       toast({
-        title: "Error al crear departamento",
-        description: "Revisa permisos y datos.",
+        title: t("hr.messages.departmentCreateErrorTitle"),
+        description: t("hr.messages.genericErrorDesc"),
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -241,7 +243,7 @@ export const HrPage: React.FC = () => {
         primaryDepartmentId: "",
       });
       toast({
-        title: "Empleado creado",
+        title: t("hr.messages.employeeCreated"),
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -249,8 +251,8 @@ export const HrPage: React.FC = () => {
     },
     onError: () => {
       toast({
-        title: "Error al crear empleado",
-        description: "Revisa permisos, usuario y departamento.",
+        title: t("hr.messages.employeeCreateErrorTitle"),
+        description: t("hr.messages.employeeCreateErrorDesc"),
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -265,7 +267,7 @@ export const HrPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
       queryClient.invalidateQueries({ queryKey: ["hr-headcount"] });
       toast({
-        title: "Empleado actualizado",
+        title: t("hr.messages.employeeUpdated"),
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -274,8 +276,8 @@ export const HrPage: React.FC = () => {
     },
     onError: () => {
       toast({
-        title: "Error al actualizar empleado",
-        description: "Revisa permisos y datos.",
+        title: t("hr.messages.employeeUpdateErrorTitle"),
+        description: t("hr.messages.genericErrorDesc"),
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -290,7 +292,7 @@ export const HrPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
       queryClient.invalidateQueries({ queryKey: ["hr-headcount"] });
       toast({
-        title: "Empleado eliminado",
+        title: t("hr.messages.employeeDeleted"),
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -299,8 +301,8 @@ export const HrPage: React.FC = () => {
     },
     onError: () => {
       toast({
-        title: "Error al eliminar empleado",
-        description: "Revisa permisos y datos.",
+        title: t("hr.messages.employeeDeleteErrorTitle"),
+        description: t("hr.messages.genericErrorDesc"),
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -382,7 +384,7 @@ export const HrPage: React.FC = () => {
     if (!editingEmployee) return;
     if (!employeeEditForm.primaryDepartmentId) {
       toast({
-        title: "Departamento obligatorio",
+        title: t("hr.messages.departmentRequired"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -419,7 +421,7 @@ export const HrPage: React.FC = () => {
     event.preventDefault();
     if (!deptForm.name.trim()) {
       toast({
-        title: "Nombre obligatorio",
+        title: t("hr.messages.nameRequired"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -428,7 +430,7 @@ export const HrPage: React.FC = () => {
     }
     if (isSuperAdmin && !effectiveTenantId) {
       toast({
-        title: "Selecciona un tenant",
+        title: t("hr.messages.selectTenant"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -449,7 +451,7 @@ export const HrPage: React.FC = () => {
     event.preventDefault();
     if (!employeeForm.primaryDepartmentId) {
       toast({
-        title: "Departamento obligatorio",
+        title: t("hr.messages.departmentRequired"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -458,8 +460,8 @@ export const HrPage: React.FC = () => {
     }
     if (!employeeForm.userId && !employeeForm.fullName.trim()) {
       toast({
-        title: "Nombre obligatorio",
-        description: "Indica el nombre completo si no seleccionas usuario.",
+        title: t("hr.messages.nameRequired"),
+        description: t("hr.messages.employeeNameRequiredDesc"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -468,7 +470,7 @@ export const HrPage: React.FC = () => {
     }
     if (isSuperAdmin && !effectiveTenantId) {
       toast({
-        title: "Selecciona un tenant",
+        title: t("hr.messages.selectTenant"),
         status: "warning",
         duration: 3000,
         isClosable: true,
@@ -521,11 +523,11 @@ export const HrPage: React.FC = () => {
         />
         <VStack position="relative" align="flex-start" spacing={3}>
           <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Recursos humanos
+            {t("hr.header.eyebrow")}
           </Text>
-          <Heading size="lg">Gestiona equipos y estructura interna</Heading>
+          <Heading size="lg">{t("hr.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Controla departamentos, perfiles y costes desde un solo panel.
+            {t("hr.header.subtitle")}
           </Text>
         </VStack>
       </Box>
@@ -533,10 +535,10 @@ export const HrPage: React.FC = () => {
       {isSuperAdmin && (
         <Box mb={6}>
           <FormControl maxW="320px">
-            <FormLabel>Tenant</FormLabel>
-            {isLoadingTenants && <Text>Cargando tenants...</Text>}
+            <FormLabel>{t("hr.tenant.label")}</FormLabel>
+            {isLoadingTenants && <Text>{t("hr.tenant.loading")}</Text>}
             {isErrorTenants && (
-              <Text color="red.400">No se han podido cargar los tenants.</Text>
+              <Text color="red.400">{t("hr.tenant.loadError")}</Text>
             )}
             {tenants && (
               <Select
@@ -546,7 +548,7 @@ export const HrPage: React.FC = () => {
                     e.target.value ? Number(e.target.value) : null
                   )
                 }
-                placeholder="Selecciona un tenant"
+                placeholder={t("hr.tenant.placeholder")}
               >
                 {tenants.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -561,7 +563,7 @@ export const HrPage: React.FC = () => {
 
       {!effectiveTenantId && isSuperAdmin && (
         <Text color="gray.400" mb={6}>
-          Selecciona un tenant para gestionar sus datos de RRHH.
+          {t("hr.emptyTenant")}
         </Text>
       )}
 
@@ -570,7 +572,7 @@ export const HrPage: React.FC = () => {
           <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} mb={8}>
             <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
               <Heading as="h2" size="md" mb={4}>
-                Departamentos
+                {t("hr.departments.title")}
               </Heading>
 
               <VStack
@@ -581,7 +583,7 @@ export const HrPage: React.FC = () => {
                 onSubmit={handleCreateDepartment}
               >
                 <FormControl isRequired>
-                  <FormLabel>Nombre</FormLabel>
+                  <FormLabel>{t("hr.departments.form.name")}</FormLabel>
                   <Input
                     name="name"
                     value={deptForm.name}
@@ -589,7 +591,7 @@ export const HrPage: React.FC = () => {
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Descripción</FormLabel>
+                  <FormLabel>{t("hr.departments.form.description")}</FormLabel>
                   <Input
                     name="description"
                     value={deptForm.description}
@@ -602,14 +604,14 @@ export const HrPage: React.FC = () => {
                   alignSelf="flex-start"
                   isLoading={createDeptMutation.isPending}
                 >
-                  Crear departamento
+                  {t("hr.departments.form.create")}
                 </Button>
               </VStack>
 
-              {isLoadingDepartments && <Text>Cargando departamentos…</Text>}
+              {isLoadingDepartments && <Text>{t("hr.departments.loading")}</Text>}
               {isErrorDepartments && (
                 <Text color="red.400">
-                  No se han podido cargar los departamentos (revisa permisos).
+                  {t("hr.departments.error")}
                 </Text>
               )}
               {!isLoadingDepartments && departments && (
@@ -622,9 +624,9 @@ export const HrPage: React.FC = () => {
                   <Table size="sm">
                     <Thead bg={tableHeadBg}>
                       <Tr>
-                        <Th>Nombre</Th>
-                        <Th>Descripción</Th>
-                        <Th>Estado</Th>
+                        <Th>{t("hr.departments.table.name")}</Th>
+                        <Th>{t("hr.departments.table.description")}</Th>
+                        <Th>{t("hr.departments.table.status")}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -632,7 +634,7 @@ export const HrPage: React.FC = () => {
                         <Tr>
                           <Td colSpan={3}>
                             <Text fontSize="sm" color="gray.500">
-                              Aún no hay departamentos creados.
+                              {t("hr.departments.table.empty")}
                             </Text>
                           </Td>
                         </Tr>
@@ -645,7 +647,7 @@ export const HrPage: React.FC = () => {
                               <Badge
                                 colorScheme={d.is_active ? "green" : "red"}
                               >
-                                {d.is_active ? "Activo" : "Inactivo"}
+                                {d.is_active ? t("hr.status.active") : t("hr.status.inactive")}
                               </Badge>
                             </Td>
                           </Tr>
@@ -659,7 +661,7 @@ export const HrPage: React.FC = () => {
 
             <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
               <Heading as="h2" size="md" mb={4}>
-                Empleados
+                {t("hr.employees.title")}
               </Heading>
 
               <VStack
@@ -670,8 +672,8 @@ export const HrPage: React.FC = () => {
                 onSubmit={handleCreateEmployee}
               >
                 <FormControl>
-                  <FormLabel>Usuario (opcional)</FormLabel>
-                  {isLoadingTenantUsers && <Text>Cargando usuarios…</Text>}
+                  <FormLabel>{t("hr.employees.form.userOptional")}</FormLabel>
+                  {isLoadingTenantUsers && <Text>{t("hr.employees.form.loadingUsers")}</Text>}
                   {tenantUsers && (
                     <Select
                       name="userId"
@@ -679,18 +681,18 @@ export const HrPage: React.FC = () => {
                         employeeForm.userId === "" ? "" : employeeForm.userId
                       }
                       onChange={handleEmployeeChange}
-                      placeholder="Sin usuario asociado"
+                      placeholder={t("hr.employees.form.userPlaceholder")}
                     >
                       {availableTenantUsers.map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.email || "sin correo"}
+                          {u.email || t("hr.employees.form.noEmail")}
                         </option>
                       ))}
                     </Select>
                   )}
                 </FormControl>
                 <FormControl isRequired={!employeeForm.userId}>
-                  <FormLabel>Nombre completo</FormLabel>
+                  <FormLabel>{t("hr.employees.form.fullName")}</FormLabel>
                   <Input
                     name="fullName"
                     value={employeeForm.fullName}
@@ -698,7 +700,7 @@ export const HrPage: React.FC = () => {
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Puesto</FormLabel>
+                  <FormLabel>{t("hr.employees.form.position")}</FormLabel>
                   <Input
                     name="position"
                     value={employeeForm.position}
@@ -706,16 +708,16 @@ export const HrPage: React.FC = () => {
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>Coste por hora</FormLabel>
+                  <FormLabel>{t("hr.employees.form.hourlyRate")}</FormLabel>
                   <Input
                     name="hourlyRate"
                     value={employeeForm.hourlyRate}
                     onChange={handleEmployeeChange}
-                    placeholder="Ej: 35.5"
+                    placeholder={t("hr.employees.form.hourlyRatePlaceholder")}
                   />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Departamento principal</FormLabel>
+                  <FormLabel>{t("hr.employees.form.primaryDepartment")}</FormLabel>
                   <Select
                     name="primaryDepartmentId"
                     value={
@@ -724,7 +726,7 @@ export const HrPage: React.FC = () => {
                         : employeeForm.primaryDepartmentId
                     }
                     onChange={handleEmployeeChange}
-                    placeholder="Selecciona departamento"
+                    placeholder={t("hr.employees.form.departmentPlaceholder")}
                   >
                     {(departments ?? []).map((d) => (
                       <option key={d.id} value={d.id}>
@@ -744,14 +746,14 @@ export const HrPage: React.FC = () => {
                     (isSuperAdmin && !effectiveTenantId)
                   }
                 >
-                  Crear empleado
+                  {t("hr.employees.form.create")}
                 </Button>
               </VStack>
 
-              {isLoadingEmployees && <Text>Cargando empleados…</Text>}
+              {isLoadingEmployees && <Text>{t("hr.employees.loading")}</Text>}
               {isErrorEmployees && (
                 <Text color="red.400">
-                  No se han podido cargar los empleados (revisa permisos).
+                  {t("hr.employees.error")}
                 </Text>
               )}
               {!isLoadingEmployees && employees && (
@@ -765,14 +767,14 @@ export const HrPage: React.FC = () => {
                     <Table size="sm" minWidth="860px">
                       <Thead bg={tableHeadBg}>
                         <Tr>
-                          <Th>Empleado</Th>
-                          <Th>Correo</Th>
-                          <Th isNumeric>Coste/hora</Th>
-                          <Th>Puesto</Th>
-                          <Th>Departamento</Th>
-                          <Th>Estado</Th>
+                          <Th>{t("hr.employees.table.employee")}</Th>
+                          <Th>{t("hr.employees.table.email")}</Th>
+                          <Th isNumeric>{t("hr.employees.table.hourlyRate")}</Th>
+                          <Th>{t("hr.employees.table.position")}</Th>
+                          <Th>{t("hr.employees.table.department")}</Th>
+                          <Th>{t("hr.employees.table.status")}</Th>
                           <Th minW="96px" whiteSpace="nowrap">
-                            Acciones
+                            {t("hr.employees.table.actions")}
                           </Th>
                         </Tr>
                       </Thead>
@@ -781,7 +783,7 @@ export const HrPage: React.FC = () => {
                         <Tr>
                           <Td colSpan={7}>
                             <Text fontSize="sm" color="gray.500">
-                              Aún no hay empleados registrados.
+                              {t("hr.employees.table.empty")}
                             </Text>
                           </Td>
                         </Tr>
@@ -794,7 +796,7 @@ export const HrPage: React.FC = () => {
                                   ?.full_name ||
                                 tenantUsers?.find((u) => u.id === e.user_id)
                                   ?.email ||
-                                "Sin nombre"}
+                                t("hr.employees.table.noName")}
                             </Td>
                             <Td>{e.email || "-"}</Td>
                             <Td isNumeric>
@@ -813,7 +815,7 @@ export const HrPage: React.FC = () => {
                               <Badge
                                 colorScheme={e.is_active ? "green" : "red"}
                               >
-                                {e.is_active ? "Activo" : "Inactivo"}
+                                {e.is_active ? t("hr.status.active") : t("hr.status.inactive")}
                               </Badge>
                             </Td>
                             <Td minW="96px" whiteSpace="nowrap">
@@ -821,7 +823,7 @@ export const HrPage: React.FC = () => {
                                 size="xs"
                                 onClick={() => openEditEmployee(e)}
                               >
-                                Editar
+                                {t("hr.employees.table.edit")}
                               </Button>
                             </Td>
                           </Tr>
@@ -837,17 +839,17 @@ export const HrPage: React.FC = () => {
 
           <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
             <Heading as="h2" size="md" mb={4}>
-              Headcount por departamento
+              {t("hr.headcount.title")}
             </Heading>
-            {isLoadingHeadcount && <Text>Cargando informe…</Text>}
+            {isLoadingHeadcount && <Text>{t("hr.headcount.loading")}</Text>}
             {!isLoadingHeadcount && headcount && (
               <>
                 <Box overflowX="auto" bg={cardBg} borderRadius="xl" mb={4}>
                   <Table size="sm" minWidth="420px">
                   <Thead bg={tableHeadBg}>
                     <Tr>
-                      <Th>Departamento</Th>
-                      <Th isNumeric>Empleados activos</Th>
+                      <Th>{t("hr.headcount.table.department")}</Th>
+                      <Th isNumeric>{t("hr.headcount.table.activeEmployees")}</Th>
                     </Tr>
                   </Thead>
                   <Tbody>
@@ -855,7 +857,7 @@ export const HrPage: React.FC = () => {
                       <Tr>
                         <Td colSpan={2}>
                           <Text fontSize="sm" color="gray.500">
-                            Aún no hay datos de headcount para este tenant.
+                            {t("hr.headcount.table.empty")}
                           </Text>
                         </Td>
                       </Tr>
@@ -871,7 +873,7 @@ export const HrPage: React.FC = () => {
                 </Table>
                 </Box>
                 <Text fontWeight="semibold" color={subtleText}>
-                  Total empleados activos: {totalEmployees}
+                  {t("hr.headcount.totalActive", { total: totalEmployees })}
                 </Text>
               </>
             )}
@@ -882,12 +884,12 @@ export const HrPage: React.FC = () => {
       <Modal isOpen={isOpen} onClose={handleCloseEdit} isCentered size="md">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Editar empleado</ModalHeader>
+          <ModalHeader>{t("hr.modal.title")}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <VStack align="stretch" spacing={3}>
               <FormControl>
-                <FormLabel>Nombre completo</FormLabel>
+                <FormLabel>{t("hr.modal.fullName")}</FormLabel>
                 <Input
                   name="fullName"
                   value={employeeEditForm.fullName}
@@ -895,7 +897,7 @@ export const HrPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Correo</FormLabel>
+                <FormLabel>{t("hr.modal.email")}</FormLabel>
                 <Input
                   name="email"
                   value={employeeEditForm.email}
@@ -903,7 +905,7 @@ export const HrPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Puesto</FormLabel>
+                <FormLabel>{t("hr.modal.position")}</FormLabel>
                 <Input
                   name="position"
                   value={employeeEditForm.position}
@@ -911,7 +913,7 @@ export const HrPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Coste por hora</FormLabel>
+                <FormLabel>{t("hr.modal.hourlyRate")}</FormLabel>
                 <Input
                   name="hourlyRate"
                   value={employeeEditForm.hourlyRate}
@@ -919,7 +921,7 @@ export const HrPage: React.FC = () => {
                 />
               </FormControl>
               <FormControl isRequired>
-                <FormLabel>Departamento principal</FormLabel>
+                <FormLabel>{t("hr.modal.primaryDepartment")}</FormLabel>
                 <Select
                   name="primaryDepartmentId"
                   value={
@@ -928,7 +930,7 @@ export const HrPage: React.FC = () => {
                       : employeeEditForm.primaryDepartmentId
                   }
                   onChange={handleEmployeeEditChange}
-                  placeholder="Selecciona departamento"
+                  placeholder={t("hr.modal.departmentPlaceholder")}
                 >
                   {(departments ?? []).map((d) => (
                     <option key={d.id} value={d.id}>
@@ -938,7 +940,7 @@ export const HrPage: React.FC = () => {
                 </Select>
               </FormControl>
               <FormControl>
-                <FormLabel>Estado</FormLabel>
+                <FormLabel>{t("hr.modal.status")}</FormLabel>
                 <Select
                   value={employeeEditForm.isActive ? "active" : "inactive"}
                   onChange={(event) =>
@@ -948,15 +950,15 @@ export const HrPage: React.FC = () => {
                     }))
                   }
                 >
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
+                  <option value="active">{t("hr.modal.statusActive")}</option>
+                  <option value="inactive">{t("hr.modal.statusInactive")}</option>
                 </Select>
               </FormControl>
             </VStack>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={handleCloseEdit}>
-              Cancelar
+              {t("hr.modal.cancel")}
             </Button>
             <Button
               colorScheme="red"
@@ -965,14 +967,14 @@ export const HrPage: React.FC = () => {
               onClick={handleDeleteEmployee}
               isLoading={deleteEmployeeMutation.isPending}
             >
-              Eliminar
+              {t("hr.modal.delete")}
             </Button>
             <Button
               colorScheme="green"
               onClick={handleUpdateEmployee}
               isLoading={updateEmployeeMutation.isPending}
             >
-              Guardar cambios
+              {t("hr.modal.save")}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -987,14 +989,14 @@ export const HrPage: React.FC = () => {
         <AlertDialogOverlay />
         <AlertDialogContent>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
-            Eliminar empleado
+            {t("hr.alert.title")}
           </AlertDialogHeader>
           <AlertDialogBody>
-            Esta accion no se puede deshacer. Quieres continuar?
+            {t("hr.alert.body")}
           </AlertDialogBody>
           <AlertDialogFooter>
             <Button ref={deleteCancelRef} onClick={onDeleteClose}>
-              Cancelar
+              {t("hr.alert.cancel")}
             </Button>
             <Button
               colorScheme="red"
@@ -1002,7 +1004,7 @@ export const HrPage: React.FC = () => {
               ml={3}
               isLoading={deleteEmployeeMutation.isPending}
             >
-              Eliminar
+              {t("hr.alert.confirm")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -26,6 +26,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
@@ -50,6 +51,7 @@ const addDays = (value: Date, days: number) => {
 
 export const DashboardPage: React.FC = () => {
   const toast = useToast();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [launchUrl, setLaunchUrl] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
@@ -97,9 +99,9 @@ export const DashboardPage: React.FC = () => {
     onError: (error: any) => {
       const message =
         error?.response?.data?.detail ??
-        "No se ha podido cargar el informe de horas.";
+        t("dashboard.messages.reportLoadFallback");
       toast({
-        title: "Error al cargar informe",
+        title: t("dashboard.messages.reportLoadTitle"),
         description: message,
         status: "error",
       });
@@ -150,9 +152,9 @@ export const DashboardPage: React.FC = () => {
     } catch (error: any) {
       const message =
         error?.response?.data?.detail ??
-        "No se ha podido lanzar la herramienta (revisa permisos y configuracion).";
+        t("dashboard.messages.toolLaunchFallback");
       toast({
-        title: "Error al lanzar herramienta",
+        title: t("dashboard.messages.toolLaunchTitle"),
         description: message,
         status: "error",
       });
@@ -180,11 +182,11 @@ export const DashboardPage: React.FC = () => {
         />
         <Stack position="relative" spacing={3}>
           <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Panel principal
+            {t("dashboard.header.eyebrow")}
           </Text>
-          <Heading size="lg">Dashboard operativo</Heading>
+          <Heading size="lg">{t("dashboard.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Resumen de actividad, accesos rapidos y seguimiento de horas clave.
+            {t("dashboard.header.subtitle")}
           </Text>
         </Stack>
       </Box>
@@ -199,7 +201,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Tenants activos</StatLabel>
+            <StatLabel>{t("dashboard.stats.tenantsActive")}</StatLabel>
             <StatNumber>{summary?.tenants_activos ?? "-"}</StatNumber>
           </Stat>
         </Box>
@@ -212,7 +214,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Usuarios activos</StatLabel>
+            <StatLabel>{t("dashboard.stats.usersActive")}</StatLabel>
             <StatNumber>{summary?.usuarios_activos ?? "-"}</StatNumber>
           </Stat>
         </Box>
@@ -225,7 +227,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Herramientas activas</StatLabel>
+            <StatLabel>{t("dashboard.stats.toolsActive")}</StatLabel>
             <StatNumber>{summary?.herramientas_activas ?? "-"}</StatNumber>
           </Stat>
         </Box>
@@ -238,7 +240,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Horas registradas hoy</StatLabel>
+            <StatLabel>{t("dashboard.stats.hoursToday")}</StatLabel>
             <StatNumber>
               {summary ? summary.horas_hoy.toFixed(2) : "0.00"} h
             </StatNumber>
@@ -253,7 +255,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Tickets abiertos</StatLabel>
+            <StatLabel>{t("dashboard.stats.ticketsOpen")}</StatLabel>
             <StatNumber>{summary?.tickets_abiertos ?? 0}</StatNumber>
           </Stat>
         </Box>
@@ -266,7 +268,7 @@ export const DashboardPage: React.FC = () => {
           borderLeftColor={statAccent}
         >
           <Stat>
-            <StatLabel>Tickets en progreso</StatLabel>
+            <StatLabel>{t("dashboard.stats.ticketsInProgress")}</StatLabel>
             <StatNumber>{summary?.tickets_en_progreso ?? 0}</StatNumber>
           </Stat>
         </Box>
@@ -281,11 +283,10 @@ export const DashboardPage: React.FC = () => {
         >
           <Box maxW="sm">
             <Text fontWeight="semibold" mb={1}>
-              Acciones rapidas
+              {t("dashboard.actions.title")}
             </Text>
             <Text fontSize="sm" color={subtleText}>
-              Gestiona tu organizacion y accede al ERP, Moodle y las
-              herramientas clave de la plataforma.
+              {t("dashboard.actions.subtitle")}
             </Text>
           </Box>
           <HStack spacing={2} flexWrap="wrap" justify="flex-end">
@@ -297,7 +298,7 @@ export const DashboardPage: React.FC = () => {
                 colorScheme="green"
                 variant="outline"
               >
-                Crear / gestionar tenants
+                {t("dashboard.actions.manageTenants")}
               </Button>
             )}
             <Button
@@ -307,7 +308,7 @@ export const DashboardPage: React.FC = () => {
               colorScheme="green"
               variant="outline"
             >
-              Gestionar usuarios
+              {t("dashboard.actions.manageUsers")}
             </Button>
             <Button
               as={Link}
@@ -316,7 +317,7 @@ export const DashboardPage: React.FC = () => {
               colorScheme="green"
               variant="outline"
             >
-              Ver informe de horas
+              {t("dashboard.actions.viewTimeReport")}
             </Button>
             <Button
               as={Link}
@@ -325,7 +326,7 @@ export const DashboardPage: React.FC = () => {
               colorScheme="green"
               variant="outline"
             >
-              Ver tickets
+              {t("dashboard.actions.viewTickets")}
             </Button>
             <Button
               as={Link}
@@ -334,14 +335,14 @@ export const DashboardPage: React.FC = () => {
               colorScheme="green"
               variant="outline"
             >
-              Ver herramientas
+              {t("dashboard.actions.viewTools")}
             </Button>
           </HStack>
         </HStack>
       </Box>
 
       <Heading as="h2" size="md" mb={4}>
-        Informe filtrable de horas
+        {t("dashboard.report.title")}
       </Heading>
       <Box
         borderWidth="1px"
@@ -352,10 +353,12 @@ export const DashboardPage: React.FC = () => {
       >
         <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
           <FormControl>
-            <FormLabel>Proyecto</FormLabel>
+            <FormLabel>{t("dashboard.report.project")}</FormLabel>
             <Select
               placeholder={
-                isLoadingProjects ? "Cargando proyectos..." : "Todos los proyectos"
+                isLoadingProjects
+                  ? t("dashboard.report.loadingProjects")
+                  : t("dashboard.report.allProjects")
               }
               value={selectedProjectId ?? ""}
               onChange={(e) => {
@@ -372,7 +375,7 @@ export const DashboardPage: React.FC = () => {
             </Select>
           </FormControl>
           <FormControl>
-            <FormLabel>Desde</FormLabel>
+            <FormLabel>{t("dashboard.report.from")}</FormLabel>
             <Input
               type="date"
               value={dateFrom}
@@ -380,7 +383,7 @@ export const DashboardPage: React.FC = () => {
             />
           </FormControl>
           <FormControl>
-            <FormLabel>Hasta</FormLabel>
+            <FormLabel>{t("dashboard.report.to")}</FormLabel>
             <Input
               type="date"
               value={dateTo}
@@ -388,9 +391,9 @@ export const DashboardPage: React.FC = () => {
             />
           </FormControl>
           <FormControl>
-            <FormLabel>Usuario (contiene)</FormLabel>
+            <FormLabel>{t("dashboard.report.userContains")}</FormLabel>
             <Input
-              placeholder="Ej: jmiralles"
+              placeholder={t("dashboard.report.userPlaceholder")}
               value={userFilter}
               onChange={(e) => setUserFilter(e.target.value)}
             />
@@ -403,7 +406,7 @@ export const DashboardPage: React.FC = () => {
             onClick={() => reportQuery.refetch()}
             isLoading={reportQuery.isFetching}
           >
-            Actualizar informe
+            {t("dashboard.report.refresh")}
           </Button>
         </HStack>
       </Box>
@@ -411,22 +414,22 @@ export const DashboardPage: React.FC = () => {
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
           <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Total horas
+            {t("dashboard.report.totalHours")}
           </Text>
           <Heading size="md">{reportHours.toFixed(2)} h</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
           <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Entradas
+            {t("dashboard.report.entries")}
           </Text>
           <Heading size="md">{filteredReportRows.length}</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
           <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Estado
+            {t("dashboard.report.status")}
           </Text>
           <Badge mt={2} colorScheme={filteredReportRows.length > 0 ? "green" : "gray"}>
-            {filteredReportRows.length > 0 ? "Datos listos" : "Sin datos"}
+            {filteredReportRows.length > 0 ? t("dashboard.report.statusReady") : t("dashboard.report.statusEmpty")}
           </Badge>
         </Box>
       </SimpleGrid>
@@ -443,11 +446,11 @@ export const DashboardPage: React.FC = () => {
         <Table size="sm" minW="760px">
           <Thead bg={tableHeadBg}>
             <Tr>
-              <Th>Proyecto</Th>
-              <Th>Tarea</Th>
-              <Th>Usuario</Th>
-              <Th isNumeric>Coste/hora</Th>
-              <Th isNumeric>Horas</Th>
+              <Th>{t("dashboard.table.project")}</Th>
+              <Th>{t("dashboard.table.task")}</Th>
+              <Th>{t("dashboard.table.user")}</Th>
+              <Th isNumeric>{t("dashboard.table.rate")}</Th>
+              <Th isNumeric>{t("dashboard.table.hours")}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -455,7 +458,7 @@ export const DashboardPage: React.FC = () => {
               <Tr>
                 <Td colSpan={5}>
                   <Text fontSize="sm" color={subtleText}>
-                    Aun no hay datos para los filtros seleccionados.
+                    {t("dashboard.table.empty")}
                   </Text>
                 </Td>
               </Tr>
@@ -464,7 +467,7 @@ export const DashboardPage: React.FC = () => {
                 <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
                   <Td>{row.project_name}</Td>
                   <Td>{row.task_title}</Td>
-                  <Td>{row.username ?? "Usuario no asignado"}</Td>
+                  <Td>{row.username ?? t("dashboard.table.unassignedUser")}</Td>
                   <Td isNumeric>
                     {row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "-"}
                   </Td>
@@ -477,13 +480,13 @@ export const DashboardPage: React.FC = () => {
       </Box>
 
       <Heading as="h2" size="md" mb={4}>
-        Herramientas disponibles
+        {t("dashboard.tools.title")}
       </Heading>
       <Text mb={4} fontSize="sm" color={subtleText}>
-        Accede a las aplicaciones corporativas vinculadas a tu tenant.
+        {t("dashboard.tools.subtitle")}
       </Text>
 
-      {isLoading && <Text>Cargando herramientas...</Text>}
+      {isLoading && <Text>{t("dashboard.tools.loading")}</Text>}
 
       {!isLoading && tools && <ToolGrid tools={tools} onLaunch={handleLaunch} />}
 
@@ -501,12 +504,11 @@ export const DashboardPage: React.FC = () => {
             </Text>
             <Text fontSize="xs" color={subtleText}>
               {selectedTool.description ??
-                "Herramienta integrada en la plataforma."}
+                t("dashboard.tools.embeddedFallback")}
             </Text>
             {selectedTool.slug === "erp" && (
               <Text fontSize="xs" color={subtleText} mt={1}>
-                ERP interno integrado en el dashboard para gestionar proyectos,
-                tareas y control horario.
+                {t("dashboard.tools.erpNote")}
               </Text>
             )}
           </Box>

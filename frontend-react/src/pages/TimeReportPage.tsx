@@ -21,6 +21,7 @@ import {
   Stack,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
+import { useTranslation } from "react-i18next";
 
 import {
   ErpProject,
@@ -32,6 +33,7 @@ import { AppShell } from "../components/layout/AppShell";
 
 export const TimeReportPage: React.FC = () => {
   const toast = useToast();
+  const { t } = useTranslation();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
   const panelBg = useColorModeValue("gray.50", "gray.800");
@@ -61,10 +63,10 @@ export const TimeReportPage: React.FC = () => {
       setProjects(data);
     } catch (error: any) {
       toast({
-        title: "Error al cargar proyectos",
+        title: t("timeReport.messages.loadProjectsTitle"),
         description:
           error?.response?.data?.detail ??
-          "No se han podido cargar los proyectos del ERP.",
+          t("timeReport.messages.loadProjectsFallback"),
         status: "error",
       });
     } finally {
@@ -84,10 +86,10 @@ export const TimeReportPage: React.FC = () => {
       setRows(data);
     } catch (error: any) {
       toast({
-        title: "Error al generar informe",
+        title: t("timeReport.messages.reportErrorTitle"),
         description:
           error?.response?.data?.detail ??
-          "No se ha podido generar el informe de horas.",
+          t("timeReport.messages.reportErrorFallback"),
         status: "error",
       });
     } finally {
@@ -111,14 +113,20 @@ export const TimeReportPage: React.FC = () => {
   const handleExportCsv = () => {
     if (filteredRows.length === 0) {
       toast({
-        title: "Sin datos para exportar",
-        description: "Genera primero un informe con resultados.",
+        title: t("timeReport.messages.exportEmptyTitle"),
+        description: t("timeReport.messages.exportEmptyDesc"),
         status: "info",
       });
       return;
     }
 
-    const header = ["Proyecto", "Tarea", "Usuario", "Coste/hora", "Horas"];
+    const header = [
+      t("timeReport.table.project"),
+      t("timeReport.table.task"),
+      t("timeReport.table.user"),
+      t("timeReport.table.rate"),
+      t("timeReport.table.hours"),
+    ];
     const lines = [
       header.join(";"),
       ...filteredRows.map((row) =>
@@ -138,7 +146,7 @@ export const TimeReportPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "informe_horas.csv";
+    link.download = t("timeReport.export.fileName");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -165,12 +173,10 @@ export const TimeReportPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Stack position="relative" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Informe de horas
-          </Text>
-          <Heading size="lg">Analiza productividad por proyecto y usuario</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("timeReport.header.eyebrow")}</Text>
+          <Heading size="lg">{t("timeReport.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Filtra por fechas, proyectos y usuarios para tomar decisiones con datos.
+            {t("timeReport.header.subtitle")}
           </Text>
         </Stack>
       </Box>
@@ -186,15 +192,17 @@ export const TimeReportPage: React.FC = () => {
         w="100%"
       >
         <Heading as="h3" size="sm" mb={4}>
-          Filtros del informe
+          {t("timeReport.filters.title")}
         </Heading>
         <Stack spacing={4}>
           <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
             <FormControl>
-              <FormLabel>Proyecto</FormLabel>
+              <FormLabel>{t("timeReport.filters.project")}</FormLabel>
               <Select
                 placeholder={
-                  isLoadingProjects ? "Cargando proyectos..." : "Todos los proyectos"
+                  isLoadingProjects
+                    ? t("timeReport.filters.loadingProjects")
+                    : t("timeReport.filters.allProjects")
                 }
                 value={selectedProjectId ?? ""}
                 onFocus={loadProjectsIfNeeded}
@@ -212,7 +220,7 @@ export const TimeReportPage: React.FC = () => {
               </Select>
             </FormControl>
             <FormControl>
-              <FormLabel>Desde</FormLabel>
+              <FormLabel>{t("timeReport.filters.from")}</FormLabel>
               <Input
                 type="date"
                 value={dateFrom}
@@ -220,7 +228,7 @@ export const TimeReportPage: React.FC = () => {
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Hasta</FormLabel>
+              <FormLabel>{t("timeReport.filters.to")}</FormLabel>
               <Input
                 type="date"
                 value={dateTo}
@@ -228,9 +236,9 @@ export const TimeReportPage: React.FC = () => {
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Usuario (contiene)</FormLabel>
+              <FormLabel>{t("timeReport.filters.userContains")}</FormLabel>
               <Input
-                placeholder="Ej: jmiralles, dios@..."
+                placeholder={t("timeReport.filters.userPlaceholder")}
                 value={userFilter}
                 onChange={(e) => setUserFilter(e.target.value)}
               />
@@ -241,39 +249,31 @@ export const TimeReportPage: React.FC = () => {
               type="submit"
               colorScheme="green"
               isLoading={isLoadingReport}
-            >
-              Generar informe
-            </Button>
+            >{t("timeReport.filters.submit")}</Button>
             <Button
               variant="outline"
               onClick={handleExportCsv}
               isDisabled={filteredRows.length === 0}
-            >
-              Exportar CSV
-            </Button>
+            >{t("timeReport.filters.export")}</Button>
           </Box>
         </Stack>
       </Box>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
-          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Total de horas
-          </Text>
+          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>{t("timeReport.stats.totalHours")}</Text>
           <Heading size="md">{totalHours.toFixed(2)} h</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
-          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Entradas encontradas
-          </Text>
+          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>{t("timeReport.stats.entries")}</Text>
           <Heading size="md">{reportCount}</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
-          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>
-            Estado
-          </Text>
+          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>{t("timeReport.stats.status")}</Text>
           <Badge mt={2} colorScheme={reportCount > 0 ? "green" : "gray"}>
-            {reportCount > 0 ? "Datos listos" : "Sin datos"}
+            {reportCount > 0
+              ? t("timeReport.stats.statusReady")
+              : t("timeReport.stats.statusEmpty")}
           </Badge>
         </Box>
       </SimpleGrid>
@@ -289,19 +289,18 @@ export const TimeReportPage: React.FC = () => {
         <Table size="sm" minW="760px">
           <Thead bg={tableHeadBg}>
             <Tr>
-              <Th>Proyecto</Th>
-              <Th>Tarea</Th>
-              <Th>Usuario</Th>
-              <Th isNumeric>Coste/hora</Th>
-              <Th isNumeric>Horas</Th>
+              <Th>{t("timeReport.filters.project")}</Th>
+              <Th>{t("timeReport.table.task")}</Th>
+              <Th>{t("timeReport.table.user")}</Th>
+              <Th isNumeric>{t("timeReport.table.rate")}</Th>
+              <Th isNumeric>{t("timeReport.table.hours")}</Th>
             </Tr>
           </Thead>
           <Tbody>
             {filteredRows.length === 0 ? (
               <Tr>
                 <Td colSpan={5}>
-                  <Text fontSize="sm" color="gray.500">
-                    Aún no hay datos para los filtros seleccionados.
+                  <Text fontSize="sm" color="gray.500">                    {t("timeReport.table.empty")}
                   </Text>
                 </Td>
               </Tr>
@@ -310,7 +309,7 @@ export const TimeReportPage: React.FC = () => {
                 <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
                   <Td>{row.project_name}</Td>
                   <Td>{row.task_title}</Td>
-                  <Td>{row.username ?? "Usuario no asignado"}</Td>
+                  <Td>{row.username ?? t("timeReport.table.unassignedUser")}</Td>
                   <Td isNumeric>{row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "-"}</Td>
                   <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
                 </Tr>

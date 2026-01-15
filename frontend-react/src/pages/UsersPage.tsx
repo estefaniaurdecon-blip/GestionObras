@@ -23,6 +23,7 @@ import {
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { keyframes } from "@emotion/react";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -69,7 +70,7 @@ interface NewUserFormState {
 }
 
 /**
- * Gestión de usuarios por tenant.
+ * Gestion de usuarios por tenant.
  *
  * Super Admin:
  *   - Puede seleccionar cualquier tenant.
@@ -81,6 +82,7 @@ interface NewUserFormState {
 export const UsersPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
@@ -157,9 +159,8 @@ export const UsersPage: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
       }
       toast({
-        title: "Invitación enviada",
-        description:
-          "Se ha enviado un correo de invitación al usuario para que complete su alta.",
+        title: t("users.messages.inviteSuccessTitle"),
+        description: t("users.messages.inviteSuccessDesc"),
         status: "success",
       });
       setForm({
@@ -172,9 +173,9 @@ export const UsersPage: React.FC = () => {
       const detail =
         error?.response?.data?.detail ??
         error?.message ??
-        "No se ha podido enviar la invitación (revisa permisos y datos).";
+        t("users.messages.inviteErrorFallback");
       toast({
-        title: "Error al enviar invitación",
+        title: t("users.messages.inviteErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -199,9 +200,9 @@ export const UsersPage: React.FC = () => {
   };
 
   const getRoleLabel = (user: User): string => {
-    if (user.is_super_admin) return "Super Admin";
-    if (user.role_id) return "Admin de tenant";
-    return "Usuario";
+    if (user.is_super_admin) return t("users.roles.superAdmin");
+    if (user.role_id) return t("users.roles.tenantAdmin");
+    return t("users.roles.standard");
   };
 
   const handleDeleteUser = (userId: number) => {
@@ -212,17 +213,17 @@ export const UsersPage: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
         }
         toast({
-          title: "Usuario eliminado",
-          description: "El usuario se ha eliminado correctamente.",
+          title: t("users.messages.deleteSuccessTitle"),
+          description: t("users.messages.deleteSuccessDesc"),
           status: "success",
         });
       })
       .catch((error: any) => {
         const detail =
           error?.response?.data?.detail ??
-          "No se ha podido eliminar el usuario (revisa permisos y datos).";
+          t("users.messages.deleteErrorFallback");
         toast({
-          title: "Error al eliminar usuario",
+          title: t("users.messages.deleteErrorTitle"),
           description: detail,
           status: "error",
         });
@@ -248,9 +249,9 @@ export const UsersPage: React.FC = () => {
       .catch((error: any) => {
         const detail =
           error?.response?.data?.detail ??
-          "No se ha podido actualizar el estado del usuario.";
+          t("users.messages.statusErrorFallback");
         toast({
-          title: "Error al actualizar usuario",
+          title: t("users.messages.statusErrorTitle"),
           description: detail,
           status: "error",
         });
@@ -302,11 +303,11 @@ export const UsersPage: React.FC = () => {
         />
         <VStack position="relative" align="flex-start" spacing={3}>
           <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Usuarios
+            {t("users.header.eyebrow")}
           </Text>
-          <Heading size="lg">Gestiona accesos y perfiles del tenant</Heading>
+          <Heading size="lg">{t("users.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Invita usuarios, controla roles y activa o desactiva cuentas.
+            {t("users.header.subtitle")}
           </Text>
         </VStack>
       </Box>
@@ -314,10 +315,12 @@ export const UsersPage: React.FC = () => {
       {isSuperAdmin ? (
         <Box mb={6}>
           <FormControl maxW="320px">
-            <FormLabel>Tenant</FormLabel>
+            <FormLabel>{t("users.tenant.label")}</FormLabel>
             <Select
               placeholder={
-                isLoadingTenants ? "Cargando tenants..." : "Selecciona un tenant"
+                isLoadingTenants
+                  ? t("users.tenant.loading")
+                  : t("users.tenant.placeholder")
               }
               value={selectedTenantId ?? ""}
               onChange={handleTenantChange}
@@ -333,7 +336,7 @@ export const UsersPage: React.FC = () => {
         </Box>
       ) : null}
 
-      <Box
+            <Box
         as="form"
         onSubmit={handleSubmit}
         mb={8}
@@ -343,33 +346,33 @@ export const UsersPage: React.FC = () => {
         bg={panelBg}
       >
         <Heading as="h3" size="sm" mb={4}>
-          Invitar usuario por correo
+          {t("users.invite.title")}
         </Heading>
         <VStack align="stretch" spacing={3}>
           <FormControl isRequired>
-            <FormLabel>Nombre completo</FormLabel>
+            <FormLabel>{t("users.invite.fullName")}</FormLabel>
             <Input
               name="full_name"
               value={form.full_name}
               onChange={handleChange}
-              placeholder="Nombre y apellidos"
+              placeholder={t("users.invite.fullNamePlaceholder")}
             />
           </FormControl>
           <FormControl isRequired>
-            <FormLabel>Email</FormLabel>
+            <FormLabel>{t("users.invite.email")}</FormLabel>
             <Input
               name="email"
               type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="usuario@empresa.com"
+              placeholder={t("users.invite.emailPlaceholder")}
             />
           </FormControl>
           <FormControl>
-            <FormLabel>Rol</FormLabel>
+            <FormLabel>{t("users.invite.role")}</FormLabel>
             <Select name="role" value={form.role} onChange={handleChange}>
-              <option value="tenant_admin">Administrador del tenant</option>
-              <option value="user">Usuario estándar</option>
+              <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+              <option value="user">{t("users.roles.standard")}</option>
             </Select>
           </FormControl>
           <Button
@@ -379,15 +382,15 @@ export const UsersPage: React.FC = () => {
             isLoading={createInvitationMutation.isPending}
             isDisabled={!selectedTenantId}
           >
-            Enviar invitación
+            {t("users.invite.submit")}
           </Button>
         </VStack>
       </Box>
 
-      {isLoadingUsers && <Text>Cargando usuarios...</Text>}
+      {isLoadingUsers && <Text>{t("users.list.loading")}</Text>}
       {isErrorUsers && (
         <Text color="red.500" mb={4}>
-          No se han podido cargar los usuarios (comprueba permisos y token).
+          {t("users.list.loadError")}
         </Text>
       )}
 
@@ -396,38 +399,38 @@ export const UsersPage: React.FC = () => {
           <Box mb={6} borderWidth="1px" borderRadius="xl" p={4} bg={panelBg}>
             <HStack spacing={4} align="flex-end" flexWrap="wrap">
               <FormControl maxW="260px">
-                <FormLabel>Buscar</FormLabel>
+                <FormLabel>{t("users.filters.search")}</FormLabel>
                 <Input
-                  placeholder="Nombre o email"
+                  placeholder={t("users.filters.searchPlaceholder")}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </FormControl>
               <FormControl maxW="220px">
-                <FormLabel>Rol</FormLabel>
+                <FormLabel>{t("users.filters.role")}</FormLabel>
                 <Select
                   value={roleFilter}
                   onChange={(e) =>
                     setRoleFilter(e.target.value as typeof roleFilter)
                   }
                 >
-                  <option value="all">Todos</option>
-                  <option value="super_admin">Super admin</option>
-                  <option value="tenant_admin">Admin de tenant</option>
-                  <option value="user">Usuario estándar</option>
+                  <option value="all">{t("users.filters.all")}</option>
+                  <option value="super_admin">{t("users.roles.superAdmin")}</option>
+                  <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="user">{t("users.roles.standard")}</option>
                 </Select>
               </FormControl>
               <FormControl maxW="220px">
-                <FormLabel>Estado</FormLabel>
+                <FormLabel>{t("users.filters.status")}</FormLabel>
                 <Select
                   value={statusFilter}
                   onChange={(e) =>
                     setStatusFilter(e.target.value as typeof statusFilter)
                   }
                 >
-                  <option value="all">Todos</option>
-                  <option value="active">Solo activos</option>
-                  <option value="inactive">Solo inactivos</option>
+                  <option value="all">{t("users.filters.all")}</option>
+                  <option value="active">{t("users.filters.activeOnly")}</option>
+                  <option value="inactive">{t("users.filters.inactiveOnly")}</option>
                 </Select>
               </FormControl>
             </HStack>
@@ -438,10 +441,10 @@ export const UsersPage: React.FC = () => {
               <Table size="sm" minW="760px">
               <Thead bg={tableHeadBg}>
                 <Tr>
-                  <Th>Nombre</Th>
-                  <Th>Email</Th>
-                  <Th>Rol</Th>
-                  <Th>Estado</Th>
+                  <Th>{t("users.table.name")}</Th>
+                  <Th>{t("users.table.email")}</Th>
+                  <Th>{t("users.table.role")}</Th>
+                  <Th>{t("users.table.status")}</Th>
                   <Th></Th>
                 </Tr>
               </Thead>
@@ -450,7 +453,7 @@ export const UsersPage: React.FC = () => {
                   <Tr>
                     <Td colSpan={5}>
                       <Text fontSize="sm" color={subtleText}>
-                        No hay usuarios que coincidan con los filtros.
+                        {t("users.table.empty")}
                       </Text>
                     </Td>
                   </Tr>
@@ -463,7 +466,7 @@ export const UsersPage: React.FC = () => {
                       <Td>
                         <HStack spacing={3}>
                           <Badge colorScheme={user.is_active ? "green" : "red"}>
-                            {user.is_active ? "Activo" : "Inactivo"}
+                            {user.is_active ? t("users.table.active") : t("users.table.inactive")}
                           </Badge>
                           <Switch
                             size="sm"
@@ -480,7 +483,7 @@ export const UsersPage: React.FC = () => {
                             variant="outline"
                             onClick={() => handleDeleteUser(user.id)}
                           >
-                            Eliminar
+                            {t("users.table.delete")}
                           </Button>
                         )}
                       </Td>

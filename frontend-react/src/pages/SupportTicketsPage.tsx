@@ -25,6 +25,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import {
@@ -47,20 +48,6 @@ import {
   reopenTicket,
 } from "../api/tickets";
 
-const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
-  { value: "open", label: "Abierto" },
-  { value: "in_progress", label: "En progreso" },
-  { value: "resolved", label: "Resuelto" },
-  { value: "closed", label: "Cerrado" },
-];
-
-const PRIORITY_OPTIONS: { value: TicketPriority; label: string }[] = [
-  { value: "low", label: "Baja" },
-  { value: "medium", label: "Media" },
-  { value: "high", label: "Alta" },
-  { value: "critical", label: "Crítica" },
-];
-
 const formatDateTime = (iso?: string | null) => {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -71,6 +58,7 @@ const formatDateTime = (iso?: string | null) => {
 export const SupportTicketsPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
@@ -95,6 +83,26 @@ export const SupportTicketsPage: React.FC = () => {
   const [replyBody, setReplyBody] = useState("");
   const [replyInternal, setReplyInternal] = useState(false);
   const [assigneeId, setAssigneeId] = useState<number | "">("");
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "open", label: t("support.status.open") },
+      { value: "in_progress", label: t("support.status.inProgress") },
+      { value: "resolved", label: t("support.status.resolved") },
+      { value: "closed", label: t("support.status.closed") },
+    ],
+    [t]
+  );
+
+  const priorityOptions = useMemo(
+    () => [
+      { value: "low", label: t("support.priority.low") },
+      { value: "medium", label: t("support.priority.medium") },
+      { value: "high", label: t("support.priority.high") },
+      { value: "critical", label: t("support.priority.critical") },
+    ],
+    [t]
+  );
 
   // Datos del usuario actual
   const { data: currentUser } = useCurrentUser();
@@ -167,8 +175,8 @@ export const SupportTicketsPage: React.FC = () => {
     onSuccess: (ticket) => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       toast({
-        title: "Ticket creado",
-        description: "El ticket se ha creado correctamente.",
+        title: t("support.messages.createSuccessTitle"),
+        description: t("support.messages.createSuccessDesc"),
         status: "success",
       });
       setNewSubject("");
@@ -180,9 +188,9 @@ export const SupportTicketsPage: React.FC = () => {
       const detail =
         error?.response?.data?.detail ??
         error?.message ??
-        "No se ha podido crear el ticket (revisa permisos y datos).";
+        t("support.messages.createErrorFallback");
       toast({
-        title: "Error al crear ticket",
+        title: t("support.messages.createErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -211,9 +219,9 @@ export const SupportTicketsPage: React.FC = () => {
       const detail =
         error?.response?.data?.detail ??
         error?.message ??
-        "No se ha podido enviar el mensaje (revisa permisos y datos).";
+        t("support.messages.replyErrorFallback");
       toast({
-        title: "Error al enviar mensaje",
+        title: t("support.messages.replyErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -231,16 +239,16 @@ export const SupportTicketsPage: React.FC = () => {
         });
       }
       toast({
-        title: "Ticket cerrado",
+        title: t("support.messages.closeSuccessTitle"),
         status: "success",
       });
     },
     onError: (error: any) => {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido cerrar el ticket (comprueba permisos).";
+        t("support.messages.closeErrorFallback");
       toast({
-        title: "Error al cerrar ticket",
+        title: t("support.messages.closeErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -253,16 +261,16 @@ export const SupportTicketsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       toast({
-        title: "Ticket reabierto",
+        title: t("support.messages.reopenSuccessTitle"),
         status: "success",
       });
     },
     onError: (error: any) => {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido reabrir el ticket (comprueba permisos).";
+        t("support.messages.reopenErrorFallback");
       toast({
-        title: "Error al reabrir ticket",
+        title: t("support.messages.reopenErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -282,16 +290,16 @@ export const SupportTicketsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       toast({
-        title: "Ticket asignado",
+        title: t("support.messages.assignSuccessTitle"),
         status: "success",
       });
     },
     onError: (error: any) => {
       const detail =
         error?.response?.data?.detail ??
-        "No se ha podido asignar el ticket (comprueba permisos y datos).";
+        t("support.messages.assignErrorFallback");
       toast({
-        title: "Error al asignar ticket",
+        title: t("support.messages.assignErrorTitle"),
         description: detail,
         status: "error",
       });
@@ -303,8 +311,8 @@ export const SupportTicketsPage: React.FC = () => {
     e.preventDefault();
     if (!newSubject.trim() || !newDescription.trim()) {
       toast({
-        title: "Datos incompletos",
-        description: "Asunto y descripción son obligatorios.",
+        title: t("support.messages.missingDataTitle"),
+        description: t("support.messages.missingDataDesc"),
         status: "warning",
       });
       return;
@@ -317,8 +325,8 @@ export const SupportTicketsPage: React.FC = () => {
     if (!selectedTicketId) return;
     if (!replyBody.trim()) {
       toast({
-        title: "Mensaje vacío",
-        description: "Escribe un mensaje antes de enviarlo.",
+        title: t("support.messages.emptyMessageTitle"),
+        description: t("support.messages.emptyMessageDesc"),
         status: "warning",
       });
       return;
@@ -355,18 +363,15 @@ export const SupportTicketsPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Stack position="relative" spacing={2} maxW="680px">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            Soporte
-          </Text>
-          <Heading size="lg">Soporte y tickets</Heading>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("support.header.eyebrow")}</Text>
+          <Heading size="lg">{t("support.header.title")}</Heading>
           <Text fontSize="sm" opacity={0.9}>
-            Gestiona incidencias por tenant y sigue la conversacion.
+            {t("support.header.subtitle")}
           </Text>
         </Stack>
       </Box>
       <Text mb={6} color={subtleText}>
-        Gestiona las incidencias de la plataforma por tenant. Los tickets se ordenan por
-        la última actividad registrada.
+        {t("support.description")}
       </Text>
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="flex-start">
@@ -375,10 +380,10 @@ export const SupportTicketsPage: React.FC = () => {
           {isSuperAdmin && (
             <Box mb={4}>
               <FormControl maxW="280px">
-                <FormLabel>Tenant</FormLabel>
+                <FormLabel>{t("support.filters.tenant")}</FormLabel>
                 <Select
                   placeholder={
-                    tenantsQuery.isLoading ? "Cargando tenants..." : "Todos los tenants"
+                    tenantsQuery.isLoading ? t("support.filters.loadingTenants") : t("support.filters.allTenants")
                   }
                   value={tenantFilterId ?? ""}
                   onChange={(e) => {
@@ -400,20 +405,18 @@ export const SupportTicketsPage: React.FC = () => {
           )}
 
           <Box mb={4} p={4} borderWidth="1px" borderRadius="md" bg={cardBg}>
-            <Heading as="h3" size="sm" mb={3}>
-              Filtros
-            </Heading>
+            <Heading as="h3" size="sm" mb={3}>{t("support.filters.title")}</Heading>
             <HStack spacing={4} align="flex-end" flexWrap="wrap">
               <FormControl maxW="200px">
-                <FormLabel>Estado</FormLabel>
+                <FormLabel>{t("support.filters.status")}</FormLabel>
                 <Select
                   value={statusFilter}
                   onChange={(e) =>
                     setStatusFilter(e.target.value as "" | TicketStatus)
                   }
                 >
-                  <option value="">Todos</option>
-                  {STATUS_OPTIONS.map((opt) => (
+                  <option value="">{t("support.filters.all")}</option>
+                  {statusOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -421,15 +424,15 @@ export const SupportTicketsPage: React.FC = () => {
                 </Select>
               </FormControl>
               <FormControl maxW="200px">
-                <FormLabel>Prioridad</FormLabel>
+                <FormLabel>{t("support.filters.priority")}</FormLabel>
                 <Select
                   value={priorityFilter}
                   onChange={(e) =>
                     setPriorityFilter(e.target.value as "" | TicketPriority)
                   }
                 >
-                  <option value="">Todas</option>
-                  {PRIORITY_OPTIONS.map((opt) => (
+                  <option value="">{t("support.filters.all")}</option>
+                  {priorityOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -437,7 +440,7 @@ export const SupportTicketsPage: React.FC = () => {
                 </Select>
               </FormControl>
               <FormControl maxW="220px">
-                <FormLabel>Solo mis tickets</FormLabel>
+                <FormLabel>{t("support.filters.mineOnly")}</FormLabel>
                 <Switch
                   isChecked={mineOnly}
                   onChange={(e) => setMineOnly(e.target.checked)}
@@ -450,18 +453,18 @@ export const SupportTicketsPage: React.FC = () => {
             <Table size="sm">
               <Thead bg={tableHeadBg}>
                 <Tr>
-                  {isSuperAdmin && <Th>Tenant</Th>}
-                  <Th>Asunto</Th>
-                  <Th>Estado</Th>
-                  <Th>Prioridad</Th>
-                  <Th>Última actividad</Th>
+                  {isSuperAdmin && <Th>{t("support.table.tenant")}</Th>}
+                  <Th>{t("support.table.subject")}</Th>
+                  <Th>{t("support.table.status")}</Th>
+                  <Th>{t("support.table.priority")}</Th>
+                  <Th>{t("support.table.lastActivity")}</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {ticketsQuery.isLoading && (
                   <Tr>
                     <Td colSpan={5}>
-                      <Text fontSize="sm">Cargando tickets...</Text>
+                      <Text fontSize="sm">{t("support.table.loading")}</Text>
                     </Td>
                   </Tr>
                 )}
@@ -469,8 +472,7 @@ export const SupportTicketsPage: React.FC = () => {
                   <Tr>
                     <Td colSpan={5}>
                       <Text fontSize="sm" color="red.400">
-                        No se han podido cargar los tickets (comprueba permisos y
-                        conexión).
+                        {t("support.table.loadError")}
                       </Text>
                     </Td>
                   </Tr>
@@ -481,7 +483,7 @@ export const SupportTicketsPage: React.FC = () => {
                     <Tr>
                       <Td colSpan={5}>
                         <Text fontSize="sm" color={subtleText}>
-                          Todavía no hay tickets para los filtros seleccionados.
+                          {t("support.table.empty")}
                         </Text>
                       </Td>
                     </Tr>
@@ -519,7 +521,7 @@ export const SupportTicketsPage: React.FC = () => {
                             : "yellow"
                         }
                       >
-                        {STATUS_OPTIONS.find((s) => s.value === ticket.status)?.label ??
+                        {statusOptions.find((s) => s.value === ticket.status)?.label ??
                           ticket.status}
                       </Badge>
                     </Td>
@@ -535,7 +537,7 @@ export const SupportTicketsPage: React.FC = () => {
                             : "gray"
                         }
                       >
-                        {PRIORITY_OPTIONS.find((p) => p.value === ticket.priority)
+                        {priorityOptions.find((p) => p.value === ticket.priority)
                           ?.label ?? ticket.priority}
                       </Badge>
                     </Td>
@@ -547,7 +549,7 @@ export const SupportTicketsPage: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Columna derecha: creación (para no super admin) + detalle */}
+        {/* Right column: creation (non super admin) + detail */}
         <Stack spacing={6}>
           {!isSuperAdmin && (
             <Box
@@ -559,36 +561,36 @@ export const SupportTicketsPage: React.FC = () => {
               onSubmit={handleCreate}
             >
               <Heading as="h3" size="sm" mb={3}>
-                Crear nuevo ticket
+                {t("support.create.title")}
               </Heading>
               <Stack spacing={3}>
                 <FormControl isRequired>
-                  <FormLabel>Asunto</FormLabel>
+                  <FormLabel>{t("support.create.subject")}</FormLabel>
                   <Input
                     value={newSubject}
                     onChange={(e) => setNewSubject(e.target.value)}
-                    placeholder="Resumen breve del problema"
+                    placeholder={t("support.create.subjectPlaceholder")}
                   />
                 </FormControl>
                 <FormControl isRequired>
-                  <FormLabel>Descripción</FormLabel>
+                  <FormLabel>{t("support.create.descriptionLabel")}</FormLabel>
                   <Textarea
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     rows={4}
-                    placeholder="Describe qué ocurre, pasos para reproducir, etc."
+                    placeholder={t("support.create.descriptionPlaceholder")}
                   />
                 </FormControl>
                 <HStack spacing={3}>
                   <FormControl>
-                    <FormLabel>Prioridad</FormLabel>
+                    <FormLabel>{t("support.filters.priority")}</FormLabel>
                     <Select
                       value={newPriority}
                       onChange={(e) =>
                         setNewPriority(e.target.value as TicketPriority)
                       }
                     >
-                      {PRIORITY_OPTIONS.map((opt) => (
+                      {priorityOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -596,11 +598,11 @@ export const SupportTicketsPage: React.FC = () => {
                     </Select>
                   </FormControl>
                   <FormControl>
-                    <FormLabel>Herramienta (opcional)</FormLabel>
+                    <FormLabel>{t("support.create.toolOptional")}</FormLabel>
                     <Input
                       value={newToolSlug}
                       onChange={(e) => setNewToolSlug(e.target.value)}
-                      placeholder="moodle, erp, plataforma..."
+                      placeholder={t("support.create.toolPlaceholder")}
                     />
                   </FormControl>
                 </HStack>
@@ -609,20 +611,18 @@ export const SupportTicketsPage: React.FC = () => {
                   colorScheme="green"
                   alignSelf="flex-start"
                   isLoading={createMutation.isPending}
-                >
-                  Crear ticket
-                </Button>
+                >{t("support.create.submit")}</Button>
               </Stack>
             </Box>
           )}
 
           <Box p={4} borderWidth="1px" borderRadius="md" bg={cardBg}>
             <Heading as="h3" size="sm" mb={3}>
-              Detalle y conversación
+              {t("support.detail.title")}
             </Heading>
             {!selectedTicket && (
               <Text fontSize="sm" color={subtleText}>
-                Selecciona un ticket del listado para ver su detalle.
+                {t("support.detail.selectPrompt")}
               </Text>
             )}
             {selectedTicket && (
@@ -632,43 +632,62 @@ export const SupportTicketsPage: React.FC = () => {
                     {selectedTicket.subject}
                   </Text>
                   <Text fontSize="sm" mb={2}>
-                    Estado:{" "}
+                    {t("support.detail.statusLabel")}{" "}
                     <Badge mr={2}>
                       {
-                        STATUS_OPTIONS.find(
+                        statusOptions.find(
                           (s) => s.value === selectedTicket.status,
                         )?.label
                       }
                     </Badge>
-                    Prioridad:{" "}
+                    {t("support.detail.priorityLabel")}{" "}
                     <Badge>
                       {
-                        PRIORITY_OPTIONS.find(
+                        priorityOptions.find(
                           (p) => p.value === selectedTicket.priority,
                         )?.label
                       }
                     </Badge>
                   </Text>
                   <Text fontSize="sm" color={subtleText}>
-                    Creado por {selectedTicket.created_by_email}. Asignado a{" "}
-                    {selectedTicket.assigned_to_email ?? "sin asignar"}.
+                    {t("support.detail.createdBy", {
+                      email: selectedTicket.created_by_email,
+                    })}{" "}
+                    {t("support.detail.assignedTo")}{" "}
+                    {selectedTicket.assigned_to_email ??
+                      t("support.detail.unassigned")}
                   </Text>
                   <Text fontSize="xs" color={subtleText} mt={1}>
-                    Creado: {formatDateTime(selectedTicket.created_at)} · Última
-                    actividad: {formatDateTime(selectedTicket.last_activity_at)}
+                    {t("support.detail.createdAt", {
+                      date: formatDateTime(selectedTicket.created_at),
+                    })}
                   </Text>
                   <Text fontSize="xs" color={subtleText}>
-                    Primera respuesta:{" "}
-                    {formatDateTime(selectedTicket.first_response_at)}
-                    {" · "}Resuelto: {formatDateTime(selectedTicket.resolved_at)}
-                    {" · "}Cerrado: {formatDateTime(selectedTicket.closed_at)}
+                    {t("support.detail.firstResponse", {
+                      date: formatDateTime(selectedTicket.first_response_at),
+                    })}
+                  </Text>
+                  <Text fontSize="xs" color={subtleText}>
+                    {t("support.detail.lastActivity", {
+                      date: formatDateTime(selectedTicket.last_activity_at),
+                    })}
+                  </Text>
+                  <Text fontSize="xs" color={subtleText}>
+                    {t("support.detail.resolvedAt", {
+                      date: formatDateTime(selectedTicket.resolved_at),
+                    })}
+                  </Text>
+                  <Text fontSize="xs" color={subtleText}>
+                    {t("support.detail.closedAt", {
+                      date: formatDateTime(selectedTicket.closed_at),
+                    })}
                   </Text>
                 </Box>
 
                 {assigneesQuery.data && assigneesQuery.data.length > 0 && (
                   <HStack spacing={3} align="flex-end">
                     <FormControl maxW="260px">
-                      <FormLabel fontSize="sm">Asignar a</FormLabel>
+                      <FormLabel fontSize="sm">{t("support.assign.label")}</FormLabel>
                       <Select
                         value={assigneeId}
                         onChange={(e) => {
@@ -676,11 +695,11 @@ export const SupportTicketsPage: React.FC = () => {
                           setAssigneeId(value ? Number(value) : "");
                         }}
                       >
-                        <option value="">Selecciona un usuario</option>
+                        <option value="">{t("support.assign.placeholder")}</option>
                         {assigneesQuery.data.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.full_name ?? u.email}
-                            {!u.is_active ? " (inactivo)" : ""}
+                            {!u.is_active ? ` (${t("support.assign.inactive")})` : ""}
                           </option>
                         ))}
                       </Select>
@@ -692,9 +711,7 @@ export const SupportTicketsPage: React.FC = () => {
                       onClick={() => assignMutation.mutate()}
                       isLoading={assignMutation.isPending}
                       isDisabled={!assigneeId || !selectedTicketId}
-                    >
-                      Asignar
-                    </Button>
+                    >{t("support.assign.submit")}</Button>
                   </HStack>
                 )}
 
@@ -711,18 +728,14 @@ export const SupportTicketsPage: React.FC = () => {
                       )
                     }
                     isLoading={reopenMutation.isPending}
-                  >
-                    Reabrir
-                  </Button>
+                  >{t("support.actions.reopen")}</Button>
                   <Button
                     size="sm"
                     colorScheme="red"
                     onClick={() => closeMutation.mutate()}
                     isDisabled={selectedTicket.status === "closed"}
                     isLoading={closeMutation.isPending}
-                  >
-                    Cerrar
-                  </Button>
+                  >{t("support.actions.close")}</Button>
                 </HStack>
 
                 <Box
@@ -733,19 +746,18 @@ export const SupportTicketsPage: React.FC = () => {
                   p={3}
                 >
                   {messagesQuery.isLoading && (
-                    <Text fontSize="sm">Cargando conversación...</Text>
+                    <Text fontSize="sm">{t("support.messages.loadingConversation")}</Text>
                   )}
                   {messagesQuery.isError && !messagesQuery.isLoading && (
                     <Text fontSize="sm" color="red.400">
-                      No se han podido cargar los mensajes (comprueba permisos y
-                      conexión).
+                      {t("support.messages.loadMessagesError")}
                     </Text>
                   )}
                   {!messagesQuery.isLoading &&
                     !messagesQuery.isError &&
                     (messagesQuery.data ?? []).length === 0 && (
                       <Text fontSize="sm" color={subtleText}>
-                        Todavía no hay mensajes en este ticket.
+                        {t("support.messages.emptyMessages")}
                       </Text>
                     )}
                   <Stack spacing={3}>
@@ -760,7 +772,7 @@ export const SupportTicketsPage: React.FC = () => {
                           </Text>
                           {msg.is_internal && (
                             <Badge colorScheme="purple" variant="outline">
-                              Nota interna
+                              {t("support.messages.internalNote")}
                             </Badge>
                           )}
                         </HStack>
@@ -773,12 +785,12 @@ export const SupportTicketsPage: React.FC = () => {
                 </Box>
 
                 <Box>
-                  <FormLabel fontSize="sm">Nuevo mensaje</FormLabel>
+                  <FormLabel fontSize="sm">{t("support.reply.title")}</FormLabel>
                   <Textarea
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
                     rows={3}
-                    placeholder="Escribe tu respuesta o nota interna..."
+                    placeholder={t("support.reply.placeholder")}
                   />
                   <HStack justify="space-between" mt={2}>
                     <HStack>
@@ -788,7 +800,7 @@ export const SupportTicketsPage: React.FC = () => {
                         onChange={(e) => setReplyInternal(e.target.checked)}
                       />
                       <Text fontSize="xs" color={subtleText}>
-                        Marcar como nota interna (solo equipo)
+                        {t("support.reply.internalLabel")}
                       </Text>
                     </HStack>
                     <Button
@@ -797,9 +809,7 @@ export const SupportTicketsPage: React.FC = () => {
                       onClick={handleSendReply}
                       isLoading={replyMutation.isPending}
                       isDisabled={!selectedTicketId}
-                    >
-                      Enviar
-                    </Button>
+                    >{t("support.reply.send")}</Button>
                   </HStack>
                 </Box>
               </Stack>

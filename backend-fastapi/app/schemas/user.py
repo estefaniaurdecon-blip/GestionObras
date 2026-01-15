@@ -32,6 +32,7 @@ class UserRead(UserBase):
     id: int
     tenant_id: int | None
     role_id: int | None
+    language: str | None = None
     created_at: datetime
 
 
@@ -42,6 +43,7 @@ class UserUpdateMe(BaseModel):
     """
 
     full_name: str
+    language: str | None = None
 
 
 class UserStatusUpdate(BaseModel):
@@ -59,3 +61,4 @@ class UserUpdateMe(BaseModel):
     """
 
     full_name: str
+    language: str | None = None
