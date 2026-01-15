@@ -151,8 +151,8 @@ export const AuditLogPage: React.FC = () => {
                 <Tr key={item.id}>
                   <Td>{new Date(item.created_at).toLocaleString()}</Td>
                   <Td>{item.user_email ?? "-"}</Td>
-                  <Td>{item.action}</Td>
-                  <Td>{item.details ?? "-"}</Td>
+                  <Td>{t(`audit_actions.${item.action}`, { defaultValue: item.action })}</Td>
+                  <Td>{t(`audit_details.${item.action}`, { defaultValue: item.details ?? "-" })}</Td>
                 </Tr>
               ))
             )}

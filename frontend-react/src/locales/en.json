@@ -340,6 +340,44 @@
       "empty": "No audit records to show yet."
     }
   },
+  "audit_actions": {
+    "login": "User login",
+    "login.mfa_request": "MFA request",
+    "mfa.verify": "MFA verification",
+    "user.change_password": "Password change",
+    "user.list": "List users",
+    "user.update_me": "Profile update",
+    "user.create": "User creation",
+    "user.delete": "User deletion",
+    "user.status_update": "User status update",
+    "tool.list": "List tools",
+    "tool.launch": "Tool launch",
+    "tool.configure": "Tool configuration",
+    "ticket.create": "Ticket creation",
+    "ticket.comment": "New comment on ticket",
+    "ticket.comment_internal": "New internal note on ticket",
+    "ticket.update": "Ticket update",
+    "ticket.close": "Ticket closed",
+    "ticket.reopen": "Ticket reopened",
+    "ticket.assign": "Ticket assignment",
+    "tenant.list": "List tenants",
+    "tenant.create": "Tenant creation",
+    "tenant.delete": "Tenant deletion",
+    "user.invitation.create": "Invitation creation",
+    "user.invitation.accept": "Invitation accepted",
+    "hr.department.create": "Department creation",
+    "hr.department.update": "Department update",
+    "hr.employee.create": "Employee creation",
+    "hr.employee.update": "Employee update",
+    "hr.employee.delete": "Employee deletion"
+  },
+  "audit_details": {
+    "login": "Login without MFA (SUPER_ADMIN)",
+    "login.mfa_request": "An MFA code has been sent by email",
+    "mfa.verify": "Successful login with email MFA",
+    "user.change_password": "User changed their own password",
+    "user.update_me": "User updated their own profile"
+  },
   "toolsAdmin": {
     "header": {
       "eyebrow": "Administration",

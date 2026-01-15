@@ -340,6 +340,44 @@
       "empty": "Todavia no hay registros de auditoria para mostrar."
     }
   },
+  "audit_actions": {
+    "login": "Inicio de sesión",
+    "login.mfa_request": "Solicitud de MFA",
+    "mfa.verify": "Verificación de MFA",
+    "user.change_password": "Cambio de contraseña",
+    "user.list": "Listar usuarios",
+    "user.update_me": "Actualización de perfil",
+    "user.create": "Creación de usuario",
+    "user.delete": "Eliminación de usuario",
+    "user.status_update": "Actualización de estado de usuario",
+    "tool.list": "Listar herramientas",
+    "tool.launch": "Lanzamiento de herramienta",
+    "tool.configure": "Configuración de herramienta",
+    "ticket.create": "Creación de ticket",
+    "ticket.comment": "Nuevo comentario en ticket",
+    "ticket.comment_internal": "Nueva nota interna en ticket",
+    "ticket.update": "Actualización de ticket",
+    "ticket.close": "Ticket cerrado",
+    "ticket.reopen": "Ticket reabierto",
+    "ticket.assign": "Asignación de ticket",
+    "tenant.list": "Listar tenants",
+    "tenant.create": "Creación de tenant",
+    "tenant.delete": "Eliminación de tenant",
+    "user.invitation.create": "Creación de invitación",
+    "user.invitation.accept": "Invitación aceptada",
+    "hr.department.create": "Creación de departamento",
+    "hr.department.update": "Actualización de departamento",
+    "hr.employee.create": "Creación de empleado",
+    "hr.employee.update": "Actualización de empleado",
+    "hr.employee.delete": "Eliminación de empleado"
+  },
+  "audit_details": {
+    "login": "Login sin MFA (SUPER_ADMIN)",
+    "login.mfa_request": "Se ha enviado un código MFA por correo electrónico",
+    "mfa.verify": "Login con MFA por email satisfactorio",
+    "user.change_password": "Cambio de contraseña del propio usuario",
+    "user.update_me": "Actualización de perfil del propio usuario"
+  },
   "toolsAdmin": {
     "header": {
       "eyebrow": "Administracion",
