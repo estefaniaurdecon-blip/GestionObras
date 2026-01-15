@@ -10,24 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Debug inicial: verificar que los secrets se pasan correctamente
+      - name: Debug SSH Info
+        run: |
+          echo "SSH_HOST=${{ secrets.SSH_HOST }}"
+          echo "SSH_USER=${{ secrets.SSH_USER }}"
+          echo "DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}"
+
+      # Deploy usando SSH
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}  # opcional, si cambias el puerto
+          port: 22  # cambia si usas otro puerto
           script: |
-            # Entrar a la carpeta de docker-compose
+            # Entrar a la carpeta del proyecto con docker-compose
             cd ${{ secrets.DEPLOY_PATH }}
 
             # Actualizar código desde Git
             git pull origin main
 
-            # Exportar variables de entorno de staging si existe
-            if [ -f ${{ secrets.ADDITIONAL_ENVS }} ]; then
-              export $(grep -v '^#' ${{ secrets.ADDITIONAL_ENVS }} | xargs)
+            # Si existe un archivo de entorno, cargarlo
+            if [ -f .env.staging ]; then
+              export $(grep -v '^#' .env.staging | xargs)
             fi
 
-            # Levantar containers con Docker Compose en modo detached
+            # Levantar contenedores en modo detached y reconstruir
             docker compose up -d --build
