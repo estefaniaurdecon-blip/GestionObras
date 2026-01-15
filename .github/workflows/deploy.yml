@@ -31,4 +31,4 @@ jobs:
       - name: Ejecutar seed RBAC
         run: |
           cd /home/server/projects/erp/infra
-          docker exec -it saas-backend-fastapi python -m app.core.seed_rbac
+          docker exec saas-backend-fastapi python -m app.core.seed_rbac
