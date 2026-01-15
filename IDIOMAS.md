@@ -1,4 +1,4 @@
-## 🧠 Enfoque recomendado (high level
+## 🧠 Enfoque recomendado (high level)
 
 1. **Frontend (React)**
 
