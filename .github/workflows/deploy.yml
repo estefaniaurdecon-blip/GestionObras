@@ -10,9 +10,6 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Verificar ubicación del runner
-        run: pwd
-
       - name: Actualizar código del proyecto
         run: |
           cd /home/server/projects/erp
@@ -27,6 +24,15 @@ jobs:
         run: |
           cd /home/server/projects/erp/infra
           docker compose -f docker-compose.staging.yml up -d --build
+
+      - name: Esperar a que PostgreSQL esté listo
+        run: |
+          cd /home/server/projects/erp/infra
+          echo "Esperando a que la base de datos PostgreSQL esté lista..."
+          until docker exec saas-db pg_isready -U postgres; do
+            sleep 2
+          done
+          echo "PostgreSQL listo"
 
       - name: Ejecutar seed RBAC
         run: |
