@@ -5,7 +5,7 @@ Este repositorio contiene la implementación de una plataforma SaaS multi‑tena
 - Backend SaaS (FastAPI) – núcleo de negocio y multi‑tenant.
 - Módulo ERP (FastAPI) – gestión operativa interna.
 - Frontend (React) – dashboard desacoplado.
-- Infraestructura (Docker + Cloudflare Tunnel) – despliegue y dominios
+- Infraestructura (Docker + Cloudflare Tunnel) – despliegue y dominios.
 
 ## Estructura
 
