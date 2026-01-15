@@ -18,7 +18,17 @@ jobs:
           cd /home/server/projects/erp
           git pull origin main
 
-      - name: Levantar Docker Compose
+      - name: Tirar instancia actual de Docker
         run: |
           cd /home/server/projects/erp/infra
-          docker compose up -d --build
+          docker compose down -v
+
+      - name: Levantar Docker Compose (staging)
+        run: |
+          cd /home/server/projects/erp/infra
+          docker compose -f docker-compose.staging.yml up -d --build
+
+      - name: Ejecutar seed RBAC
+        run: |
+          cd /home/server/projects/erp/infra
+          docker exec -it saas-backend-fastapi python -m app.core.seed_rbac
