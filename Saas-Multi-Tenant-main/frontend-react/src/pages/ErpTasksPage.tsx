@@ -3,6 +3,7 @@ import {
   Badge,
   Box,
   Button,
+  Collapse,
   Drawer,
   DrawerBody,
   DrawerCloseButton,
@@ -113,6 +114,7 @@ export const ErpTasksPage: React.FC = () => {
   const [optimisticStatus, setOptimisticStatus] = useState<
     Record<number, KanbanStatus>
   >({});
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Determina permisos y tenant del usuario actual.
   const { data: currentUser } = useCurrentUser();
@@ -444,93 +446,6 @@ export const ErpTasksPage: React.FC = () => {
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
-            <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
-              <Heading size="sm" mb={3}>
-                Crear tarea
-              </Heading>
-              <Stack spacing={2}>
-                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                  <Stack spacing={2}>
-                    <FormControl>
-                      <FormLabel>Titulo de la tarea</FormLabel>
-                      <Input
-                        value={taskTitle}
-                        onChange={(e) => setTaskTitle(e.target.value)}
-                      />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Descripcion</FormLabel>
-                      <Textarea
-                        value={taskDescription}
-                        onChange={(e) => setTaskDescription(e.target.value)}
-                        rows={2}
-                      />
-                    </FormControl>
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
-                      <FormControl>
-                        <FormLabel>Inicio</FormLabel>
-                        <Input
-                          type="date"
-                          value={taskStartDate}
-                          onChange={(e) => setTaskStartDate(e.target.value)}
-                        />
-                      </FormControl>
-                      <FormControl>
-                        <FormLabel>Fin</FormLabel>
-                        <Input
-                          type="date"
-                          value={taskEndDate}
-                          onChange={(e) => setTaskEndDate(e.target.value)}
-                        />
-                      </FormControl>
-                    </SimpleGrid>
-                  </Stack>
-                  <Stack spacing={2}>
-                    <FormControl>
-                      <FormLabel>Proyecto</FormLabel>
-                      <Select
-                        placeholder="Sin proyecto"
-                        value={taskProjectId}
-                        onChange={(e) => setTaskProjectId(e.target.value)}
-                      >
-                        {(projects ?? []).map((project) => (
-                          <option key={project.id} value={String(project.id)}>
-                            {project.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Asignar a</FormLabel>
-                      <Select
-                        placeholder={
-                          isSuperAdmin
-                            ? "Selecciona usuario"
-                            : "Usuarios del tenant"
-                        }
-                        value={taskAssigneeId}
-                        onChange={(e) => setTaskAssigneeId(e.target.value)}
-                      >
-                        {(users ?? []).map((user) => (
-                          <option key={user.id} value={String(user.id)}>
-                            {user.full_name || user.email}
-                          </option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Stack>
-                </SimpleGrid>
-                <Button
-                  colorScheme="green"
-                  onClick={handleCreateTask}
-                  isLoading={createTaskMutation.isPending}
-                  alignSelf="flex-start"
-                  size="sm"
-                >
-                  Crear tarea
-                </Button>
-              </Stack>
-            </Box>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
                 <Stack
@@ -623,6 +538,103 @@ export const ErpTasksPage: React.FC = () => {
                 )}
               </Box>
             </SimpleGrid>
+            <Button
+              mt={6}
+              variant="outline"
+              colorScheme="green"
+              onClick={() => setShowCreateForm((prev) => !prev)}
+            >
+              {showCreateForm ? "Ocultar formulario" : "Crear tarea"}
+            </Button>
+            <Collapse in={showCreateForm} animateOpacity>
+              <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mt={4}>
+                <Heading size="sm" mb={3}>
+                  Crear tarea
+                </Heading>
+                <Stack spacing={2}>
+                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+                    <Stack spacing={2}>
+                      <FormControl>
+                        <FormLabel>Titulo de la tarea</FormLabel>
+                        <Input
+                          value={taskTitle}
+                          onChange={(e) => setTaskTitle(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel>Descripcion</FormLabel>
+                        <Textarea
+                          value={taskDescription}
+                          onChange={(e) => setTaskDescription(e.target.value)}
+                          rows={2}
+                        />
+                      </FormControl>
+                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
+                        <FormControl>
+                          <FormLabel>Inicio</FormLabel>
+                          <Input
+                            type="date"
+                            value={taskStartDate}
+                            onChange={(e) => setTaskStartDate(e.target.value)}
+                          />
+                        </FormControl>
+                        <FormControl>
+                          <FormLabel>Fin</FormLabel>
+                          <Input
+                            type="date"
+                            value={taskEndDate}
+                            onChange={(e) => setTaskEndDate(e.target.value)}
+                          />
+                        </FormControl>
+                      </SimpleGrid>
+                    </Stack>
+                    <Stack spacing={2}>
+                      <FormControl>
+                        <FormLabel>Proyecto</FormLabel>
+                        <Select
+                          placeholder="Sin proyecto"
+                          value={taskProjectId}
+                          onChange={(e) => setTaskProjectId(e.target.value)}
+                        >
+                          {(projects ?? []).map((project) => (
+                            <option key={project.id} value={String(project.id)}>
+                              {project.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel>Asignar a</FormLabel>
+                        <Select
+                          placeholder={
+                            isSuperAdmin
+                              ? "Selecciona usuario"
+                              : "Usuarios del tenant"
+                          }
+                          value={taskAssigneeId}
+                          onChange={(e) => setTaskAssigneeId(e.target.value)}
+                        >
+                          {(users ?? []).map((user) => (
+                            <option key={user.id} value={String(user.id)}>
+                              {user.full_name || user.email}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
+                  </SimpleGrid>
+                  <Button
+                    colorScheme="green"
+                    onClick={handleCreateTask}
+                    isLoading={createTaskMutation.isPending}
+                    alignSelf="flex-start"
+                    size="sm"
+                  >
+                    Crear tarea
+                  </Button>
+                </Stack>
+              </Box>
+            </Collapse>
           </TabPanel>
           <TabPanel px={0}>
             <Heading size="md" mb={2}>

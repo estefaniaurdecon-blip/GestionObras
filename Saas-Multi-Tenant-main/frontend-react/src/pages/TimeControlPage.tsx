@@ -176,8 +176,10 @@ export const TimeControlPage: React.FC = () => {
   const subtleText = useColorModeValue("gray.500", "gray.300");
   const mutedText = useColorModeValue("gray.400", "gray.500");
   const accent = useColorModeValue("brand.500", "brand.300");
-  const calendarHeaderBg = useColorModeValue("green.600", "green.700");
-  const calendarHeaderText = useColorModeValue("white", "white");
+  const calendarHeaderActiveBg = useColorModeValue("green.600", "green.500");
+  const calendarHeaderActiveText = useColorModeValue("white", "white");
+  const calendarHeaderIdleBg = useColorModeValue("white", "gray.800");
+  const calendarHeaderIdleText = useColorModeValue("green.600", "green.300");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -809,7 +811,7 @@ export const TimeControlPage: React.FC = () => {
 
       <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
         <SimpleGrid
-          columns={{ base: 1, lg: 4 }}
+          columns={{ base: 1, lg: 3 }}
           spacing={4}
           alignItems="center"
         >
@@ -817,7 +819,7 @@ export const TimeControlPage: React.FC = () => {
             <Text fontSize="xs" color={subtleText}>
               Total Horas Semanal
             </Text>
-            <Text fontSize="lg" fontWeight="semibold">
+            <Text fontSize="xl" fontWeight="semibold">
               {formatSeconds(totalWeekSeconds)}
             </Text>
           </Box>
@@ -842,45 +844,54 @@ export const TimeControlPage: React.FC = () => {
               </Text>
             )}
           </FormControl>
-          <HStack spacing={3} justify="flex-end" w="100%">
-            {/* Boton de inicio: icono redondo con el mismo tamano que detener. */}
-            <IconButton
-              aria-label="Iniciar"
-              icon={<FaPlay />}
-              colorScheme="green"
-              isRound
-              size="lg"
-              w="48px"
-              h="48px"
-              onClick={handleStart}
-              isLoading={isLoading && !isRunning}
-              isDisabled={isRunning}
-            />
-            {/* Boton de detener: icono redondo, mismo tamano y conectado al handler. */}
-            <IconButton
-              aria-label="Detener"
-              icon={<FaStop />}
-              colorScheme="red"
-              variant="outline"
-              isRound
-              size="lg"
-              w="48px"
-              h="48px"
-              onClick={handleStop}
-              isLoading={isLoading && isRunning}
-              isDisabled={!isRunning}
-            />
+          <HStack
+            spacing={4}
+            align="center"
+            justify="flex-end"
+            justifySelf="end"
+            w="100%"
+            flexWrap="wrap"
+          >
+            <Box textAlign={{ base: "left", lg: "right" }}>
+              <Badge colorScheme={isRunning ? "green" : "gray"}>
+                {isRunning ? "En progreso" : "Sin actividad"}
+              </Badge>
+              {isRunning && (
+                <Text fontSize="2xl" fontFamily="mono" mt={1}>
+                  {formattedElapsed}
+                </Text>
+              )}
+            </Box>
+            <HStack spacing={3}>
+              {/* Boton de inicio: icono redondo con el mismo tamano que detener. */}
+              <IconButton
+                aria-label="Iniciar"
+                icon={<FaPlay />}
+                colorScheme="green"
+                isRound
+                size="lg"
+                w="48px"
+                h="48px"
+                onClick={handleStart}
+                isLoading={isLoading && !isRunning}
+                isDisabled={isRunning}
+              />
+              {/* Boton de detener: icono redondo, mismo tamano y conectado al handler. */}
+              <IconButton
+                aria-label="Detener"
+                icon={<FaStop />}
+                colorScheme="red"
+                variant="outline"
+                isRound
+                size="lg"
+                w="48px"
+                h="48px"
+                onClick={handleStop}
+                isLoading={isLoading && isRunning}
+                isDisabled={!isRunning}
+              />
+            </HStack>
           </HStack>
-          <Box textAlign={{ base: "left", lg: "right" }}>
-            <Badge colorScheme={isRunning ? "green" : "gray"}>
-              {isRunning ? "En progreso" : "Sin actividad"}
-            </Badge>
-            {isRunning && (
-              <Text fontSize="2xl" fontFamily="mono" mt={1}>
-                {formattedElapsed}
-              </Text>
-            )}
-          </Box>
         </SimpleGrid>
       </Box>
 
@@ -1018,24 +1029,27 @@ export const TimeControlPage: React.FC = () => {
                 Hora
               </Text>
             </Box>
-            {weekDays.map((day) => (
+            {weekDays.map((day) => {
+              const isToday = day.toDateString() === now.toDateString();
+              return (
               <Box
                 key={day.toISOString()}
                 p={3}
                 borderRightWidth="1px"
-                bg={calendarHeaderBg}
+                bg={isToday ? calendarHeaderActiveBg : calendarHeaderIdleBg}
               >
                 <Text
                   fontSize="xs"
                   fontWeight="semibold"
                   textTransform="uppercase"
                   letterSpacing="0.08em"
-                  color={calendarHeaderText}
+                  color={isToday ? calendarHeaderActiveText : calendarHeaderIdleText}
                 >
                   {formatDayLabel(day)}
                 </Text>
               </Box>
-            ))}
+              );
+            })}
           </SimpleGrid>
           <Box position="relative" ref={calendarRef}>
             {HOURS.map((hour) => (
