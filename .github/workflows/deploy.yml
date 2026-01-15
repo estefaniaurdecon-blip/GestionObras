@@ -18,7 +18,7 @@ jobs:
       - name: Tirar instancia actual de Docker
         run: |
           cd /home/server/projects/erp/infra
-          docker compose down -v
+          docker compose down
 
       - name: Levantar Docker Compose (staging)
         run: |
