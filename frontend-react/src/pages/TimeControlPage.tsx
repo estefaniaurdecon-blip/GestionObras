@@ -93,7 +93,40 @@ const formatDayLabel = (date: Date): string => {
 };
 
 // Formatea fecha para inputs datetime-local.
-const formatDateInput = (date: Date): string => date.toISOString().slice(0, 16);
+const padTimePart = (value: number): string => String(value).padStart(2, "0");
+
+const formatDateInput = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = padTimePart(date.getMonth() + 1);
+  const day = padTimePart(date.getDate());
+  const hours = padTimePart(date.getHours());
+  const minutes = padTimePart(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const parseDateInput = (value: string): Date => {
+  if (!value) return new Date(NaN);
+  const [datePart, timePart] = value.split("T");
+  if (!datePart || !timePart) return new Date(NaN);
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hours, minutes] = timePart.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes);
+};
+
+const toLocalIsoString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = padTimePart(date.getMonth() + 1);
+  const day = padTimePart(date.getDate());
+  const hours = padTimePart(date.getHours());
+  const minutes = padTimePart(date.getMinutes());
+  const seconds = padTimePart(date.getSeconds());
+  const offsetMinutes = date.getTimezoneOffset();
+  const sign = offsetMinutes <= 0 ? "+" : "-";
+  const offsetTotal = Math.abs(offsetMinutes);
+  const offsetHours = padTimePart(Math.floor(offsetTotal / 60));
+  const offsetMins = padTimePart(offsetTotal % 60);
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
+};
 
 // Limita un valor entre min y max.
 const clamp = (value: number, min: number, max: number): number =>
@@ -346,8 +379,8 @@ export const TimeControlPage: React.FC = () => {
       setIsLoadingSessions(true);
       try {
         const list = await fetchTimeSessions(
-          weekRange.start.toISOString(),
-          weekRange.end.toISOString()
+          toLocalIsoString(weekRange.start),
+          toLocalIsoString(weekRange.end)
         );
         if (!cancelled) {
           setSessions(list);
@@ -457,8 +490,8 @@ export const TimeControlPage: React.FC = () => {
             session.id === dragState.sessionId
               ? {
                   ...session,
-                  started_at: startDate.toISOString(),
-                  ended_at: endDate.toISOString(),
+                  started_at: toLocalIsoString(startDate),
+                  ended_at: toLocalIsoString(endDate),
                   duration_seconds: Math.max(
                     0,
                     Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
@@ -469,8 +502,8 @@ export const TimeControlPage: React.FC = () => {
         );
         try {
           await updateTimeSession(dragState.sessionId, {
-            started_at: startDate.toISOString(),
-            ended_at: endDate.toISOString(),
+            started_at: toLocalIsoString(startDate),
+            ended_at: toLocalIsoString(endDate),
           });
         } catch (error: any) {
           toast({
@@ -651,8 +684,8 @@ export const TimeControlPage: React.FC = () => {
       const payload = {
         task_id: taskId,
         description: draftDescription || null,
-        started_at: new Date(draftStart).toISOString(),
-        ended_at: new Date(draftEnd).toISOString(),
+        started_at: toLocalIsoString(parseDateInput(draftStart)),
+        ended_at: toLocalIsoString(parseDateInput(draftEnd)),
       };
 
       if (editingSessionId) {
@@ -765,8 +798,8 @@ export const TimeControlPage: React.FC = () => {
       const created = await createTimeSession({
         task_id: taskId,
         description: null,
-        started_at: startDate.toISOString(),
-        ended_at: endDate.toISOString(),
+        started_at: toLocalIsoString(startDate),
+        ended_at: toLocalIsoString(endDate),
       });
       setSessions((prev) => [created, ...prev]);
       toast({ title: "Sesion creada", status: "success" });

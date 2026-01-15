@@ -2,7 +2,7 @@ import React from "react";
 import { screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { renderWithProviders } from "../test/testUtils";
+import { renderWithProviders } from "./testUtils";
 import { DashboardPage } from "./DashboardPage";
 
 // Mock del módulo de API de herramientas
@@ -12,7 +12,7 @@ vi.mock("../api/tools", () => ({
 
 const mockedFetchTenantTools = vi.mocked(
   // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-  require("../api/tools").fetchTenantTools,
+  require("../api/tools").fetchTenantTools
 );
 
 describe("DashboardPage", () => {
@@ -35,15 +35,14 @@ describe("DashboardPage", () => {
 
     // Comprueba textos básicos y que la herramienta mock aparece
     expect(
-      screen.getByText(/herramientas disponibles para tu tenant/i),
+      screen.getByText(/herramientas disponibles para tu tenant/i)
     ).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText("Moodle Demo")).toBeInTheDocument();
       expect(
-        screen.getByText("Instancia Moodle de pruebas"),
+        screen.getByText("Instancia Moodle de pruebas")
       ).toBeInTheDocument();
     });
   });
 });
-
