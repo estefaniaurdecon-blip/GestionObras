@@ -7,27 +7,28 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}  # opcional, si cambias el puerto
-          script: |
-            # Entrar a la carpeta de docker-compose
-            cd ${{ secrets.DEPLOY_PATH }}
+      - name: Verificar ubicación del runner
+        run: pwd
 
-            # Actualizar código desde Git
-            git pull origin main
+      - name: Actualizar código del proyecto
+        run: |
+          cd /home/server/projects/erp
+          git pull origin main
 
-            # Exportar variables de entorno de staging si existe
-            if [ -f ${{ secrets.ADDITIONAL_ENVS }} ]; then
-              export $(grep -v '^#' ${{ secrets.ADDITIONAL_ENVS }} | xargs)
-            fi
+      - name: Tirar instancia actual de Docker
+        run: |
+          cd /home/server/projects/erp/infra
+          docker compose down -v
 
-            # Levantar containers con Docker Compose en modo detached
-            docker compose up -d --build
+      - name: Levantar Docker Compose (staging)
+        run: |
+          cd /home/server/projects/erp/infra
+          docker compose -f docker-compose.staging.yml up -d --build
+
+      - name: Ejecutar seed RBAC
+        run: |
+          cd /home/server/projects/erp/infra
+          docker exec saas-backend-fastapi python -m app.core.seed_rbac
