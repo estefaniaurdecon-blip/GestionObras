@@ -16,6 +16,7 @@ jobs:
           echo "SSH_HOST=${{ secrets.SSH_HOST }}"
           echo "SSH_USER=${{ secrets.SSH_USER }}"
           echo "DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}"
+          echo "DOCKER_COMPOSE_FILE=${{ secrets.DOCKER_COMPOSE_FILE }}"
 
       # Deploy usando SSH
       - name: Deploy to server
