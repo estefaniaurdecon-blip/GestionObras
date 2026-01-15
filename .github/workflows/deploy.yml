@@ -33,10 +33,5 @@ jobs:
             # Actualizar código desde Git
             git pull origin main
 
-            # Si existe un archivo de entorno, cargarlo
-            if [ -f .env.staging ]; then
-              export $(grep -v '^#' .env.staging | xargs)
-            fi
-
             # Levantar contenedores en modo detached y reconstruir
             docker compose up -d --build
