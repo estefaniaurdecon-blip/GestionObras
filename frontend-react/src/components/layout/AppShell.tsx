@@ -43,6 +43,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     isErpRoute ? 0 : -1
   );
   const isActive = (path: string) => pathname === path;
+  const isActivePrefix = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
 
   useEffect(() => {
     if (isErpRoute) {
@@ -164,7 +166,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/projects"
-                      variant={isActive("/erp/projects") ? "solid" : "ghost"}
+                      variant={
+                        isActivePrefix("/erp/projects") ? "solid" : "ghost"
+                      }
                       justifyContent="flex-start"
                       size="sm"
                     >{t("layout.nav.projects")}</Button>

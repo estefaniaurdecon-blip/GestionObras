@@ -841,15 +841,47 @@
         "saveErrorFallback": "Revisa los datos."
       },
       "gantt": {
-        "title": "Gantt",
-        "subtitle": "Sigue proyectos y tareas en el calendario.",
+        "title": "Diagrama de Gantt",
+        "subtitle": "Visualiza el progreso de proyectos y tareas en el calendario.",
         "week": "Semana",
         "month": "Mes",
         "empty": "No hay tareas programadas.",
+        "selectedProject": "Proyecto Seleccionado",
+        "allProjects": "Todos los proyectos",
+        "projectDetails": {
+          "title": "Detalles del Proyecto",
+          "completedTasks": "Tareas Completadas",
+          "inProgressTasks": "En Progreso",
+          "pendingTasks": "Pendientes",
+          "totalHours": "Horas Totales",
+          "overallProgress": "Progreso General del Proyecto",
+          "startDate": "Inicio",
+          "endDate": "Fin",
+          "totalTasks": "tareas totales"
+        },
         "headers": {
           "name": "Nombre",
           "start": "Desde",
           "end": "Hasta"
+        },
+        "tooltip": {
+          "progress": "Progreso",
+          "estimatedHours": "Horas estimadas"
+        },
+        "legend": {
+          "title": "Leyenda de colores:",
+          "onTime": "En plazo",
+          "atRisk": "Riesgo",
+          "overdue": "Fuera de plazo",
+          "planned": "Planificado"
+        },
+        "filters": {
+          "showActivities": "Mostrar actividades",
+          "showMilestones": "Mostrar hitos"
+        },
+        "filters": {
+          "showActivities": "Mostrar actividades",
+          "showMilestones": "Mostrar hitos"
         }
       },
       "permissions": {
