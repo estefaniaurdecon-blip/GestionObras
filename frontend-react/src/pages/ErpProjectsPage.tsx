@@ -22,23 +22,30 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import { fetchErpProjects, type ErpProject as ErpProjectApi } from "../api/erpReports";
+import { createErpProject } from "../api/erpManagement";
+import { fetchErpTasks, type ErpTask as ErpTaskApi } from "../api/erpTimeTracking";
+import {
+  createActivity,
+  createMilestone,
+  createSubActivity,
+  fetchActivities,
+  fetchMilestones,
+  fetchSubActivities,
+  type ErpActivity,
+  type ErpMilestone,
+  type ErpSubActivity,
+} from "../api/erpStructure";
 
 type ViewMode = "week" | "month";
 type Status = "on-time" | "at-risk" | "overdue" | "planned";
 
-interface ErpProject {
-  id: number;
-  name: string;
-  description?: string;
-  start_date?: string;
-  end_date?: string;
-}
-
 interface ErpTask {
   id: number;
-  project_id: number;
+  project_id: number | null;
   name: string;
   start_date: string;
   end_date: string;
@@ -55,6 +62,7 @@ interface GanttTask {
   type: "task" | "milestone";
   status: Status;
   project?: string;
+  projectId?: number;
 }
 
 interface ProfessionalGanttProps {
@@ -78,6 +86,10 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   const containerBg = useColorModeValue("white", "gray.900");
   const labelColor = useColorModeValue("gray.600", "gray.300");
   const rowBg = useColorModeValue("white", "gray.900");
+  const taskTitleColor = useColorModeValue("gray.800", "white");
+  const docBg = useColorModeValue("gray.50", "gray.800");
+  const docColor = useColorModeValue("gray.600", "gray.200");
+  const headerTitleColor = useColorModeValue("gray.700", "gray.100");
 
   const dateRange = useMemo(() => {
     if (tasks.length === 0) {
@@ -213,7 +225,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
             py={3}
             fontWeight="semibold"
             fontSize="sm"
-            color={useColorModeValue("gray.700", "gray.100")}
+            color={headerTitleColor}
             borderRightWidth="1px"
           >
             Tarea
@@ -267,8 +279,8 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   borderColor={lineColor}
                   display="grid"
                   placeItems="center"
-                  bg={useColorModeValue("gray.50", "gray.800")}
-                  color={useColorModeValue("gray.600", "gray.200")}
+                  bg={docBg}
+                  color={docColor}
                   fontSize="xs"
                   fontWeight="semibold"
                 >
@@ -279,7 +291,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                     fontSize="sm"
                     fontWeight="semibold"
                     noOfLines={1}
-                    color={useColorModeValue("gray.800", "white")}
+                    color={taskTitleColor}
                   >
                     {task.name}
                   </Text>
@@ -374,7 +386,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   );
 };
 
-// Página principal de proyectos (solo UI demo con datos locales para evitar nuevas ventanas).
+// Página principal de proyectos.
 export const ErpProjectsPage: React.FC = () => {
   const cardBg = useColorModeValue("white", "gray.700");
   const panelBg = useColorModeValue("gray.50", "gray.800");
@@ -389,11 +401,12 @@ export const ErpProjectsPage: React.FC = () => {
   const [ganttView, setGanttView] = useState<ViewMode>("week");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStart, setProjectStart] = useState("");
   const [projectEnd, setProjectEnd] = useState("");
-  const [activities, setActivities] = useState<
+  const [projectActivities, setProjectActivities] = useState<
     Array<{
       id: string;
       name: string;
@@ -409,103 +422,206 @@ export const ErpProjectsPage: React.FC = () => {
       }>;
     }>
   >([]);
-  const [milestones, setMilestones] = useState<
+  const [projectMilestones, setProjectMilestones] = useState<
     Array<{ id: string; name: string; start: string; end: string }>
   >([]);
 
-  // Datos demo
-  const projects: ErpProject[] = [
-    {
-      id: 1,
-      name: "Proyecto Web Corporativo",
-      description: "Desarrollo completo del sitio web corporativo",
-      start_date: "2026-01-01",
-      end_date: "2026-04-30",
-    },
-    {
-      id: 2,
-      name: "App Mobile",
-      description: "Aplicación móvil para iOS y Android",
-      start_date: "2026-02-01",
-      end_date: "2026-05-31",
-    },
-  ];
+  const { data: projects = [] } = useQuery<ErpProjectApi[]>({
+    queryKey: ["erp-projects"],
+    queryFn: fetchErpProjects,
+  });
 
-  const tasks: ErpTask[] = [
-    {
-      id: 1,
-      project_id: 1,
-      name: "Diseño UI/UX",
-      start_date: "2025-12-29",
-      end_date: "2026-01-14",
-      status: "completed",
-      progress: 100,
+  const { data: rawTasks = [] } = useQuery<ErpTaskApi[]>({
+    queryKey: ["erp-tasks"],
+    queryFn: fetchErpTasks,
+  });
+
+  const { data: activities = [] } = useQuery<ErpActivity[]>({
+    queryKey: ["erp-activities"],
+    queryFn: () => fetchActivities(),
+  });
+
+  const { data: subactivities = [] } = useQuery<ErpSubActivity[]>({
+    queryKey: ["erp-subactivities"],
+    queryFn: () => fetchSubActivities(),
+  });
+
+  const { data: milestones = [] } = useQuery<ErpMilestone[]>({
+    queryKey: ["erp-milestones"],
+    queryFn: () => fetchMilestones(),
+  });
+
+  const tasks: ErpTask[] = useMemo(
+    () => {
+      const now = new Date();
+      return rawTasks
+        .filter((task) => task.start_date && task.end_date)
+        .map((task) => {
+          const status = task.is_completed
+            ? "completed"
+            : task.status === "done"
+              ? "completed"
+              : task.status === "in_progress"
+                ? "in_progress"
+                : "pending";
+          const start = new Date(task.start_date as string);
+          const end = new Date(task.end_date as string);
+          const durationMs = end.getTime() - start.getTime();
+          let progress = 0;
+          if (status === "completed") {
+            progress = 100;
+          } else if (status === "in_progress" && durationMs > 0) {
+            const elapsedMs = now.getTime() - start.getTime();
+            const ratio = Math.min(Math.max(elapsedMs / durationMs, 0), 1);
+            progress = Math.round(ratio * 100);
+          }
+
+          return {
+            id: task.id,
+            project_id: task.project_id ?? null,
+            name: task.title,
+            start_date: task.start_date ?? "",
+            end_date: task.end_date ?? "",
+            status,
+            progress,
+          };
+        });
     },
-    {
-      id: 2,
-      project_id: 1,
-      name: "Desarrollo Frontend",
-      start_date: "2026-01-15",
-      end_date: "2026-02-25",
-      status: "in_progress",
-      progress: 65,
-    },
-    {
-      id: 3,
-      project_id: 1,
-      name: "Desarrollo Backend",
-      start_date: "2026-01-18",
-      end_date: "2026-03-25",
-      status: "in_progress",
-      progress: 40,
-    },
-    {
-      id: 4,
-      project_id: 2,
-      name: "Arquitectura",
-      start_date: "2026-01-20",
-      end_date: "2026-02-10",
-      status: "completed",
-      progress: 100,
-    },
-    {
-      id: 5,
-      project_id: 2,
-      name: "Desarrollo iOS",
-      start_date: "2026-02-15",
-      end_date: "2026-04-30",
-      status: "in_progress",
-      progress: 50,
-    },
-  ];
+    [rawTasks]
+  );
+  const totalTasks = rawTasks.length;
+  const completedTasks = rawTasks.filter(
+    (task) => task.is_completed || task.status === "done" || task.status === "completed"
+  ).length;
+
+  const projectNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    projects.forEach((project) => {
+      map.set(project.id, project.name);
+    });
+    return map;
+  }, [projects]);
+
+  const activityMap = useMemo(() => {
+    const map = new Map<number, ErpActivity>();
+    activities.forEach((activity) => {
+      map.set(activity.id, activity);
+    });
+    return map;
+  }, [activities]);
+
+  const computeProgress = (start: Date, end: Date) => {
+    const now = new Date();
+    const durationMs = end.getTime() - start.getTime();
+    if (now >= end) return 100;
+    if (now <= start) return 0;
+    if (durationMs <= 0) return 0;
+    const elapsedMs = now.getTime() - start.getTime();
+    const ratio = Math.min(Math.max(elapsedMs / durationMs, 0), 1);
+    return Math.round(ratio * 100);
+  };
+
+  const ganttItems: GanttTask[] = useMemo(() => {
+    const items: GanttTask[] = [];
+    const now = new Date();
+
+    projects
+      .filter((project) => project.start_date && project.end_date)
+      .forEach((project) => {
+        const start = new Date(project.start_date as string);
+        const end = new Date(project.end_date as string);
+        const progress = computeProgress(start, end);
+        const status: Status =
+          now >= end ? "on-time" : now >= start ? "planned" : "planned";
+        items.push({
+          id: `project-${project.id}`,
+          name: project.name,
+          start,
+          end,
+          progress,
+          type: "task",
+          status,
+          project: project.name,
+          projectId: project.id,
+        });
+      });
+
+    activities
+      .filter((activity) => activity.start_date && activity.end_date)
+      .forEach((activity) => {
+        const start = new Date(activity.start_date as string);
+        const end = new Date(activity.end_date as string);
+        const progress = computeProgress(start, end);
+        const status: Status =
+          now >= end ? "on-time" : now >= start ? "planned" : "planned";
+        items.push({
+          id: `activity-${activity.id}`,
+          name: activity.name,
+          start,
+          end,
+          progress,
+          type: "task",
+          status,
+          project: projectNameMap.get(activity.project_id),
+          projectId: activity.project_id,
+        });
+      });
+
+    subactivities
+      .filter((subactivity) => subactivity.start_date && subactivity.end_date)
+      .forEach((subactivity) => {
+        const activity = activityMap.get(subactivity.activity_id);
+        if (!activity) return;
+        const start = new Date(subactivity.start_date as string);
+        const end = new Date(subactivity.end_date as string);
+        const progress = computeProgress(start, end);
+        const status: Status =
+          now >= end ? "on-time" : now >= start ? "planned" : "planned";
+        items.push({
+          id: `subactivity-${subactivity.id}`,
+          name: `Sub: ${subactivity.name}`,
+          start,
+          end,
+          progress,
+          type: "task",
+          status,
+          project: projectNameMap.get(activity.project_id),
+          projectId: activity.project_id,
+        });
+      });
+
+    milestones
+      .filter((milestone) => milestone.due_date)
+      .forEach((milestone) => {
+        const due = new Date(milestone.due_date as string);
+        const status: Status = now > due ? "on-time" : "planned";
+        items.push({
+          id: `milestone-${milestone.id}`,
+          name: milestone.title,
+          start: due,
+          end: due,
+          progress: 100,
+          type: "milestone",
+          status,
+          project: projectNameMap.get(milestone.project_id),
+          projectId: milestone.project_id,
+        });
+      });
+
+    return items;
+  }, [projects, activities, subactivities, milestones, projectNameMap, activityMap]);
+
+  const ganttProjects = projects;
 
   const ganttTasks: GanttTask[] = useMemo(() => {
-    const filtered = selectedProjectId === "all"
-      ? tasks
-      : tasks.filter((t) => String(t.project_id) === selectedProjectId);
-    return filtered.map((task) => {
-      const start = new Date(task.start_date);
-      const end = new Date(task.end_date);
-      const progress = task.progress ?? 0;
-      let status: Status = "planned";
-      if (task.status === "completed") status = "on-time";
-      else if (end < new Date()) status = "overdue";
-      else if (task.status === "in_progress") status = "planned";
-      return {
-        id: String(task.id),
-        name: task.name,
-        start,
-        end,
-        progress,
-        type: "task",
-        status,
-        project: projects.find((p) => p.id === task.project_id)?.name,
-      };
-    });
-  }, [selectedProjectId, tasks, projects]);
+    if (selectedProjectId === "all") return ganttItems;
+    return ganttItems.filter(
+      (item) => item.projectId && String(item.projectId) === selectedProjectId
+    );
+  }, [selectedProjectId, ganttItems]);
 
   const handleAddActivity = () => {
-    setActivities((prev) => [
+    setProjectActivities((prev) => [
       ...prev,
       {
         id: createId(),
@@ -519,7 +635,7 @@ export const ErpProjectsPage: React.FC = () => {
   };
 
   const handleAddSubactivity = (actId: string) => {
-    setActivities((prev) =>
+    setProjectActivities((prev) =>
       prev.map((act) =>
         act.id === actId
           ? {
@@ -541,35 +657,97 @@ export const ErpProjectsPage: React.FC = () => {
   };
 
   const handleAddMilestone = () => {
-    setMilestones((prev) => [
+    setProjectMilestones((prev) => [
       ...prev,
       { id: createId(), name: `Hito ${prev.length + 1}`, start: "", end: "" },
     ]);
   };
+
+  const createProjectMutation = useMutation({
+    mutationFn: async () => {
+      const project = await createErpProject({
+        name: projectName.trim(),
+        description: projectDescription.trim() || null,
+        start_date: projectStart || null,
+        end_date: projectEnd || null,
+      });
+
+      for (const activity of projectActivities) {
+        const activityDescription =
+          activity.weight > 0 ? `Peso: ${activity.weight}%` : null;
+        const createdActivity = await createActivity({
+          project_id: project.id,
+          name: activity.name.trim() || "Actividad",
+          description: activityDescription,
+          start_date: activity.start || null,
+          end_date: activity.end || null,
+        });
+
+        for (const subactivity of activity.subactivities) {
+          const subDescription =
+            subactivity.weight > 0 ? `Peso: ${subactivity.weight}%` : null;
+          await createSubActivity({
+            activity_id: createdActivity.id,
+            name: subactivity.name.trim() || "Subactividad",
+            description: subDescription,
+            start_date: subactivity.start || null,
+            end_date: subactivity.end || null,
+          });
+        }
+      }
+
+      for (const milestone of projectMilestones) {
+        const milestoneDescription =
+          milestone.start && milestone.end && milestone.start !== milestone.end
+            ? `Inicio: ${milestone.start}. Fin: ${milestone.end}.`
+            : milestone.start
+              ? `Inicio: ${milestone.start}.`
+              : milestone.end
+                ? `Fin: ${milestone.end}.`
+                : null;
+        await createMilestone({
+          project_id: project.id,
+          title: milestone.name.trim() || "Hito",
+          due_date: milestone.end || milestone.start || null,
+          description: milestoneDescription,
+        });
+      }
+
+      return project;
+    },
+    onSuccess: async () => {
+      setProjectName("");
+      setProjectDescription("");
+      setProjectStart("");
+      setProjectEnd("");
+      setProjectActivities([]);
+      setProjectMilestones([]);
+      await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
+      toast({ title: "Proyecto guardado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al guardar",
+        description: error?.response?.data?.detail ?? "No se pudo guardar el proyecto.",
+        status: "error",
+      });
+    },
+  });
 
   const handleSaveProject = () => {
     if (!projectName.trim()) {
       toast({ title: "Nombre requerido", status: "warning" });
       return;
     }
-    const payload = {
-      name: projectName.trim(),
-      description: projectDescription.trim(),
-      start_date: projectStart || null,
-      end_date: projectEnd || null,
-      activities,
-      milestones,
-    };
-    console.log("Nuevo proyecto", payload);
-    toast({ title: "Proyecto preparado (demo)", status: "success" });
+    createProjectMutation.mutate();
   };
 
   const heroItems = [
     { label: "Proyectos activos", value: projects.length },
-    { label: "Total tareas", value: tasks.length },
+    { label: "Total tareas", value: totalTasks },
     {
       label: "Completadas",
-      value: tasks.filter((t) => t.status === "completed").length,
+      value: completedTasks,
     },
   ];
 
@@ -672,7 +850,7 @@ export const ErpProjectsPage: React.FC = () => {
                     size="sm"
                   >
                     <option value="all">Todos los proyectos</option>
-                    {projects.map((p) => (
+                    {ganttProjects.map((p) => (
                       <option key={p.id} value={String(p.id)}>
                         {p.name}
                       </option>
@@ -762,12 +940,12 @@ export const ErpProjectsPage: React.FC = () => {
                 </Button>
               </Flex>
               <Stack spacing={3}>
-                {activities.length === 0 && (
+                {projectActivities.length === 0 && (
                   <Text fontSize="sm" color={subtleText}>
                     Añade actividades con peso y fechas.
                   </Text>
                 )}
-                {activities.map((act, idx) => (
+                {projectActivities.map((act, idx) => (
                   <Box key={act.id} borderWidth="1px" borderRadius="md" p={3} bg={cardBg}>
                     <SimpleGrid columns={{ base: 1, md: 5 }} spacing={3}>
                       <FormControl>
@@ -775,7 +953,7 @@ export const ErpProjectsPage: React.FC = () => {
                         <Input
                           value={act.name}
                           onChange={(e) =>
-                            setActivities((prev) =>
+                            setProjectActivities((prev) =>
                               prev.map((item) =>
                                 item.id === act.id ? { ...item, name: e.target.value } : item
                               )
@@ -789,7 +967,7 @@ export const ErpProjectsPage: React.FC = () => {
                           type="number"
                           value={act.weight}
                           onChange={(e) =>
-                            setActivities((prev) =>
+                            setProjectActivities((prev) =>
                               prev.map((item) =>
                                 item.id === act.id
                                   ? { ...item, weight: Number(e.target.value) }
@@ -805,7 +983,7 @@ export const ErpProjectsPage: React.FC = () => {
                           type="date"
                           value={act.start}
                           onChange={(e) =>
-                            setActivities((prev) =>
+                            setProjectActivities((prev) =>
                               prev.map((item) =>
                                 item.id === act.id ? { ...item, start: e.target.value } : item
                               )
@@ -819,7 +997,7 @@ export const ErpProjectsPage: React.FC = () => {
                           type="date"
                           value={act.end}
                           onChange={(e) =>
-                            setActivities((prev) =>
+                            setProjectActivities((prev) =>
                               prev.map((item) =>
                                 item.id === act.id ? { ...item, end: e.target.value } : item
                               )
@@ -833,7 +1011,7 @@ export const ErpProjectsPage: React.FC = () => {
                         colorScheme="red"
                         alignSelf="flex-end"
                         onClick={() =>
-                          setActivities((prev) => prev.filter((item) => item.id !== act.id))
+                          setProjectActivities((prev) => prev.filter((item) => item.id !== act.id))
                         }
                       >
                         Eliminar
@@ -861,7 +1039,7 @@ export const ErpProjectsPage: React.FC = () => {
                               <Input
                                 value={sub.name}
                                 onChange={(e) =>
-                                  setActivities((prev) =>
+                                  setProjectActivities((prev) =>
                                     prev.map((item) =>
                                       item.id === act.id
                                         ? {
@@ -882,7 +1060,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 type="number"
                                 value={sub.weight}
                                 onChange={(e) =>
-                                  setActivities((prev) =>
+                                  setProjectActivities((prev) =>
                                     prev.map((item) =>
                                       item.id === act.id
                                         ? {
@@ -905,7 +1083,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 type="date"
                                 value={sub.start}
                                 onChange={(e) =>
-                                  setActivities((prev) =>
+                                  setProjectActivities((prev) =>
                                     prev.map((item) =>
                                       item.id === act.id
                                         ? {
@@ -928,7 +1106,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 type="date"
                                 value={sub.end}
                                 onChange={(e) =>
-                                  setActivities((prev) =>
+                                  setProjectActivities((prev) =>
                                     prev.map((item) =>
                                       item.id === act.id
                                         ? {
@@ -960,19 +1138,19 @@ export const ErpProjectsPage: React.FC = () => {
                 </Button>
               </Flex>
               <Stack spacing={3}>
-                {milestones.length === 0 ? (
+                {projectMilestones.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
                     Añade hitos con fechas.
                   </Text>
                 ) : (
-                  milestones.map((mil, idx) => (
+                  projectMilestones.map((mil, idx) => (
                     <SimpleGrid key={mil.id} columns={{ base: 1, md: 4 }} spacing={3}>
                       <FormControl>
                         <FormLabel fontSize="sm">Hito #{idx + 1}</FormLabel>
                         <Input
                           value={mil.name}
                           onChange={(e) =>
-                            setMilestones((prev) =>
+                            setProjectMilestones((prev) =>
                               prev.map((m) => (m.id === mil.id ? { ...m, name: e.target.value } : m))
                             )
                           }
@@ -984,7 +1162,7 @@ export const ErpProjectsPage: React.FC = () => {
                           type="date"
                           value={mil.start}
                           onChange={(e) =>
-                            setMilestones((prev) =>
+                            setProjectMilestones((prev) =>
                               prev.map((m) => (m.id === mil.id ? { ...m, start: e.target.value } : m))
                             )
                           }
@@ -996,7 +1174,7 @@ export const ErpProjectsPage: React.FC = () => {
                           type="date"
                           value={mil.end}
                           onChange={(e) =>
-                            setMilestones((prev) =>
+                            setProjectMilestones((prev) =>
                               prev.map((m) => (m.id === mil.id ? { ...m, end: e.target.value } : m))
                             )
                           }
@@ -1008,7 +1186,7 @@ export const ErpProjectsPage: React.FC = () => {
                         colorScheme="red"
                         alignSelf="flex-end"
                         onClick={() =>
-                          setMilestones((prev) => prev.filter((m) => m.id !== mil.id))
+                          setProjectMilestones((prev) => prev.filter((m) => m.id !== mil.id))
                         }
                       >
                         Eliminar
@@ -1022,8 +1200,9 @@ export const ErpProjectsPage: React.FC = () => {
                 alignSelf="flex-start"
                 colorScheme="green"
                 onClick={handleSaveProject}
+                isLoading={createProjectMutation.isPending}
               >
-                Guardar proyecto (demo)
+                Guardar proyecto
               </Button>
             </Stack>
           </TabPanel>
