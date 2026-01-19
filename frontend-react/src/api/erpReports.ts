@@ -25,6 +25,7 @@ export interface TimeReportFilters {
   projectId?: number | null;
   dateFrom?: string | null;
   dateTo?: string | null;
+  userIds?: number[] | null;
 }
 
 export async function fetchErpProjects(): Promise<ErpProject[]> {
@@ -52,6 +53,9 @@ export async function fetchTimeReport(
   }
   if (filters.dateTo) {
     params.date_to = filters.dateTo;
+  }
+  if (filters.userIds && filters.userIds.length > 0) {
+    params.user_ids = filters.userIds.join(",");
   }
 
   const response = await apiClient.get<TimeReportRow[]>(

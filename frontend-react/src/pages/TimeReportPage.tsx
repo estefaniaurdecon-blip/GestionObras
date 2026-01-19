@@ -1,12 +1,20 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Box,
   Badge,
   Button,
+  Checkbox,
   FormControl,
   FormLabel,
   Heading,
   Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Select,
   SimpleGrid,
   Table,
@@ -22,6 +30,7 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   ErpProject,
@@ -29,7 +38,9 @@ import {
   fetchTimeReport,
   TimeReportRow,
 } from "../api/erpReports";
+import { fetchEmployees, type EmployeeProfile } from "../api/hr";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 export const TimeReportPage: React.FC = () => {
   const toast = useToast();
@@ -54,6 +65,17 @@ export const TimeReportPage: React.FC = () => {
   const [rows, setRows] = useState<TimeReportRow[]>([]);
   const [userFilter, setUserFilter] = useState("");
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
+  const { data: currentUser } = useCurrentUser();
+  const tenantId = currentUser?.tenant_id ?? undefined;
+
+  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery<EmployeeProfile[]>({
+    queryKey: ["hr-employees", tenantId ?? "all"],
+    queryFn: () => fetchEmployees(tenantId),
+  });
 
   const loadProjectsIfNeeded = async () => {
     if (projects.length > 0 || isLoadingProjects) return;
@@ -82,6 +104,7 @@ export const TimeReportPage: React.FC = () => {
         projectId: selectedProjectId,
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
+        userIds: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : null,
       });
       setRows(data);
     } catch (error: any) {
@@ -98,7 +121,15 @@ export const TimeReportPage: React.FC = () => {
   };
 
   const normalizedFilter = userFilter.trim().toLowerCase();
+  const employeeIdSet = useMemo(
+    () => new Set(selectedEmployeeIds),
+    [selectedEmployeeIds]
+  );
+
   const filteredRows = rows.filter((row) => {
+    if (selectedEmployeeIds.length > 0) {
+      if (!row.user_id || !employeeIdSet.has(row.user_id)) return false;
+    }
     if (!normalizedFilter) return true;
     const haystack = `${row.username ?? ""}`.toLowerCase();
     return haystack.includes(normalizedFilter);
@@ -237,11 +268,39 @@ export const TimeReportPage: React.FC = () => {
             </FormControl>
             <FormControl>
               <FormLabel>{t("timeReport.filters.userContains")}</FormLabel>
-              <Input
-                placeholder={t("timeReport.filters.userPlaceholder")}
-                value={userFilter}
-                onChange={(e) => setUserFilter(e.target.value)}
-              />
+              <Button
+                variant="outline"
+                colorScheme="green"
+                onClick={() => setEmployeeModalOpen(true)}
+                size="sm"
+                minW={{ base: "100%", md: "200px" }}
+                isLoading={isLoadingEmployees}
+              >
+                Seleccionar empleados
+              </Button>
+              {selectedEmployeeIds.length > 0 && (
+                <Stack direction="row" spacing={2} mt={2} flexWrap="wrap">
+                  {selectedEmployeeIds.map((id) => {
+                    const emp = employees.find((e) => (e.user_id ?? e.id) === id);
+                    const label = emp?.full_name || emp?.email || `#${id}`;
+                    return (
+                      <Badge
+                        key={id}
+                        colorScheme="green"
+                        borderRadius="full"
+                        px={2}
+                        py={1}
+                        cursor="pointer"
+                        onClick={() =>
+                          setSelectedEmployeeIds((prev) => prev.filter((x) => x !== id))
+                        }
+                      >
+                        {label} ✕
+                      </Badge>
+                    );
+                  })}
+                </Stack>
+              )}
             </FormControl>
           </SimpleGrid>
           <Box display="flex" justifyContent="flex-end" gap={2}>
@@ -285,7 +344,7 @@ export const TimeReportPage: React.FC = () => {
         overflowX="auto"
         overflowY="hidden"
         borderColor={accent}
-      >
+        >
         <Table size="sm" minW="760px">
           <Thead bg={tableHeadBg}>
             <Tr>
@@ -318,6 +377,129 @@ export const TimeReportPage: React.FC = () => {
           </Tbody>
         </Table>
       </Box>
+
+      <Modal isOpen={employeeModalOpen} onClose={() => setEmployeeModalOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Seleccionar empleados</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={3}>
+              <Input
+                placeholder="Buscar por nombre o email"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              <Box maxH="320px" overflowY="auto" borderWidth="1px" borderRadius="md" p={3}>
+                <Stack spacing={2}>
+                  {isLoadingEmployees && (
+                    <Text fontSize="sm" color={subtleText}>
+                      Cargando empleados...
+                    </Text>
+                  )}
+                  {employees
+                    .filter((emp) => {
+                      const term = employeeSearch.trim().toLowerCase();
+                      if (!term) return true;
+                      const haystack = `${emp.full_name ?? ""} ${emp.email ?? ""}`.toLowerCase();
+                      return haystack.includes(term);
+                    })
+                    .map((emp) => {
+                      const id = emp.user_id ?? emp.id;
+                      const label = emp.full_name || emp.email || `Empleado ${id}`;
+                      return (
+                        <Checkbox
+                          key={`${id}-${emp.email}`}
+                          isChecked={selectedEmployeeIds.includes(id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedEmployeeIds((prev) =>
+                              checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)
+                            );
+                          }}
+                        >
+                          {label}
+                        </Checkbox>
+                      );
+                    })}
+                  {employees.length === 0 && (
+                    <Text fontSize="sm" color={subtleText}>
+                      No hay empleados disponibles.
+                    </Text>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button colorScheme="green" onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+      <Modal isOpen={employeeModalOpen} onClose={() => setEmployeeModalOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Seleccionar empleados</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={3}>
+              <Input
+                placeholder="Buscar por nombre o email"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              <Box maxH="320px" overflowY="auto" borderWidth="1px" borderRadius="md" p={3}>
+                <Stack spacing={2}>
+                  {employees
+                    .filter((emp) => {
+                      const term = employeeSearch.trim().toLowerCase();
+                      if (!term) return true;
+                      const haystack = `${emp.full_name ?? ""} ${emp.email ?? ""}`.toLowerCase();
+                      return haystack.includes(term);
+                    })
+                    .map((emp) => {
+                      const id = emp.user_id ?? emp.id;
+                      const label = emp.full_name || emp.email || `Empleado ${id}`;
+                      return (
+                        <Checkbox
+                          key={`${id}-${emp.email ?? ""}`}
+                          isChecked={selectedEmployeeIds.includes(id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedEmployeeIds((prev) =>
+                              checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)
+                            );
+                          }}
+                        >
+                          {label}
+                        </Checkbox>
+                      );
+                    })}
+                  {employees.length === 0 && (
+                    <Text fontSize="sm" color={subtleText}>
+                      No hay empleados disponibles.
+                    </Text>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button colorScheme="green" onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
     </AppShell>
   );
 };

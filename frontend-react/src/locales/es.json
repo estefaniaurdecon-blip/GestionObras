@@ -607,7 +607,8 @@
     },
     "list": {
       "loading": "Cargando usuarios...",
-      "loadError": "No se han podido cargar los usuarios (comprueba permisos y token)."
+      "loadError": "No se han podido cargar los usuarios (comprueba permisos y token).",
+      "title": "Lista de usuarios"
     },
     "messages": {
       "inviteSuccessTitle": "Invitacion enviada",

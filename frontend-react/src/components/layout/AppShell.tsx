@@ -19,7 +19,10 @@ import {
   Text,
   VStack,
   useColorModeValue,
+  IconButton,
+  useColorMode,
 } from "@chakra-ui/react";
+import { MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
@@ -33,6 +36,7 @@ interface AppShellProps {
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const { t } = useTranslation();
+  const { colorMode, setColorMode } = useColorMode();
   const sidebarBg = useColorModeValue("white", "gray.900");
   const headerBg = useColorModeValue("white", "gray.900");
   const pageBg = useColorModeValue("gray.50", "gray.800");
@@ -259,6 +263,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </Box>
 
             <HStack spacing={4}>
+              <IconButton
+                aria-label="Toggle color mode"
+                icon={colorMode === "light" ? <MoonIcon /> : <SunIcon />}
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setColorMode(colorMode === "light" ? "dark" : "light")
+                }
+              />
               <NotificationsBell />
               <Menu>
                 <MenuButton>
