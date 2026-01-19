@@ -17,6 +17,13 @@ import {
   Tr,
   useToast,
   useColorModeValue,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,6 +75,7 @@ export const TenantSettingsPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Estado del formulario de alta de tenant.
   const [form, setForm] = useState<NewTenantFormState>({
@@ -221,71 +229,13 @@ export const TenantSettingsPage: React.FC = () => {
 
       {isSuperAdmin && (
         <>
-          <Box
-            as="form"
-            onSubmit={handleSubmit}
-            maxW="480px"
-            borderWidth="1px"
-            borderRadius="md"
-            p={6}
-            bg={cardBg}
-          >
-            <Stack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>{t("tenantSettings.fields.name")}</FormLabel>
-                <Input
-                  name="name"
-                  value={form.name}
-                  onChange={handleChange}
-                  placeholder={t("tenantSettings.placeholders.name")}
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>{t("tenantSettings.fields.subdomain")}</FormLabel>
-                <Input
-                  name="subdomain"
-                  value={form.subdomain}
-                  onChange={handleChange}
-                  placeholder={t("tenantSettings.placeholders.subdomain")}
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>{t("tenantSettings.fields.active")}</FormLabel>
-                <Switch
-                  name="is_active"
-                  isChecked={form.is_active}
-                  onChange={handleChange}
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>{t("tenantSettings.fields.adminEmail")}</FormLabel>
-                <Input
-                  name="admin_email"
-                  type="email"
-                  value={form.admin_email}
-                  onChange={handleChange}
-                  placeholder={t("tenantSettings.placeholders.adminEmail")}
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>{t("tenantSettings.fields.adminPassword")}</FormLabel>
-                <Input
-                  name="admin_password"
-                  type="password"
-                  value={form.admin_password}
-                  onChange={handleChange}
-                />
-              </FormControl>
-              <Button
-                type="submit"
-                colorScheme="blue"
-                isLoading={createTenantMutation.isPending}
-              >{t("tenantSettings.actions.create")}</Button>
+          <Box mt={2}>
+            <Stack direction={{ base: "column", md: "row" }} justify="space-between" align="center" mb={4}>
+              <Heading as="h3" size="sm">{t("tenantSettings.list.title")}</Heading>
+              <Button colorScheme="green" size="sm" onClick={() => setCreateModalOpen(true)}>
+                {t("tenantSettings.actions.create")}
+              </Button>
             </Stack>
-          </Box>
-
-          <Box mt={10}>
-            <Heading as="h3" size="sm" mb={4}>{t("tenantSettings.list.title")}</Heading>
 
             {isLoading && <Text>{t("tenantSettings.list.loading")}</Text>}
             {isError && (
@@ -330,6 +280,75 @@ export const TenantSettingsPage: React.FC = () => {
               </Box>
             )}
           </Box>
+
+          <Modal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} size="lg">
+            <ModalOverlay />
+            <ModalContent as="form" onSubmit={handleSubmit}>
+              <ModalHeader>{t("tenantSettings.actions.create")}</ModalHeader>
+              <ModalCloseButton />
+              <ModalBody>
+                <Stack spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.name")}</FormLabel>
+                    <Input
+                      name="name"
+                      value={form.name}
+                      onChange={handleChange}
+                      placeholder={t("tenantSettings.placeholders.name")}
+                    />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.subdomain")}</FormLabel>
+                    <Input
+                      name="subdomain"
+                      value={form.subdomain}
+                      onChange={handleChange}
+                      placeholder={t("tenantSettings.placeholders.subdomain")}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>{t("tenantSettings.fields.active")}</FormLabel>
+                    <Switch
+                      name="is_active"
+                      isChecked={form.is_active}
+                      onChange={handleChange}
+                    />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.adminEmail")}</FormLabel>
+                    <Input
+                      name="admin_email"
+                      type="email"
+                      value={form.admin_email}
+                      onChange={handleChange}
+                      placeholder={t("tenantSettings.placeholders.adminEmail")}
+                    />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.adminPassword")}</FormLabel>
+                    <Input
+                      name="admin_password"
+                      type="password"
+                      value={form.admin_password}
+                      onChange={handleChange}
+                    />
+                  </FormControl>
+                </Stack>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="ghost" mr={3} onClick={() => setCreateModalOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  colorScheme="green"
+                  type="submit"
+                  isLoading={createTenantMutation.isPending}
+                >
+                  {t("tenantSettings.actions.create")}
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
         </>
       )}
     </AppShell>
