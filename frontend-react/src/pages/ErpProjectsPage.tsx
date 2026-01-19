@@ -74,17 +74,21 @@ interface GanttTask {
   start: Date;
   end: Date;
   progress: number;
-  type: "task" | "milestone";
+  type: "task" | "milestone" | "project";
   status: Status;
   project?: string;
   projectId?: number;
   activityId?: number;
+  hasMilestones?: boolean;
+  milestoneDates?: Date[];
 }
 
 interface ProfessionalGanttProps {
   tasks: GanttTask[];
   viewMode?: ViewMode;
   centerOnToday?: boolean;
+  onProjectClick?: (projectId: number) => void;
+  showMilestoneLines?: boolean;
 }
 
 const toDateSafe = (value?: string | null): Date | null => {
@@ -106,6 +110,8 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   tasks,
   viewMode = "month",
   centerOnToday = false,
+  onProjectClick,
+  showMilestoneLines = true,
 }) => {
   // Colores dependientes de tema para la tabla y barras.
   const gridBg = useColorModeValue("gray.50", "gray.800");
@@ -186,6 +192,32 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
 
     return { left: `${left}%`, width: `${width}%` };
   };
+
+  // Posiciones verticales de hitos (porcentaje sobre el timeline) para dibujar líneas globales.
+  const milestoneLines = useMemo(() => {
+    if (!showMilestoneLines) return [];
+    const positions: number[] = [];
+    tasks.forEach((task) => {
+      if (task.type === "milestone") {
+        const pct =
+          ((task.start.getTime() - dateRange.start.getTime()) /
+            (dateRange.end.getTime() - dateRange.start.getTime())) *
+          100;
+        if (!Number.isNaN(pct)) positions.push(pct);
+      }
+      if (task.type === "project" && task.milestoneDates) {
+        task.milestoneDates.forEach((mDate) => {
+          const pct =
+            ((mDate.getTime() - dateRange.start.getTime()) /
+              (dateRange.end.getTime() - dateRange.start.getTime())) *
+            100;
+          if (!Number.isNaN(pct)) positions.push(pct);
+        });
+      }
+    });
+    // Dedup por redondeo.
+    return Array.from(new Set(positions.map((p) => Number(p.toFixed(3)))));
+  }, [tasks, dateRange, showMilestoneLines]);
 
   // Colores de barra según estado.
   const getStatusColor = (status: Status) => {
@@ -318,6 +350,28 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
         position="relative"
       >
         <Box position="relative" bg={rowBg} minW="1100px" ref={contentRef}>
+          {milestoneLines.length > 0 && (
+            <Box
+              position="absolute"
+              top={-260}
+              bottom={0}
+              left={`${leftColumnWidth}px`}
+              right={0}
+              pointerEvents="none"
+              zIndex={3}
+            >
+              {milestoneLines.map((pct, idx) => (
+                <Box
+                  key={`ms-line-${idx}-${pct}`}
+                  position="absolute"
+                  top={0}
+                  bottom={0}
+                  left={`${pct}%`}
+                  borderLeft="2px dashed red"
+                />
+              ))}
+            </Box>
+          )}
           {tasks.map((task, idx) => {
             const isMilestone = task.type === "milestone";
             const barPosition = getBarStyle(task);
@@ -339,6 +393,12 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
               _hover={{ bg: gridBg }}
               transition="background-color 0.15s ease"
               bg={idx % 2 === 0 ? rowBg : gridBg}
+              cursor={task.type === "project" ? "pointer" : "default"}
+              onClick={() => {
+                if (task.type === "project" && task.projectId && onProjectClick) {
+                  onProjectClick(task.projectId);
+                }
+              }}
             >
               <HStack
                 spacing={3}
@@ -348,6 +408,18 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                 borderRightWidth="1px"
                 borderColor={lineColor}
                 align="center"
+                role={task.type === "project" ? "button" : undefined}
+                cursor={task.type === "project" ? "pointer" : "default"}
+                onClick={() => {
+                  if (task.type === "project" && task.projectId && onProjectClick) {
+                    onProjectClick(task.projectId);
+                  }
+                }}
+                _hover={
+                  task.type === "project"
+                    ? { bg: gridBg, transition: "background 0.15s ease" }
+                    : undefined
+                }
               >
                 <Box flex="1" minW={0}>
                   <Text
@@ -362,6 +434,17 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                     <Tag size="sm" colorScheme={isMilestone ? "purple" : "gray"}>
                       {typeLabel}
                     </Tag>
+                    {task.type === "project" && task.hasMilestones && (
+                      <Box
+                        w="10px"
+                        h="10px"
+                        bg="purple.500"
+                        transform="rotate(45deg)"
+                        borderRadius="2px"
+                        boxShadow="sm"
+                        border="1px solid rgba(255,255,255,0.7)"
+                      />
+                    )}
                     {task.project && (
                       <Text fontSize="xs" color="gray.500" noOfLines={1}>
                         {task.project}
@@ -395,31 +478,16 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   openDelay={150}
                 >
                   {isMilestone ? (
-                    <>
-                      {/* Línea base del hito sobre toda la fila */}
-                      <Box
-                        position="absolute"
-                        top="50%"
-                        left="0"
-                        right="0"
-                        h="2px"
-                        bg={lineColor}
-                        opacity={0.7}
-                        transform="translateY(-50%)"
-                      />
-                      {/* Marcador del hito en la fecha exacta */}
-                      <Box
-                        position="absolute"
-                        top="50%"
-                        left={barPosition.left}
-                        w="12px"
-                        h="12px"
-                        bg={getStatusColor(task.status)}
-                        transform="translate(-50%, -50%) rotate(45deg)"
-                        borderRadius="2px"
-                        boxShadow="md"
-                      />
-                    </>
+                    <Box
+                      position="absolute"
+                      top={-260}
+                      bottom={0}
+                      left={barPosition.left}
+                      borderLeft="2px dashed red"
+                      transform="translateX(-50%)"
+                      pointerEvents="none"
+                      zIndex={2}
+                    />
                   ) : (
                     <Box
                       position="absolute"
@@ -471,13 +539,13 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
               right={0}
               pointerEvents="none"
             >
-              <Box position="absolute" top={0} bottom={0} left={`${todayLeftPx}px`} w="2px" bg="red.500">
+              <Box position="absolute" top={0} bottom={0} left={`${todayLeftPx}px`} w="2px" bg="green.600">
                 <Box
                   position="absolute"
                   top="-24px"
                   left="50%"
                   transform="translateX(-50%)"
-                  bg="red.500"
+                  bg="green.600"
                   color="white"
                   px={2}
                   py={1}
@@ -739,17 +807,23 @@ export const ErpProjectsPage: React.FC = () => {
       const progress = computeProgress(projectStart, projectEnd);
       const status: Status =
         now >= projectEnd ? "on-time" : now >= projectStart ? "planned" : "planned";
+      const projectMilestones = milestones.filter((m) => m.project_id === project.id);
+      const milestoneDates = projectMilestones
+        .map((m) => toDateSafe(m.due_date) ?? toDateSafe((m as any).end_date) ?? toDateSafe((m as any).start_date))
+        .filter((d): d is Date => Boolean(d));
       items.push({
         id: `project-${project.id}`,
         name: project.name,
         start: projectStart,
         end: projectEnd,
         progress,
-        type: "task",
+        type: "project",
         status,
         project: project.name,
         projectId: project.id,
         activityId: undefined,
+        hasMilestones: projectMilestones.length > 0,
+        milestoneDates,
       });
     });
 
@@ -862,73 +936,45 @@ export const ErpProjectsPage: React.FC = () => {
   const ganttProjects = projects;
 
   const ganttTasks: GanttTask[] = useMemo(() => {
-    const filtered =
-      selectedProjectId === "all"
-        ? ganttItems
-        : ganttItems.filter(
-            (item) => item.projectId && String(item.projectId) === selectedProjectId
-          );
-
-    // Para un proyecto específico, mantiene el orden jerárquico: proyecto > actividades > subactividades > hitos.
-    if (selectedProjectId !== "all") {
-      const projectIdNum = Number(selectedProjectId);
-      const projectRow = filtered.find((t) => t.id === `project-${projectIdNum}`);
-      const activityRows = filtered
-        .filter((t) => t.id.startsWith("activity-"))
+    // Vista general: solo proyectos, ordenados por fecha.
+    if (selectedProjectId === "all") {
+      return ganttItems
+        .filter((item) => item.type === "project")
         .sort((a, b) => a.start.getTime() - b.start.getTime());
-      const subRows = filtered
-        .filter((t) => t.id.startsWith("subactivity-"))
-        .sort((a, b) => a.start.getTime() - b.start.getTime());
-      const milestoneRows = filtered
-        .filter((t) => t.id.startsWith("milestone-"))
-        .sort((a, b) => a.start.getTime() - b.start.getTime());
-
-      const ordered: GanttTask[] = [];
-      if (projectRow) ordered.push(projectRow);
-      activityRows.forEach((act) => {
-        ordered.push(act);
-        subRows
-          .filter((sub) => sub.activityId === act.activityId || sub.activityId === act.id)
-          .forEach((sub) => ordered.push(sub));
-        milestoneRows
-          .filter((mil) => mil.activityId && (mil.activityId === act.activityId || mil.activityId === act.id))
-          .forEach((mil) => ordered.push(mil));
-      });
-      // Milestones sin actividad asociada
-      milestoneRows
-        .filter((mil) => !mil.activityId)
-        .forEach((mil) => ordered.push(mil));
-      return ordered;
     }
 
-    // En vista general, ordenar por tipo y fecha.
-    const order = { project: 0, activity: 1, subactivity: 2, milestone: 3, task: 4 };
-    return [...filtered].sort((a, b) => {
-      const aType =
-        a.id.startsWith("project-")
-          ? "project"
-          : a.id.startsWith("activity-")
-            ? "activity"
-            : a.id.startsWith("subactivity-")
-              ? "subactivity"
-              : a.id.startsWith("milestone-")
-                ? "milestone"
-                : "task";
-      const bType =
-        b.id.startsWith("project-")
-          ? "project"
-          : b.id.startsWith("activity-")
-            ? "activity"
-            : b.id.startsWith("subactivity-")
-              ? "subactivity"
-              : b.id.startsWith("milestone-")
-                ? "milestone"
-                : "task";
-      if (order[aType as keyof typeof order] !== order[bType as keyof typeof order]) {
-        return order[aType as keyof typeof order] - order[bType as keyof typeof order];
-      }
-      return a.start.getTime() - b.start.getTime();
+    // Vista del proyecto seleccionado: incluye actividades, subactividades e hitos.
+    const filtered = ganttItems.filter(
+      (item) => item.projectId && String(item.projectId) === selectedProjectId
+    );
+
+    const projectIdNum = Number(selectedProjectId);
+    const projectRow = filtered.find((t) => t.id === `project-${projectIdNum}`);
+    const activityRows = filtered
+      .filter((t) => t.id.startsWith("activity-"))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    const subRows = filtered
+      .filter((t) => t.id.startsWith("subactivity-"))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+    const milestoneRows = filtered
+      .filter((t) => t.id.startsWith("milestone-"))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const ordered: GanttTask[] = [];
+    if (projectRow) ordered.push(projectRow);
+    activityRows.forEach((act) => {
+      ordered.push(act);
+      subRows
+        .filter((sub) => sub.activityId === act.activityId || sub.activityId === act.id)
+        .forEach((sub) => ordered.push(sub));
+      milestoneRows
+        .filter((mil) => mil.activityId && (mil.activityId === act.activityId || mil.activityId === act.id))
+        .forEach((mil) => ordered.push(mil));
     });
+    milestoneRows
+      .filter((mil) => !mil.activityId)
+      .forEach((mil) => ordered.push(mil));
+    return ordered;
   }, [selectedProjectId, ganttItems]);
 
   const handleAddActivity = () => {
@@ -1412,7 +1458,13 @@ export const ErpProjectsPage: React.FC = () => {
                 </HStack>
               </HStack>
 
-              <ProfessionalGantt tasks={ganttTasks} viewMode="month" centerOnToday />
+              <ProfessionalGantt
+                tasks={ganttTasks}
+                viewMode="month"
+                centerOnToday
+                onProjectClick={(id) => setSelectedProjectId(String(id))}
+                showMilestoneLines={selectedProjectId !== "all"}
+              />
             </Stack>
           </TabPanel>
 
@@ -2122,3 +2174,10 @@ export const ErpProjectsPage: React.FC = () => {
 };
 
 export default ErpProjectsPage;
+
+
+
+
+
+
+
