@@ -83,3 +83,7 @@ export async function updateErpTask(
 ): Promise<void> {
   await apiClient.patch(`/api/v1/erp/tasks/${taskId}`, payload);
 }
+
+export async function deleteErpProject(projectId: number): Promise<void> {
+  await apiClient.delete(`/api/v1/erp/projects/${projectId}`);
+}

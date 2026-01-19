@@ -103,6 +103,15 @@ def update_project(session: Session, project_id: int, data: ProjectUpdate) -> Pr
     return project
 
 
+def delete_project(session: Session, project_id: int) -> None:
+    """Soft-delete de proyecto (is_active = False) para evitar problemas de FK."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+    project.is_active = False
+    session.add(project)
+    session.commit()
+
 def _resolve_assignee(session: Session, current_user: User, assigned_to_id: Optional[int]) -> Optional[User]:
     if assigned_to_id is None:
         return None

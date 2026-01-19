@@ -26,17 +26,19 @@ import {
   TabPanels,
   Tabs,
   Text,
+  Tooltip,
   Textarea,
   useColorModeValue,
   useToast,
   Switch,
+  Tag,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
 import { fetchErpProjects, type ErpProject as ErpProjectApi } from "../api/erpReports";
-import { createErpProject, updateErpProject } from "../api/erpManagement";
+import { createErpProject, deleteErpProject, updateErpProject } from "../api/erpManagement";
 import { fetchErpTasks, type ErpTask as ErpTaskApi } from "../api/erpTimeTracking";
 import {
   createActivity,
@@ -234,15 +236,9 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
       boxShadow="sm"
     >
       <Box minW="1100px">
-        <Flex
-          position="sticky"
-          top={0}
-          zIndex={2}
-          bg={headerBg}
-          borderBottomWidth="1px"
-        >
+        <Flex position="sticky" top={0} zIndex={2} bg={headerBg} borderBottomWidth="1px">
           <Box
-            w="260px"
+            w="300px"
             px={4}
             py={3}
             fontWeight="semibold"
@@ -250,7 +246,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
             color={headerTitleColor}
             borderRightWidth="1px"
           >
-            Tarea
+            Elemento / Proyecto / Fechas
           </Box>
           <Box flex="1" position="relative" h="64px">
             <Flex h="100%">
@@ -276,38 +272,36 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
         </Flex>
 
         <Box position="relative" bg={rowBg}>
-          {tasks.map((task) => (
+          {tasks.map((task, idx) => {
+            const isMilestone = task.type === "milestone";
+            const typeLabel =
+              task.id.startsWith("project-")
+                ? "Proyecto"
+                : task.id.startsWith("activity-")
+                  ? "Actividad"
+                  : task.id.startsWith("subactivity-")
+                    ? "Subactividad"
+                    : isMilestone
+                      ? "Hito"
+                      : "Tarea";
+            return (
             <Flex
               key={task.id}
               borderBottomWidth="1px"
               borderColor={lineColor}
               _hover={{ bg: gridBg }}
               transition="background-color 0.15s ease"
+              bg={idx % 2 === 0 ? rowBg : gridBg}
             >
               <HStack
                 spacing={3}
-                w="260px"
+                w="300px"
                 px={4}
                 py={3}
                 borderRightWidth="1px"
                 borderColor={lineColor}
                 align="center"
               >
-                <Box
-                  w="28px"
-                  h="28px"
-                  borderRadius="md"
-                  borderWidth="1px"
-                  borderColor={lineColor}
-                  display="grid"
-                  placeItems="center"
-                  bg={docBg}
-                  color={docColor}
-                  fontSize="xs"
-                  fontWeight="semibold"
-                >
-                  Doc
-                </Box>
                 <Box flex="1" minW={0}>
                   <Text
                     fontSize="sm"
@@ -317,11 +311,19 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   >
                     {task.name}
                   </Text>
-                  {task.project && (
-                    <Text fontSize="xs" color="gray.500" noOfLines={1}>
-                      {task.project}
-                    </Text>
-                  )}
+                  <HStack spacing={2} mt={1} align="center">
+                    <Tag size="sm" colorScheme={isMilestone ? "purple" : "gray"}>
+                      {typeLabel}
+                    </Tag>
+                    {task.project && (
+                      <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                        {task.project}
+                      </Text>
+                    )}
+                  </HStack>
+                  <Text fontSize="xs" color="gray.500">
+                    {task.start.toLocaleDateString("es-ES")} — {task.end.toLocaleDateString("es-ES")}
+                  </Text>
                 </Box>
               </HStack>
               <Box flex="1" position="relative" h="60px">
@@ -332,47 +334,62 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   bgSize={`${100 / timeColumns.length}% 100%`}
                   opacity={0.6}
                 />
-                <Box
-                  position="absolute"
-                  top="50%"
-                  transform="translateY(-50%)"
-                  h={task.type === "milestone" ? "20px" : "32px"}
-                  borderRadius={task.type === "milestone" ? "full" : "md"}
-                  bg={getStatusColor(task.status)}
-                  cursor="pointer"
-                  boxShadow="md"
-                  transition="all 0.15s ease"
-                  _hover={{ boxShadow: "lg", transform: "translateY(-50%) scale(1.02)" }}
-                  {...getBarStyle(task)}
+                <Tooltip
+                  label={`${task.name} · ${typeLabel}${
+                    task.project ? ` · ${task.project}` : ""
+                  }\n${task.start.toLocaleDateString("es-ES")} — ${task.end.toLocaleDateString("es-ES")}`}
+                  hasArrow
+                  bg="gray.800"
+                  color="white"
+                  fontSize="xs"
+                  borderRadius="md"
+                  p={2}
+                  whiteSpace="pre-line"
+                  openDelay={150}
                 >
-                  {task.type !== "milestone" && (
-                    <>
-                      <Box
-                        position="absolute"
-                        left={0}
-                        top={0}
-                        bottom={0}
-                        w={`${task.progress}%`}
-                        bg="rgba(255,255,255,0.35)"
-                        borderRadius="md"
-                      />
-                      <Flex
-                        position="absolute"
-                        inset={0}
-                        align="center"
-                        px={2}
-                        fontSize="xs"
-                        fontWeight="semibold"
-                        color="white"
-                      >
-                        {Math.round(task.progress)}%
-                      </Flex>
-                    </>
-                  )}
-                </Box>
+                  <Box
+                    position="absolute"
+                    top="50%"
+                    transform="translateY(-50%)"
+                    h={isMilestone ? "20px" : "32px"}
+                    borderRadius={isMilestone ? "full" : "md"}
+                    bg={getStatusColor(task.status)}
+                    cursor="pointer"
+                    boxShadow="md"
+                    transition="all 0.15s ease"
+                    _hover={{ boxShadow: "lg", transform: "translateY(-50%) scale(1.02)" }}
+                    {...getBarStyle(task)}
+                  >
+                    {!isMilestone && (
+                      <>
+                        <Box
+                          position="absolute"
+                          left={0}
+                          top={0}
+                          bottom={0}
+                          w={`${task.progress}%`}
+                          bg="rgba(255,255,255,0.35)"
+                          borderRadius="md"
+                        />
+                        <Flex
+                          position="absolute"
+                          inset={0}
+                          align="center"
+                          px={2}
+                          fontSize="xs"
+                          fontWeight="semibold"
+                          color="white"
+                        >
+                          {Math.round(task.progress)}%
+                        </Flex>
+                      </>
+                    )}
+                  </Box>
+                </Tooltip>
               </Box>
             </Flex>
-          ))}
+          );
+          })}
 
           {getTodayPosition() >= 0 && getTodayPosition() <= 100 && (
             <Box
@@ -906,6 +923,53 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
+  // Elimina proyecto seleccionado.
+  const deleteProjectMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedProject) {
+        throw new Error("No hay proyecto seleccionado");
+      }
+      return deleteErpProject(selectedProject.id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
+      setSelectedProject(null);
+      setDetailsOpen(false);
+      toast({ title: "Proyecto eliminado", status: "success" });
+    },
+    onError: async (error: any) => {
+      // Fallback: si el backend no permite DELETE (405), intenta desactivar el proyecto.
+      if (error?.response?.status === 405 && selectedProject) {
+        try {
+          await updateErpProject(selectedProject.id, { is_active: false });
+          await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
+          toast({
+            title: "Proyecto desactivado",
+            description: "El backend no permite eliminar; se marcó como inactivo.",
+            status: "info",
+          });
+          setSelectedProject(null);
+          setDetailsOpen(false);
+          return;
+        } catch (fallbackError: any) {
+          toast({
+            title: "Error al desactivar",
+            description:
+              fallbackError?.response?.data?.detail ??
+              "No se pudo desactivar el proyecto después del 405.",
+            status: "error",
+          });
+          return;
+        }
+      }
+      toast({
+        title: "Error al eliminar",
+        description: error?.response?.data?.detail ?? "No se pudo eliminar el proyecto.",
+        status: "error",
+      });
+    },
+  });
+
   const updateProjectMutation = useMutation({
     mutationFn: async () => {
       if (!selectedProject) {
@@ -952,6 +1016,14 @@ export const ErpProjectsPage: React.FC = () => {
       return;
     }
     updateProjectMutation.mutate();
+  };
+
+  const handleDeleteProject = () => {
+    if (!selectedProject) {
+      toast({ title: "Selecciona un proyecto", status: "warning" });
+      return;
+    }
+    deleteProjectMutation.mutate();
   };
 
   const handleUpdateActivity = (id: number) => {
@@ -1865,6 +1937,16 @@ export const ErpProjectsPage: React.FC = () => {
           <DrawerFooter borderTopWidth="1px">
             <Button variant="ghost" mr={3} onClick={closeProjectDetails}>
               Cerrar
+            </Button>
+            <Button
+              variant="outline"
+              colorScheme="red"
+              mr={3}
+              onClick={handleDeleteProject}
+              isLoading={deleteProjectMutation.isPending}
+              isDisabled={!selectedProject}
+            >
+              Eliminar proyecto
             </Button>
             <Button
               colorScheme="green"

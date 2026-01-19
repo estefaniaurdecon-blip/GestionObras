@@ -60,6 +60,7 @@ from app.services.erp_service import (
     update_activity,
     update_deliverable,
     update_milestone,
+    delete_project,
     update_task,
     update_project,
     update_subactivity,
@@ -108,6 +109,18 @@ def api_update_project(
 ) -> ProjectRead:
     try:
         return update_project(session, project_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_project(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> None:
+    try:
+        delete_project(session, project_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
