@@ -1,8 +1,16 @@
-import React, { useMemo, useState } from "react";
+// Vista principal de proyectos: creación, resumen, diagrama Gantt y edición detallada.
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
   Button,
+  Divider,
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
   Flex,
   FormControl,
   FormLabel,
@@ -18,15 +26,17 @@ import {
   TabPanels,
   Tabs,
   Text,
+  Textarea,
   useColorModeValue,
   useToast,
+  Switch,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
 import { fetchErpProjects, type ErpProject as ErpProjectApi } from "../api/erpReports";
-import { createErpProject } from "../api/erpManagement";
+import { createErpProject, updateErpProject } from "../api/erpManagement";
 import { fetchErpTasks, type ErpTask as ErpTaskApi } from "../api/erpTimeTracking";
 import {
   createActivity,
@@ -35,6 +45,9 @@ import {
   fetchActivities,
   fetchMilestones,
   fetchSubActivities,
+  updateActivity,
+  updateMilestone,
+  updateSubActivity,
   type ErpActivity,
   type ErpMilestone,
   type ErpSubActivity,
@@ -70,6 +83,9 @@ interface ProfessionalGanttProps {
   viewMode?: ViewMode;
 }
 
+// Normaliza fechas ISO (con tiempo) a formato yyyy-MM-dd para inputs type="date".
+const toDateInput = (value?: string | null) => (value ? value.split("T")[0] : "");
+
 // Helper simple para ids locales.
 const createId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -80,6 +96,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   tasks,
   viewMode = "month",
 }) => {
+  // Colores dependientes de tema para la tabla y barras.
   const gridBg = useColorModeValue("gray.50", "gray.800");
   const lineColor = useColorModeValue("gray.200", "gray.700");
   const headerBg = useColorModeValue("white", "gray.900");
@@ -91,6 +108,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   const docColor = useColorModeValue("gray.600", "gray.200");
   const headerTitleColor = useColorModeValue("gray.700", "gray.100");
 
+  // Calcula rango de fechas a mostrar según las tareas cargadas.
   const dateRange = useMemo(() => {
     if (tasks.length === 0) {
       const now = new Date();
@@ -116,6 +134,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { start: paddedStart, end: paddedEnd };
   }, [tasks, viewMode]);
 
+  // Genera columnas de tiempo (días o meses) para el encabezado.
   const timeColumns = useMemo(() => {
     const columns: Date[] = [];
     const current = new Date(dateRange.start);
@@ -139,6 +158,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     (dateRange.end.getTime() - dateRange.start.getTime()) /
     (1000 * 60 * 60 * 24);
 
+  // Posiciona y dimensiona cada barra en porcentaje.
   const getBarStyle = (task: GanttTask) => {
     const startOffset =
       (task.start.getTime() - dateRange.start.getTime()) /
@@ -152,6 +172,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { left: `${left}%`, width: `${width}%` };
   };
 
+  // Colores de barra según estado.
   const getStatusColor = (status: Status) => {
     switch (status) {
       case "on-time":
@@ -166,6 +187,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     }
   };
 
+  // Línea de hoy en el Gantt.
   const getTodayPosition = () => {
     const today = new Date();
     const offset =
@@ -386,8 +408,9 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   );
 };
 
-// Página principal de proyectos.
+// Página principal de proyectos: resumen, listado, Gantt, creación y edición detallada.
 export const ErpProjectsPage: React.FC = () => {
+  // Tokens de estilo y animación para la cabecera hero.
   const cardBg = useColorModeValue("white", "gray.700");
   const panelBg = useColorModeValue("gray.50", "gray.800");
   const subtleText = useColorModeValue("gray.600", "gray.300");
@@ -397,11 +420,13 @@ export const ErpProjectsPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
+  // Estado de navegación, filtros y utilidades.
   const [activeTab, setActiveTab] = useState(0);
   const [ganttView, setGanttView] = useState<ViewMode>("week");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const toast = useToast();
   const queryClient = useQueryClient();
+  // Formulario de creación de proyectos.
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStart, setProjectStart] = useState("");
@@ -425,7 +450,25 @@ export const ErpProjectsPage: React.FC = () => {
   const [projectMilestones, setProjectMilestones] = useState<
     Array<{ id: string; name: string; start: string; end: string }>
   >([]);
+  // Estado del drawer de detalle/edición.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<ErpProjectApi | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editActive, setEditActive] = useState(true);
+  const [activityEdits, setActivityEdits] = useState<
+    Record<number, { name: string; start: string; end: string; description: string }>
+  >({});
+  const [subactivityEdits, setSubactivityEdits] = useState<
+    Record<number, { name: string; start: string; end: string; description: string }>
+  >({});
+  const [milestoneEdits, setMilestoneEdits] = useState<
+    Record<number, { title: string; due: string; description: string }>
+  >({});
 
+  // Fetch básico: proyectos, tareas, actividades, subactividades e hitos.
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects"],
     queryFn: fetchErpProjects,
@@ -451,6 +494,17 @@ export const ErpProjectsPage: React.FC = () => {
     queryFn: () => fetchMilestones(),
   });
 
+  // Sincroniza el formulario de edición con el proyecto seleccionado.
+  useEffect(() => {
+    if (!selectedProject) return;
+    setEditName(selectedProject.name ?? "");
+    setEditDescription(selectedProject.description ?? "");
+    setEditStart(toDateInput(selectedProject.start_date));
+    setEditEnd(toDateInput(selectedProject.end_date));
+    setEditActive(selectedProject.is_active ?? true);
+  }, [selectedProject]);
+
+  // Normaliza tareas para calcular progreso y alimentar métricas.
   const tasks: ErpTask[] = useMemo(
     () => {
       const now = new Date();
@@ -493,6 +547,63 @@ export const ErpProjectsPage: React.FC = () => {
   const completedTasks = rawTasks.filter(
     (task) => task.is_completed || task.status === "done" || task.status === "completed"
   ).length;
+  // Filtra elementos asociados al proyecto seleccionado para el drawer.
+  const selectedProjectActivities = useMemo(
+    () => (selectedProject ? activities.filter((act) => act.project_id === selectedProject.id) : []),
+    [selectedProject, activities]
+  );
+  const selectedProjectMilestones = useMemo(
+    () => (selectedProject ? milestones.filter((mil) => mil.project_id === selectedProject.id) : []),
+    [selectedProject, milestones]
+  );
+  const selectedProjectTasks = useMemo(
+    () => (selectedProject ? rawTasks.filter((task) => task.project_id === selectedProject.id) : []),
+    [selectedProject, rawTasks]
+  );
+  const selectedProjectSubactivities = useMemo(() => {
+    if (!selectedProject) return [];
+    const activityIds = new Set(selectedProjectActivities.map((a) => a.id));
+    return subactivities.filter((sub) => activityIds.has(sub.activity_id));
+  }, [selectedProject, selectedProjectActivities, subactivities]);
+
+  // Prepara formularios locales para actividades, subactividades e hitos del proyecto.
+  useEffect(() => {
+    if (!selectedProject) return;
+    const nextActivities: Record<number, { name: string; start: string; end: string; description: string }> = {};
+    selectedProjectActivities.forEach((act) => {
+      nextActivities[act.id] = {
+        name: act.name ?? "",
+        start: toDateInput(act.start_date),
+        end: toDateInput(act.end_date),
+        description: act.description ?? "",
+      };
+    });
+    setActivityEdits(nextActivities);
+
+    const nextSubactivities: Record<
+      number,
+      { name: string; start: string; end: string; description: string }
+    > = {};
+    selectedProjectSubactivities.forEach((sub) => {
+      nextSubactivities[sub.id] = {
+        name: sub.name ?? "",
+        start: toDateInput(sub.start_date),
+        end: toDateInput(sub.end_date),
+        description: sub.description ?? "",
+      };
+    });
+    setSubactivityEdits(nextSubactivities);
+
+    const nextMilestones: Record<number, { title: string; due: string; description: string }> = {};
+    selectedProjectMilestones.forEach((mil) => {
+      nextMilestones[mil.id] = {
+        title: mil.title ?? "",
+        due: toDateInput(mil.due_date),
+        description: mil.description ?? "",
+      };
+    });
+    setMilestoneEdits(nextMilestones);
+  }, [selectedProject, selectedProjectActivities, selectedProjectSubactivities, selectedProjectMilestones]);
 
   const projectNameMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -521,6 +632,7 @@ export const ErpProjectsPage: React.FC = () => {
     return Math.round(ratio * 100);
   };
 
+  // Construye la colección de ítems de Gantt (proyectos, actividades, subactividades, hitos).
   const ganttItems: GanttTask[] = useMemo(() => {
     const items: GanttTask[] = [];
     const now = new Date();
@@ -663,6 +775,17 @@ export const ErpProjectsPage: React.FC = () => {
     ]);
   };
 
+  const openProjectDetails = (project: ErpProjectApi) => {
+    setSelectedProject(project);
+    setDetailsOpen(true);
+  };
+
+  const closeProjectDetails = () => {
+    setDetailsOpen(false);
+    setSelectedProject(null);
+  };
+
+  // Crea proyecto con actividades/subactividades/hitos anidados.
   const createProjectMutation = useMutation({
     mutationFn: async () => {
       const project = await createErpProject({
@@ -734,12 +857,142 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
+  // Mutaciones de edición en cascada para actividad, subactividad e hito.
+  const updateActivityMutation = useMutation({
+    mutationFn: async (input: { id: number; payload: Parameters<typeof updateActivity>[1] }) =>
+      updateActivity(input.id, input.payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["erp-activities"] });
+      toast({ title: "Actividad actualizada", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al actualizar actividad",
+        description: error?.response?.data?.detail ?? "No se pudo actualizar la actividad.",
+        status: "error",
+      });
+    },
+  });
+
+  const updateSubActivityMutation = useMutation({
+    mutationFn: async (input: { id: number; payload: Parameters<typeof updateSubActivity>[1] }) =>
+      updateSubActivity(input.id, input.payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["erp-subactivities"] });
+      toast({ title: "Subactividad actualizada", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al actualizar subactividad",
+        description: error?.response?.data?.detail ?? "No se pudo actualizar la subactividad.",
+        status: "error",
+      });
+    },
+  });
+
+  const updateMilestoneMutation = useMutation({
+    mutationFn: async (input: { id: number; payload: Parameters<typeof updateMilestone>[1] }) =>
+      updateMilestone(input.id, input.payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["erp-milestones"] });
+      toast({ title: "Hito actualizado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al actualizar hito",
+        description: error?.response?.data?.detail ?? "No se pudo actualizar el hito.",
+        status: "error",
+      });
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedProject) {
+        throw new Error("No hay proyecto seleccionado");
+      }
+      return updateErpProject(selectedProject.id, {
+        name: editName.trim(),
+        description: editDescription.trim() || null,
+        start_date: editStart || null,
+        end_date: editEnd || null,
+        is_active: editActive,
+      });
+    },
+    onSuccess: async (project) => {
+      setSelectedProject(project);
+      await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
+      toast({ title: "Proyecto actualizado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al actualizar",
+        description: error?.response?.data?.detail ?? "No se pudo actualizar el proyecto.",
+        status: "error",
+      });
+    },
+  });
+
   const handleSaveProject = () => {
     if (!projectName.trim()) {
       toast({ title: "Nombre requerido", status: "warning" });
       return;
     }
     createProjectMutation.mutate();
+  };
+
+  // Guarda edición del proyecto actual.
+  const handleUpdateProject = () => {
+    if (!selectedProject) {
+      toast({ title: "Selecciona un proyecto", status: "warning" });
+      return;
+    }
+    if (!editName.trim()) {
+      toast({ title: "Nombre requerido", status: "warning" });
+      return;
+    }
+    updateProjectMutation.mutate();
+  };
+
+  const handleUpdateActivity = (id: number) => {
+    const form = activityEdits[id];
+    if (!form) return;
+    updateActivityMutation.mutate({
+      id,
+      payload: {
+        name: form.name.trim() || "Actividad",
+        description: form.description.trim() || null,
+        start_date: form.start || null,
+        end_date: form.end || null,
+      },
+    });
+  };
+
+  const handleUpdateSubactivity = (id: number) => {
+    const form = subactivityEdits[id];
+    if (!form) return;
+    updateSubActivityMutation.mutate({
+      id,
+      payload: {
+        name: form.name.trim() || "Subactividad",
+        description: form.description.trim() || null,
+        start_date: form.start || null,
+        end_date: form.end || null,
+      },
+    });
+  };
+
+  const handleUpdateMilestone = (id: number) => {
+    const form = milestoneEdits[id];
+    if (!form) return;
+    updateMilestoneMutation.mutate({
+      id,
+      payload: {
+        title: form.title.trim() || "Hito",
+        description: form.description.trim() || null,
+        due_date: form.due || null,
+      },
+    });
   };
 
   const heroItems = [
@@ -751,6 +1004,7 @@ export const ErpProjectsPage: React.FC = () => {
     },
   ];
 
+  // Render principal.
   return (
     <AppShell>
       <Box
@@ -792,6 +1046,7 @@ export const ErpProjectsPage: React.FC = () => {
         </Stack>
       </Box>
 
+      {/* Navegación por pestañas: resumen, tarjetas, Gantt y creación */}
       <Tabs variant="line" colorScheme="green" isLazy index={activeTab} onChange={setActiveTab}>
           <TabList borderBottomWidth="1px">
             <Tab>Resumen</Tab>
@@ -800,6 +1055,7 @@ export const ErpProjectsPage: React.FC = () => {
             <Tab>Crear</Tab>
           </TabList>
           <TabPanels mt={4}>
+          {/* Resumen rápido de proyectos en tarjetas simples */}
           <TabPanel px={0}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               {projects.map((project) => (
@@ -821,24 +1077,49 @@ export const ErpProjectsPage: React.FC = () => {
             </SimpleGrid>
           </TabPanel>
 
+          {/* Listado detallado por proyecto con botón de edición */}
           <TabPanel px={0}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               {projects.map((project) => (
                 <Box key={project.id} borderWidth="1px" borderRadius="lg" p={4} bg={cardBg}>
-                  <Heading size="sm" mb={1}>
-                    {project.name}
-                  </Heading>
-                  <Text fontSize="sm" color={subtleText} mb={2}>
-                    {project.description}
+                  <Flex justify="space-between" align="flex-start" mb={2}>
+                    <Heading size="sm">{project.name}</Heading>
+                    <Badge colorScheme={project.is_active === false ? "red" : "green"}>
+                      {project.is_active === false ? "Inactivo" : "Activo"}
+                    </Badge>
+                  </Flex>
+                  <Text fontSize="sm" color={subtleText} mb={3}>
+                    {project.description || "Sin descripcion"}
                   </Text>
-                  <Text fontSize="xs" color={subtleText}>
-                    {project.start_date} — {project.end_date}
-                  </Text>
+                  <Stack fontSize="xs" color={subtleText} spacing={1} mb={3}>
+                    <HStack spacing={2}>
+                      <Badge colorScheme="gray">Fechas</Badge>
+                      <Text>
+                        {project.start_date || "Sin inicio"} — {project.end_date || "Sin fin"}
+                      </Text>
+                    </HStack>
+                    <HStack spacing={2}>
+                      <Badge colorScheme="gray">Actividades</Badge>
+                      <Text>{activities.filter((a) => a.project_id === project.id).length}</Text>
+                    </HStack>
+                    <HStack spacing={2}>
+                      <Badge colorScheme="gray">Hitos</Badge>
+                      <Text>{milestones.filter((m) => m.project_id === project.id).length}</Text>
+                    </HStack>
+                    <HStack spacing={2}>
+                      <Badge colorScheme="gray">Tareas</Badge>
+                      <Text>{rawTasks.filter((t) => t.project_id === project.id).length}</Text>
+                    </HStack>
+                  </Stack>
+                  <Button size="sm" colorScheme="green" onClick={() => openProjectDetails(project)}>
+                    Ver detalle y editar
+                  </Button>
                 </Box>
               ))}
             </SimpleGrid>
           </TabPanel>
 
+          {/* Diagrama Gantt filtrable y con selector de vista */}
           <TabPanel px={0}>
             <Stack spacing={4}>
               <HStack spacing={3} align="flex-end" flexWrap="wrap">
@@ -905,6 +1186,7 @@ export const ErpProjectsPage: React.FC = () => {
             </Stack>
           </TabPanel>
 
+          {/* Alta de proyecto con actividades, subactividades e hitos locales */}
           <TabPanel px={0}>
             <Stack spacing={4}>
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -1208,6 +1490,393 @@ export const ErpProjectsPage: React.FC = () => {
           </TabPanel>
         </TabPanels>
       </Tabs>
+      {/* Drawer de detalle/edición del proyecto seleccionado */}
+      <Drawer isOpen={detailsOpen} placement="right" onClose={closeProjectDetails} size="xl">
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerHeader borderBottomWidth="1px">
+            {selectedProject ? `Proyecto: ${selectedProject.name}` : "Proyecto"}
+          </DrawerHeader>
+          <DrawerBody>
+            {selectedProject ? (
+              <Stack spacing={4}>
+                <Stack spacing={1} fontSize="sm" color={subtleText}>
+                  <Text>ID: {selectedProject.id}</Text>
+                  {selectedProject.created_at && <Text>Creado: {selectedProject.created_at}</Text>}
+                </Stack>
+
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                  <Box borderWidth="1px" borderRadius="md" p={3}>
+                    <Text fontSize="xs" color={subtleText}>
+                      Inicio
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {selectedProject.start_date || "Sin inicio"}
+                    </Text>
+                  </Box>
+                  <Box borderWidth="1px" borderRadius="md" p={3}>
+                    <Text fontSize="xs" color={subtleText}>
+                      Fin
+                    </Text>
+                    <Text fontWeight="semibold">{selectedProject.end_date || "Sin fin"}</Text>
+                  </Box>
+                  <Box borderWidth="1px" borderRadius="md" p={3}>
+                    <Text fontSize="xs" color={subtleText}>
+                      Actividades
+                    </Text>
+                    <Text fontWeight="semibold">{selectedProjectActivities.length}</Text>
+                  </Box>
+                  <Box borderWidth="1px" borderRadius="md" p={3}>
+                    <Text fontSize="xs" color={subtleText}>
+                      Hitos
+                    </Text>
+                    <Text fontWeight="semibold">{selectedProjectMilestones.length}</Text>
+                  </Box>
+                </SimpleGrid>
+
+                <Divider />
+
+                <Heading size="sm">Editar datos</Heading>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                  <FormControl isRequired>
+                    <FormLabel>Nombre</FormLabel>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Activo</FormLabel>
+                    <Switch
+                      isChecked={editActive}
+                      onChange={(e) => setEditActive(e.target.checked)}
+                      colorScheme="green"
+                    />
+                  </FormControl>
+                  <FormControl gridColumn={{ base: "auto", md: "1 / -1" }}>
+                    <FormLabel>Descripcion</FormLabel>
+                    <Textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      rows={3}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Inicio</FormLabel>
+                    <Input
+                      type="date"
+                      value={editStart}
+                      onChange={(e) => setEditStart(e.target.value)}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Fin</FormLabel>
+                    <Input
+                      type="date"
+                      value={editEnd}
+                      onChange={(e) => setEditEnd(e.target.value)}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+
+                <Divider />
+
+                <Heading size="sm">Actividades</Heading>
+                <Stack spacing={3}>
+                  {selectedProjectActivities.length === 0 ? (
+                    <Text fontSize="sm" color={subtleText}>
+                      Sin actividades vinculadas.
+                    </Text>
+                  ) : (
+                    selectedProjectActivities.map((act) => {
+                      const form = activityEdits[act.id] || {
+                        name: "",
+                        start: "",
+                        end: "",
+                        description: "",
+                      };
+                      return (
+                        <Box key={act.id} borderWidth="1px" borderRadius="md" p={3}>
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Nombre</FormLabel>
+                              <Input
+                                value={form.name}
+                                onChange={(e) =>
+                                  setActivityEdits((prev) => ({
+                                    ...prev,
+                                    [act.id]: { ...form, name: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Descripcion</FormLabel>
+                              <Input
+                                value={form.description}
+                                onChange={(e) =>
+                                  setActivityEdits((prev) => ({
+                                    ...prev,
+                                    [act.id]: { ...form, description: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Inicio</FormLabel>
+                              <Input
+                                type="date"
+                                value={form.start}
+                                onChange={(e) =>
+                                  setActivityEdits((prev) => ({
+                                    ...prev,
+                                    [act.id]: { ...form, start: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Fin</FormLabel>
+                              <Input
+                                type="date"
+                                value={form.end}
+                                onChange={(e) =>
+                                  setActivityEdits((prev) => ({
+                                    ...prev,
+                                    [act.id]: { ...form, end: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                          </SimpleGrid>
+                          <HStack justify="space-between">
+                            <Text fontSize="xs" color={subtleText}>
+                              Subactividades:{" "}
+                              {selectedProjectSubactivities.filter(
+                                (sub) => sub.activity_id === act.id
+                              ).length}
+                            </Text>
+                            <Button
+                              size="sm"
+                              colorScheme="green"
+                              onClick={() => handleUpdateActivity(act.id)}
+                              isLoading={updateActivityMutation.isPending}
+                            >
+                              Guardar actividad
+                            </Button>
+                          </HStack>
+                        </Box>
+                      );
+                    })
+                  )}
+                </Stack>
+
+                <Heading size="sm">Subactividades</Heading>
+                <Stack spacing={3}>
+                  {selectedProjectSubactivities.length === 0 ? (
+                    <Text fontSize="sm" color={subtleText}>
+                      Sin subactividades.
+                    </Text>
+                  ) : (
+                    selectedProjectSubactivities.map((sub) => {
+                      const form = subactivityEdits[sub.id] || {
+                        name: "",
+                        start: "",
+                        end: "",
+                        description: "",
+                      };
+                      const parentActivity = selectedProjectActivities.find(
+                        (act) => act.id === sub.activity_id
+                      );
+                      return (
+                        <Box key={sub.id} borderWidth="1px" borderRadius="md" p={3}>
+                          <Text fontSize="xs" color={subtleText} mb={1}>
+                            Actividad: {parentActivity?.name ?? "-"}
+                          </Text>
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Nombre</FormLabel>
+                              <Input
+                                value={form.name}
+                                onChange={(e) =>
+                                  setSubactivityEdits((prev) => ({
+                                    ...prev,
+                                    [sub.id]: { ...form, name: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Descripcion</FormLabel>
+                              <Input
+                                value={form.description}
+                                onChange={(e) =>
+                                  setSubactivityEdits((prev) => ({
+                                    ...prev,
+                                    [sub.id]: { ...form, description: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Inicio</FormLabel>
+                              <Input
+                                type="date"
+                                value={form.start}
+                                onChange={(e) =>
+                                  setSubactivityEdits((prev) => ({
+                                    ...prev,
+                                    [sub.id]: { ...form, start: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Fin</FormLabel>
+                              <Input
+                                type="date"
+                                value={form.end}
+                                onChange={(e) =>
+                                  setSubactivityEdits((prev) => ({
+                                    ...prev,
+                                    [sub.id]: { ...form, end: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                          </SimpleGrid>
+                          <Flex justify="flex-end">
+                            <Button
+                              size="sm"
+                              colorScheme="green"
+                              onClick={() => handleUpdateSubactivity(sub.id)}
+                              isLoading={updateSubActivityMutation.isPending}
+                            >
+                              Guardar subactividad
+                            </Button>
+                          </Flex>
+                        </Box>
+                      );
+                    })
+                  )}
+                </Stack>
+
+                <Heading size="sm">Hitos</Heading>
+                <Stack spacing={3}>
+                  {selectedProjectMilestones.length === 0 ? (
+                    <Text fontSize="sm" color={subtleText}>
+                      Sin hitos.
+                    </Text>
+                  ) : (
+                    selectedProjectMilestones.map((milestone) => {
+                      const form = milestoneEdits[milestone.id] || {
+                        title: "",
+                        due: "",
+                        description: "",
+                      };
+                      return (
+                        <Box key={milestone.id} borderWidth="1px" borderRadius="md" p={3}>
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Titulo</FormLabel>
+                              <Input
+                                value={form.title}
+                                onChange={(e) =>
+                                  setMilestoneEdits((prev) => ({
+                                    ...prev,
+                                    [milestone.id]: { ...form, title: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Descripcion</FormLabel>
+                              <Input
+                                value={form.description}
+                                onChange={(e) =>
+                                  setMilestoneEdits((prev) => ({
+                                    ...prev,
+                                    [milestone.id]: { ...form, description: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                            <FormControl>
+                              <FormLabel fontSize="xs">Fecha</FormLabel>
+                              <Input
+                                type="date"
+                                value={form.due}
+                                onChange={(e) =>
+                                  setMilestoneEdits((prev) => ({
+                                    ...prev,
+                                    [milestone.id]: { ...form, due: e.target.value },
+                                  }))
+                                }
+                              />
+                            </FormControl>
+                          </SimpleGrid>
+                          <Flex justify="flex-end">
+                            <Button
+                              size="sm"
+                              colorScheme="green"
+                              onClick={() => handleUpdateMilestone(milestone.id)}
+                              isLoading={updateMilestoneMutation.isPending}
+                            >
+                              Guardar hito
+                            </Button>
+                          </Flex>
+                        </Box>
+                      );
+                    })
+                  )}
+                </Stack>
+
+                <Heading size="sm">Tareas</Heading>
+                <Stack spacing={3}>
+                  {selectedProjectTasks.length === 0 ? (
+                    <Text fontSize="sm" color={subtleText}>
+                      Sin tareas.
+                    </Text>
+                  ) : (
+                    selectedProjectTasks.map((task) => (
+                      <Box key={task.id} borderWidth="1px" borderRadius="md" p={3}>
+                        <Flex justify="space-between" align="center" mb={1}>
+                          <Text fontWeight="semibold">{task.title}</Text>
+                          <Badge colorScheme={task.is_completed ? "green" : "yellow"}>
+                            {task.status || (task.is_completed ? "completed" : "pendiente")}
+                          </Badge>
+                        </Flex>
+                        <Text fontSize="xs" color={subtleText}>
+                          {task.start_date || "Sin inicio"} — {task.end_date || "Sin fin"}
+                        </Text>
+                        {task.description && (
+                          <Text mt={1} fontSize="xs" color={subtleText}>
+                            {task.description}
+                          </Text>
+                        )}
+                      </Box>
+                    ))
+                  )}
+                </Stack>
+              </Stack>
+            ) : (
+              <Text fontSize="sm" color={subtleText}>
+                Selecciona un proyecto para ver los detalles.
+              </Text>
+            )}
+          </DrawerBody>
+          <DrawerFooter borderTopWidth="1px">
+            <Button variant="ghost" mr={3} onClick={closeProjectDetails}>
+              Cerrar
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={handleUpdateProject}
+              isLoading={updateProjectMutation.isPending}
+              isDisabled={!selectedProject}
+            >
+              Guardar cambios
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </AppShell>
   );
 };
