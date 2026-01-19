@@ -52,6 +52,7 @@ class Activity(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="erp_project.id")
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -64,6 +65,7 @@ class SubActivity(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     activity_id: int = Field(foreign_key="erp_activity.id")
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -105,7 +107,9 @@ class TimeEntry(SQLModel, table=True):
     __tablename__ = "erp_timeentry"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    task_id: int = Field(foreign_key="erp_task.id")
+    task_id: Optional[int] = Field(default=None, foreign_key="erp_task.id")
+    activity_id: Optional[int] = Field(default=None, foreign_key="erp_activity.id")
+    subactivity_id: Optional[int] = Field(default=None, foreign_key="erp_subactivity.id")
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     time_session_id: Optional[int] = Field(default=None, foreign_key="erp_timesession.id")
     hours: Decimal = Field(sa_column=Column(Numeric(6, 2)))
@@ -117,7 +121,9 @@ class TimeSession(SQLModel, table=True):
     __tablename__ = "erp_timesession"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    task_id: int = Field(foreign_key="erp_task.id")
+    task_id: Optional[int] = Field(default=None, foreign_key="erp_task.id")
+    activity_id: Optional[int] = Field(default=None, foreign_key="erp_activity.id")
+    subactivity_id: Optional[int] = Field(default=None, foreign_key="erp_subactivity.id")
     user_id: int = Field(foreign_key="user.id")
     description: Optional[str] = None
     started_at: datetime

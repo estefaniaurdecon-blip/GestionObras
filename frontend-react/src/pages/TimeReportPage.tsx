@@ -1,12 +1,20 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Box,
   Badge,
   Button,
+  Checkbox,
   FormControl,
   FormLabel,
   Heading,
   Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Select,
   SimpleGrid,
   Table,
@@ -19,9 +27,11 @@ import {
   useColorModeValue,
   useToast,
   Stack,
+  HStack,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   ErpProject,
@@ -29,7 +39,9 @@ import {
   fetchTimeReport,
   TimeReportRow,
 } from "../api/erpReports";
+import { fetchEmployees, type EmployeeProfile } from "../api/hr";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 
 export const TimeReportPage: React.FC = () => {
   const toast = useToast();
@@ -52,8 +64,19 @@ export const TimeReportPage: React.FC = () => {
   const [dateTo, setDateTo] = useState("");
 
   const [rows, setRows] = useState<TimeReportRow[]>([]);
-  const [userFilter, setUserFilter] = useState("");
+  const [resultsSearch, setResultsSearch] = useState("");
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
+  const { data: currentUser } = useCurrentUser();
+  const tenantId = currentUser?.tenant_id ?? undefined;
+
+  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery<EmployeeProfile[]>({
+    queryKey: ["hr-employees", tenantId ?? "all"],
+    queryFn: () => fetchEmployees(tenantId),
+  });
 
   const loadProjectsIfNeeded = async () => {
     if (projects.length > 0 || isLoadingProjects) return;
@@ -82,6 +105,7 @@ export const TimeReportPage: React.FC = () => {
         projectId: selectedProjectId,
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
+        userIds: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : null,
       });
       setRows(data);
     } catch (error: any) {
@@ -97,10 +121,18 @@ export const TimeReportPage: React.FC = () => {
     }
   };
 
-  const normalizedFilter = userFilter.trim().toLowerCase();
+  const normalizedFilter = resultsSearch.trim().toLowerCase();
+  const employeeIdSet = useMemo(
+    () => new Set(selectedEmployeeIds),
+    [selectedEmployeeIds]
+  );
+
   const filteredRows = rows.filter((row) => {
+    if (selectedEmployeeIds.length > 0) {
+      if (!row.user_id || !employeeIdSet.has(row.user_id)) return false;
+    }
     if (!normalizedFilter) return true;
-    const haystack = `${row.username ?? ""}`.toLowerCase();
+    const haystack = `${row.project_name ?? ""} ${row.task_title ?? ""} ${row.username ?? ""}`.toLowerCase();
     return haystack.includes(normalizedFilter);
   });
 
@@ -108,6 +140,11 @@ export const TimeReportPage: React.FC = () => {
     (acc, row) => acc + Number(row.total_hours),
     0,
   );
+  const totalCost = filteredRows.reduce((acc, row) => {
+    const rate = Number(row.hourly_rate ?? 0);
+    const hours = Number(row.total_hours ?? 0);
+    return acc + rate * hours;
+  }, 0);
   const reportCount = filteredRows.length;
 
   const handleExportCsv = () => {
@@ -237,11 +274,55 @@ export const TimeReportPage: React.FC = () => {
             </FormControl>
             <FormControl>
               <FormLabel>{t("timeReport.filters.userContains")}</FormLabel>
-              <Input
-                placeholder={t("timeReport.filters.userPlaceholder")}
-                value={userFilter}
-                onChange={(e) => setUserFilter(e.target.value)}
-              />
+              <HStack spacing={2} align="center">
+                <Button
+                  variant="outline"
+                  colorScheme="green"
+                  onClick={() => setEmployeeModalOpen(true)}
+                  size="sm"
+                  minW={{ base: "100%", md: "200px" }}
+                  isLoading={isLoadingEmployees}
+                >
+                  Seleccionar empleados
+                  {selectedEmployeeIds.length > 0 && (
+                    <Badge ml={2} colorScheme="green">
+                      {selectedEmployeeIds.length}
+                    </Badge>
+                  )}
+                </Button>
+                {selectedEmployeeIds.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedEmployeeIds([])}
+                  >
+                    Quitar selección
+                  </Button>
+                )}
+              </HStack>
+              {selectedEmployeeIds.length > 0 && (
+                <Stack direction="row" spacing={2} mt={2} flexWrap="wrap">
+                  {selectedEmployeeIds.map((id) => {
+                    const emp = employees.find((e) => (e.user_id ?? e.id) === id);
+                    const label = emp?.full_name || emp?.email || `#${id}`;
+                    return (
+                      <Badge
+                        key={id}
+                        colorScheme="green"
+                        borderRadius="full"
+                        px={2}
+                        py={1}
+                        cursor="pointer"
+                        onClick={() =>
+                          setSelectedEmployeeIds((prev) => prev.filter((x) => x !== id))
+                        }
+                      >
+                        {label} ✕
+                      </Badge>
+                    );
+                  })}
+                </Stack>
+              )}
             </FormControl>
           </SimpleGrid>
           <Box display="flex" justifyContent="flex-end" gap={2}>
@@ -269,31 +350,40 @@ export const TimeReportPage: React.FC = () => {
           <Heading size="md">{reportCount}</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
-          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>{t("timeReport.stats.status")}</Text>
-          <Badge mt={2} colorScheme={reportCount > 0 ? "green" : "gray"}>
-            {reportCount > 0
-              ? t("timeReport.stats.statusReady")
-              : t("timeReport.stats.statusEmpty")}
-          </Badge>
+          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>Coste estimado</Text>
+          <Heading size="md">{totalCost.toFixed(2)} €</Heading>
         </Box>
       </SimpleGrid>
 
+      <Box mb={3}>
+        <FormControl maxW={{ base: "100%", md: "320px" }}>
+          <FormLabel fontSize="sm" color={subtleText}>Buscar en resultados</FormLabel>
+          <Input
+            size="sm"
+            placeholder="Proyecto, tarea o usuario"
+            value={resultsSearch}
+            onChange={(e) => setResultsSearch(e.target.value)}
+          />
+        </FormControl>
+      </Box>
+
       <Box
-        borderWidth="1px"
-        borderRadius="xl"
-        bg={cardBg}
-        overflowX="auto"
+          borderWidth="1px"
+          borderRadius="xl"
+          bg={cardBg}
+          overflowX="auto"
         overflowY="hidden"
         borderColor={accent}
-      >
-        <Table size="sm" minW="760px">
-          <Thead bg={tableHeadBg}>
+        >
+          <Table size="sm" minW="760px">
+          <Thead bg={tableHeadBg} position="sticky" top={0} zIndex={1}>
             <Tr>
               <Th>{t("timeReport.filters.project")}</Th>
               <Th>{t("timeReport.table.task")}</Th>
               <Th>{t("timeReport.table.user")}</Th>
               <Th isNumeric>{t("timeReport.table.rate")}</Th>
               <Th isNumeric>{t("timeReport.table.hours")}</Th>
+              <Th isNumeric>Coste</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -304,20 +394,146 @@ export const TimeReportPage: React.FC = () => {
                   </Text>
                 </Td>
               </Tr>
-            ) : (
-              filteredRows.map((row, index) => (
-                <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
-                  <Td>{row.project_name}</Td>
-                  <Td>{row.task_title}</Td>
-                  <Td>{row.username ?? t("timeReport.table.unassignedUser")}</Td>
-                  <Td isNumeric>{row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "-"}</Td>
-                  <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
-                </Tr>
-              ))
-            )}
+              ) : (
+                filteredRows.map((row, index) => (
+                  <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
+                    <Td>{row.project_name}</Td>
+                    <Td>{row.task_title}</Td>
+                    <Td>{row.username ?? t("timeReport.table.unassignedUser")}</Td>
+                    <Td isNumeric>{Number(row.hourly_rate ?? 0).toFixed(2)}</Td>
+                    <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
+                    <Td isNumeric>
+                      {(Number(row.hourly_rate ?? 0) * Number(row.total_hours ?? 0)).toFixed(2)}
+                    </Td>
+                  </Tr>
+                ))
+              )}
           </Tbody>
         </Table>
       </Box>
+
+      <Modal isOpen={employeeModalOpen} onClose={() => setEmployeeModalOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Seleccionar empleados</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={3}>
+              <Input
+                placeholder="Buscar por nombre o email"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              <Box maxH="320px" overflowY="auto" borderWidth="1px" borderRadius="md" p={3}>
+                <Stack spacing={2}>
+                  {isLoadingEmployees && (
+                    <Text fontSize="sm" color={subtleText}>
+                      Cargando empleados...
+                    </Text>
+                  )}
+                  {employees
+                    .filter((emp) => {
+                      const term = employeeSearch.trim().toLowerCase();
+                      if (!term) return true;
+                      const haystack = `${emp.full_name ?? ""} ${emp.email ?? ""}`.toLowerCase();
+                      return haystack.includes(term);
+                    })
+                    .map((emp) => {
+                      const id = emp.user_id ?? emp.id;
+                      const label = emp.full_name || emp.email || `Empleado ${id}`;
+                      return (
+                        <Checkbox
+                          key={`${id}-${emp.email}`}
+                          isChecked={selectedEmployeeIds.includes(id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedEmployeeIds((prev) =>
+                              checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)
+                            );
+                          }}
+                        >
+                          {label}
+                        </Checkbox>
+                      );
+                    })}
+                  {employees.length === 0 && (
+                    <Text fontSize="sm" color={subtleText}>
+                      No hay empleados disponibles.
+                    </Text>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button colorScheme="green" onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+      <Modal isOpen={employeeModalOpen} onClose={() => setEmployeeModalOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Seleccionar empleados</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={3}>
+              <Input
+                placeholder="Buscar por nombre o email"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+              />
+              <Box maxH="320px" overflowY="auto" borderWidth="1px" borderRadius="md" p={3}>
+                <Stack spacing={2}>
+                  {employees
+                    .filter((emp) => {
+                      const term = employeeSearch.trim().toLowerCase();
+                      if (!term) return true;
+                      const haystack = `${emp.full_name ?? ""} ${emp.email ?? ""}`.toLowerCase();
+                      return haystack.includes(term);
+                    })
+                    .map((emp) => {
+                      const id = emp.user_id ?? emp.id;
+                      const label = emp.full_name || emp.email || `Empleado ${id}`;
+                      return (
+                        <Checkbox
+                          key={`${id}-${emp.email ?? ""}`}
+                          isChecked={selectedEmployeeIds.includes(id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedEmployeeIds((prev) =>
+                              checked ? Array.from(new Set([...prev, id])) : prev.filter((x) => x !== id)
+                            );
+                          }}
+                        >
+                          {label}
+                        </Checkbox>
+                      );
+                    })}
+                  {employees.length === 0 && (
+                    <Text fontSize="sm" color={subtleText}>
+                      No hay empleados disponibles.
+                    </Text>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button colorScheme="green" onClick={() => setEmployeeModalOpen(false)}>
+              {t("common.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
     </AppShell>
   );
 };

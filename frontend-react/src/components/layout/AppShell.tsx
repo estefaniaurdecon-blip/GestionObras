@@ -19,7 +19,10 @@ import {
   Text,
   VStack,
   useColorModeValue,
+  IconButton,
+  useColorMode,
 } from "@chakra-ui/react";
+import { MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
@@ -33,6 +36,7 @@ interface AppShellProps {
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const { t } = useTranslation();
+  const { colorMode, setColorMode } = useColorMode();
   const sidebarBg = useColorModeValue("white", "gray.900");
   const headerBg = useColorModeValue("white", "gray.900");
   const pageBg = useColorModeValue("gray.50", "gray.800");
@@ -43,6 +47,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     isErpRoute ? 0 : -1
   );
   const isActive = (path: string) => pathname === path;
+  const isActivePrefix = (path: string) =>
+    pathname === path || pathname.startsWith(`${path}/`);
 
   useEffect(() => {
     if (isErpRoute) {
@@ -80,7 +86,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         display={{ base: "none", md: "block" }}
       >
         <VStack align="stretch" spacing={6}>
-          <HStack spacing={3}>
+          <HStack
+            as={Link}
+            to="/dashboard"
+            spacing={3}
+            cursor="pointer"
+            _hover={{ textDecoration: "none", opacity: 0.9 }}
+          >
             <Image
               src="/logo-urdecon.svg"
               alt={t("layout.brand.logoAlt")}
@@ -100,15 +112,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           <Divider />
 
           <VStack align="stretch" spacing={2}>
-            <Text
-              fontSize="xs"
-              fontWeight="semibold"
-              textTransform="uppercase"
-              color="gray.500"
-            >
-              {t("layout.sections.navigation")}
-            </Text>
-
             <Button
               as={Link}
               to="/dashboard"
@@ -164,7 +167,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     <Button
                       as={Link}
                       to="/erp/projects"
-                      variant={isActive("/erp/projects") ? "solid" : "ghost"}
+                      variant={
+                        isActivePrefix("/erp/projects") ? "solid" : "ghost"
+                      }
                       justifyContent="flex-start"
                       size="sm"
                     >{t("layout.nav.projects")}</Button>
@@ -178,14 +183,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <Button
                   as={Link}
                   to="/users"
-                  variant="ghost"
+                  variant={isActivePrefix("/users") ? "solid" : "ghost"}
                   justifyContent="flex-start"
                   size="sm"
                 >{t("layout.nav.users")}</Button>
                 <Button
                   as={Link}
                   to="/hr"
-                  variant="ghost"
+                  variant={isActivePrefix("/hr") ? "solid" : "ghost"}
                   justifyContent="flex-start"
                   size="sm"
                 >{t("layout.nav.hr")}</Button>
@@ -194,29 +199,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
             <Button
               as={Link}
-              to="/support"
-              variant="ghost"
-              justifyContent="flex-start"
-              size="sm"
-            >{t("layout.nav.support")}</Button>
-
-            <Button
-              as={Link}
               to="/tools"
-              variant="ghost"
+              variant={isActivePrefix("/tools") ? "solid" : "ghost"}
               justifyContent="flex-start"
               size="sm"
             >{t("layout.nav.tools")}</Button>
-
-            {isSuperAdmin && (
-              <Button
-                as={Link}
-                to="/audit"
-                variant="ghost"
-                justifyContent="flex-start"
-                size="sm"
-              >{t("layout.nav.audit")}</Button>
-            )}
           </VStack>
 
           <Divider />
@@ -234,10 +221,26 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               <Button
                 as={Link}
                 to="/tenant-settings"
-                variant="ghost"
+                variant={isActivePrefix("/tenant-settings") ? "solid" : "ghost"}
                 justifyContent="flex-start"
                 size="sm"
               >{t("layout.nav.tenantSettings")}</Button>
+              <Button
+                as={Link}
+                to="/audit"
+                variant={isActivePrefix("/audit") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >
+                Logs
+              </Button>
+              <Button
+                as={Link}
+                to="/support"
+                variant={isActivePrefix("/support") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >{t("layout.nav.support")}</Button>
             </VStack>
           )}
         </VStack>
@@ -260,6 +263,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </Box>
 
             <HStack spacing={4}>
+              <IconButton
+                aria-label="Toggle color mode"
+                icon={colorMode === "light" ? <MoonIcon /> : <SunIcon />}
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setColorMode(colorMode === "light" ? "dark" : "light")
+                }
+              />
               <NotificationsBell />
               <Menu>
                 <MenuButton>

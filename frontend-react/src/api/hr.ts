@@ -44,6 +44,18 @@ export interface DepartmentCreatePayload {
   tenantId?: number;
 }
 
+export interface DepartmentUpdateInput {
+  name?: string;
+  description?: string | null;
+  manager_id?: number | null;
+  is_active?: boolean;
+}
+
+export interface DepartmentUpdatePayload {
+  departmentId: number;
+  data: DepartmentUpdateInput;
+}
+
 export interface EmployeeCreateInput {
   user_id?: number | null;
   full_name?: string;
@@ -94,6 +106,17 @@ export async function createDepartment(
     {
       params: tenantId ? { tenant_id: tenantId } : undefined,
     },
+  );
+  return response.data;
+}
+
+export async function updateDepartment(
+  payload: DepartmentUpdatePayload,
+): Promise<Department> {
+  const { departmentId, data } = payload;
+  const response = await apiClient.patch<Department>(
+    `/api/v1/hr/departments/${departmentId}`,
+    data,
   );
   return response.data;
 }

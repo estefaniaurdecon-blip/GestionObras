@@ -20,6 +20,13 @@ import {
   HStack,
   useToast,
   useColorModeValue,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
 } from "@chakra-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { keyframes } from "@emotion/react";
@@ -111,6 +118,7 @@ export const UsersPage: React.FC = () => {
     full_name: "",
     role: "tenant_admin",
   });
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
@@ -168,6 +176,7 @@ export const UsersPage: React.FC = () => {
         full_name: "",
         role: "tenant_admin",
       });
+      setInviteOpen(false);
     },
     onError: (error: any) => {
       const detail =
@@ -336,56 +345,19 @@ export const UsersPage: React.FC = () => {
         </Box>
       ) : null}
 
-            <Box
-        as="form"
-        onSubmit={handleSubmit}
-        mb={8}
-        borderWidth="1px"
-        borderRadius="xl"
-        p={6}
-        bg={panelBg}
-      >
-        <Heading as="h3" size="sm" mb={4}>
-          {t("users.invite.title")}
+      <HStack mb={4} justify="space-between" align="center" flexWrap="wrap" spacing={4}>
+        <Heading as="h3" size="md">
+          {t("users.list.title")}
         </Heading>
-        <VStack align="stretch" spacing={3}>
-          <FormControl isRequired>
-            <FormLabel>{t("users.invite.fullName")}</FormLabel>
-            <Input
-              name="full_name"
-              value={form.full_name}
-              onChange={handleChange}
-              placeholder={t("users.invite.fullNamePlaceholder")}
-            />
-          </FormControl>
-          <FormControl isRequired>
-            <FormLabel>{t("users.invite.email")}</FormLabel>
-            <Input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder={t("users.invite.emailPlaceholder")}
-            />
-          </FormControl>
-          <FormControl>
-            <FormLabel>{t("users.invite.role")}</FormLabel>
-            <Select name="role" value={form.role} onChange={handleChange}>
-              <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
-              <option value="user">{t("users.roles.standard")}</option>
-            </Select>
-          </FormControl>
-          <Button
-            type="submit"
-            colorScheme="green"
-            alignSelf="flex-start"
-            isLoading={createInvitationMutation.isPending}
-            isDisabled={!selectedTenantId}
-          >
-            {t("users.invite.submit")}
-          </Button>
-        </VStack>
-      </Box>
+        <Button
+          colorScheme="green"
+          size="sm"
+          onClick={() => setInviteOpen(true)}
+          isDisabled={!selectedTenantId}
+        >
+          {t("users.invite.submit")}
+        </Button>
+      </HStack>
 
       {isLoadingUsers && <Text>{t("users.list.loading")}</Text>}
       {isErrorUsers && (
@@ -396,7 +368,7 @@ export const UsersPage: React.FC = () => {
 
       {!isLoadingUsers && users && (
         <>
-          <Box mb={6} borderWidth="1px" borderRadius="xl" p={4} bg={panelBg}>
+          <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
             <HStack spacing={4} align="flex-end" flexWrap="wrap">
               <FormControl maxW="260px">
                 <FormLabel>{t("users.filters.search")}</FormLabel>
@@ -496,6 +468,58 @@ export const UsersPage: React.FC = () => {
           </Box>
         </>
       )}
+
+      <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent as="form" onSubmit={handleSubmit}>
+          <ModalHeader>{t("users.invite.title")}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={3}>
+              <FormControl isRequired>
+                <FormLabel>{t("users.invite.fullName")}</FormLabel>
+                <Input
+                  name="full_name"
+                  value={form.full_name}
+                  onChange={handleChange}
+                  placeholder={t("users.invite.fullNamePlaceholder")}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t("users.invite.email")}</FormLabel>
+                <Input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder={t("users.invite.emailPlaceholder")}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("users.invite.role")}</FormLabel>
+                <Select name="role" value={form.role} onChange={handleChange}>
+                  <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="user">{t("users.roles.standard")}</option>
+                </Select>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setInviteOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              colorScheme="green"
+              isLoading={createInvitationMutation.isPending}
+              isDisabled={!selectedTenantId}
+            >
+              {t("users.invite.submit")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
     </AppShell>
   );
 };

@@ -38,6 +38,7 @@ import {
   stopTimeSession,
   TimeSession,
 } from "../api/erpTimeTracking";
+import { fetchSubActivities, type ErpSubActivity } from "../api/erpStructure";
 import {
   createTimeSession,
   deleteTimeSession,
@@ -157,6 +158,7 @@ export const TimeControlPage: React.FC = () => {
   const [taskIdInput, setTaskIdInput] = useState<string>("");
   const [tasks, setTasks] = useState<ErpTask[]>([]);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  const [subactivities, setSubactivities] = useState<ErpSubActivity[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<Date>(new Date());
@@ -262,6 +264,13 @@ export const TimeControlPage: React.FC = () => {
     return map;
   }, [tasks]);
 
+  // Mapa de subactividades por id para etiquetas.
+  const subMap = useMemo(() => {
+    const map = new Map<number, ErpSubActivity>();
+    subactivities.forEach((sub) => map.set(sub.id, sub));
+    return map;
+  }, [subactivities]);
+
   // Rango de fechas para cargar sesiones de la semana.
   const weekRange = useMemo(() => {
     const start = new Date(weekStart);
@@ -319,8 +328,10 @@ export const TimeControlPage: React.FC = () => {
     (async () => {
       try {
         const list = await fetchErpTasks();
+        const subs = await fetchSubActivities();
         if (!cancelled) {
           setTasks(list);
+          setSubactivities(subs);
           setTasksError(null);
         }
       } catch (error: any) {
