@@ -82,7 +82,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         display={{ base: "none", md: "block" }}
       >
         <VStack align="stretch" spacing={6}>
-          <HStack spacing={3}>
+          <HStack
+            as={Link}
+            to="/dashboard"
+            spacing={3}
+            cursor="pointer"
+            _hover={{ textDecoration: "none", opacity: 0.9 }}
+          >
             <Image
               src="/logo-urdecon.svg"
               alt={t("layout.brand.logoAlt")}
@@ -102,15 +108,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           <Divider />
 
           <VStack align="stretch" spacing={2}>
-            <Text
-              fontSize="xs"
-              fontWeight="semibold"
-              textTransform="uppercase"
-              color="gray.500"
-            >
-              {t("layout.sections.navigation")}
-            </Text>
-
             <Button
               as={Link}
               to="/dashboard"
@@ -182,14 +179,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <Button
                   as={Link}
                   to="/users"
-                  variant="ghost"
+                  variant={isActivePrefix("/users") ? "solid" : "ghost"}
                   justifyContent="flex-start"
                   size="sm"
                 >{t("layout.nav.users")}</Button>
                 <Button
                   as={Link}
                   to="/hr"
-                  variant="ghost"
+                  variant={isActivePrefix("/hr") ? "solid" : "ghost"}
                   justifyContent="flex-start"
                   size="sm"
                 >{t("layout.nav.hr")}</Button>
@@ -198,29 +195,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
             <Button
               as={Link}
-              to="/support"
-              variant="ghost"
-              justifyContent="flex-start"
-              size="sm"
-            >{t("layout.nav.support")}</Button>
-
-            <Button
-              as={Link}
               to="/tools"
-              variant="ghost"
+              variant={isActivePrefix("/tools") ? "solid" : "ghost"}
               justifyContent="flex-start"
               size="sm"
             >{t("layout.nav.tools")}</Button>
-
-            {isSuperAdmin && (
-              <Button
-                as={Link}
-                to="/audit"
-                variant="ghost"
-                justifyContent="flex-start"
-                size="sm"
-              >{t("layout.nav.audit")}</Button>
-            )}
           </VStack>
 
           <Divider />
@@ -238,10 +217,26 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               <Button
                 as={Link}
                 to="/tenant-settings"
-                variant="ghost"
+                variant={isActivePrefix("/tenant-settings") ? "solid" : "ghost"}
                 justifyContent="flex-start"
                 size="sm"
               >{t("layout.nav.tenantSettings")}</Button>
+              <Button
+                as={Link}
+                to="/audit"
+                variant={isActivePrefix("/audit") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >
+                Logs
+              </Button>
+              <Button
+                as={Link}
+                to="/support"
+                variant={isActivePrefix("/support") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >{t("layout.nav.support")}</Button>
             </VStack>
           )}
         </VStack>
