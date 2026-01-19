@@ -127,6 +127,8 @@ export const ErpTasksPage: React.FC = () => {
   const [editSubactivityId, setEditSubactivityId] = useState<string>("");
   const [editStatus, setEditStatus] = useState<KanbanStatus>("pending");
   const [selectedTask, setSelectedTask] = useState<ErpTask | null>(null);
+  const [viewTask, setViewTask] = useState<ErpTask | null>(null);
+  const [deletedTaskIds, setDeletedTaskIds] = useState<number[]>([]);
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<
@@ -166,8 +168,13 @@ export const ErpTasksPage: React.FC = () => {
   });
 
   const allTasks = useMemo(
-    () => (tasks ?? []).filter((t) => t.status?.toLowerCase() !== "deleted"),
-    [tasks]
+    () =>
+      (tasks ?? []).filter(
+        (t) =>
+          t.status?.toLowerCase() !== "deleted" &&
+          !deletedTaskIds.includes(t.id)
+      ),
+    [tasks, deletedTaskIds]
   );
 
   // Mapas auxiliares para mostrar nombres en el Kanban.
@@ -295,7 +302,7 @@ export const ErpTasksPage: React.FC = () => {
         title: editTitle.trim(),
       description: editDescription.trim() || null,
       project_id: editProjectId ? Number(editProjectId) : null,
-      subactivity_id: taskSubactivityId ? Number(taskSubactivityId) : null,
+      subactivity_id: editSubactivityId ? Number(editSubactivityId) : null,
       assigned_to_id: editAssigneeId ? Number(editAssigneeId) : null,
       start_date: editStartDate || null,
       end_date: editEndDate || null,
@@ -320,9 +327,24 @@ export const ErpTasksPage: React.FC = () => {
 
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: number) => deleteErpTask(taskId),
-    onSuccess: async () => {
+    onSuccess: async (_data, taskId) => {
+      setSelectedTask((prev) => (prev?.id === taskId ? null : prev));
+      setViewTask(null);
+      setEditOpen(false);
+      setDeletedTaskIds((prev) => [...prev, taskId]);
+      // Eliminamos la tarea del cache para que desaparezca sin esperar al refetch.
+      queryClient.setQueryData<ErpTask[]>(["erp-tasks"], (prev) =>
+        prev ? prev.filter((task) => task.id !== taskId) : prev
+      );
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
-      toast({ title: t("erp.tasks.messages.deleteSuccess") || "Tarea eliminada", status: "success" });
+      const deleteOk = t("erp.tasks.messages.deleteSuccess");
+      toast({
+        title:
+          deleteOk && deleteOk !== "erp.tasks.messages.deleteSuccess"
+            ? deleteOk
+            : "Tarea eliminada",
+        status: "success",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -513,7 +535,7 @@ export const ErpTasksPage: React.FC = () => {
         </Stack>
       </Box>
 
-      <Tabs variant="enclosed" colorScheme="green" isLazy>
+      <Tabs variant="enclosed" colorScheme="green">
         <TabList flexWrap="wrap" gap={2}>
           <Tab>{t("erp.tasks.tabs.summary")}</Tab>
           <Tab>{t("erp.tasks.tabs.kanban")}</Tab>
@@ -545,17 +567,49 @@ export const ErpTasksPage: React.FC = () => {
                         borderWidth="1px"
                         borderRadius="lg"
                         p={3}
+                        cursor="pointer"
+                        _hover={{ borderColor: accent, boxShadow: "md" }}
+                        onClick={() => setViewTask(task)}
                       >
-                        <Text fontWeight="semibold">{task.title}</Text>
-                        <Text fontSize="xs" color={subtleText}>
-                          {task.project_id
-                            ? t("erp.tasks.summary.projectLabel", {
-                                project:
-                                  projectMap.get(task.project_id) ??
-                                  task.project_id,
-                              })
-                            : t("erp.tasks.summary.noProject")}
-                        </Text>
+                        <Stack direction="row" justify="space-between" align="flex-start">
+                          <Box>
+                            <Text fontWeight="semibold">{task.title}</Text>
+                            <Text fontSize="xs" color={subtleText}>
+                              {task.project_id
+                                ? t("erp.tasks.summary.projectLabel", {
+                                    project:
+                                      projectMap.get(task.project_id) ??
+                                      task.project_id,
+                                  })
+                                : t("erp.tasks.summary.noProject")}
+                            </Text>
+                          </Box>
+                          <Stack direction="row" spacing={2}>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              colorScheme="green"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewTask(task);
+                              }}
+                            >
+                              {t("erp.tasks.actions.edit")}
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              colorScheme="red"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTaskMutation.mutate(task.id);
+                              }}
+                              isLoading={deleteTaskMutation.isPending}
+                            >
+                              Eliminar
+                            </Button>
+                          </Stack>
+                        </Stack>
                         <Badge
                           mt={2}
                           colorScheme={kanbanStyles[getTaskStatus(task)].accent}
@@ -591,17 +645,49 @@ export const ErpTasksPage: React.FC = () => {
                         borderWidth="1px"
                         borderRadius="lg"
                         p={3}
+                        cursor="pointer"
+                        _hover={{ borderColor: accent, boxShadow: "md" }}
+                        onClick={() => setViewTask(task)}
                       >
-                        <Text fontWeight="semibold">{task.title}</Text>
-                        <Text fontSize="xs" color={subtleText}>
-                          {task.project_id
-                            ? t("erp.tasks.summary.projectLabel", {
-                                project:
-                                  projectMap.get(task.project_id) ??
-                                  task.project_id,
-                              })
-                            : t("erp.tasks.summary.noProject")}
-                        </Text>
+                        <Stack direction="row" justify="space-between" align="flex-start">
+                          <Box>
+                            <Text fontWeight="semibold">{task.title}</Text>
+                            <Text fontSize="xs" color={subtleText}>
+                              {task.project_id
+                                ? t("erp.tasks.summary.projectLabel", {
+                                    project:
+                                      projectMap.get(task.project_id) ??
+                                      task.project_id,
+                                  })
+                                : t("erp.tasks.summary.noProject")}
+                            </Text>
+                          </Box>
+                          <Stack direction="row" spacing={2}>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              colorScheme="green"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewTask(task);
+                              }}
+                            >
+                              {t("erp.tasks.actions.edit")}
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              colorScheme="red"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTaskMutation.mutate(task.id);
+                              }}
+                              isLoading={deleteTaskMutation.isPending}
+                            >
+                              Eliminar
+                            </Button>
+                          </Stack>
+                        </Stack>
                         <Badge
                           mt={2}
                           colorScheme={kanbanStyles[getTaskStatus(task)].accent}
@@ -1150,6 +1236,120 @@ export const ErpTasksPage: React.FC = () => {
           </TabPanel>
         </TabPanels>
       </Tabs>
+
+      <Modal
+        isOpen={Boolean(viewTask)}
+        onClose={() => setViewTask(null)}
+        size="lg"
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Detalle de la tarea</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {viewTask && (
+              <Stack spacing={3}>
+                <Heading size="md">{viewTask.title}</Heading>
+                <Text fontSize="sm" color={subtleText}>
+                  {viewTask.description?.trim()
+                    ? viewTask.description
+                    : t("erp.tasks.drawer.noDescription")}
+                </Text>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      Proyecto
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {viewTask.project_id
+                        ? projectMap.get(viewTask.project_id) ??
+                          t("erp.tasks.summary.noProject")
+                        : t("erp.tasks.summary.noProject")}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      Subactividad
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {viewTask.subactivity_id
+                        ? subactivities.find((sub) => sub.id === viewTask.subactivity_id)?.name ??
+                          viewTask.subactivity_id
+                        : t("erp.tasks.fields.noProject")}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      {t("erp.tasks.fields.assignee")}
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {viewTask.assigned_to_id
+                        ? userMap.get(viewTask.assigned_to_id) ??
+                          viewTask.assigned_to_id
+                        : t("erp.tasks.drawer.unassigned")}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      {t("erp.tasks.fields.status")}
+                    </Text>
+                    <Badge
+                      colorScheme={kanbanStyles[getTaskStatus(viewTask)].accent}
+                      variant="subtle"
+                      px={2}
+                    >
+                      {statusLabels[getTaskStatus(viewTask)]}
+                    </Badge>
+                  </Box>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      {t("erp.tasks.fields.start")}
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {viewTask.start_date ?? t("erp.tasks.drawer.noDate")}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text fontSize="xs" color={subtleText}>
+                      {t("erp.tasks.fields.end")}
+                    </Text>
+                    <Text fontWeight="semibold">
+                      {viewTask.end_date ?? t("erp.tasks.drawer.noDate")}
+                    </Text>
+                  </Box>
+                </SimpleGrid>
+              </Stack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setViewTask(null)}>
+              {t("common.close") || "Cerrar"}
+            </Button>
+            {viewTask && (
+              <>
+                <Button
+                  variant="outline"
+                  colorScheme="green"
+                  mr={3}
+                  onClick={() => {
+                    openEditTask(viewTask);
+                    setViewTask(null);
+                  }}
+                >
+                  {t("erp.tasks.actions.edit")}
+                </Button>
+                <Button
+                  colorScheme="red"
+                  onClick={() => deleteTaskMutation.mutate(viewTask.id)}
+                  isLoading={deleteTaskMutation.isPending}
+                >
+                  Eliminar
+                </Button>
+              </>
+            )}
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <Drawer
         isOpen={Boolean(selectedTask)}
