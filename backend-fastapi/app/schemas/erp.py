@@ -89,6 +89,7 @@ class TaskTemplateCreate(BaseModel):
 class ActivityRead(BaseModel):
     id: int
     project_id: int
+    assigned_to_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -98,6 +99,7 @@ class ActivityRead(BaseModel):
 
 class ActivityCreate(BaseModel):
     project_id: int
+    assigned_to_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -109,11 +111,13 @@ class ActivityUpdate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    assigned_to_id: Optional[int] = None
 
 
 class SubActivityRead(BaseModel):
     id: int
     activity_id: int
+    assigned_to_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -123,6 +127,7 @@ class SubActivityRead(BaseModel):
 
 class SubActivityCreate(BaseModel):
     activity_id: int
+    assigned_to_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -134,6 +139,7 @@ class SubActivityUpdate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    assigned_to_id: Optional[int] = None
 
 
 class MilestoneRead(BaseModel):
@@ -194,7 +200,9 @@ class DeliverableUpdate(BaseModel):
 
 class TimeSessionRead(BaseModel):
     id: int
-    task_id: int
+    task_id: Optional[int] = None
+    activity_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
     user_id: int
     description: Optional[str] = None
     started_at: datetime
@@ -205,11 +213,15 @@ class TimeSessionRead(BaseModel):
 
 
 class TimeTrackingStart(BaseModel):
-    task_id: int
+    task_id: Optional[int] = None
+    activity_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
 
 
 class TimeSessionCreate(BaseModel):
-    task_id: int
+    task_id: Optional[int] = None
+    activity_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
     description: Optional[str] = None
     started_at: datetime
     ended_at: datetime
@@ -217,6 +229,8 @@ class TimeSessionCreate(BaseModel):
 
 class TimeSessionUpdate(BaseModel):
     task_id: Optional[int] = None
+    activity_id: Optional[int] = None
+    subactivity_id: Optional[int] = None
     description: Optional[str] = None
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None

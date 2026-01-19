@@ -828,8 +828,36 @@ export const ErpProjectsPage: React.FC = () => {
       });
     });
 
+    // Tareas sueltas (sin subactividad) también al Gantt.
+    rawTasks.forEach((task) => {
+      if (!task.start_date || !task.end_date) return;
+      const start = new Date(task.start_date as string);
+      const end = new Date(task.end_date as string);
+      const progress =
+        task.is_completed || task.status === "done"
+          ? 100
+          : computeProgress(start, end);
+      const status: Status =
+        task.is_completed || task.status === "done"
+          ? "on-time"
+          : task.status === "in_progress"
+            ? "at-risk"
+            : "planned";
+      items.push({
+        id: `task-${task.id}`,
+        name: task.title,
+        start,
+        end,
+        progress,
+        type: "task",
+        status,
+        project: projectNameMap.get(task.project_id ?? 0),
+        projectId: task.project_id ?? undefined,
+      });
+    });
+
     return items;
-  }, [projects, activities, subactivities, milestones, projectNameMap, projectMap, activityMap]);
+  }, [projects, activities, subactivities, milestones, rawTasks, projectNameMap, projectMap, activityMap]);
 
   const ganttProjects = projects;
 

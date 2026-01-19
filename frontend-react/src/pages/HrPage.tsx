@@ -718,12 +718,12 @@ export const HrPage: React.FC = () => {
                             <Td>
                               <Button
                                 size="xs"
-                                variant="ghost"
-                                colorScheme="blue"
-                                mr={2}
-                                onClick={() => startEditDepartment(d)}
-                              >
-                                {t("common.edit") || "Editar"}
+                              variant="ghost"
+                              colorScheme="blue"
+                              mr={2}
+                              onClick={() => startEditDepartment(d)}
+                            >
+                                Editar
                               </Button>
                               <Button
                                 size="xs"
@@ -732,7 +732,7 @@ export const HrPage: React.FC = () => {
                                 onClick={() => handleDeleteDepartment(d)}
                                 isLoading={updateDeptMutation.isPending}
                               >
-                                {t("common.delete") || "Eliminar"}
+                                Eliminar
                               </Button>
                             </Td>
                           </Tr>

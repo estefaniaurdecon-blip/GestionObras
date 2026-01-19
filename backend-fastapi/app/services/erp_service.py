@@ -311,6 +311,18 @@ def update_task(
     return task
 
 
+def delete_task(session: Session, task_id: int) -> None:
+    task = session.get(Task, task_id)
+    if not task:
+        raise ValueError("Tarea no encontrada.")
+    # Soft delete: marca como completada y remueve referencias opcionales para evitar errores de FK.
+    task.status = "done"
+    task.is_completed = True
+    task.subactivity_id = None
+    session.add(task)
+    session.commit()
+
+
 def list_task_templates(session: Session) -> list[TaskTemplate]:
     return session.exec(
         select(TaskTemplate).order_by(TaskTemplate.created_at.desc()),
@@ -346,6 +358,7 @@ def create_activity(session: Session, data: ActivityCreate) -> Activity:
         description=data.description,
         start_date=data.start_date,
         end_date=data.end_date,
+        assigned_to_id=data.assigned_to_id,
     )
     session.add(activity)
     session.commit()
@@ -368,6 +381,8 @@ def update_activity(session: Session, activity_id: int, data: ActivityUpdate) ->
         _validate_date_range(start_date, end_date)
         activity.start_date = start_date
         activity.end_date = end_date
+    if data.assigned_to_id is not None:
+        activity.assigned_to_id = data.assigned_to_id
 
     session.add(activity)
     session.commit()
@@ -402,6 +417,7 @@ def create_subactivity(session: Session, data: SubActivityCreate) -> SubActivity
         description=data.description,
         start_date=data.start_date,
         end_date=data.end_date,
+        assigned_to_id=data.assigned_to_id,
     )
     session.add(subactivity)
     session.commit()
@@ -424,6 +440,8 @@ def update_subactivity(session: Session, subactivity_id: int, data: SubActivityU
         _validate_date_range(start_date, end_date)
         subactivity.start_date = start_date
         subactivity.end_date = end_date
+    if data.assigned_to_id is not None:
+        subactivity.assigned_to_id = data.assigned_to_id
 
     session.add(subactivity)
     session.commit()
