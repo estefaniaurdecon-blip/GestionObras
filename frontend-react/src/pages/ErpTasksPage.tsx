@@ -107,6 +107,7 @@ export const ErpTasksPage: React.FC = () => {
   const [taskAssigneeId, setTaskAssigneeId] = useState<string>("");
   const [taskStartDate, setTaskStartDate] = useState("");
   const [taskEndDate, setTaskEndDate] = useState("");
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddStatus, setQuickAddStatus] = useState<KanbanStatus>("pending");
   const [quickAddTitle, setQuickAddTitle] = useState("");
@@ -233,6 +234,8 @@ export const ErpTasksPage: React.FC = () => {
       setTaskAssigneeId("");
       setTaskStartDate("");
       setTaskEndDate("");
+      setTaskSubactivityId("");
+      setCreateModalOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
       toast({ title: t("erp.tasks.messages.createSuccess"), status: "success" });
     },
@@ -376,6 +379,10 @@ export const ErpTasksPage: React.FC = () => {
     };
 
     createTaskMutation.mutate(payload);
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
   };
 
   // Abre el modal de alta rapida en una columna.
@@ -542,6 +549,14 @@ export const ErpTasksPage: React.FC = () => {
         </TabList>
         <TabPanels mt={6}>
           <TabPanel px={0}>
+            <Button
+              colorScheme="green"
+              size="sm"
+              mb={4}
+              onClick={() => setCreateModalOpen(true)}
+            >
+              {t("erp.tasks.actions.create")}
+            </Button>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
                 <Stack
@@ -700,123 +715,6 @@ export const ErpTasksPage: React.FC = () => {
                 )}
               </Box>
             </SimpleGrid>
-            <Button
-              mt={6}
-              variant="outline"
-              colorScheme="green"
-              onClick={() => setShowCreateForm((prev) => !prev)}
-            >
-              {showCreateForm
-                ? t("erp.tasks.actions.hideForm")
-                : t("erp.tasks.actions.toggleCreate")}
-            </Button>
-            <Collapse in={showCreateForm} animateOpacity>
-              <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mt={4}>
-                  <Heading size="sm" mb={3}>
-                    {t("erp.tasks.create.title")}
-                  </Heading>
-                  <Stack spacing={2}>
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-                    <Stack spacing={2}>
-                      <FormControl>
-                        <FormLabel>{t("erp.tasks.fields.title")}</FormLabel>
-                        <Input
-                          value={taskTitle}
-                          onChange={(e) => setTaskTitle(e.target.value)}
-                        />
-                      </FormControl>
-                      <FormControl>
-                        <FormLabel>{t("erp.tasks.fields.description")}</FormLabel>
-                        <Textarea
-                          value={taskDescription}
-                          onChange={(e) => setTaskDescription(e.target.value)}
-                          rows={2}
-                        />
-                      </FormControl>
-                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2}>
-                        <FormControl>
-                          <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
-                          <Input
-                            type="date"
-                            value={taskStartDate}
-                            onChange={(e) => setTaskStartDate(e.target.value)}
-                          />
-                        </FormControl>
-                        <FormControl>
-                          <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
-                          <Input
-                            type="date"
-                            value={taskEndDate}
-                            onChange={(e) => setTaskEndDate(e.target.value)}
-                          />
-                        </FormControl>
-                      </SimpleGrid>
-                    </Stack>
-                    <Stack spacing={2}>
-                    <FormControl>
-                      <FormLabel>{t("erp.tasks.fields.project")}</FormLabel>
-                      <Select
-                        placeholder={t("erp.tasks.fields.noProject")}
-                        value={taskProjectId}
-                          onChange={(e) => {
-                            setTaskProjectId(e.target.value);
-                            setTaskSubactivityId("");
-                          }}
-                        >
-                          {(projects ?? []).map((project) => (
-                            <option key={project.id} value={String(project.id)}>
-                              {project.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl>
-                        <FormLabel>Subactividad</FormLabel>
-                        <Select
-                          placeholder="Sin subactividad"
-                          value={taskSubactivityId}
-                          onChange={(e) => setTaskSubactivityId(e.target.value)}
-                          isDisabled={!taskProjectId}
-                        >
-                          {(subactivitiesByProject.get(Number(taskProjectId)) ?? []).map((sub) => (
-                            <option key={sub.id} value={String(sub.id)}>
-                              {sub.name}
-                            </option>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl>
-                        <FormLabel>{t("erp.tasks.fields.assignee")}</FormLabel>
-                        <Select
-                          placeholder={
-                            isSuperAdmin
-                              ? t("erp.tasks.fields.selectUser")
-                              : t("erp.tasks.fields.tenantUsers")
-                          }
-                          value={taskAssigneeId}
-                          onChange={(e) => setTaskAssigneeId(e.target.value)}
-                        >
-                          {(users ?? []).map((user) => (
-                            <option key={user.id} value={String(user.id)}>
-                              {user.full_name || user.email}
-                            </option>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Stack>
-                  </SimpleGrid>
-                  <Button
-                    colorScheme="green"
-                    onClick={handleCreateTask}
-                    isLoading={createTaskMutation.isPending}
-                    alignSelf="flex-start"
-                    size="sm"
-                  >
-                    {t("erp.tasks.actions.create")}
-                  </Button>
-                </Stack>
-              </Box>
-            </Collapse>
           </TabPanel>
           <TabPanel px={0}>
             <Heading size="md" mb={2}>
@@ -1347,6 +1245,119 @@ export const ErpTasksPage: React.FC = () => {
                 </Button>
               </>
             )}
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={createModalOpen} onClose={closeCreateModal} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{t("erp.tasks.create.title")}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Stack spacing={3}>
+              <Text fontSize="sm" color={subtleText}>
+                {t("erp.tasks.status.pending")}
+              </Text>
+              <FormControl>
+                <FormLabel>{t("erp.tasks.fields.title")}</FormLabel>
+                <Input
+                  placeholder="Escribe el título"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("erp.tasks.fields.description")}</FormLabel>
+                <Textarea
+                  rows={3}
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("erp.tasks.fields.project")}</FormLabel>
+                <Select
+                  placeholder={t("erp.tasks.fields.noProject")}
+                  value={taskProjectId}
+                  onChange={(e) => {
+                    setTaskProjectId(e.target.value);
+                    setTaskSubactivityId("");
+                  }}
+                >
+                  {(projects ?? []).map((project) => (
+                    <option key={project.id} value={String(project.id)}>
+                      {project.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Subactividad</FormLabel>
+                <Select
+                  placeholder="Sin subactividad"
+                  value={taskSubactivityId}
+                  onChange={(e) => setTaskSubactivityId(e.target.value)}
+                  isDisabled={!taskProjectId}
+                >
+                  {(subactivitiesByProject.get(Number(taskProjectId)) ?? []).map(
+                    (sub) => (
+                      <option key={sub.id} value={String(sub.id)}>
+                        {sub.name}
+                      </option>
+                    )
+                  )}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("erp.tasks.fields.assignee")}</FormLabel>
+                <Select
+                  placeholder={
+                    isSuperAdmin
+                      ? t("erp.tasks.fields.selectUser")
+                      : t("erp.tasks.fields.tenantUsers")
+                  }
+                  value={taskAssigneeId}
+                  onChange={(e) => setTaskAssigneeId(e.target.value)}
+                >
+                  {(users ?? []).map((user) => (
+                    <option key={user.id} value={String(user.id)}>
+                      {user.full_name || user.email}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                <FormControl>
+                  <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
+                  <Input
+                    type="date"
+                    value={taskStartDate}
+                    onChange={(e) => setTaskStartDate(e.target.value)}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
+                  <Input
+                    type="date"
+                    value={taskEndDate}
+                    onChange={(e) => setTaskEndDate(e.target.value)}
+                  />
+                </FormControl>
+              </SimpleGrid>
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={closeCreateModal}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={handleCreateTask}
+              isLoading={createTaskMutation.isPending}
+            >
+              {t("common.save")}
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
