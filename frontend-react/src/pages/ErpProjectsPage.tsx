@@ -1,5 +1,5 @@
 // Vista principal de proyectos: creación, resumen, diagrama Gantt y edición detallada.
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -78,12 +78,20 @@ interface GanttTask {
   status: Status;
   project?: string;
   projectId?: number;
+  activityId?: number;
 }
 
 interface ProfessionalGanttProps {
   tasks: GanttTask[];
   viewMode?: ViewMode;
+  centerOnToday?: boolean;
 }
+
+const toDateSafe = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 
 // Normaliza fechas ISO (con tiempo) a formato yyyy-MM-dd para inputs type="date".
 const toDateInput = (value?: string | null) => (value ? value.split("T")[0] : "");
@@ -97,6 +105,7 @@ const createId = () =>
 const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   tasks,
   viewMode = "month",
+  centerOnToday = false,
 }) => {
   // Colores dependientes de tema para la tabla y barras.
   const gridBg = useColorModeValue("gray.50", "gray.800");
@@ -109,6 +118,10 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   const docBg = useColorModeValue("gray.50", "gray.800");
   const docColor = useColorModeValue("gray.600", "gray.200");
   const headerTitleColor = useColorModeValue("gray.700", "gray.100");
+  const leftColumnWidth = 300;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [todayLeftPx, setTodayLeftPx] = useState<number | null>(null);
 
   // Calcula rango de fechas a mostrar según las tareas cargadas.
   const dateRange = useMemo(() => {
@@ -198,6 +211,29 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return (offset / totalDays) * 100;
   };
 
+  // Centra la vista en la fecha actual al cargar/actualizar.
+  useEffect(() => {
+    if (!centerOnToday || !scrollRef.current || !contentRef.current || tasks.length === 0) return;
+    const container = scrollRef.current;
+    const content = contentRef.current;
+    const todayPos = getTodayPosition();
+    const target = (todayPos / 100) * content.scrollWidth - container.clientWidth / 2;
+    container.scrollTo({ left: Math.max(target, 0), behavior: "smooth" });
+  }, [centerOnToday, tasks, viewMode, dateRange]);
+
+  // Calcula posición de la línea "hoy" respecto al área de timeline (sin la columna izquierda).
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    const timelineWidth = contentRef.current.clientWidth - leftColumnWidth;
+    const todayPos = getTodayPosition();
+    const px = (todayPos / 100) * timelineWidth;
+    if (px < 0 || px > timelineWidth) {
+      setTodayLeftPx(null);
+    } else {
+      setTodayLeftPx(px);
+    }
+  }, [dateRange, timeColumns, tasks, leftColumnWidth]);
+
   const formatDate = (date: Date) => {
     if (viewMode === "week") {
       return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
@@ -229,12 +265,13 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     <Box
       w="100%"
       maxW="100%"
-      overflowX="auto"
       borderWidth="1px"
       borderRadius="xl"
       bg={containerBg}
       boxShadow="sm"
+      overflow="hidden"
     >
+      {/* Encabezado fijo */}
       <Box minW="1100px">
         <Flex position="sticky" top={0} zIndex={2} bg={headerBg} borderBottomWidth="1px">
           <Box
@@ -270,10 +307,20 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
             </Flex>
           </Box>
         </Flex>
+      </Box>
 
-        <Box position="relative" bg={rowBg}>
+      {/* Zona scrolleable (horizontal + vertical) */}
+      <Box
+        ref={scrollRef}
+        overflowX="auto"
+        overflowY="auto"
+        maxH="620px"
+        position="relative"
+      >
+        <Box position="relative" bg={rowBg} minW="1100px" ref={contentRef}>
           {tasks.map((task, idx) => {
             const isMilestone = task.type === "milestone";
+            const barPosition = getBarStyle(task);
             const typeLabel =
               task.id.startsWith("project-")
                 ? "Proyecto"
@@ -347,75 +394,100 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   whiteSpace="pre-line"
                   openDelay={150}
                 >
-                  <Box
-                    position="absolute"
-                    top="50%"
-                    transform="translateY(-50%)"
-                    h={isMilestone ? "20px" : "32px"}
-                    borderRadius={isMilestone ? "full" : "md"}
-                    bg={getStatusColor(task.status)}
-                    cursor="pointer"
-                    boxShadow="md"
-                    transition="all 0.15s ease"
-                    _hover={{ boxShadow: "lg", transform: "translateY(-50%) scale(1.02)" }}
-                    {...getBarStyle(task)}
-                  >
-                    {!isMilestone && (
-                      <>
-                        <Box
-                          position="absolute"
-                          left={0}
-                          top={0}
-                          bottom={0}
-                          w={`${task.progress}%`}
-                          bg="rgba(255,255,255,0.35)"
-                          borderRadius="md"
-                        />
-                        <Flex
-                          position="absolute"
-                          inset={0}
-                          align="center"
-                          px={2}
-                          fontSize="xs"
-                          fontWeight="semibold"
-                          color="white"
-                        >
-                          {Math.round(task.progress)}%
-                        </Flex>
-                      </>
-                    )}
-                  </Box>
+                  {isMilestone ? (
+                    <>
+                      {/* Línea base del hito sobre toda la fila */}
+                      <Box
+                        position="absolute"
+                        top="50%"
+                        left="0"
+                        right="0"
+                        h="2px"
+                        bg={lineColor}
+                        opacity={0.7}
+                        transform="translateY(-50%)"
+                      />
+                      {/* Marcador del hito en la fecha exacta */}
+                      <Box
+                        position="absolute"
+                        top="50%"
+                        left={barPosition.left}
+                        w="12px"
+                        h="12px"
+                        bg={getStatusColor(task.status)}
+                        transform="translate(-50%, -50%) rotate(45deg)"
+                        borderRadius="2px"
+                        boxShadow="md"
+                      />
+                    </>
+                  ) : (
+                    <Box
+                      position="absolute"
+                      top="50%"
+                      transform="translateY(-50%)"
+                      h="32px"
+                      borderRadius="md"
+                      bg={getStatusColor(task.status)}
+                      cursor="pointer"
+                      boxShadow="md"
+                      transition="all 0.15s ease"
+                      _hover={{ boxShadow: "lg", transform: "translateY(-50%) scale(1.02)" }}
+                      {...barPosition}
+                    >
+                      <Box
+                        position="absolute"
+                        left={0}
+                        top={0}
+                        bottom={0}
+                        w={`${task.progress}%`}
+                        bg="rgba(255,255,255,0.35)"
+                        borderRadius="md"
+                      />
+                      <Flex
+                        position="absolute"
+                        inset={0}
+                        align="center"
+                        px={2}
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        color="white"
+                      >
+                        {Math.round(task.progress)}%
+                      </Flex>
+                    </Box>
+                  )}
                 </Tooltip>
               </Box>
             </Flex>
           );
           })}
 
-          {getTodayPosition() >= 0 && getTodayPosition() <= 100 && (
+          {todayLeftPx !== null && (
             <Box
               position="absolute"
-              left={`${getTodayPosition()}%`}
               top={0}
               bottom={0}
-              w="2px"
-              bg="red.500"
+              left={`${leftColumnWidth}px`}
+              right={0}
               pointerEvents="none"
             >
-              <Box
-                position="absolute"
-                top="-24px"
-                left="50%"
-                transform="translateX(-50%)"
-                bg="red.500"
-                color="white"
-                px={2}
-                py={1}
-                borderRadius="md"
-                fontSize="xs"
-                fontWeight="semibold"
-                whiteSpace="nowrap"
-              >
-                HOY
+              <Box position="absolute" top={0} bottom={0} left={`${todayLeftPx}px`} w="2px" bg="red.500">
+                <Box
+                  position="absolute"
+                  top="-24px"
+                  left="50%"
+                  transform="translateX(-50%)"
+                  bg="red.500"
+                  color="white"
+                  px={2}
+                  py={1}
+                  borderRadius="md"
+                  fontSize="xs"
+                  fontWeight="semibold"
+                  whiteSpace="nowrap"
+                >
+                  HOY
+                </Box>
               </Box>
             </Box>
           )}
@@ -439,7 +511,6 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Estado de navegación, filtros y utilidades.
   const [activeTab, setActiveTab] = useState(0);
-  const [ganttView, setGanttView] = useState<ViewMode>("week");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -630,6 +701,12 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [projects]);
 
+  const projectMap = useMemo(() => {
+    const map = new Map<number, ErpProjectApi>();
+    projects.forEach((project) => map.set(project.id, project));
+    return map;
+  }, [projects]);
+
   const activityMap = useMemo(() => {
     const map = new Map<number, ErpActivity>();
     activities.forEach((activity) => {
@@ -654,99 +731,176 @@ export const ErpProjectsPage: React.FC = () => {
     const items: GanttTask[] = [];
     const now = new Date();
 
-    projects
-      .filter((project) => project.start_date && project.end_date)
-      .forEach((project) => {
-        const start = new Date(project.start_date as string);
-        const end = new Date(project.end_date as string);
-        const progress = computeProgress(start, end);
-        const status: Status =
-          now >= end ? "on-time" : now >= start ? "planned" : "planned";
-        items.push({
-          id: `project-${project.id}`,
-          name: project.name,
-          start,
-          end,
-          progress,
-          type: "task",
-          status,
-          project: project.name,
-          projectId: project.id,
-        });
+    projects.forEach((project) => {
+      const projectStart = toDateSafe(project.start_date) ?? new Date();
+      const projectEnd =
+        toDateSafe(project.end_date) ??
+        new Date(projectStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const progress = computeProgress(projectStart, projectEnd);
+      const status: Status =
+        now >= projectEnd ? "on-time" : now >= projectStart ? "planned" : "planned";
+      items.push({
+        id: `project-${project.id}`,
+        name: project.name,
+        start: projectStart,
+        end: projectEnd,
+        progress,
+        type: "task",
+        status,
+        project: project.name,
+        projectId: project.id,
+        activityId: undefined,
       });
+    });
 
-    activities
-      .filter((activity) => activity.start_date && activity.end_date)
-      .forEach((activity) => {
-        const start = new Date(activity.start_date as string);
-        const end = new Date(activity.end_date as string);
-        const progress = computeProgress(start, end);
-        const status: Status =
-          now >= end ? "on-time" : now >= start ? "planned" : "planned";
-        items.push({
-          id: `activity-${activity.id}`,
-          name: activity.name,
-          start,
-          end,
-          progress,
-          type: "task",
-          status,
-          project: projectNameMap.get(activity.project_id),
-          projectId: activity.project_id,
-        });
+    activities.forEach((activity) => {
+      const project = projectMap.get(activity.project_id);
+      const fallbackStart = project ? toDateSafe(project.start_date) : null;
+      const fallbackEnd = project ? toDateSafe(project.end_date) : null;
+      const start = toDateSafe(activity.start_date) ?? fallbackStart ?? new Date();
+      const end =
+        toDateSafe(activity.end_date) ??
+        fallbackEnd ??
+        new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const progress = computeProgress(start, end);
+      const status: Status = now >= end ? "on-time" : now >= start ? "planned" : "planned";
+      items.push({
+        id: `activity-${activity.id}`,
+        name: activity.name,
+        start,
+        end,
+        progress,
+        type: "task",
+        status,
+        project: projectNameMap.get(activity.project_id),
+        projectId: activity.project_id,
+        activityId: activity.id,
       });
+    });
 
-    subactivities
-      .filter((subactivity) => subactivity.start_date && subactivity.end_date)
-      .forEach((subactivity) => {
-        const activity = activityMap.get(subactivity.activity_id);
-        if (!activity) return;
-        const start = new Date(subactivity.start_date as string);
-        const end = new Date(subactivity.end_date as string);
-        const progress = computeProgress(start, end);
-        const status: Status =
-          now >= end ? "on-time" : now >= start ? "planned" : "planned";
-        items.push({
-          id: `subactivity-${subactivity.id}`,
-          name: `Sub: ${subactivity.name}`,
-          start,
-          end,
-          progress,
-          type: "task",
-          status,
-          project: projectNameMap.get(activity.project_id),
-          projectId: activity.project_id,
-        });
+    subactivities.forEach((subactivity) => {
+      const activity = activityMap.get(subactivity.activity_id);
+      const project = activity ? projectMap.get(activity.project_id) : null;
+      if (!activity) return;
+      const fallbackStart = toDateSafe(activity.start_date) ?? (project ? toDateSafe(project.start_date) : null);
+      const fallbackEnd = toDateSafe(activity.end_date) ?? (project ? toDateSafe(project.end_date) : null);
+      const start = toDateSafe(subactivity.start_date) ?? fallbackStart ?? new Date();
+      const end =
+        toDateSafe(subactivity.end_date) ??
+        fallbackEnd ??
+        new Date(start.getTime() + 5 * 24 * 60 * 60 * 1000);
+      const progress = computeProgress(start, end);
+      const status: Status = now >= end ? "on-time" : now >= start ? "planned" : "planned";
+      items.push({
+        id: `subactivity-${subactivity.id}`,
+        name: `Sub: ${subactivity.name}`,
+        start,
+        end,
+        progress,
+        type: "task",
+        status,
+        project: projectNameMap.get(activity.project_id),
+        projectId: activity.project_id,
+        activityId: subactivity.activity_id,
       });
+    });
 
-    milestones
-      .filter((milestone) => milestone.due_date)
-      .forEach((milestone) => {
-        const due = new Date(milestone.due_date as string);
-        const status: Status = now > due ? "on-time" : "planned";
-        items.push({
-          id: `milestone-${milestone.id}`,
-          name: milestone.title,
-          start: due,
-          end: due,
-          progress: 100,
-          type: "milestone",
-          status,
-          project: projectNameMap.get(milestone.project_id),
-          projectId: milestone.project_id,
-        });
+    milestones.forEach((milestone) => {
+      const project = projectMap.get(milestone.project_id);
+      const fallbackDue =
+        toDateSafe(milestone.due_date) ??
+        toDateSafe(project?.end_date) ??
+        toDateSafe(project?.start_date) ??
+        new Date();
+      const due = fallbackDue;
+      const status: Status = now > due ? "on-time" : "planned";
+      items.push({
+        id: `milestone-${milestone.id}`,
+        name: milestone.title,
+        start: due,
+        end: due,
+        progress: 100,
+        type: "milestone",
+        status,
+        project: projectNameMap.get(milestone.project_id),
+        projectId: milestone.project_id,
+        activityId: milestone.activity_id ?? undefined,
       });
+    });
 
     return items;
-  }, [projects, activities, subactivities, milestones, projectNameMap, activityMap]);
+  }, [projects, activities, subactivities, milestones, projectNameMap, projectMap, activityMap]);
 
   const ganttProjects = projects;
 
   const ganttTasks: GanttTask[] = useMemo(() => {
-    if (selectedProjectId === "all") return ganttItems;
-    return ganttItems.filter(
-      (item) => item.projectId && String(item.projectId) === selectedProjectId
-    );
+    const filtered =
+      selectedProjectId === "all"
+        ? ganttItems
+        : ganttItems.filter(
+            (item) => item.projectId && String(item.projectId) === selectedProjectId
+          );
+
+    // Para un proyecto específico, mantiene el orden jerárquico: proyecto > actividades > subactividades > hitos.
+    if (selectedProjectId !== "all") {
+      const projectIdNum = Number(selectedProjectId);
+      const projectRow = filtered.find((t) => t.id === `project-${projectIdNum}`);
+      const activityRows = filtered
+        .filter((t) => t.id.startsWith("activity-"))
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+      const subRows = filtered
+        .filter((t) => t.id.startsWith("subactivity-"))
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+      const milestoneRows = filtered
+        .filter((t) => t.id.startsWith("milestone-"))
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      const ordered: GanttTask[] = [];
+      if (projectRow) ordered.push(projectRow);
+      activityRows.forEach((act) => {
+        ordered.push(act);
+        subRows
+          .filter((sub) => sub.activityId === act.activityId || sub.activityId === act.id)
+          .forEach((sub) => ordered.push(sub));
+        milestoneRows
+          .filter((mil) => mil.activityId && (mil.activityId === act.activityId || mil.activityId === act.id))
+          .forEach((mil) => ordered.push(mil));
+      });
+      // Milestones sin actividad asociada
+      milestoneRows
+        .filter((mil) => !mil.activityId)
+        .forEach((mil) => ordered.push(mil));
+      return ordered;
+    }
+
+    // En vista general, ordenar por tipo y fecha.
+    const order = { project: 0, activity: 1, subactivity: 2, milestone: 3, task: 4 };
+    return [...filtered].sort((a, b) => {
+      const aType =
+        a.id.startsWith("project-")
+          ? "project"
+          : a.id.startsWith("activity-")
+            ? "activity"
+            : a.id.startsWith("subactivity-")
+              ? "subactivity"
+              : a.id.startsWith("milestone-")
+                ? "milestone"
+                : "task";
+      const bType =
+        b.id.startsWith("project-")
+          ? "project"
+          : b.id.startsWith("activity-")
+            ? "activity"
+            : b.id.startsWith("subactivity-")
+              ? "subactivity"
+              : b.id.startsWith("milestone-")
+                ? "milestone"
+                : "task";
+      if (order[aType as keyof typeof order] !== order[bType as keyof typeof order]) {
+        return order[aType as keyof typeof order] - order[bType as keyof typeof order];
+      }
+      return a.start.getTime() - b.start.getTime();
+    });
   }, [selectedProjectId, ganttItems]);
 
   const handleAddActivity = () => {
@@ -1210,30 +1364,6 @@ export const ErpProjectsPage: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
-                <HStack
-                  spacing={2}
-                  borderWidth="1px"
-                  borderRadius="md"
-                  p={1}
-                  bg={panelBg}
-                >
-                  <Button
-                    size="sm"
-                    variant={ganttView === "week" ? "solid" : "ghost"}
-                    colorScheme="green"
-                    onClick={() => setGanttView("week")}
-                  >
-                    Semana
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={ganttView === "month" ? "solid" : "ghost"}
-                    colorScheme="green"
-                    onClick={() => setGanttView("month")}
-                  >
-                    Mes
-                  </Button>
-                </HStack>
                 <HStack spacing={4} ml="auto" fontSize="sm" color={subtleText} flexWrap="wrap">
                   <HStack spacing={1}>
                     <Box w={4} h={4} borderRadius="md" bg="green.500" />
@@ -1254,7 +1384,7 @@ export const ErpProjectsPage: React.FC = () => {
                 </HStack>
               </HStack>
 
-              <ProfessionalGantt tasks={ganttTasks} viewMode={ganttView} />
+              <ProfessionalGantt tasks={ganttTasks} viewMode="month" centerOnToday />
             </Stack>
           </TabPanel>
 

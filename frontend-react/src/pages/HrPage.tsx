@@ -45,9 +45,11 @@ import {
   deleteEmployee,
   updateEmployee,
   fetchDepartments,
+  updateDepartment,
   fetchEmployees,
   fetchHeadcount,
   type Department,
+  type DepartmentUpdatePayload,
   type EmployeeProfile,
   type HeadcountItem,
 } from "../api/hr";
@@ -122,6 +124,7 @@ export const HrPage: React.FC = () => {
     name: "",
     description: "",
   });
+  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
 
   const [employeeForm, setEmployeeForm] = useState<EmployeeFormState>({
     userId: "",
@@ -210,6 +213,7 @@ export const HrPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hr-departments"] });
       setDeptForm({ name: "", description: "" });
+      setEditingDepartment(null);
       toast({
         title: t("hr.messages.departmentCreated"),
         status: "success",
@@ -224,6 +228,25 @@ export const HrPage: React.FC = () => {
         status: "error",
         duration: 4000,
         isClosable: true,
+      });
+    },
+  });
+
+  const updateDeptMutation = useMutation({
+    mutationFn: (payload: DepartmentUpdatePayload) => updateDepartment(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hr-departments"] });
+      setDeptForm({ name: "", description: "" });
+      setEditingDepartment(null);
+      toast({
+        title: t("hr.messages.departmentUpdated") || "Departamento actualizado",
+        status: "success",
+      });
+    },
+    onError: () => {
+      toast({
+        title: t("hr.messages.departmentUpdateError") || "Error al actualizar departamento",
+        status: "error",
       });
     },
   });
@@ -417,7 +440,7 @@ export const HrPage: React.FC = () => {
     deleteEmployeeMutation.mutate(editingEmployee.id);
   };
 
-  const handleCreateDepartment = (event: React.FormEvent) => {
+  const handleSubmitDepartment = (event: React.FormEvent) => {
     event.preventDefault();
     if (!deptForm.name.trim()) {
       toast({
@@ -428,7 +451,7 @@ export const HrPage: React.FC = () => {
       });
       return;
     }
-    if (isSuperAdmin && !effectiveTenantId) {
+    if (!editingDepartment && isSuperAdmin && !effectiveTenantId) {
       toast({
         title: t("hr.messages.selectTenant"),
         status: "warning",
@@ -437,13 +460,39 @@ export const HrPage: React.FC = () => {
       });
       return;
     }
-    createDeptMutation.mutate({
-      data: {
-        name: deptForm.name.trim(),
-        description: deptForm.description || undefined,
-        is_active: true,
-      },
-      tenantId: isSuperAdmin ? effectiveTenantId ?? undefined : undefined,
+
+    if (editingDepartment) {
+      updateDeptMutation.mutate({
+        departmentId: editingDepartment.id,
+        data: {
+          name: deptForm.name.trim(),
+          description: deptForm.description || undefined,
+        },
+      });
+    } else {
+      createDeptMutation.mutate({
+        data: {
+          name: deptForm.name.trim(),
+          description: deptForm.description || undefined,
+          is_active: true,
+        },
+        tenantId: isSuperAdmin ? effectiveTenantId ?? undefined : undefined,
+      });
+    }
+  };
+
+  const startEditDepartment = (dept: Department) => {
+    setEditingDepartment(dept);
+    setDeptForm({
+      name: dept.name ?? "",
+      description: dept.description ?? "",
+    });
+  };
+
+  const handleDeleteDepartment = (dept: Department) => {
+    updateDeptMutation.mutate({
+      departmentId: dept.id,
+      data: { is_active: false },
     });
   };
 
@@ -580,7 +629,7 @@ export const HrPage: React.FC = () => {
                 align="stretch"
                 spacing={3}
                 mb={4}
-                onSubmit={handleCreateDepartment}
+                onSubmit={handleSubmitDepartment}
               >
                 <FormControl isRequired>
                   <FormLabel>{t("hr.departments.form.name")}</FormLabel>
@@ -602,10 +651,25 @@ export const HrPage: React.FC = () => {
                   type="submit"
                   colorScheme="green"
                   alignSelf="flex-start"
-                  isLoading={createDeptMutation.isPending}
+                  isLoading={createDeptMutation.isPending || updateDeptMutation.isPending}
                 >
-                  {t("hr.departments.form.create")}
+                  {editingDepartment
+                    ? t("hr.departments.form.update") || "Actualizar"
+                    : t("hr.departments.form.create")}
                 </Button>
+                {editingDepartment && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    alignSelf="flex-start"
+                    onClick={() => {
+                      setEditingDepartment(null);
+                      setDeptForm({ name: "", description: "" });
+                    }}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                )}
               </VStack>
 
               {isLoadingDepartments && <Text>{t("hr.departments.loading")}</Text>}
@@ -627,6 +691,7 @@ export const HrPage: React.FC = () => {
                         <Th>{t("hr.departments.table.name")}</Th>
                         <Th>{t("hr.departments.table.description")}</Th>
                         <Th>{t("hr.departments.table.status")}</Th>
+                        <Th>{t("common.actions")}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -649,6 +714,26 @@ export const HrPage: React.FC = () => {
                               >
                                 {d.is_active ? t("hr.status.active") : t("hr.status.inactive")}
                               </Badge>
+                            </Td>
+                            <Td>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                colorScheme="blue"
+                                mr={2}
+                                onClick={() => startEditDepartment(d)}
+                              >
+                                {t("common.edit") || "Editar"}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                colorScheme="red"
+                                onClick={() => handleDeleteDepartment(d)}
+                                isLoading={updateDeptMutation.isPending}
+                              >
+                                {t("common.delete") || "Eliminar"}
+                              </Button>
                             </Td>
                           </Tr>
                         ))
