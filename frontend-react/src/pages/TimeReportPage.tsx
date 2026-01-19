@@ -27,6 +27,7 @@ import {
   useColorModeValue,
   useToast,
   Stack,
+  HStack,
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
@@ -63,7 +64,7 @@ export const TimeReportPage: React.FC = () => {
   const [dateTo, setDateTo] = useState("");
 
   const [rows, setRows] = useState<TimeReportRow[]>([]);
-  const [userFilter, setUserFilter] = useState("");
+  const [resultsSearch, setResultsSearch] = useState("");
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [employeeModalOpen, setEmployeeModalOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
@@ -120,7 +121,7 @@ export const TimeReportPage: React.FC = () => {
     }
   };
 
-  const normalizedFilter = userFilter.trim().toLowerCase();
+  const normalizedFilter = resultsSearch.trim().toLowerCase();
   const employeeIdSet = useMemo(
     () => new Set(selectedEmployeeIds),
     [selectedEmployeeIds]
@@ -131,7 +132,7 @@ export const TimeReportPage: React.FC = () => {
       if (!row.user_id || !employeeIdSet.has(row.user_id)) return false;
     }
     if (!normalizedFilter) return true;
-    const haystack = `${row.username ?? ""}`.toLowerCase();
+    const haystack = `${row.project_name ?? ""} ${row.task_title ?? ""} ${row.username ?? ""}`.toLowerCase();
     return haystack.includes(normalizedFilter);
   });
 
@@ -139,6 +140,11 @@ export const TimeReportPage: React.FC = () => {
     (acc, row) => acc + Number(row.total_hours),
     0,
   );
+  const totalCost = filteredRows.reduce((acc, row) => {
+    const rate = Number(row.hourly_rate ?? 0);
+    const hours = Number(row.total_hours ?? 0);
+    return acc + rate * hours;
+  }, 0);
   const reportCount = filteredRows.length;
 
   const handleExportCsv = () => {
@@ -268,16 +274,32 @@ export const TimeReportPage: React.FC = () => {
             </FormControl>
             <FormControl>
               <FormLabel>{t("timeReport.filters.userContains")}</FormLabel>
-              <Button
-                variant="outline"
-                colorScheme="green"
-                onClick={() => setEmployeeModalOpen(true)}
-                size="sm"
-                minW={{ base: "100%", md: "200px" }}
-                isLoading={isLoadingEmployees}
-              >
-                Seleccionar empleados
-              </Button>
+              <HStack spacing={2} align="center">
+                <Button
+                  variant="outline"
+                  colorScheme="green"
+                  onClick={() => setEmployeeModalOpen(true)}
+                  size="sm"
+                  minW={{ base: "100%", md: "200px" }}
+                  isLoading={isLoadingEmployees}
+                >
+                  Seleccionar empleados
+                  {selectedEmployeeIds.length > 0 && (
+                    <Badge ml={2} colorScheme="green">
+                      {selectedEmployeeIds.length}
+                    </Badge>
+                  )}
+                </Button>
+                {selectedEmployeeIds.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedEmployeeIds([])}
+                  >
+                    Quitar selección
+                  </Button>
+                )}
+              </HStack>
               {selectedEmployeeIds.length > 0 && (
                 <Stack direction="row" spacing={2} mt={2} flexWrap="wrap">
                   {selectedEmployeeIds.map((id) => {
@@ -328,31 +350,40 @@ export const TimeReportPage: React.FC = () => {
           <Heading size="md">{reportCount}</Heading>
         </Box>
         <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
-          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>{t("timeReport.stats.status")}</Text>
-          <Badge mt={2} colorScheme={reportCount > 0 ? "green" : "gray"}>
-            {reportCount > 0
-              ? t("timeReport.stats.statusReady")
-              : t("timeReport.stats.statusEmpty")}
-          </Badge>
+          <Text fontSize="xs" textTransform="uppercase" color={subtleText}>Coste estimado</Text>
+          <Heading size="md">{totalCost.toFixed(2)} €</Heading>
         </Box>
       </SimpleGrid>
 
+      <Box mb={3}>
+        <FormControl maxW={{ base: "100%", md: "320px" }}>
+          <FormLabel fontSize="sm" color={subtleText}>Buscar en resultados</FormLabel>
+          <Input
+            size="sm"
+            placeholder="Proyecto, tarea o usuario"
+            value={resultsSearch}
+            onChange={(e) => setResultsSearch(e.target.value)}
+          />
+        </FormControl>
+      </Box>
+
       <Box
-        borderWidth="1px"
-        borderRadius="xl"
-        bg={cardBg}
-        overflowX="auto"
+          borderWidth="1px"
+          borderRadius="xl"
+          bg={cardBg}
+          overflowX="auto"
         overflowY="hidden"
         borderColor={accent}
         >
-        <Table size="sm" minW="760px">
-          <Thead bg={tableHeadBg}>
+          <Table size="sm" minW="760px">
+          <Thead bg={tableHeadBg} position="sticky" top={0} zIndex={1}>
             <Tr>
               <Th>{t("timeReport.filters.project")}</Th>
               <Th>{t("timeReport.table.task")}</Th>
               <Th>{t("timeReport.table.user")}</Th>
               <Th isNumeric>{t("timeReport.table.rate")}</Th>
               <Th isNumeric>{t("timeReport.table.hours")}</Th>
+              <Th isNumeric>Coste</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -363,17 +394,20 @@ export const TimeReportPage: React.FC = () => {
                   </Text>
                 </Td>
               </Tr>
-            ) : (
-              filteredRows.map((row, index) => (
-                <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
-                  <Td>{row.project_name}</Td>
-                  <Td>{row.task_title}</Td>
-                  <Td>{row.username ?? t("timeReport.table.unassignedUser")}</Td>
-                  <Td isNumeric>{row.hourly_rate ? Number(row.hourly_rate).toFixed(2) : "-"}</Td>
-                  <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
-                </Tr>
-              ))
-            )}
+              ) : (
+                filteredRows.map((row, index) => (
+                  <Tr key={`${row.project_id}-${row.task_id}-${row.user_id}-${index}`}>
+                    <Td>{row.project_name}</Td>
+                    <Td>{row.task_title}</Td>
+                    <Td>{row.username ?? t("timeReport.table.unassignedUser")}</Td>
+                    <Td isNumeric>{Number(row.hourly_rate ?? 0).toFixed(2)}</Td>
+                    <Td isNumeric>{Number(row.total_hours).toFixed(2)}</Td>
+                    <Td isNumeric>
+                      {(Number(row.hourly_rate ?? 0) * Number(row.total_hours ?? 0)).toFixed(2)}
+                    </Td>
+                  </Tr>
+                ))
+              )}
           </Tbody>
         </Table>
       </Box>
