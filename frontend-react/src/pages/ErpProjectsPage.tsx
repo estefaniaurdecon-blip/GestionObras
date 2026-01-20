@@ -1729,9 +1729,9 @@ export const ErpProjectsPage: React.FC = () => {
         />
         <Stack position="relative" spacing={4}>
           <Stack spacing={1}>
-            <Heading size="lg">Gesti├│n de Proyectos</Heading>
+            <Heading size="lg">Gestión de Proyectos</Heading>
             <Text color="whiteAlpha.800">
-              Control y visualizaci├│n de proyectos y tareas
+              Control y visualización de proyectos y tareas
             </Text>
           </Stack>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
