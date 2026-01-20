@@ -34,6 +34,8 @@ class EmployeeProfileBase(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     hourly_rate: Optional[Decimal] = None
+    available_hours: Optional[Decimal] = None
+    availability_percentage: Optional[Decimal] = None
     position: Optional[str] = None
     employment_type: str = "permanent"
     hire_date: Optional[datetime] = None
@@ -49,6 +51,8 @@ class EmployeeProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     hourly_rate: Optional[Decimal] = None
+    available_hours: Optional[Decimal] = None
+    availability_percentage: Optional[Decimal] = None
     position: Optional[str] = None
     employment_type: Optional[str] = None
     hire_date: Optional[datetime] = None
@@ -68,3 +72,33 @@ class HeadcountItem(BaseModel):
     department_id: Optional[int]
     department_name: Optional[str]
     total_employees: int
+
+
+class EmployeeAllocationBase(BaseModel):
+    employee_id: int
+    department_id: Optional[int] = None
+    project_id: Optional[int] = None
+    milestone: Optional[str] = None
+    year: int
+    allocated_hours: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class EmployeeAllocationCreate(EmployeeAllocationBase):
+    tenant_id: int
+
+
+class EmployeeAllocationUpdate(BaseModel):
+    department_id: Optional[int] = None
+    project_id: Optional[int] = None
+    milestone: Optional[str] = None
+    year: Optional[int] = None
+    allocated_hours: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class EmployeeAllocationRead(EmployeeAllocationBase):
+    id: int
+    tenant_id: int
+    created_at: datetime
+    updated_at: datetime

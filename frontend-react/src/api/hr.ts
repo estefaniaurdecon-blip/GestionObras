@@ -17,6 +17,8 @@ export interface EmployeeProfile {
   full_name?: string | null;
   email?: string | null;
   hourly_rate?: number | null;
+  available_hours?: number | null;
+  availability_percentage?: number | null;
   position?: string | null;
   employment_type: string;
   hire_date?: string | null;
@@ -61,6 +63,8 @@ export interface EmployeeCreateInput {
   full_name?: string;
   email?: string;
   hourly_rate?: number;
+  available_hours?: number | null;
+  availability_percentage?: number | null;
   position?: string;
   employment_type?: string;
   primary_department_id?: number | null;
@@ -76,6 +80,8 @@ export interface EmployeeUpdateInput {
   full_name?: string;
   email?: string;
   hourly_rate?: number;
+  available_hours?: number | null;
+  availability_percentage?: number | null;
   position?: string;
   employment_type?: string;
   primary_department_id?: number | null;
@@ -85,6 +91,47 @@ export interface EmployeeUpdateInput {
 export interface EmployeeUpdatePayload {
   profileId: number;
   data: EmployeeUpdateInput;
+}
+
+export interface EmployeeAllocation {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  department_id?: number | null;
+  project_id?: number | null;
+  milestone?: string | null;
+  year?: number | null;
+  allocated_hours?: number | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface EmployeeAllocationCreateInput {
+  tenant_id: number;
+  employee_id: number;
+  department_id?: number | null;
+  project_id?: number | null;
+  milestone?: string | null;
+  year?: number | null;
+  allocated_hours?: number | null;
+  notes?: string | null;
+}
+
+export interface EmployeeAllocationUpdateInput {
+  department_id?: number | null;
+  project_id?: number | null;
+  milestone?: string | null;
+  year?: number | null;
+  allocated_hours?: number | null;
+  notes?: string | null;
+}
+
+export interface AllocationFilters {
+  tenantId?: number;
+  projectId?: number;
+  employeeId?: number;
+  year?: number;
 }
 
 export async function fetchDepartments(
@@ -160,6 +207,33 @@ export async function updateEmployee(
 
 export async function deleteEmployee(profileId: number): Promise<void> {
   await apiClient.delete(`/api/v1/hr/employees/${profileId}`);
+}
+
+export async function fetchEmployeeAllocations(filters: AllocationFilters = {}): Promise<EmployeeAllocation[]> {
+  const params: Record<string, number> = {};
+  if (filters.tenantId) params.tenant_id = filters.tenantId;
+  if (filters.projectId) params.project_id = filters.projectId;
+  if (filters.employeeId) params.employee_id = filters.employeeId;
+  if (filters.year) params.year = filters.year;
+
+  const response = await apiClient.get<EmployeeAllocation[]>("/api/v1/hr/allocations", {
+    params: Object.keys(params).length ? params : undefined,
+  });
+  return response.data;
+}
+
+export async function createEmployeeAllocation(data: EmployeeAllocationCreateInput): Promise<EmployeeAllocation> {
+  const response = await apiClient.post<EmployeeAllocation>("/api/v1/hr/allocations", data);
+  return response.data;
+}
+
+export async function updateEmployeeAllocation(allocationId: number, data: EmployeeAllocationUpdateInput): Promise<EmployeeAllocation> {
+  const response = await apiClient.patch<EmployeeAllocation>(`/api/v1/hr/allocations/${allocationId}`, data);
+  return response.data;
+}
+
+export async function deleteEmployeeAllocation(allocationId: number): Promise<void> {
+  await apiClient.delete(`/api/v1/hr/allocations/${allocationId}`);
 }
 
 export async function fetchHeadcount(

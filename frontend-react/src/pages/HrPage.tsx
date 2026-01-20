@@ -9,8 +9,11 @@ import {
   Badge,
   Box,
   Button,
+  Divider,
   FormControl,
   FormLabel,
+  Flex,
+  HStack,
   Heading,
   Input,
   Modal,
@@ -20,6 +23,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Progress,
   Select,
   SimpleGrid,
   Table,
@@ -61,6 +65,21 @@ import {
 } from "../api/users";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
+// Pequeño helper visual para las tarjetas de empleado.
+const StatCell: React.FC<{ label: string; value: string }> = ({ label, value }) => {
+  const border = useColorModeValue("gray.200", "gray.700");
+  const bg = useColorModeValue("gray.50", "gray.800");
+  const subtle = useColorModeValue("gray.600", "gray.400");
+  return (
+    <Box borderWidth="1px" borderColor={border} borderRadius="md" p={3} bg={bg}>
+      <Text fontSize="xs" color={subtle} mb={1} fontWeight="bold">
+        {label}
+      </Text>
+      <Text fontWeight="semibold">{value}</Text>
+    </Box>
+  );
+};
+
 interface DepartmentFormState {
   name: string;
   description: string;
@@ -72,6 +91,8 @@ interface EmployeeFormState {
   email: string;
   hourlyRate: string;
   position: string;
+  availableHours: string;
+  availabilityPercentage: string;
   primaryDepartmentId: number | "";
 }
 
@@ -80,6 +101,8 @@ interface EmployeeEditFormState {
   email: string;
   hourlyRate: string;
   position: string;
+  availableHours: string;
+  availabilityPercentage: string;
   primaryDepartmentId: number | "";
   isActive: boolean;
 }
@@ -132,6 +155,8 @@ export const HrPage: React.FC = () => {
     email: "",
     hourlyRate: "",
     position: "",
+    availableHours: "",
+    availabilityPercentage: "",
     primaryDepartmentId: "",
   });
   const [editingEmployee, setEditingEmployee] =
@@ -142,6 +167,8 @@ export const HrPage: React.FC = () => {
       email: "",
       hourlyRate: "",
       position: "",
+      availableHours: "",
+      availabilityPercentage: "",
       primaryDepartmentId: "",
       isActive: true,
     });
@@ -254,8 +281,23 @@ export const HrPage: React.FC = () => {
   // Mutacion para crear empleados.
   const createEmployeeMutation = useMutation({
     mutationFn: createEmployee,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
+    onSuccess: (createdEmployee, variables) => {
+      // Mezcla valores introducidos en el formulario en caso de que la API no devuelva los nuevos campos.
+      const merged = {
+        ...createdEmployee,
+        available_hours:
+          createdEmployee.available_hours ??
+          variables.data.available_hours ??
+          null,
+        availability_percentage:
+          createdEmployee.availability_percentage ??
+          variables.data.availability_percentage ??
+          null,
+      };
+      queryClient.setQueryData<EmployeeProfile[] | undefined>(
+        ["hr-employees", effectiveTenantId],
+        (prev) => (prev ? [...prev, merged] : [merged])
+      );
       queryClient.invalidateQueries({ queryKey: ["hr-headcount"] });
       setEmployeeForm({
         userId: "",
@@ -263,6 +305,8 @@ export const HrPage: React.FC = () => {
         email: "",
         hourlyRate: "",
         position: "",
+        availableHours: "",
+        availabilityPercentage: "",
         primaryDepartmentId: "",
       });
       toast({
@@ -286,8 +330,25 @@ export const HrPage: React.FC = () => {
   // Mutacion para editar empleados.
   const updateEmployeeMutation = useMutation({
     mutationFn: updateEmployee,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["hr-employees"] });
+    onSuccess: (updatedEmployee, variables) => {
+      // Mezcla valores enviados para garantizar que los campos de disponibilidad se reflejen en UI.
+      const mergedFields = {
+        available_hours:
+          updatedEmployee.available_hours ??
+          variables.data.available_hours ??
+          null,
+        availability_percentage:
+          updatedEmployee.availability_percentage ??
+          variables.data.availability_percentage ??
+          null,
+      };
+      queryClient.setQueryData<EmployeeProfile[] | undefined>(
+        ["hr-employees", effectiveTenantId],
+        (prev) =>
+          prev?.map((emp) =>
+            emp.id === updatedEmployee.id ? { ...emp, ...updatedEmployee, ...mergedFields } : emp
+          ) ?? prev
+      );
       queryClient.invalidateQueries({ queryKey: ["hr-headcount"] });
       toast({
         title: t("hr.messages.employeeUpdated"),
@@ -392,6 +453,12 @@ export const HrPage: React.FC = () => {
       hourlyRate:
         employee.hourly_rate != null ? String(employee.hourly_rate) : "",
       position: employee.position ?? "",
+      availableHours:
+        employee.available_hours != null ? String(employee.available_hours) : "",
+      availabilityPercentage:
+        employee.availability_percentage != null
+          ? String(employee.availability_percentage)
+          : "",
       primaryDepartmentId: employee.primary_department_id ?? "",
       isActive: employee.is_active,
     });
@@ -423,6 +490,14 @@ export const HrPage: React.FC = () => {
           ? Number(employeeEditForm.hourlyRate)
           : undefined,
         position: employeeEditForm.position || undefined,
+        available_hours:
+          employeeEditForm.availableHours.trim() === ""
+            ? null
+            : Number(employeeEditForm.availableHours),
+        availability_percentage:
+          employeeEditForm.availabilityPercentage.trim() === ""
+            ? null
+            : Number(employeeEditForm.availabilityPercentage),
         primary_department_id: employeeEditForm.primaryDepartmentId,
         is_active: employeeEditForm.isActive,
       },
@@ -536,6 +611,14 @@ export const HrPage: React.FC = () => {
           : undefined,
         position: employeeForm.position || undefined,
         employment_type: "permanent",
+        available_hours:
+          employeeForm.availableHours.trim() === ""
+            ? null
+            : Number(employeeForm.availableHours),
+        availability_percentage:
+          employeeForm.availabilityPercentage.trim() === ""
+            ? null
+            : Number(employeeForm.availabilityPercentage),
         primary_department_id: employeeForm.primaryDepartmentId,
         is_active: true,
       },
@@ -549,6 +632,24 @@ export const HrPage: React.FC = () => {
       0,
     [headcount]
   );
+
+  // Filtro por departamento para la vista de empleados.
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<
+    number | "all"
+  >("all");
+  const departmentOptions = useMemo(
+    () => departments ?? [],
+    [departments]
+  );
+
+  // Empleados filtrados según el departamento seleccionado.
+  const filteredEmployees = useMemo(() => {
+    if (!employees) return [];
+    if (selectedDepartmentFilter === "all") return employees;
+    return employees.filter(
+      (e) => e.primary_department_id === selectedDepartmentFilter
+    );
+  }, [employees, selectedDepartmentFilter]);
 
   // Render principal de la pagina.
   return (
@@ -618,8 +719,14 @@ export const HrPage: React.FC = () => {
 
       {effectiveTenantId && (
         <>
-          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} mb={8}>
-            <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
+          <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={6} mb={8}>
+            <Box
+              gridColumn={{ base: "1 / -1", xl: "1 / span 1" }}
+              borderWidth="1px"
+              borderRadius="xl"
+              p={6}
+              bg={panelBg}
+            >
               <Heading as="h2" size="md" mb={4}>
                 {t("hr.departments.title")}
               </Heading>
@@ -744,7 +851,13 @@ export const HrPage: React.FC = () => {
               )}
             </Box>
 
-            <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
+            <Box
+              gridColumn={{ base: "1 / -1", xl: "2 / span 2" }}
+              borderWidth="1px"
+              borderRadius="xl"
+              p={6}
+              bg={panelBg}
+            >
               <Heading as="h2" size="md" mb={4}>
                 {t("hr.employees.title")}
               </Heading>
@@ -753,7 +866,7 @@ export const HrPage: React.FC = () => {
                 as="form"
                 align="stretch"
                 spacing={3}
-                mb={4}
+                mb={6}
                 onSubmit={handleCreateEmployee}
               >
                 <FormControl>
@@ -796,9 +909,28 @@ export const HrPage: React.FC = () => {
                   <FormLabel>{t("hr.employees.form.hourlyRate")}</FormLabel>
                   <Input
                     name="hourlyRate"
+                    type="number"
                     value={employeeForm.hourlyRate}
                     onChange={handleEmployeeChange}
                     placeholder={t("hr.employees.form.hourlyRatePlaceholder")}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>{t("hr.employees.form.availableHours", "Horas disponibles")}</FormLabel>
+                  <Input
+                    name="availableHours"
+                    type="number"
+                    value={employeeForm.availableHours}
+                    onChange={handleEmployeeChange}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>{t("hr.employees.form.availabilityPercentage", "Disponibilidad %")}</FormLabel>
+                  <Input
+                    name="availabilityPercentage"
+                    type="number"
+                    value={employeeForm.availabilityPercentage}
+                    onChange={handleEmployeeChange}
                   />
                 </FormControl>
                 <FormControl isRequired>
@@ -835,134 +967,187 @@ export const HrPage: React.FC = () => {
                 </Button>
               </VStack>
 
+              <Divider my={2} />
+              <Heading as="h3" size="sm" mb={3}>
+                {t("hr.employees.table.employee")}
+              </Heading>
+
               {isLoadingEmployees && <Text>{t("hr.employees.loading")}</Text>}
               {isErrorEmployees && (
                 <Text color="red.400">
                   {t("hr.employees.error")}
                 </Text>
               )}
-              {!isLoadingEmployees && employees && (
-                <Box
-                  borderWidth="1px"
-                  borderRadius="xl"
-                  bg={cardBg}
-                  overflow="hidden"
-                >
-                  <Box overflowX="auto" pb={2}>
-                    <Table size="sm" minWidth="860px">
-                      <Thead bg={tableHeadBg}>
-                        <Tr>
-                          <Th>{t("hr.employees.table.employee")}</Th>
-                          <Th>{t("hr.employees.table.email")}</Th>
-                          <Th isNumeric>{t("hr.employees.table.hourlyRate")}</Th>
-                          <Th>{t("hr.employees.table.position")}</Th>
-                          <Th>{t("hr.employees.table.department")}</Th>
-                          <Th>{t("hr.employees.table.status")}</Th>
-                          <Th minW="96px" whiteSpace="nowrap">
-                            {t("hr.employees.table.actions")}
-                          </Th>
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                      {employees.length === 0 ? (
-                        <Tr>
-                          <Td colSpan={7}>
-                            <Text fontSize="sm" color="gray.500">
-                              {t("hr.employees.table.empty")}
-                            </Text>
-                          </Td>
-                        </Tr>
-                      ) : (
-                        employees.map((e) => (
-                          <Tr key={e.id}>
-                            <Td>
-                              {e.full_name ||
-                                tenantUsers?.find((u) => u.id === e.user_id)
-                                  ?.full_name ||
-                                tenantUsers?.find((u) => u.id === e.user_id)
-                                  ?.email ||
-                                t("hr.employees.table.noName")}
-                            </Td>
-                            <Td>{e.email || "-"}</Td>
-                            <Td isNumeric>
-                              {e.hourly_rate != null
-                                ? Number(e.hourly_rate).toFixed(2)
-                                : "-"}
-                            </Td>
-                            <Td>{e.position || "-"}</Td>
-                            <Td>
-                              {e.primary_department_id
-                                ? departmentById.get(e.primary_department_id)
-                                    ?.name ?? "-"
-                                : "-"}
-                            </Td>
-                            <Td>
-                              <Badge
-                                colorScheme={e.is_active ? "green" : "red"}
-                              >
-                                {e.is_active ? t("hr.status.active") : t("hr.status.inactive")}
-                              </Badge>
-                            </Td>
-                            <Td minW="96px" whiteSpace="nowrap">
-                              <Button
-                                size="xs"
-                                onClick={() => openEditEmployee(e)}
-                              >
-                                {t("hr.employees.table.edit")}
-                              </Button>
-                            </Td>
-                          </Tr>
-                        ))
-                      )}
-                      </Tbody>
-                    </Table>
-                  </Box>
-                </Box>
-              )}
             </Box>
           </SimpleGrid>
 
-          <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
-            <Heading as="h2" size="md" mb={4}>
-              {t("hr.headcount.title")}
-            </Heading>
-            {isLoadingHeadcount && <Text>{t("hr.headcount.loading")}</Text>}
-            {!isLoadingHeadcount && headcount && (
-              <>
-                <Box overflowX="auto" bg={cardBg} borderRadius="xl" mb={4}>
-                  <Table size="sm" minWidth="420px">
-                  <Thead bg={tableHeadBg}>
-                    <Tr>
-                      <Th>{t("hr.headcount.table.department")}</Th>
-                      <Th isNumeric>{t("hr.headcount.table.activeEmployees")}</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {headcount.length === 0 ? (
-                      <Tr>
-                        <Td colSpan={2}>
-                          <Text fontSize="sm" color="gray.500">
-                            {t("hr.headcount.table.empty")}
-                          </Text>
-                        </Td>
-                      </Tr>
-                    ) : (
-                      headcount.map((item) => (
-                        <Tr key={item.department_id ?? Math.random()}>
-                          <Td>{item.department_name ?? "-"}</Td>
-                          <Td isNumeric>{item.total_employees}</Td>
-                        </Tr>
-                      ))
-                    )}
-                  </Tbody>
-                </Table>
+          {/* Listado de empleados con filtro de departamentos */}
+          {!isLoadingEmployees && employees && (
+            <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
+              <SimpleGrid columns={{ base: 1, lg: 4 }} spacing={4} alignItems="flex-start">
+                <Box
+                  gridColumn={{ base: "1 / -1", lg: "1 / span 1" }}
+                  borderWidth="1px"
+                  borderRadius="xl"
+                  p={4}
+                  bg={cardBg}
+                >
+                  <Heading size="sm" mb={3}>
+                    {t("hr.departments.title")}
+                  </Heading>
+                  <VStack align="stretch" spacing={2}>
+                    <Button
+                      size="sm"
+                      variant={selectedDepartmentFilter === "all" ? "solid" : "ghost"}
+                      colorScheme="green"
+                      justifyContent="space-between"
+                      onClick={() => setSelectedDepartmentFilter("all")}
+                    >
+                      <Text>Todos los departamentos</Text>
+                      <Badge>{employees.length}</Badge>
+                    </Button>
+                    {departmentOptions.map((dept) => {
+                      const count = employees.filter(
+                        (emp) => emp.primary_department_id === dept.id
+                      ).length;
+                      return (
+                        <Button
+                          key={dept.id}
+                          size="sm"
+                          variant={selectedDepartmentFilter === dept.id ? "solid" : "ghost"}
+                          justifyContent="space-between"
+                          onClick={() => setSelectedDepartmentFilter(dept.id)}
+                        >
+                          <Text>{dept.name}</Text>
+                          <Badge>{count}</Badge>
+                        </Button>
+                      );
+                    })}
+                  </VStack>
                 </Box>
-                <Text fontWeight="semibold" color={subtleText}>
-                  {t("hr.headcount.totalActive", { total: totalEmployees })}
-                </Text>
-              </>
-            )}
-          </Box>
+
+                <VStack
+                  gridColumn={{ base: "1 / -1", lg: "2 / span 3" }}
+                  align="stretch"
+                  spacing={3}
+                >
+                  {filteredEmployees.length === 0 ? (
+                    <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg}>
+                      <Text fontSize="sm" color="gray.500">
+                        {t("hr.employees.table.empty")}
+                      </Text>
+                    </Box>
+                  ) : (
+                    filteredEmployees.map((e) => {
+                      const fullName =
+                        e.full_name ||
+                        tenantUsers?.find((u) => u.id === e.user_id)?.full_name ||
+                        tenantUsers?.find((u) => u.id === e.user_id)?.email ||
+                        t("hr.employees.table.noName");
+                      const departmentName = e.primary_department_id
+                        ? departmentById.get(e.primary_department_id)?.name ?? "-"
+                        : "-";
+                      const availabilityPct =
+                        e.availability_percentage != null
+                          ? Number(e.availability_percentage)
+                          : null;
+                      const availabilityHours =
+                        e.available_hours != null ? Number(e.available_hours) : null;
+
+                      return (
+                        <Box
+                          key={e.id}
+                          borderWidth="1px"
+                          borderRadius="xl"
+                          p={5}
+                          bg={cardBg}
+                          boxShadow="sm"
+                        >
+                          <Flex
+                            justify="space-between"
+                            align={{ base: "flex-start", md: "center" }}
+                            gap={3}
+                            wrap="wrap"
+                            mb={3}
+                          >
+                            <Box>
+                              <Heading size="sm">{fullName}</Heading>
+                              <Text fontSize="sm" color={subtleText}>
+                                {e.position || "-"} • {departmentName}
+                              </Text>
+                              <Text fontSize="xs" color={subtleText}>
+                                {e.email || "-"}
+                              </Text>
+                            </Box>
+                            <HStack spacing={3}>
+                              <Badge colorScheme={e.is_active ? "green" : "red"}>
+                                {e.is_active ? t("hr.status.active") : t("hr.status.inactive")}
+                              </Badge>
+                              <Badge colorScheme="blue">
+                                {e.hourly_rate != null
+                                  ? `€${Number(e.hourly_rate).toFixed(2)}/h`
+                                  : t("hr.employees.table.hourlyRate")}
+                              </Badge>
+                              <Button size="sm" onClick={() => openEditEmployee(e)}>
+                                {t("hr.employees.table.edit")}
+                              </Button>
+                            </HStack>
+                          </Flex>
+
+                          <SimpleGrid columns={{ base: 1, md: 3, lg: 6 }} spacing={3}>
+                            <StatCell
+                              label={t("hr.employees.table.department", "Departamento")}
+                              value={departmentName}
+                            />
+                            <StatCell
+                              label={t("hr.employees.table.position", "Puesto")}
+                              value={e.position || "-"}
+                            />
+                            <StatCell
+                              label={t("hr.employees.table.hourlyRate", "Coste/hora")}
+                              value={
+                                e.hourly_rate != null
+                                  ? `€${Number(e.hourly_rate).toFixed(2)}`
+                                  : "-"
+                              }
+                            />
+                              <StatCell
+                                label={t("hr.employees.table.availableHours", "Horas disponibles")}
+                                value={
+                                  availabilityHours != null ? `${availabilityHours.toFixed(2)}h` : "-"
+                                }
+                              />
+                              <StatCell
+                                label={t("hr.employees.table.availabilityPercentage", "Disponibilidad %")}
+                                value={
+                                  availabilityPct != null ? `${availabilityPct.toFixed(1)}%` : "-"
+                                }
+                              />
+                            <StatCell label={t("hr.employees.table.email", "Correo")} value={e.email || "-"} />
+                          </SimpleGrid>
+
+                          {availabilityPct != null && (
+                            <Box mt={4}>
+                              <Progress
+                                value={Math.min(availabilityPct, 140)}
+                                size="sm"
+                                borderRadius="full"
+                                colorScheme={
+                                  availabilityPct > 100 ? "red" : availabilityPct > 85 ? "yellow" : "green"
+                                }
+                              />
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })
+                  )}
+                </VStack>
+              </SimpleGrid>
+            </Box>
+          )}
+
+          {/* Headcount eliminado según solicitud */}
         </>
       )}
 
@@ -1001,7 +1186,26 @@ export const HrPage: React.FC = () => {
                 <FormLabel>{t("hr.modal.hourlyRate")}</FormLabel>
                 <Input
                   name="hourlyRate"
+                  type="number"
                   value={employeeEditForm.hourlyRate}
+                  onChange={handleEmployeeEditChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.modal.availableHours", "Horas disponibles")}</FormLabel>
+                <Input
+                  name="availableHours"
+                  type="number"
+                  value={employeeEditForm.availableHours}
+                  onChange={handleEmployeeEditChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.modal.availabilityPercentage", "Disponibilidad %")}</FormLabel>
+                <Input
+                  name="availabilityPercentage"
+                  type="number"
+                  value={employeeEditForm.availabilityPercentage}
                   onChange={handleEmployeeEditChange}
                 />
               </FormControl>

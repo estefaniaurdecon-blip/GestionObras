@@ -140,6 +140,21 @@ def init_db() -> None:
                   text("ALTER TABLE erp_timeentry ALTER COLUMN task_id DROP NOT NULL")
                 )
 
+    # Campos de disponibilidad en perfiles de empleado.
+    if "employeeprofile" in table_names:
+        emp_columns = {col["name"] for col in inspector.get_columns("employeeprofile")}
+        with engine.begin() as conn:
+            if "available_hours" not in emp_columns:
+                conn.execute(
+                    text("ALTER TABLE employeeprofile ADD COLUMN available_hours DECIMAL NULL")
+                )
+            if "availability_percentage" not in emp_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE employeeprofile ADD COLUMN availability_percentage DECIMAL NULL"
+                    )
+                )
+
 def get_session() -> Iterator[Session]:
     """
     Proveedor de sesiones de base de datos para FastAPI.
