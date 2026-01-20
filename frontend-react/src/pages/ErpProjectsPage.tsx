@@ -1,5 +1,11 @@
 ﻿// Vista principal de proyectos: creaci├│n, resumen, diagrama Gantt y edici├│n detallada.
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Badge,
   Box,
@@ -43,9 +49,19 @@ import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
-import { fetchErpProjects, type ErpProject as ErpProjectApi } from "../api/erpReports";
-import { createErpProject, deleteErpProject, updateErpProject } from "../api/erpManagement";
-import { fetchErpTasks, type ErpTask as ErpTaskApi } from "../api/erpTimeTracking";
+import {
+  fetchErpProjects,
+  type ErpProject as ErpProjectApi,
+} from "../api/erpReports";
+import {
+  createErpProject,
+  deleteErpProject,
+  updateErpProject,
+} from "../api/erpManagement";
+import {
+  fetchErpTasks,
+  type ErpTask as ErpTaskApi,
+} from "../api/erpTimeTracking";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import {
   createActivity,
@@ -115,7 +131,8 @@ const toDateSafe = (value?: string | null): Date | null => {
 };
 
 // Normaliza fechas ISO (con tiempo) a formato yyyy-MM-dd para inputs type="date".
-const toDateInput = (value?: string | null) => (value ? value.split("T")[0] : "");
+const toDateInput = (value?: string | null) =>
+  value ? value.split("T")[0] : "";
 
 // Helper simple para ids locales.
 const createId = () =>
@@ -157,16 +174,28 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     }
 
     const allDates = tasks.flatMap((task) => [task.start, task.end]);
-    const minDate = new Date(Math.min(...allDates.map((date) => date.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map((date) => date.getTime())));
+    const minDate = new Date(
+      Math.min(...allDates.map((date) => date.getTime())),
+    );
+    const maxDate = new Date(
+      Math.max(...allDates.map((date) => date.getTime())),
+    );
 
     const paddedStart =
       viewMode === "week"
-        ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate() - 7)
+        ? new Date(
+            minDate.getFullYear(),
+            minDate.getMonth(),
+            minDate.getDate() - 7,
+          )
         : new Date(minDate.getFullYear(), minDate.getMonth(), 1);
     const paddedEnd =
       viewMode === "week"
-        ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate() + 14)
+        ? new Date(
+            maxDate.getFullYear(),
+            maxDate.getMonth(),
+            maxDate.getDate() + 14,
+          )
         : new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
 
     return { start: paddedStart, end: paddedEnd };
@@ -255,18 +284,24 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   const getTodayPosition = () => {
     const today = new Date();
     const offset =
-      (today.getTime() - dateRange.start.getTime()) /
-      (1000 * 60 * 60 * 24);
+      (today.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24);
     return (offset / totalDays) * 100;
   };
 
   // Centra la vista en la fecha actual al cargar/actualizar.
   useEffect(() => {
-    if (!centerOnToday || !scrollRef.current || !contentRef.current || tasks.length === 0) return;
+    if (
+      !centerOnToday ||
+      !scrollRef.current ||
+      !contentRef.current ||
+      tasks.length === 0
+    )
+      return;
     const container = scrollRef.current;
     const content = contentRef.current;
     const todayPos = getTodayPosition();
-    const target = (todayPos / 100) * content.scrollWidth - container.clientWidth / 2;
+    const target =
+      (todayPos / 100) * content.scrollWidth - container.clientWidth / 2;
     container.scrollTo({ left: Math.max(target, 0), behavior: "smooth" });
   }, [centerOnToday, tasks, viewMode, dateRange]);
 
@@ -285,9 +320,15 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
 
   const formatDate = (date: Date) => {
     if (viewMode === "week") {
-      return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+      return date.toLocaleDateString("es-ES", {
+        day: "2-digit",
+        month: "short",
+      });
     }
-    return date.toLocaleDateString("es-ES", { month: "short", year: "numeric" });
+    return date.toLocaleDateString("es-ES", {
+      month: "short",
+      year: "numeric",
+    });
   };
 
   if (tasks.length === 0) {
@@ -322,7 +363,13 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     >
       {/* Encabezado fijo */}
       <Box minW="1100px">
-        <Flex position="sticky" top={0} zIndex={2} bg={headerBg} borderBottomWidth="1px">
+        <Flex
+          position="sticky"
+          top={0}
+          zIndex={2}
+          bg={headerBg}
+          borderBottomWidth="1px"
+        >
           <Box
             w="300px"
             px={4}
@@ -392,159 +439,173 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
           {tasks.map((task, idx) => {
             const isMilestone = task.type === "milestone";
             const barPosition = getBarStyle(task);
-            const typeLabel =
-              task.id.startsWith("project-")
-                ? "Proyecto"
-                : task.id.startsWith("activity-")
-                  ? "Actividad"
-                  : task.id.startsWith("subactivity-")
-                    ? "Subactividad"
-                    : isMilestone
-                      ? "Hito"
-                      : "Tarea";
+            const typeLabel = task.id.startsWith("project-")
+              ? "Proyecto"
+              : task.id.startsWith("activity-")
+                ? "Actividad"
+                : task.id.startsWith("subactivity-")
+                  ? "Subactividad"
+                  : isMilestone
+                    ? "Hito"
+                    : "Tarea";
             return (
-            <Flex
-              key={task.id}
-              borderBottomWidth="1px"
-              borderColor={lineColor}
-              _hover={{ bg: gridBg }}
-              transition="background-color 0.15s ease"
-              bg={idx % 2 === 0 ? rowBg : gridBg}
-              cursor={task.type === "project" ? "pointer" : "default"}
-              onClick={() => {
-                if (task.type === "project" && task.projectId && onProjectClick) {
-                  onProjectClick(task.projectId);
-                }
-              }}
-            >
-              <HStack
-                spacing={3}
-                w="300px"
-                px={4}
-                py={3}
-                borderRightWidth="1px"
+              <Flex
+                key={task.id}
+                borderBottomWidth="1px"
                 borderColor={lineColor}
-                align="center"
-                role={task.type === "project" ? "button" : undefined}
+                _hover={{ bg: gridBg }}
+                transition="background-color 0.15s ease"
+                bg={idx % 2 === 0 ? rowBg : gridBg}
                 cursor={task.type === "project" ? "pointer" : "default"}
                 onClick={() => {
-                  if (task.type === "project" && task.projectId && onProjectClick) {
+                  if (
+                    task.type === "project" &&
+                    task.projectId &&
+                    onProjectClick
+                  ) {
                     onProjectClick(task.projectId);
                   }
                 }}
-                _hover={
-                  task.type === "project"
-                    ? { bg: gridBg, transition: "background 0.15s ease" }
-                    : undefined
-                }
               >
-                <Box flex="1" minW={0}>
-                  <Text
-                    fontSize="sm"
-                    fontWeight="semibold"
-                    noOfLines={1}
-                    color={taskTitleColor}
-                  >
-                    {task.name}
-                  </Text>
-                  <HStack spacing={2} mt={1} align="center">
-                    <Tag size="sm" colorScheme={isMilestone ? "purple" : "gray"}>
-                      {typeLabel}
-                    </Tag>
-                    {task.type === "project" && task.hasMilestones && (
-                      <Box
-                        w="10px"
-                        h="10px"
-                        bg="purple.500"
-                        transform="rotate(45deg)"
-                        borderRadius="2px"
-                        boxShadow="sm"
-                        border="1px solid rgba(255,255,255,0.7)"
-                      />
-                    )}
-                    {task.project && (
-                      <Text fontSize="xs" color="gray.500" noOfLines={1}>
-                        {task.project}
-                      </Text>
-                    )}
-                  </HStack>
-                  <Text fontSize="xs" color="gray.500">
-                    {task.start.toLocaleDateString("es-ES")} ÔÇö {task.end.toLocaleDateString("es-ES")}
-                  </Text>
-                </Box>
-              </HStack>
-              <Box flex="1" position="relative" h="60px">
-                <Flex
-                  position="absolute"
-                  inset={0}
-                  bgGradient={`linear(to-r, ${lineColor} 1px, transparent 1px)`}
-                  bgSize={`${100 / timeColumns.length}% 100%`}
-                  opacity={0.6}
-                />
-                <Tooltip
-                  label={`${task.name} ┬À ${typeLabel}${
-                    task.project ? ` ┬À ${task.project}` : ""
-                  }\n${task.start.toLocaleDateString("es-ES")} ÔÇö ${task.end.toLocaleDateString("es-ES")}`}
-                  hasArrow
-                  bg="gray.800"
-                  color="white"
-                  fontSize="xs"
-                  borderRadius="md"
-                  p={2}
-                  whiteSpace="pre-line"
-                  openDelay={150}
+                <HStack
+                  spacing={3}
+                  w="300px"
+                  px={4}
+                  py={3}
+                  borderRightWidth="1px"
+                  borderColor={lineColor}
+                  align="center"
+                  role={task.type === "project" ? "button" : undefined}
+                  cursor={task.type === "project" ? "pointer" : "default"}
+                  onClick={() => {
+                    if (
+                      task.type === "project" &&
+                      task.projectId &&
+                      onProjectClick
+                    ) {
+                      onProjectClick(task.projectId);
+                    }
+                  }}
+                  _hover={
+                    task.type === "project"
+                      ? { bg: gridBg, transition: "background 0.15s ease" }
+                      : undefined
+                  }
                 >
-                  {isMilestone ? (
-                    <Box
-                      position="absolute"
-                      top={-260}
-                      bottom={0}
-                      left={barPosition.left}
-                      borderLeft="2px dashed red"
-                      transform="translateX(-50%)"
-                      pointerEvents="none"
-                      zIndex={2}
-                    />
-                  ) : (
-                    <Box
-                      position="absolute"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      h="32px"
-                      borderRadius="md"
-                      bg={getStatusColor(task.status)}
-                      cursor="pointer"
-                      boxShadow="md"
-                      transition="all 0.15s ease"
-                      _hover={{ boxShadow: "lg", transform: "translateY(-50%) scale(1.02)" }}
-                      {...barPosition}
+                  <Box flex="1" minW={0}>
+                    <Text
+                      fontSize="sm"
+                      fontWeight="semibold"
+                      noOfLines={1}
+                      color={taskTitleColor}
                     >
+                      {task.name}
+                    </Text>
+                    <HStack spacing={2} mt={1} align="center">
+                      <Tag
+                        size="sm"
+                        colorScheme={isMilestone ? "purple" : "gray"}
+                      >
+                        {typeLabel}
+                      </Tag>
+                      {task.type === "project" && task.hasMilestones && (
+                        <Box
+                          w="10px"
+                          h="10px"
+                          bg="purple.500"
+                          transform="rotate(45deg)"
+                          borderRadius="2px"
+                          boxShadow="sm"
+                          border="1px solid rgba(255,255,255,0.7)"
+                        />
+                      )}
+                      {task.project && (
+                        <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                          {task.project}
+                        </Text>
+                      )}
+                    </HStack>
+                    <Text fontSize="xs" color="gray.500">
+                      {task.start.toLocaleDateString("es-ES")} ÔÇö{" "}
+                      {task.end.toLocaleDateString("es-ES")}
+                    </Text>
+                  </Box>
+                </HStack>
+                <Box flex="1" position="relative" h="60px">
+                  <Flex
+                    position="absolute"
+                    inset={0}
+                    bgGradient={`linear(to-r, ${lineColor} 1px, transparent 1px)`}
+                    bgSize={`${100 / timeColumns.length}% 100%`}
+                    opacity={0.6}
+                  />
+                  <Tooltip
+                    label={`${task.name} ┬À ${typeLabel}${
+                      task.project ? ` ┬À ${task.project}` : ""
+                    }\n${task.start.toLocaleDateString("es-ES")} ÔÇö ${task.end.toLocaleDateString("es-ES")}`}
+                    hasArrow
+                    bg="gray.800"
+                    color="white"
+                    fontSize="xs"
+                    borderRadius="md"
+                    p={2}
+                    whiteSpace="pre-line"
+                    openDelay={150}
+                  >
+                    {isMilestone ? (
                       <Box
                         position="absolute"
-                        left={0}
-                        top={0}
+                        top={-260}
                         bottom={0}
-                        w={`${task.progress}%`}
-                        bg="rgba(255,255,255,0.35)"
-                        borderRadius="md"
+                        left={barPosition.left}
+                        borderLeft="2px dashed red"
+                        transform="translateX(-50%)"
+                        pointerEvents="none"
+                        zIndex={2}
                       />
-                      <Flex
+                    ) : (
+                      <Box
                         position="absolute"
-                        inset={0}
-                        align="center"
-                        px={2}
-                        fontSize="xs"
-                        fontWeight="semibold"
-                        color="white"
+                        top="50%"
+                        transform="translateY(-50%)"
+                        h="32px"
+                        borderRadius="md"
+                        bg={getStatusColor(task.status)}
+                        cursor="pointer"
+                        boxShadow="md"
+                        transition="all 0.15s ease"
+                        _hover={{
+                          boxShadow: "lg",
+                          transform: "translateY(-50%) scale(1.02)",
+                        }}
+                        {...barPosition}
                       >
-                        {Math.round(task.progress)}%
-                      </Flex>
-                    </Box>
-                  )}
-                </Tooltip>
-              </Box>
-            </Flex>
-          );
+                        <Box
+                          position="absolute"
+                          left={0}
+                          top={0}
+                          bottom={0}
+                          w={`${task.progress}%`}
+                          bg="rgba(255,255,255,0.35)"
+                          borderRadius="md"
+                        />
+                        <Flex
+                          position="absolute"
+                          inset={0}
+                          align="center"
+                          px={2}
+                          fontSize="xs"
+                          fontWeight="semibold"
+                          color="white"
+                        >
+                          {Math.round(task.progress)}%
+                        </Flex>
+                      </Box>
+                    )}
+                  </Tooltip>
+                </Box>
+              </Flex>
+            );
           })}
 
           {todayLeftPx !== null && (
@@ -556,7 +617,14 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
               right={0}
               pointerEvents="none"
             >
-              <Box position="absolute" top={0} bottom={0} left={`${todayLeftPx}px`} w="2px" bg="green.600">
+              <Box
+                position="absolute"
+                top={0}
+                bottom={0}
+                left={`${todayLeftPx}px`}
+                w="2px"
+                bg="green.600"
+              >
                 <Box
                   position="absolute"
                   top="-24px"
@@ -625,28 +693,46 @@ export const ErpProjectsPage: React.FC = () => {
   >([]);
   // Estado del drawer de detalle/edici├│n.
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<ErpProjectApi | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ErpProjectApi | null>(
+    null,
+  );
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [activityEdits, setActivityEdits] = useState<
-    Record<number, { name: string; start: string; end: string; description: string }>
+    Record<
+      number,
+      { name: string; start: string; end: string; description: string }
+    >
   >({});
   const [subactivityEdits, setSubactivityEdits] = useState<
-    Record<number, { name: string; start: string; end: string; description: string }>
+    Record<
+      number,
+      { name: string; start: string; end: string; description: string }
+    >
   >({});
   const [milestoneEdits, setMilestoneEdits] = useState<
     Record<number, { title: string; due: string; description: string }>
   >({});
-  const [summaryYear, setSummaryYear] = useState<number>(new Date().getFullYear());
-  const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
+  const [summaryYear, setSummaryYear] = useState<number>(
+    new Date().getFullYear(),
+  );
+  const [allocationDrafts, setAllocationDrafts] = useState<
+    Record<string, string>
+  >({});
   const [summarySearch, setSummarySearch] = useState("");
   const [summaryEditMode, setSummaryEditMode] = useState(false);
-  const [projectJustify, setProjectJustify] = useState<Record<number, number>>({});
-  const [projectJustified, setProjectJustified] = useState<Record<number, number>>({});
-  const [summaryMilestones, setSummaryMilestones] = useState<Record<number, Array<{ label: string; hours: number }>>>({});
+  const [projectJustify, setProjectJustify] = useState<Record<number, number>>(
+    {},
+  );
+  const [projectJustified, setProjectJustified] = useState<
+    Record<number, number>
+  >({});
+  const [summaryMilestones, setSummaryMilestones] = useState<
+    Record<number, Array<{ label: string; hours: number }>>
+  >({});
   const { data: currentUser } = useCurrentUser();
 
   // Fetch b├ísico: proyectos, tareas, actividades, subactividades e hitos.
@@ -693,7 +779,8 @@ export const ErpProjectsPage: React.FC = () => {
 
   const { data: allocations = [] } = useQuery<EmployeeAllocation[]>({
     queryKey: ["hr-allocations", summaryYear, hrTenantId],
-    queryFn: () => fetchEmployeeAllocations({ year: summaryYear, tenantId: hrTenantId }),
+    queryFn: () =>
+      fetchEmployeeAllocations({ year: summaryYear, tenantId: hrTenantId }),
     enabled: canFetchHr,
   });
 
@@ -708,60 +795,69 @@ export const ErpProjectsPage: React.FC = () => {
   }, [selectedProject]);
 
   // Normaliza tareas para calcular progreso y alimentar m├®tricas.
-  const tasks: ErpTask[] = useMemo(
-    () => {
-      const now = new Date();
-      return rawTasks
-        .filter((task) => task.start_date && task.end_date)
-        .map((task) => {
-          const status = task.is_completed
+  const tasks: ErpTask[] = useMemo(() => {
+    const now = new Date();
+    return rawTasks
+      .filter((task) => task.start_date && task.end_date)
+      .map((task) => {
+        const status = task.is_completed
+          ? "completed"
+          : task.status === "done"
             ? "completed"
-            : task.status === "done"
-              ? "completed"
-              : task.status === "in_progress"
-                ? "in_progress"
-                : "pending";
-          const start = new Date(task.start_date as string);
-          const end = new Date(task.end_date as string);
-          const durationMs = end.getTime() - start.getTime();
-          let progress = 0;
-          if (status === "completed") {
-            progress = 100;
-          } else if (status === "in_progress" && durationMs > 0) {
-            const elapsedMs = now.getTime() - start.getTime();
-            const ratio = Math.min(Math.max(elapsedMs / durationMs, 0), 1);
-            progress = Math.round(ratio * 100);
-          }
+            : task.status === "in_progress"
+              ? "in_progress"
+              : "pending";
+        const start = new Date(task.start_date as string);
+        const end = new Date(task.end_date as string);
+        const durationMs = end.getTime() - start.getTime();
+        let progress = 0;
+        if (status === "completed") {
+          progress = 100;
+        } else if (status === "in_progress" && durationMs > 0) {
+          const elapsedMs = now.getTime() - start.getTime();
+          const ratio = Math.min(Math.max(elapsedMs / durationMs, 0), 1);
+          progress = Math.round(ratio * 100);
+        }
 
-          return {
-            id: task.id,
-            project_id: task.project_id ?? null,
-            name: task.title,
-            start_date: task.start_date ?? "",
-            end_date: task.end_date ?? "",
-            status,
-            progress,
-          };
-        });
-    },
-    [rawTasks]
-  );
+        return {
+          id: task.id,
+          project_id: task.project_id ?? null,
+          name: task.title,
+          start_date: task.start_date ?? "",
+          end_date: task.end_date ?? "",
+          status,
+          progress,
+        };
+      });
+  }, [rawTasks]);
   const totalTasks = rawTasks.length;
   const completedTasks = rawTasks.filter(
-    (task) => task.is_completed || task.status === "done" || task.status === "completed"
+    (task) =>
+      task.is_completed ||
+      task.status === "done" ||
+      task.status === "completed",
   ).length;
   // Filtra elementos asociados al proyecto seleccionado para el drawer.
   const selectedProjectActivities = useMemo(
-    () => (selectedProject ? activities.filter((act) => act.project_id === selectedProject.id) : []),
-    [selectedProject, activities]
+    () =>
+      selectedProject
+        ? activities.filter((act) => act.project_id === selectedProject.id)
+        : [],
+    [selectedProject, activities],
   );
   const selectedProjectMilestones = useMemo(
-    () => (selectedProject ? milestones.filter((mil) => mil.project_id === selectedProject.id) : []),
-    [selectedProject, milestones]
+    () =>
+      selectedProject
+        ? milestones.filter((mil) => mil.project_id === selectedProject.id)
+        : [],
+    [selectedProject, milestones],
   );
   const selectedProjectTasks = useMemo(
-    () => (selectedProject ? rawTasks.filter((task) => task.project_id === selectedProject.id) : []),
-    [selectedProject, rawTasks]
+    () =>
+      selectedProject
+        ? rawTasks.filter((task) => task.project_id === selectedProject.id)
+        : [],
+    [selectedProject, rawTasks],
   );
   const selectedProjectSubactivities = useMemo(() => {
     if (!selectedProject) return [];
@@ -772,7 +868,10 @@ export const ErpProjectsPage: React.FC = () => {
   // Prepara formularios locales para actividades, subactividades e hitos del proyecto.
   useEffect(() => {
     if (!selectedProject) return;
-    const nextActivities: Record<number, { name: string; start: string; end: string; description: string }> = {};
+    const nextActivities: Record<
+      number,
+      { name: string; start: string; end: string; description: string }
+    > = {};
     selectedProjectActivities.forEach((act) => {
       nextActivities[act.id] = {
         name: act.name ?? "",
@@ -797,7 +896,10 @@ export const ErpProjectsPage: React.FC = () => {
     });
     setSubactivityEdits(nextSubactivities);
 
-    const nextMilestones: Record<number, { title: string; due: string; description: string }> = {};
+    const nextMilestones: Record<
+      number,
+      { title: string; due: string; description: string }
+    > = {};
     selectedProjectMilestones.forEach((mil) => {
       nextMilestones[mil.id] = {
         title: mil.title ?? "",
@@ -806,7 +908,12 @@ export const ErpProjectsPage: React.FC = () => {
       };
     });
     setMilestoneEdits(nextMilestones);
-  }, [selectedProject, selectedProjectActivities, selectedProjectSubactivities, selectedProjectMilestones]);
+  }, [
+    selectedProject,
+    selectedProjectActivities,
+    selectedProjectSubactivities,
+    selectedProjectMilestones,
+  ]);
 
   const projectNameMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -853,10 +960,21 @@ export const ErpProjectsPage: React.FC = () => {
         new Date(projectStart.getTime() + 30 * 24 * 60 * 60 * 1000);
       const progress = computeProgress(projectStart, projectEnd);
       const status: Status =
-        now >= projectEnd ? "on-time" : now >= projectStart ? "planned" : "planned";
-      const projectMilestones = milestones.filter((m) => m.project_id === project.id);
+        now >= projectEnd
+          ? "on-time"
+          : now >= projectStart
+            ? "planned"
+            : "planned";
+      const projectMilestones = milestones.filter(
+        (m) => m.project_id === project.id,
+      );
       const milestoneDates = projectMilestones
-        .map((m) => toDateSafe(m.due_date) ?? toDateSafe((m as any).end_date) ?? toDateSafe((m as any).start_date))
+        .map(
+          (m) =>
+            toDateSafe(m.due_date) ??
+            toDateSafe((m as any).end_date) ??
+            toDateSafe((m as any).start_date),
+        )
         .filter((d): d is Date => Boolean(d));
       items.push({
         id: `project-${project.id}`,
@@ -878,13 +996,15 @@ export const ErpProjectsPage: React.FC = () => {
       const project = projectMap.get(activity.project_id);
       const fallbackStart = project ? toDateSafe(project.start_date) : null;
       const fallbackEnd = project ? toDateSafe(project.end_date) : null;
-      const start = toDateSafe(activity.start_date) ?? fallbackStart ?? new Date();
+      const start =
+        toDateSafe(activity.start_date) ?? fallbackStart ?? new Date();
       const end =
         toDateSafe(activity.end_date) ??
         fallbackEnd ??
         new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
       const progress = computeProgress(start, end);
-      const status: Status = now >= end ? "on-time" : now >= start ? "planned" : "planned";
+      const status: Status =
+        now >= end ? "on-time" : now >= start ? "planned" : "planned";
       items.push({
         id: `activity-${activity.id}`,
         name: activity.name,
@@ -903,15 +1023,21 @@ export const ErpProjectsPage: React.FC = () => {
       const activity = activityMap.get(subactivity.activity_id);
       const project = activity ? projectMap.get(activity.project_id) : null;
       if (!activity) return;
-      const fallbackStart = toDateSafe(activity.start_date) ?? (project ? toDateSafe(project.start_date) : null);
-      const fallbackEnd = toDateSafe(activity.end_date) ?? (project ? toDateSafe(project.end_date) : null);
-      const start = toDateSafe(subactivity.start_date) ?? fallbackStart ?? new Date();
+      const fallbackStart =
+        toDateSafe(activity.start_date) ??
+        (project ? toDateSafe(project.start_date) : null);
+      const fallbackEnd =
+        toDateSafe(activity.end_date) ??
+        (project ? toDateSafe(project.end_date) : null);
+      const start =
+        toDateSafe(subactivity.start_date) ?? fallbackStart ?? new Date();
       const end =
         toDateSafe(subactivity.end_date) ??
         fallbackEnd ??
         new Date(start.getTime() + 5 * 24 * 60 * 60 * 1000);
       const progress = computeProgress(start, end);
-      const status: Status = now >= end ? "on-time" : now >= start ? "planned" : "planned";
+      const status: Status =
+        now >= end ? "on-time" : now >= start ? "planned" : "planned";
       items.push({
         id: `subactivity-${subactivity.id}`,
         name: `Sub: ${subactivity.name}`,
@@ -978,7 +1104,16 @@ export const ErpProjectsPage: React.FC = () => {
     });
 
     return items;
-  }, [projects, activities, subactivities, milestones, rawTasks, projectNameMap, projectMap, activityMap]);
+  }, [
+    projects,
+    activities,
+    subactivities,
+    milestones,
+    rawTasks,
+    projectNameMap,
+    projectMap,
+    activityMap,
+  ]);
 
   const ganttProjects = projects;
 
@@ -992,7 +1127,7 @@ export const ErpProjectsPage: React.FC = () => {
 
     // Vista del proyecto seleccionado: incluye actividades, subactividades e hitos.
     const filtered = ganttItems.filter(
-      (item) => item.projectId && String(item.projectId) === selectedProjectId
+      (item) => item.projectId && String(item.projectId) === selectedProjectId,
     );
 
     const projectIdNum = Number(selectedProjectId);
@@ -1012,10 +1147,17 @@ export const ErpProjectsPage: React.FC = () => {
     activityRows.forEach((act) => {
       ordered.push(act);
       subRows
-        .filter((sub) => sub.activityId === act.activityId || sub.activityId === act.id)
+        .filter(
+          (sub) =>
+            sub.activityId === act.activityId || sub.activityId === act.id,
+        )
         .forEach((sub) => ordered.push(sub));
       milestoneRows
-        .filter((mil) => mil.activityId && (mil.activityId === act.activityId || mil.activityId === act.id))
+        .filter(
+          (mil) =>
+            mil.activityId &&
+            (mil.activityId === act.activityId || mil.activityId === act.id),
+        )
         .forEach((mil) => ordered.push(mil));
     });
     milestoneRows
@@ -1055,8 +1197,8 @@ export const ErpProjectsPage: React.FC = () => {
                 },
               ],
             }
-          : act
-      )
+          : act,
+      ),
     );
   };
 
@@ -1143,7 +1285,8 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al guardar",
-        description: error?.response?.data?.detail ?? "No se pudo guardar el proyecto.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo guardar el proyecto.",
         status: "error",
       });
     },
@@ -1151,8 +1294,10 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Mutaciones de edici├│n en cascada para actividad, subactividad e hito.
   const updateActivityMutation = useMutation({
-    mutationFn: async (input: { id: number; payload: Parameters<typeof updateActivity>[1] }) =>
-      updateActivity(input.id, input.payload),
+    mutationFn: async (input: {
+      id: number;
+      payload: Parameters<typeof updateActivity>[1];
+    }) => updateActivity(input.id, input.payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["erp-activities"] });
       toast({ title: "Actividad actualizada", status: "success" });
@@ -1160,15 +1305,19 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al actualizar actividad",
-        description: error?.response?.data?.detail ?? "No se pudo actualizar la actividad.",
+        description:
+          error?.response?.data?.detail ??
+          "No se pudo actualizar la actividad.",
         status: "error",
       });
     },
   });
 
   const updateSubActivityMutation = useMutation({
-    mutationFn: async (input: { id: number; payload: Parameters<typeof updateSubActivity>[1] }) =>
-      updateSubActivity(input.id, input.payload),
+    mutationFn: async (input: {
+      id: number;
+      payload: Parameters<typeof updateSubActivity>[1];
+    }) => updateSubActivity(input.id, input.payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["erp-subactivities"] });
       toast({ title: "Subactividad actualizada", status: "success" });
@@ -1176,15 +1325,19 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al actualizar subactividad",
-        description: error?.response?.data?.detail ?? "No se pudo actualizar la subactividad.",
+        description:
+          error?.response?.data?.detail ??
+          "No se pudo actualizar la subactividad.",
         status: "error",
       });
     },
   });
 
   const updateMilestoneMutation = useMutation({
-    mutationFn: async (input: { id: number; payload: Parameters<typeof updateMilestone>[1] }) =>
-      updateMilestone(input.id, input.payload),
+    mutationFn: async (input: {
+      id: number;
+      payload: Parameters<typeof updateMilestone>[1];
+    }) => updateMilestone(input.id, input.payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["erp-milestones"] });
       toast({ title: "Hito actualizado", status: "success" });
@@ -1192,7 +1345,8 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al actualizar hito",
-        description: error?.response?.data?.detail ?? "No se pudo actualizar el hito.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo actualizar el hito.",
         status: "error",
       });
     },
@@ -1201,10 +1355,10 @@ export const ErpProjectsPage: React.FC = () => {
   const createAllocationMutation = useMutation({
     mutationFn: createEmployeeAllocation,
     onSuccess: (created) => {
-      queryClient.setQueryData<EmployeeAllocation[]>(["hr-allocations", summaryYear], (prev = []) => [
-        ...prev.filter((a) => a.id !== created.id),
-        created,
-      ]);
+      queryClient.setQueryData<EmployeeAllocation[]>(
+        ["hr-allocations", summaryYear],
+        (prev = []) => [...prev.filter((a) => a.id !== created.id), created],
+      );
       toast({
         title: "Horas asignadas",
         description: "La asignación se guardó correctamente.",
@@ -1223,11 +1377,17 @@ export const ErpProjectsPage: React.FC = () => {
   });
 
   const updateAllocationMutation = useMutation({
-    mutationFn: ({ allocationId, data }: { allocationId: number; data: Partial<EmployeeAllocation> }) =>
-      updateEmployeeAllocation(allocationId, data),
+    mutationFn: ({
+      allocationId,
+      data,
+    }: {
+      allocationId: number;
+      data: Partial<EmployeeAllocation>;
+    }) => updateEmployeeAllocation(allocationId, data),
     onSuccess: (updated) => {
-      queryClient.setQueryData<EmployeeAllocation[]>(["hr-allocations", summaryYear], (prev = []) =>
-        prev.map((a) => (a.id === updated.id ? updated : a)),
+      queryClient.setQueryData<EmployeeAllocation[]>(
+        ["hr-allocations", summaryYear],
+        (prev = []) => prev.map((a) => (a.id === updated.id ? updated : a)),
       );
       toast({
         title: "Asignación actualizada",
@@ -1266,7 +1426,8 @@ export const ErpProjectsPage: React.FC = () => {
           await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
           toast({
             title: "Proyecto desactivado",
-            description: "El backend no permite eliminar; se marc├│ como inactivo.",
+            description:
+              "El backend no permite eliminar; se marc├│ como inactivo.",
             status: "info",
           });
           setSelectedProject(null);
@@ -1285,7 +1446,8 @@ export const ErpProjectsPage: React.FC = () => {
       }
       toast({
         title: "Error al eliminar",
-        description: error?.response?.data?.detail ?? "No se pudo eliminar el proyecto.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo eliminar el proyecto.",
         status: "error",
       });
     },
@@ -1312,7 +1474,8 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al actualizar",
-        description: error?.response?.data?.detail ?? "No se pudo actualizar el proyecto.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo actualizar el proyecto.",
         status: "error",
       });
     },
@@ -1405,8 +1568,11 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrDepartments]);
 
-  const allocationKey = (employeeId: number, projectId?: number | null, year?: number | null) =>
-    `${employeeId}-${projectId ?? "none"}-${year ?? ""}`;
+  const allocationKey = (
+    employeeId: number,
+    projectId?: number | null,
+    year?: number | null,
+  ) => `${employeeId}-${projectId ?? "none"}-${year ?? ""}`;
 
   const allocationIndex = useMemo(() => {
     const map = new Map<string, EmployeeAllocation>();
@@ -1430,7 +1596,10 @@ export const ErpProjectsPage: React.FC = () => {
     hrEmployees.forEach((emp) => {
       const base = Number(emp.available_hours ?? 0);
       const pct = Number(emp.availability_percentage ?? 100);
-      const available = Number.isFinite(base) && Number.isFinite(pct) ? Math.max(0, Math.round(base * (pct / 100))) : 0;
+      const available =
+        Number.isFinite(base) && Number.isFinite(pct)
+          ? Math.max(0, Math.round(base * (pct / 100)))
+          : 0;
       map[emp.id] = available;
     });
     return map;
@@ -1440,7 +1609,8 @@ export const ErpProjectsPage: React.FC = () => {
     const totals: Record<number, number> = {};
     allocations.forEach((a) => {
       if (!a.project_id) return;
-      totals[a.project_id] = (totals[a.project_id] ?? 0) + Number(a.allocated_hours ?? 0);
+      totals[a.project_id] =
+        (totals[a.project_id] ?? 0) + Number(a.allocated_hours ?? 0);
     });
     return totals;
   }, [allocations]);
@@ -1457,19 +1627,18 @@ export const ErpProjectsPage: React.FC = () => {
     setProjectJustified((prev) => {
       const next = { ...prev };
       projectColumns.forEach((p) => {
-        if (next[p.id] === undefined) next[p.id] = Math.min(projectTotals[p.id] ?? 0, projectJustify[p.id] ?? projectTotals[p.id] ?? 0);
+        if (next[p.id] === undefined)
+          next[p.id] = Math.min(
+            projectTotals[p.id] ?? 0,
+            projectJustify[p.id] ?? projectTotals[p.id] ?? 0,
+          );
       });
       return next;
     });
     setSummaryMilestones((prev) => {
       const next = { ...prev };
       projectColumns.forEach((p) => {
-        if (!next[p.id]) {
-          next[p.id] = [
-            { label: "H1", hours: 0 },
-            { label: "H2", hours: 0 },
-          ];
-        }
+        if (next[p.id] === undefined) next[p.id] = "";
       });
       return next;
     });
@@ -1481,19 +1650,26 @@ export const ErpProjectsPage: React.FC = () => {
   );
 
   const totalAllocatedHours = useMemo(
-    () => allocations.reduce((sum, a) => sum + Number(a.allocated_hours ?? 0), 0),
+    () =>
+      allocations.reduce((sum, a) => sum + Number(a.allocated_hours ?? 0), 0),
     [allocations],
   );
 
   const filteredSummaryEmployees = useMemo(
     () =>
       hrEmployees.filter((emp) =>
-        (emp.full_name || "").toLowerCase().includes(summarySearch.toLowerCase()),
+        (emp.full_name || "")
+          .toLowerCase()
+          .includes(summarySearch.toLowerCase()),
       ),
     [hrEmployees, summarySearch],
   );
 
-  const handleAllocationBlur = (employee: EmployeeProfile, projectId: number, value: string) => {
+  const handleAllocationBlur = (
+    employee: EmployeeProfile,
+    projectId: number,
+    value: string,
+  ) => {
     const key = allocationKey(employee.id, projectId, summaryYear);
     const parsed = Number(value || 0);
     const safeValue = Number.isFinite(parsed) ? parsed : 0;
@@ -1506,7 +1682,8 @@ export const ErpProjectsPage: React.FC = () => {
           allocated_hours: safeValue,
           project_id: projectId,
           employee_id: existing.employee_id,
-          department_id: employee.primary_department_id ?? existing.department_id ?? null,
+          department_id:
+            employee.primary_department_id ?? existing.department_id ?? null,
           year: summaryYear,
         },
       });
@@ -1560,7 +1737,11 @@ export const ErpProjectsPage: React.FC = () => {
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
             {heroItems.map((item) => (
               <Box key={item.label} p={4} borderRadius="lg" bg="whiteAlpha.100">
-                <Text fontSize="xs" textTransform="uppercase" color="whiteAlpha.800">
+                <Text
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  color="whiteAlpha.800"
+                >
                   {item.label}
                 </Text>
                 <Heading size="md" mt={1}>
@@ -1573,24 +1754,36 @@ export const ErpProjectsPage: React.FC = () => {
       </Box>
 
       {/* Navegaci├│n por pesta├▒as: resumen, tarjetas, Gantt y creaci├│n */}
-      <Tabs variant="line" colorScheme="green" isLazy index={activeTab} onChange={setActiveTab}>
-          <TabList borderBottomWidth="1px">
-            <Tab>Resumen</Tab>
-            <Tab>Proyectos</Tab>
-            <Tab>Diagrama de Gantt</Tab>
-            <Tab>Crear</Tab>
-          </TabList>
-          <TabPanels mt={4}>
+      <Tabs
+        variant="line"
+        colorScheme="green"
+        isLazy
+        index={activeTab}
+        onChange={setActiveTab}
+      >
+        <TabList borderBottomWidth="1px">
+          <Tab>Resumen</Tab>
+          <Tab>Proyectos</Tab>
+          <Tab>Diagrama de Gantt</Tab>
+          <Tab>Crear</Tab>
+        </TabList>
+        <TabPanels mt={4}>
           {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
           <TabPanel px={0}>
             <Stack spacing={5}>
-              <Flex align="center" justify="space-between" gap={4} flexWrap="wrap">
+              <Flex
+                align="center"
+                justify="space-between"
+                gap={4}
+                flexWrap="wrap"
+              >
                 <Box>
                   <Heading size="md" mb={1}>
                     Gestión y seguimiento de proyectos 2024-2025
                   </Heading>
                   <Text fontSize="sm" color={subtleText}>
-                    Tablero tipo Excel con horas a justificar, justificadas y asignación por empleado.
+                    Tablero tipo Excel con horas a justificar, justificadas y
+                    asignación por empleado.
                   </Text>
                 </Box>
                 <HStack spacing={3} align="flex-end">
@@ -1615,7 +1808,11 @@ export const ErpProjectsPage: React.FC = () => {
                       value={summaryYear}
                       onChange={(e) => {
                         const parsed = Number(e.target.value);
-                        setSummaryYear(Number.isFinite(parsed) ? parsed : new Date().getFullYear());
+                        setSummaryYear(
+                          Number.isFinite(parsed)
+                            ? parsed
+                            : new Date().getFullYear(),
+                        );
                       }}
                     />
                   </FormControl>
@@ -1623,7 +1820,11 @@ export const ErpProjectsPage: React.FC = () => {
                     size="sm"
                     colorScheme="green"
                     variant="solid"
-                    onClick={() => queryClient.invalidateQueries({ queryKey: ["hr-allocations", summaryYear, hrTenantId] })}
+                    onClick={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["hr-allocations", summaryYear, hrTenantId],
+                      })
+                    }
                   >
                     Refrescar
                   </Button>
@@ -1638,24 +1839,55 @@ export const ErpProjectsPage: React.FC = () => {
                 </HStack>
               </Flex>
 
-              <Box borderWidth="1px" borderRadius="xl" overflow="auto" bg="white" boxShadow="md">
+              <Box
+                borderWidth="1px"
+                borderRadius="xl"
+                overflow="auto"
+                bg="white"
+                boxShadow="md"
+              >
                 <Table size="sm" variant="simple" minW="1400px">
                   <Thead>
                     <Tr bg="gray.200">
                       <Th position="sticky" left={0} zIndex={4} minW="60px" />
-                      <Th position="sticky" left="60px" zIndex={4} minW="170px" />
-                      <Th position="sticky" left="230px" zIndex={4} minW="190px" />
-                      <Th position="sticky" left="420px" zIndex={4} minW="120px" />
+                      <Th
+                        position="sticky"
+                        left="60px"
+                        zIndex={4}
+                        minW="170px"
+                      />
+                      <Th
+                        position="sticky"
+                        left="230px"
+                        zIndex={4}
+                        minW="190px"
+                      />
+                      <Th
+                        position="sticky"
+                        left="420px"
+                        zIndex={4}
+                        minW="120px"
+                      />
                       {projectColumns.map((p) => (
-                        <Th key={p.id} textAlign="center" bg="gray.200" borderColor="gray.300">
+                        <Th
+                          key={p.id}
+                          textAlign="center"
+                          bg="gray.200"
+                          borderColor="gray.300"
+                        >
                           {p.name}
                         </Th>
                       ))}
-                      <Th textAlign="center" bg="green.700" color="white" minW="140px">
+                      <Th
+                        textAlign="center"
+                        bg="green.700"
+                        color="white"
+                        minW="140px"
+                      >
                         TOTAL HORAS JUSTIFICADAS
                       </Th>
                       <Th textAlign="center" bg="gray.50" minW="90px">
-                        H+D 100%
+                        I+D 100%
                       </Th>
                       <Th textAlign="center" bg="gray.50" minW="90px">
                         Estudio 50%
@@ -1666,7 +1898,12 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th textAlign="center" bg="gray.50" minW="110px">
                         Límites especiales
                       </Th>
-                      <Th textAlign="center" bg="red.600" color="white" minW="150px">
+                      <Th
+                        textAlign="center"
+                        bg="red.600"
+                        color="white"
+                        minW="150px"
+                      >
                         Horas disponibles para 2025
                       </Th>
                       <Th textAlign="center" minW="90px">
@@ -1674,11 +1911,22 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
                     </Tr>
                     <Tr bg="gray.50" borderBottomWidth="1px">
-                      <Th position="sticky" left={0} zIndex={3} bg="gray.50" colSpan={4} textAlign="left">
+                      <Th
+                        position="sticky"
+                        left={0}
+                        zIndex={3}
+                        bg="gray.50"
+                        colSpan={4}
+                        textAlign="left"
+                      >
                         Horas a justificar
                       </Th>
                       {projectColumns.map((p) => (
-                        <Th key={p.id} textAlign="center" borderColor="gray.200">
+                        <Th
+                          key={p.id}
+                          textAlign="center"
+                          borderColor="gray.200"
+                        >
                           <Input
                             size="xs"
                             type="number"
@@ -1696,16 +1944,31 @@ export const ErpProjectsPage: React.FC = () => {
                         </Th>
                       ))}
                       <Th textAlign="center" bg="green.50">
-                        {Object.values(projectJustified).reduce((a, b) => a + (b || 0), 0)} h
+                        {Object.values(projectJustified).reduce(
+                          (a, b) => a + (b || 0),
+                          0,
+                        )}{" "}
+                        h
                       </Th>
                       <Th colSpan={5} />
                     </Tr>
                     <Tr bg="green.50" borderBottomWidth="1px">
-                      <Th position="sticky" left={0} zIndex={3} bg="gray.50" colSpan={4} textAlign="left">
+                      <Th
+                        position="sticky"
+                        left={0}
+                        zIndex={3}
+                        bg="gray.50"
+                        colSpan={4}
+                        textAlign="left"
+                      >
                         Justificadas
                       </Th>
                       {projectColumns.map((p) => (
-                        <Th key={p.id} textAlign="center" borderColor="gray.200">
+                        <Th
+                          key={p.id}
+                          textAlign="center"
+                          borderColor="gray.200"
+                        >
                           <Input
                             size="xs"
                             type="number"
@@ -1728,13 +1991,26 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th colSpan={5} />
                     </Tr>
                     <Tr bg="orange.50" borderBottomWidth="1px">
-                      <Th position="sticky" left={0} zIndex={3} bg="orange.50" colSpan={4} textAlign="left">
+                      <Th
+                        position="sticky"
+                        left={0}
+                        zIndex={3}
+                        bg="orange.50"
+                        colSpan={4}
+                        textAlign="left"
+                      >
                         Faltan
                       </Th>
                       {projectColumns.map((p) => {
-                        const falt = (projectJustify[p.id] ?? 0) - (projectJustified[p.id] ?? 0);
+                        const falt =
+                          (projectJustify[p.id] ?? 0) -
+                          (projectJustified[p.id] ?? 0);
                         return (
-                          <Th key={p.id} textAlign="center" color={falt > 0 ? "orange.600" : "green.600"}>
+                          <Th
+                            key={p.id}
+                            textAlign="center"
+                            color={falt > 0 ? "orange.600" : "green.600"}
+                          >
                             {falt} h
                           </Th>
                         );
@@ -1742,14 +2018,27 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th textAlign="center" bg="orange.50" />
                       <Th colSpan={5} />
                     </Tr>
-                    <Tr bg="blue.100" borderBottomWidth="2px" borderColor="blue.200">
-                      <Th position="sticky" left={0} zIndex={3} bg="blue.100" colSpan={4} textAlign="left" color="blue.700">
+                    <Tr
+                      bg="blue.100"
+                      borderBottomWidth="2px"
+                      borderColor="blue.200"
+                    >
+                      <Th
+                        position="sticky"
+                        left={0}
+                        zIndex={3}
+                        bg="blue.100"
+                        colSpan={4}
+                        textAlign="left"
+                        color="blue.700"
+                      >
                         % Ejecutado en {summaryYear}
                       </Th>
                       {projectColumns.map((p) => {
                         const justify = projectJustify[p.id] ?? 0;
                         const just = projectJustified[p.id] ?? 0;
-                        const pct = justify > 0 ? Math.round((just / justify) * 100) : 0;
+                        const pct =
+                          justify > 0 ? Math.round((just / justify) * 100) : 0;
                         return (
                           <Th key={p.id} textAlign="center" color="blue.700">
                             {pct}%
@@ -1758,56 +2047,38 @@ export const ErpProjectsPage: React.FC = () => {
                       })}
                       <Th colSpan={6} />
                     </Tr>
-                    <Tr bg="green.700" color="white" borderBottomWidth="2px" borderColor="green.800">
-                      <Th position="sticky" left={0} zIndex={3} bg="green.700" colSpan={4} textAlign="left">
+                    <Tr
+                      bg="teal.50"
+                      borderBottomWidth="2px"
+                      borderColor="teal.200"
+                    >
+                      <Th
+                        position="sticky"
+                        left={0}
+                        zIndex={3}
+                        bg="teal.50"
+                        colSpan={4}
+                        textAlign="left"
+                        color="teal.700"
+                      >
                         Hitos (H1/H2/H3/H4)
                       </Th>
                       {projectColumns.map((p) => (
-                        <Th key={p.id} textAlign="center" bg="green.700">
-                          <Stack spacing={1} align="center">
-                            {summaryMilestones[p.id]?.map((m, idx) => (
-                              <HStack key={idx} spacing={1} justify="center">
-                                <Input
-                                  size="xs"
-                                  value={m.label}
-                                  onChange={(e) =>
-                                    setSummaryMilestones((prev) => {
-                                      const next = { ...prev };
-                                      const list = [...(next[p.id] || [])];
-                                      list[idx] = { ...list[idx], label: e.target.value };
-                                      next[p.id] = list;
-                                      return next;
-                                    })
-                                  }
-                                  textAlign="center"
-                                  px={2}
-                                  py={1}
-                                  bg="white"
-                                  maxW="60px"
-                                  fontWeight="bold"
-                                />
-                                <Input
-                                  size="xs"
-                                  type="number"
-                                  value={m.hours}
-                                  onChange={(e) =>
-                                    setSummaryMilestones((prev) => {
-                                      const next = { ...prev };
-                                      const list = [...(next[p.id] || [])];
-                                      list[idx] = { ...list[idx], hours: Number(e.target.value || 0) };
-                                      next[p.id] = list;
-                                      return next;
-                                    })
-                                  }
-                                  textAlign="center"
-                                  px={2}
-                                  py={1}
-                                  bg="white"
-                                  maxW="70px"
-                                />
-                              </HStack>
-                            ))}
-                          </Stack>
+                        <Th key={p.id} textAlign="center" color="teal.800">
+                          <Input
+                            size="xs"
+                            value={summaryMilestones[p.id] ?? ""}
+                            onChange={(e) =>
+                              setSummaryMilestones((prev) => ({
+                                ...prev,
+                                [p.id]: e.target.value,
+                              }))
+                            }
+                            textAlign="center"
+                            px={2}
+                            py={1}
+                            bg="white"
+                          />
                         </Th>
                       ))}
                       <Th colSpan={6} />
@@ -1816,7 +2087,12 @@ export const ErpProjectsPage: React.FC = () => {
                   <Tbody>
                     {filteredSummaryEmployees.length === 0 ? (
                       <Tr>
-                        <Td colSpan={projectColumns.length + 9} textAlign="center" color={subtleText} py={6}>
+                        <Td
+                          colSpan={projectColumns.length + 9}
+                          textAlign="center"
+                          color={subtleText}
+                          py={6}
+                        >
                           No hay empleados registrados en RRHH.
                         </Td>
                       </Tr>
@@ -1826,25 +2102,59 @@ export const ErpProjectsPage: React.FC = () => {
                         let totalEmpAllocated = 0;
 
                         return (
-                          <Tr key={emp.id} bg={idx % 2 === 0 ? "white" : "gray.50"}>
-                            <Td position="sticky" left={0} zIndex={3} bg={idx % 2 === 0 ? "white" : "gray.50"}>
+                          <Tr
+                            key={emp.id}
+                            bg={idx % 2 === 0 ? "white" : "gray.50"}
+                          >
+                            <Td
+                              position="sticky"
+                              left={0}
+                              zIndex={3}
+                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                            >
                               {idx + 1}
                             </Td>
-                            <Td position="sticky" left="70px" zIndex={3} bg={idx % 2 === 0 ? "white" : "gray.50"} fontWeight="semibold">
+                            <Td
+                              position="sticky"
+                              left="70px"
+                              zIndex={3}
+                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              fontWeight="semibold"
+                            >
                               {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
                             </Td>
-                            <Td position="sticky" left="230px" zIndex={3} bg={idx % 2 === 0 ? "white" : "gray.50"}>
-                              {emp.full_name?.split(" ").slice(1).join(" ") || "-"}
+                            <Td
+                              position="sticky"
+                              left="230px"
+                              zIndex={3}
+                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                            >
+                              {emp.full_name?.split(" ").slice(1).join(" ") ||
+                                "-"}
                             </Td>
                             {projectColumns.map((p) => {
-                              const key = allocationKey(emp.id, p.id, summaryYear);
+                              const key = allocationKey(
+                                emp.id,
+                                p.id,
+                                summaryYear,
+                              );
                               const existing = allocationIndex.get(key);
-                              const value = allocationDrafts[key] ?? (existing?.allocated_hours?.toString() ?? "");
-                              const numericValue = Number(value || existing?.allocated_hours || 0);
-                              totalEmpAllocated += Number.isFinite(numericValue) ? numericValue : 0;
+                              const value =
+                                allocationDrafts[key] ??
+                                existing?.allocated_hours?.toString() ??
+                                "";
+                              const numericValue = Number(
+                                value || existing?.allocated_hours || 0,
+                              );
+                              totalEmpAllocated += Number.isFinite(numericValue)
+                                ? numericValue
+                                : 0;
 
                               return (
-                                <Td key={`${emp.id}-${p.id}`} textAlign="center">
+                                <Td
+                                  key={`${emp.id}-${p.id}`}
+                                  textAlign="center"
+                                >
                                   {summaryEditMode ? (
                                     <Input
                                       size="sm"
@@ -1857,23 +2167,54 @@ export const ErpProjectsPage: React.FC = () => {
                                           [key]: e.target.value,
                                         }))
                                       }
-                                      onBlur={(e) => handleAllocationBlur(emp, p.id, e.target.value)}
+                                      onBlur={(e) =>
+                                        handleAllocationBlur(
+                                          emp,
+                                          p.id,
+                                          e.target.value,
+                                        )
+                                      }
                                       textAlign="center"
                                     />
                                   ) : (
-                                    <Text>{existing?.allocated_hours ?? 0} h</Text>
+                                    <Text>
+                                      {existing?.allocated_hours ?? 0} h
+                                    </Text>
                                   )}
                                 </Td>
                               );
                             })}
-                            <Td textAlign="center" fontWeight="bold" color="white" bg="green.700">
+                            <Td
+                              textAlign="center"
+                              fontWeight="bold"
+                              color="white"
+                              bg="green.700"
+                            >
                               {totalEmpAllocated} h
                             </Td>
-                            <Td textAlign="center" bg="green.50" color={available - totalEmpAllocated < 0 ? "red.600" : "green.700"}>
+                            <Td
+                              textAlign="center"
+                              bg="green.50"
+                              color={
+                                available - totalEmpAllocated < 0
+                                  ? "red.600"
+                                  : "green.700"
+                              }
+                            >
                               {available - totalEmpAllocated} h
                             </Td>
-                            <Td textAlign="center" bg="green.50" color={available > 0 && totalEmpAllocated > available ? "red.600" : "green.700"}>
-                              {available > 0 ? `${Math.round((totalEmpAllocated / available) * 100)}%` : "0%"}
+                            <Td
+                              textAlign="center"
+                              bg="green.50"
+                              color={
+                                available > 0 && totalEmpAllocated > available
+                                  ? "red.600"
+                                  : "green.700"
+                              }
+                            >
+                              {available > 0
+                                ? `${Math.round((totalEmpAllocated / available) * 100)}%`
+                                : "0%"}
                             </Td>
                             <Td textAlign="center" bg="white">
                               -
@@ -1887,11 +2228,23 @@ export const ErpProjectsPage: React.FC = () => {
                             <Td textAlign="center" bg="white">
                               -
                             </Td>
-                            <Td textAlign="center" bg="red.50" color="red.700" fontWeight="semibold">
+                            <Td
+                              textAlign="center"
+                              bg="red.50"
+                              color="red.700"
+                              fontWeight="semibold"
+                            >
                               {available - totalEmpAllocated}
                             </Td>
                             <Td textAlign="center">
-                              <Button size="xs" colorScheme="red" variant="ghost" onClick={() => setAllocationDrafts((prev) => prev)}>
+                              <Button
+                                size="xs"
+                                colorScheme="red"
+                                variant="ghost"
+                                onClick={() =>
+                                  setAllocationDrafts((prev) => prev)
+                                }
+                              >
                                 ✕
                               </Button>
                             </Td>
@@ -1908,14 +2261,24 @@ export const ErpProjectsPage: React.FC = () => {
                   <Text fontSize="xs" color={subtleText}>
                     Horas a justificar
                   </Text>
-                  <Heading size="lg">{Object.values(projectJustify).reduce((a, b) => a + (b || 0), 0)} h</Heading>
+                  <Heading size="lg">
+                    {Object.values(projectJustify).reduce(
+                      (a, b) => a + (b || 0),
+                      0,
+                    )}{" "}
+                    h
+                  </Heading>
                 </Box>
                 <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
                   <Text fontSize="xs" color={subtleText}>
                     Justificadas
                   </Text>
                   <Heading size="lg" color="green.600">
-                    {Object.values(projectJustified).reduce((a, b) => a + (b || 0), 0)} h
+                    {Object.values(projectJustified).reduce(
+                      (a, b) => a + (b || 0),
+                      0,
+                    )}{" "}
+                    h
                   </Heading>
                 </Box>
                 <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
@@ -1923,7 +2286,14 @@ export const ErpProjectsPage: React.FC = () => {
                     Faltantes
                   </Text>
                   <Heading size="lg" color="orange.600">
-                    {Object.keys(projectJustify).reduce((sum, pid) => sum + ((projectJustify[Number(pid)] ?? 0) - (projectJustified[Number(pid)] ?? 0)), 0)} h
+                    {Object.keys(projectJustify).reduce(
+                      (sum, pid) =>
+                        sum +
+                        ((projectJustify[Number(pid)] ?? 0) -
+                          (projectJustified[Number(pid)] ?? 0)),
+                      0,
+                    )}{" "}
+                    h
                   </Heading>
                 </Box>
               </SimpleGrid>
@@ -1934,10 +2304,20 @@ export const ErpProjectsPage: React.FC = () => {
           <TabPanel px={0}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
               {projects.map((project) => (
-                <Box key={project.id} borderWidth="1px" borderRadius="lg" p={4} bg={cardBg}>
+                <Box
+                  key={project.id}
+                  borderWidth="1px"
+                  borderRadius="lg"
+                  p={4}
+                  bg={cardBg}
+                >
                   <Flex justify="space-between" align="flex-start" mb={2}>
                     <Heading size="sm">{project.name}</Heading>
-                    <Badge colorScheme={project.is_active === false ? "red" : "green"}>
+                    <Badge
+                      colorScheme={
+                        project.is_active === false ? "red" : "green"
+                      }
+                    >
                       {project.is_active === false ? "Inactivo" : "Activo"}
                     </Badge>
                   </Flex>
@@ -1948,23 +2328,43 @@ export const ErpProjectsPage: React.FC = () => {
                     <HStack spacing={2}>
                       <Badge colorScheme="gray">Fechas</Badge>
                       <Text>
-                        {project.start_date || "Sin inicio"} ÔÇö {project.end_date || "Sin fin"}
+                        {project.start_date || "Sin inicio"} ÔÇö{" "}
+                        {project.end_date || "Sin fin"}
                       </Text>
                     </HStack>
                     <HStack spacing={2}>
                       <Badge colorScheme="gray">Actividades</Badge>
-                      <Text>{activities.filter((a) => a.project_id === project.id).length}</Text>
+                      <Text>
+                        {
+                          activities.filter((a) => a.project_id === project.id)
+                            .length
+                        }
+                      </Text>
                     </HStack>
                     <HStack spacing={2}>
                       <Badge colorScheme="gray">Hitos</Badge>
-                      <Text>{milestones.filter((m) => m.project_id === project.id).length}</Text>
+                      <Text>
+                        {
+                          milestones.filter((m) => m.project_id === project.id)
+                            .length
+                        }
+                      </Text>
                     </HStack>
                     <HStack spacing={2}>
                       <Badge colorScheme="gray">Tareas</Badge>
-                      <Text>{rawTasks.filter((t) => t.project_id === project.id).length}</Text>
+                      <Text>
+                        {
+                          rawTasks.filter((t) => t.project_id === project.id)
+                            .length
+                        }
+                      </Text>
                     </HStack>
                   </Stack>
-                  <Button size="sm" colorScheme="green" onClick={() => openProjectDetails(project)}>
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    onClick={() => openProjectDetails(project)}
+                  >
                     Ver detalle y editar
                   </Button>
                 </Box>
@@ -1991,7 +2391,13 @@ export const ErpProjectsPage: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
-                <HStack spacing={4} ml="auto" fontSize="sm" color={subtleText} flexWrap="wrap">
+                <HStack
+                  spacing={4}
+                  ml="auto"
+                  fontSize="sm"
+                  color={subtleText}
+                  flexWrap="wrap"
+                >
                   <HStack spacing={1}>
                     <Box w={4} h={4} borderRadius="md" bg="green.500" />
                     <Text>A tiempo</Text>
@@ -2027,7 +2433,10 @@ export const ErpProjectsPage: React.FC = () => {
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                 <FormControl isRequired>
                   <FormLabel>Nombre del proyecto</FormLabel>
-                  <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+                  <Input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                  />
                 </FormControl>
                 <FormControl>
                   <FormLabel>Descripci├│n</FormLabel>
@@ -2046,7 +2455,11 @@ export const ErpProjectsPage: React.FC = () => {
                 </FormControl>
                 <FormControl>
                   <FormLabel>Fin</FormLabel>
-                  <Input type="date" value={projectEnd} onChange={(e) => setProjectEnd(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={projectEnd}
+                    onChange={(e) => setProjectEnd(e.target.value)}
+                  />
                 </FormControl>
               </SimpleGrid>
 
@@ -2063,17 +2476,27 @@ export const ErpProjectsPage: React.FC = () => {
                   </Text>
                 )}
                 {projectActivities.map((act, idx) => (
-                  <Box key={act.id} borderWidth="1px" borderRadius="md" p={3} bg={cardBg}>
+                  <Box
+                    key={act.id}
+                    borderWidth="1px"
+                    borderRadius="md"
+                    p={3}
+                    bg={cardBg}
+                  >
                     <SimpleGrid columns={{ base: 1, md: 5 }} spacing={3}>
                       <FormControl>
-                        <FormLabel fontSize="sm">Actividad #{idx + 1}</FormLabel>
+                        <FormLabel fontSize="sm">
+                          Actividad #{idx + 1}
+                        </FormLabel>
                         <Input
                           value={act.name}
                           onChange={(e) =>
                             setProjectActivities((prev) =>
                               prev.map((item) =>
-                                item.id === act.id ? { ...item, name: e.target.value } : item
-                              )
+                                item.id === act.id
+                                  ? { ...item, name: e.target.value }
+                                  : item,
+                              ),
                             )
                           }
                         />
@@ -2088,8 +2511,8 @@ export const ErpProjectsPage: React.FC = () => {
                               prev.map((item) =>
                                 item.id === act.id
                                   ? { ...item, weight: Number(e.target.value) }
-                                  : item
-                              )
+                                  : item,
+                              ),
                             )
                           }
                         />
@@ -2102,8 +2525,10 @@ export const ErpProjectsPage: React.FC = () => {
                           onChange={(e) =>
                             setProjectActivities((prev) =>
                               prev.map((item) =>
-                                item.id === act.id ? { ...item, start: e.target.value } : item
-                              )
+                                item.id === act.id
+                                  ? { ...item, start: e.target.value }
+                                  : item,
+                              ),
                             )
                           }
                         />
@@ -2116,8 +2541,10 @@ export const ErpProjectsPage: React.FC = () => {
                           onChange={(e) =>
                             setProjectActivities((prev) =>
                               prev.map((item) =>
-                                item.id === act.id ? { ...item, end: e.target.value } : item
-                              )
+                                item.id === act.id
+                                  ? { ...item, end: e.target.value }
+                                  : item,
+                              ),
                             )
                           }
                         />
@@ -2128,14 +2555,20 @@ export const ErpProjectsPage: React.FC = () => {
                         colorScheme="red"
                         alignSelf="flex-end"
                         onClick={() =>
-                          setProjectActivities((prev) => prev.filter((item) => item.id !== act.id))
+                          setProjectActivities((prev) =>
+                            prev.filter((item) => item.id !== act.id),
+                          )
                         }
                       >
                         Eliminar
                       </Button>
                     </SimpleGrid>
 
-                    <Button size="xs" mt={2} onClick={() => handleAddSubactivity(act.id)}>
+                    <Button
+                      size="xs"
+                      mt={2}
+                      onClick={() => handleAddSubactivity(act.id)}
+                    >
                       + A├▒adir subactividad
                     </Button>
                     <Stack mt={2} spacing={2}>
@@ -2152,7 +2585,9 @@ export const ErpProjectsPage: React.FC = () => {
                             alignItems="center"
                           >
                             <FormControl>
-                              <FormLabel fontSize="xs">Subactividad #{sidx + 1}</FormLabel>
+                              <FormLabel fontSize="xs">
+                                Subactividad #{sidx + 1}
+                              </FormLabel>
                               <Input
                                 value={sub.name}
                                 onChange={(e) =>
@@ -2161,12 +2596,18 @@ export const ErpProjectsPage: React.FC = () => {
                                       item.id === act.id
                                         ? {
                                             ...item,
-                                            subactivities: item.subactivities.map((s) =>
-                                              s.id === sub.id ? { ...s, name: e.target.value } : s
-                                            ),
+                                            subactivities:
+                                              item.subactivities.map((s) =>
+                                                s.id === sub.id
+                                                  ? {
+                                                      ...s,
+                                                      name: e.target.value,
+                                                    }
+                                                  : s,
+                                              ),
                                           }
-                                        : item
-                                    )
+                                        : item,
+                                    ),
                                   )
                                 }
                               />
@@ -2182,14 +2623,20 @@ export const ErpProjectsPage: React.FC = () => {
                                       item.id === act.id
                                         ? {
                                             ...item,
-                                            subactivities: item.subactivities.map((s) =>
-                                              s.id === sub.id
-                                                ? { ...s, weight: Number(e.target.value) }
-                                                : s
-                                            ),
+                                            subactivities:
+                                              item.subactivities.map((s) =>
+                                                s.id === sub.id
+                                                  ? {
+                                                      ...s,
+                                                      weight: Number(
+                                                        e.target.value,
+                                                      ),
+                                                    }
+                                                  : s,
+                                              ),
                                           }
-                                        : item
-                                    )
+                                        : item,
+                                    ),
                                   )
                                 }
                               />
@@ -2205,14 +2652,18 @@ export const ErpProjectsPage: React.FC = () => {
                                       item.id === act.id
                                         ? {
                                             ...item,
-                                            subactivities: item.subactivities.map((s) =>
-                                              s.id === sub.id
-                                                ? { ...s, start: e.target.value }
-                                                : s
-                                            ),
+                                            subactivities:
+                                              item.subactivities.map((s) =>
+                                                s.id === sub.id
+                                                  ? {
+                                                      ...s,
+                                                      start: e.target.value,
+                                                    }
+                                                  : s,
+                                              ),
                                           }
-                                        : item
-                                    )
+                                        : item,
+                                    ),
                                   )
                                 }
                               />
@@ -2228,14 +2679,18 @@ export const ErpProjectsPage: React.FC = () => {
                                       item.id === act.id
                                         ? {
                                             ...item,
-                                            subactivities: item.subactivities.map((s) =>
-                                              s.id === sub.id
-                                                ? { ...s, end: e.target.value }
-                                                : s
-                                            ),
+                                            subactivities:
+                                              item.subactivities.map((s) =>
+                                                s.id === sub.id
+                                                  ? {
+                                                      ...s,
+                                                      end: e.target.value,
+                                                    }
+                                                  : s,
+                                              ),
                                           }
-                                        : item
-                                    )
+                                        : item,
+                                    ),
                                   )
                                 }
                               />
@@ -2261,14 +2716,22 @@ export const ErpProjectsPage: React.FC = () => {
                   </Text>
                 ) : (
                   projectMilestones.map((mil, idx) => (
-                    <SimpleGrid key={mil.id} columns={{ base: 1, md: 4 }} spacing={3}>
+                    <SimpleGrid
+                      key={mil.id}
+                      columns={{ base: 1, md: 4 }}
+                      spacing={3}
+                    >
                       <FormControl>
                         <FormLabel fontSize="sm">Hito #{idx + 1}</FormLabel>
                         <Input
                           value={mil.name}
                           onChange={(e) =>
                             setProjectMilestones((prev) =>
-                              prev.map((m) => (m.id === mil.id ? { ...m, name: e.target.value } : m))
+                              prev.map((m) =>
+                                m.id === mil.id
+                                  ? { ...m, name: e.target.value }
+                                  : m,
+                              ),
                             )
                           }
                         />
@@ -2280,7 +2743,11 @@ export const ErpProjectsPage: React.FC = () => {
                           value={mil.start}
                           onChange={(e) =>
                             setProjectMilestones((prev) =>
-                              prev.map((m) => (m.id === mil.id ? { ...m, start: e.target.value } : m))
+                              prev.map((m) =>
+                                m.id === mil.id
+                                  ? { ...m, start: e.target.value }
+                                  : m,
+                              ),
                             )
                           }
                         />
@@ -2292,7 +2759,11 @@ export const ErpProjectsPage: React.FC = () => {
                           value={mil.end}
                           onChange={(e) =>
                             setProjectMilestones((prev) =>
-                              prev.map((m) => (m.id === mil.id ? { ...m, end: e.target.value } : m))
+                              prev.map((m) =>
+                                m.id === mil.id
+                                  ? { ...m, end: e.target.value }
+                                  : m,
+                              ),
                             )
                           }
                         />
@@ -2303,7 +2774,9 @@ export const ErpProjectsPage: React.FC = () => {
                         colorScheme="red"
                         alignSelf="flex-end"
                         onClick={() =>
-                          setProjectMilestones((prev) => prev.filter((m) => m.id !== mil.id))
+                          setProjectMilestones((prev) =>
+                            prev.filter((m) => m.id !== mil.id),
+                          )
                         }
                       >
                         Eliminar
@@ -2326,7 +2799,12 @@ export const ErpProjectsPage: React.FC = () => {
         </TabPanels>
       </Tabs>
       {/* Drawer de detalle/edici├│n del proyecto seleccionado */}
-      <Drawer isOpen={detailsOpen} placement="right" onClose={closeProjectDetails} size="xl">
+      <Drawer
+        isOpen={detailsOpen}
+        placement="right"
+        onClose={closeProjectDetails}
+        size="xl"
+      >
         <DrawerOverlay />
         <DrawerContent>
           <DrawerHeader borderBottomWidth="1px">
@@ -2337,7 +2815,9 @@ export const ErpProjectsPage: React.FC = () => {
               <Stack spacing={4}>
                 <Stack spacing={1} fontSize="sm" color={subtleText}>
                   <Text>ID: {selectedProject.id}</Text>
-                  {selectedProject.created_at && <Text>Creado: {selectedProject.created_at}</Text>}
+                  {selectedProject.created_at && (
+                    <Text>Creado: {selectedProject.created_at}</Text>
+                  )}
                 </Stack>
 
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
@@ -2353,19 +2833,25 @@ export const ErpProjectsPage: React.FC = () => {
                     <Text fontSize="xs" color={subtleText}>
                       Fin
                     </Text>
-                    <Text fontWeight="semibold">{selectedProject.end_date || "Sin fin"}</Text>
+                    <Text fontWeight="semibold">
+                      {selectedProject.end_date || "Sin fin"}
+                    </Text>
                   </Box>
                   <Box borderWidth="1px" borderRadius="md" p={3}>
                     <Text fontSize="xs" color={subtleText}>
                       Actividades
                     </Text>
-                    <Text fontWeight="semibold">{selectedProjectActivities.length}</Text>
+                    <Text fontWeight="semibold">
+                      {selectedProjectActivities.length}
+                    </Text>
                   </Box>
                   <Box borderWidth="1px" borderRadius="md" p={3}>
                     <Text fontSize="xs" color={subtleText}>
                       Hitos
                     </Text>
-                    <Text fontWeight="semibold">{selectedProjectMilestones.length}</Text>
+                    <Text fontWeight="semibold">
+                      {selectedProjectMilestones.length}
+                    </Text>
                   </Box>
                 </SimpleGrid>
 
@@ -2375,7 +2861,10 @@ export const ErpProjectsPage: React.FC = () => {
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                   <FormControl isRequired>
                     <FormLabel>Nombre</FormLabel>
-                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                    />
                   </FormControl>
                   <FormControl>
                     <FormLabel>Activo</FormLabel>
@@ -2428,8 +2917,17 @@ export const ErpProjectsPage: React.FC = () => {
                         description: "",
                       };
                       return (
-                        <Box key={act.id} borderWidth="1px" borderRadius="md" p={3}>
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                        <Box
+                          key={act.id}
+                          borderWidth="1px"
+                          borderRadius="md"
+                          p={3}
+                        >
+                          <SimpleGrid
+                            columns={{ base: 1, md: 2 }}
+                            spacing={2}
+                            mb={2}
+                          >
                             <FormControl>
                               <FormLabel fontSize="xs">Nombre</FormLabel>
                               <Input
@@ -2449,7 +2947,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setActivityEdits((prev) => ({
                                     ...prev,
-                                    [act.id]: { ...form, description: e.target.value },
+                                    [act.id]: {
+                                      ...form,
+                                      description: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2462,7 +2963,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setActivityEdits((prev) => ({
                                     ...prev,
-                                    [act.id]: { ...form, start: e.target.value },
+                                    [act.id]: {
+                                      ...form,
+                                      start: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2484,9 +2988,11 @@ export const ErpProjectsPage: React.FC = () => {
                           <HStack justify="space-between">
                             <Text fontSize="xs" color={subtleText}>
                               Subactividades:{" "}
-                              {selectedProjectSubactivities.filter(
-                                (sub) => sub.activity_id === act.id
-                              ).length}
+                              {
+                                selectedProjectSubactivities.filter(
+                                  (sub) => sub.activity_id === act.id,
+                                ).length
+                              }
                             </Text>
                             <Button
                               size="sm"
@@ -2518,14 +3024,23 @@ export const ErpProjectsPage: React.FC = () => {
                         description: "",
                       };
                       const parentActivity = selectedProjectActivities.find(
-                        (act) => act.id === sub.activity_id
+                        (act) => act.id === sub.activity_id,
                       );
                       return (
-                        <Box key={sub.id} borderWidth="1px" borderRadius="md" p={3}>
+                        <Box
+                          key={sub.id}
+                          borderWidth="1px"
+                          borderRadius="md"
+                          p={3}
+                        >
                           <Text fontSize="xs" color={subtleText} mb={1}>
                             Actividad: {parentActivity?.name ?? "-"}
                           </Text>
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                          <SimpleGrid
+                            columns={{ base: 1, md: 2 }}
+                            spacing={2}
+                            mb={2}
+                          >
                             <FormControl>
                               <FormLabel fontSize="xs">Nombre</FormLabel>
                               <Input
@@ -2545,7 +3060,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setSubactivityEdits((prev) => ({
                                     ...prev,
-                                    [sub.id]: { ...form, description: e.target.value },
+                                    [sub.id]: {
+                                      ...form,
+                                      description: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2558,7 +3076,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setSubactivityEdits((prev) => ({
                                     ...prev,
-                                    [sub.id]: { ...form, start: e.target.value },
+                                    [sub.id]: {
+                                      ...form,
+                                      start: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2607,8 +3128,17 @@ export const ErpProjectsPage: React.FC = () => {
                         description: "",
                       };
                       return (
-                        <Box key={milestone.id} borderWidth="1px" borderRadius="md" p={3}>
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={2} mb={2}>
+                        <Box
+                          key={milestone.id}
+                          borderWidth="1px"
+                          borderRadius="md"
+                          p={3}
+                        >
+                          <SimpleGrid
+                            columns={{ base: 1, md: 2 }}
+                            spacing={2}
+                            mb={2}
+                          >
                             <FormControl>
                               <FormLabel fontSize="xs">Titulo</FormLabel>
                               <Input
@@ -2616,7 +3146,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setMilestoneEdits((prev) => ({
                                     ...prev,
-                                    [milestone.id]: { ...form, title: e.target.value },
+                                    [milestone.id]: {
+                                      ...form,
+                                      title: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2628,7 +3161,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setMilestoneEdits((prev) => ({
                                     ...prev,
-                                    [milestone.id]: { ...form, description: e.target.value },
+                                    [milestone.id]: {
+                                      ...form,
+                                      description: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2641,7 +3177,10 @@ export const ErpProjectsPage: React.FC = () => {
                                 onChange={(e) =>
                                   setMilestoneEdits((prev) => ({
                                     ...prev,
-                                    [milestone.id]: { ...form, due: e.target.value },
+                                    [milestone.id]: {
+                                      ...form,
+                                      due: e.target.value,
+                                    },
                                   }))
                                 }
                               />
@@ -2651,7 +3190,9 @@ export const ErpProjectsPage: React.FC = () => {
                             <Button
                               size="sm"
                               colorScheme="green"
-                              onClick={() => handleUpdateMilestone(milestone.id)}
+                              onClick={() =>
+                                handleUpdateMilestone(milestone.id)
+                              }
                               isLoading={updateMilestoneMutation.isPending}
                             >
                               Guardar hito
@@ -2671,15 +3212,24 @@ export const ErpProjectsPage: React.FC = () => {
                     </Text>
                   ) : (
                     selectedProjectTasks.map((task) => (
-                      <Box key={task.id} borderWidth="1px" borderRadius="md" p={3}>
+                      <Box
+                        key={task.id}
+                        borderWidth="1px"
+                        borderRadius="md"
+                        p={3}
+                      >
                         <Flex justify="space-between" align="center" mb={1}>
                           <Text fontWeight="semibold">{task.title}</Text>
-                          <Badge colorScheme={task.is_completed ? "green" : "yellow"}>
-                            {task.status || (task.is_completed ? "completed" : "pendiente")}
+                          <Badge
+                            colorScheme={task.is_completed ? "green" : "yellow"}
+                          >
+                            {task.status ||
+                              (task.is_completed ? "completed" : "pendiente")}
                           </Badge>
                         </Flex>
                         <Text fontSize="xs" color={subtleText}>
-                          {task.start_date || "Sin inicio"} ÔÇö {task.end_date || "Sin fin"}
+                          {task.start_date || "Sin inicio"} ÔÇö{" "}
+                          {task.end_date || "Sin fin"}
                         </Text>
                         {task.description && (
                           <Text mt={1} fontSize="xs" color={subtleText}>
@@ -2727,10 +3277,3 @@ export const ErpProjectsPage: React.FC = () => {
 };
 
 export default ErpProjectsPage;
-
-
-
-
-
-
-
