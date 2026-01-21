@@ -55,6 +55,7 @@ import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import ProjectMilestoneTracker from "../components/ProjectMilestoneTracker";
 
 import {
   fetchErpProjects,
@@ -2407,7 +2408,7 @@ export const ErpProjectsPage: React.FC = () => {
         </Stack>
       </Box>
 
-      {/* Navegaci├│n por pesta├▒as: resumen, tarjetas, Gantt y creaci├│n */}
+      {/* Navegacion por pestanas: resumen, tarjetas, Gantt y creacion */}
 
       <Tabs
         variant="line"
@@ -2431,6 +2432,8 @@ export const ErpProjectsPage: React.FC = () => {
 
           <TabPanel px={0}>
             <Stack spacing={5}>
+              <ProjectMilestoneTracker />
+
               <Flex
                 align="center"
                 justify="space-between"
@@ -2540,35 +2543,31 @@ export const ErpProjectsPage: React.FC = () => {
                         minW="120px"
                       />
 
-                      {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
-                        return (
-                          <Th
-                            key={p.id}
-                            colSpan={count}
-                            textAlign="center"
-                            bg="gray.200"
-                            borderColor="gray.300"
-                          >
-                            <HStack spacing={2} justify="center">
-                              <Text fontWeight="semibold">{p.name}</Text>
-                              <Button
-                                size="xs"
-                                colorScheme="green"
-                                variant="solid"
-                                borderRadius="full"
-                                onClick={() => addMilestoneRow(p.id)}
-                                aria-label={`Añadir hito a ${p.name}`}
-                                minW="22px"
-                                h="22px"
-                                p={0}
-                              >
-                                +
-                              </Button>
-                            </HStack>
-                          </Th>
-                        );
-                      })}
+                      {projectColumns.map((p) => (
+                        <Th
+                          key={p.id}
+                          textAlign="center"
+                          bg="gray.200"
+                          borderColor="gray.300"
+                        >
+                          <HStack spacing={2} justify="center">
+                            <Text fontWeight="semibold">{p.name}</Text>
+                            <Button
+                              size="xs"
+                              colorScheme="green"
+                              variant="solid"
+                              borderRadius="full"
+                              onClick={() => addMilestoneRow(p.id)}
+                              aria-label={`Añadir hito a ${p.name}`}
+                              minW="22px"
+                              h="22px"
+                              p={0}
+                            >
+                              +
+                            </Button>
+                          </HStack>
+                        </Th>
+                      ))}
 
                       <Th
                         textAlign="center"
@@ -2768,7 +2767,11 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th colSpan={6} />
                     </Tr>
 
-                    <Tr bg="green.50" borderBottomWidth="2px" borderColor="green.200">
+                    <Tr
+                      bg="green.50"
+                      borderBottomWidth="2px"
+                      borderColor="green.200"
+                    >
                       <Th
                         position="sticky"
                         left={0}
@@ -2781,63 +2784,112 @@ export const ErpProjectsPage: React.FC = () => {
                         Hitos (H1/H2/H3/H4)
                       </Th>
 
-                      {projectColumns.map((p) => {
-                        const ms = summaryMilestones[p.id] ?? [];
-                        if (ms.length === 0) {
-                          return (
-                            <Th key={`${p.id}-ms-empty`} textAlign="center" color="green.800">
-                              <Text fontSize="xs" color="teal.600">
-                                Añade hitos con el +
-                              </Text>
-                            </Th>
-                          );
-                        }
+                      {projectColumns.map((p) => (
+                        <Th
+                          key={p.id}
+                          textAlign="center"
+                          color="green.800"
+                          p={0}
+                        >
+                          <Stack
+                            spacing={2}
+                            align="stretch"
+                            px={1}
+                            py={2}
+                            bg="green.50"
+                          >
+                            <Flex
+                              gap={2}
+                              wrap="wrap"
+                              justify="center"
+                              align="flex-start"
+                            >
+                              {(summaryMilestones[p.id] ?? []).map(
+                                (item, idx) => (
+                                  <Stack
+                                    key={`${p.id}-ms-${idx}`}
+                                    spacing={1}
+                                    minW="100px"
+                                    maxW="130px"
+                                    bg="green.100"
+                                    borderWidth="1px"
+                                    borderColor="green.200"
+                                    borderRadius="md"
+                                    p={2}
+                                  >
+                                    <Flex
+                                      align="center"
+                                      justify="center"
+                                      gap={1}
+                                    >
+                                      <Text fontSize="xs" fontWeight="semibold">
+                                        {item.label || `H${idx + 1}`}
+                                      </Text>
+                                      <Button
+                                        size="xs"
+                                        variant="ghost"
+                                        colorScheme="red"
+                                        onClick={() =>
+                                          setSummaryMilestones((prev) => {
+                                            const list = prev[p.id] ?? [];
+                                            const next = list.filter(
+                                              (_, mIdx) => mIdx !== idx,
+                                            );
+                                            return { ...prev, [p.id]: next };
+                                          })
+                                        }
+                                        p={0}
+                                        minW="18px"
+                                      >
+                                        <Text fontSize="xs">?</Text>
+                                      </Button>
+                                    </Flex>
+                                    <InputGroup size="xs">
+                                      <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={item.hours ?? 0}
+                                        onChange={(e) =>
+                                          updateMilestoneRow(
+                                            p.id,
+                                            idx,
+                                            "hours",
+                                            e.target.value,
+                                          )
+                                        }
+                                        textAlign="center"
+                                      />
+                                      <InputRightAddon>h</InputRightAddon>
+                                    </InputGroup>
+                                    <Text
+                                      fontSize="xs"
+                                      color="gray.700"
+                                      textAlign="center"
+                                    >
+                                      TOTAL: {item.hours ?? 0} h
+                                    </Text>
+                                  </Stack>
+                                ),
+                              )}
 
-                        return ms.map((item, idx) => (
-                          <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
-                            <HStack justify="center" spacing={1} mb={1}>
-                              <Text fontSize="xs" fontWeight="semibold">
-                                {item.label || `H${idx + 1}`}
-                              </Text>
+                              {(summaryMilestones[p.id] ?? []).length === 0 && (
+                                <Text fontSize="xs" color="teal.600">
+                                  Anade hitos con el +
+                                </Text>
+                              )}
+                            </Flex>
 
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                colorScheme="red"
-                                p={0}
-                                minW="18px"
-                                h="18px"
-                                onClick={() =>
-                                  setSummaryMilestones((prev) => {
-                                    const list = prev[p.id] ?? [];
-                                    const next = list.filter((_, mIdx) => mIdx !== idx);
-                                    return { ...prev, [p.id]: next };
-                                  })
-                                }
-                              >
-                                <Text fontSize="xs">x</Text>
-                              </Button>
-                            </HStack>
-
-                            <InputGroup size="xs">
-                              <Input
-                                type="number"
-                                placeholder="0"
-                                value={item.hours ?? 0}
-                                onChange={(e) =>
-                                  updateMilestoneRow(p.id, idx, "hours", e.target.value)
-                                }
-                                textAlign="center"
-                              />
-                              <InputRightAddon>h</InputRightAddon>
-                            </InputGroup>
-
-                            <Text fontSize="xs" color="gray.700" textAlign="center" mt={1}>
-                              TOTAL: {item.hours ?? 0} h
+                            <Text
+                              fontSize="xs"
+                              color="teal.700"
+                              fontWeight="semibold"
+                              textAlign="center"
+                            >
+                              Total proyecto: {milestoneTotals[p.id] ?? 0} h
                             </Text>
-                          </Th>
-                        ));
-                      })}
+                          </Stack>
+                        </Th>
+                      ))}
 
                       <Th colSpan={6} />
                     </Tr>
