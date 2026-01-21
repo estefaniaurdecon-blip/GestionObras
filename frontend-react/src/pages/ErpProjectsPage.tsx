@@ -1,6 +1,7 @@
 ﻿// Vista principal de proyectos: creaci├│n, resumen, diagrama Gantt y edici├│n detallada.
 
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -56,6 +57,72 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
 
+type SummaryYearlyData = {
+  projectJustify: Record<number, number>;
+  projectJustified: Record<number, number>;
+  summaryMilestones: Record<number, Array<{ label: string; hours: number }>>;
+};
+
+type SummaryStorage = Record<number, SummaryYearlyData>;
+
+const SUMMARY_STORAGE_KEY = "erp-summary-table-by-year";
+
+const createEmptyYearData = (): SummaryYearlyData => ({
+  projectJustify: {},
+  projectJustified: {},
+  summaryMilestones: {},
+});
+
+const cloneYearData = (data: SummaryYearlyData): SummaryYearlyData => ({
+  projectJustify: { ...data.projectJustify },
+  projectJustified: { ...data.projectJustified },
+  summaryMilestones: Object.fromEntries(
+    Object.entries(data.summaryMilestones || {}).map(([projId, items]) => [
+      Number(projId),
+      (items || []).map((item) => ({
+        label: item.label,
+        hours: item.hours,
+      })),
+    ]),
+  ),
+});
+
+const readSummaryStorage = (): SummaryStorage => {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = window.localStorage.getItem(SUMMARY_STORAGE_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    if (parsed && typeof parsed === "object") {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn("Failed to read summary storage", err);
+  }
+  return {};
+};
+
+const writeSummaryStorage = (value: SummaryStorage) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(value));
+  } catch (err) {
+    console.warn("Failed to write summary storage", err);
+  }
+};
+
+const loadSummaryFallback = (year: number): SummaryYearlyData => {
+  const storage = readSummaryStorage();
+  const entry = storage[year];
+  return entry ? cloneYearData(entry) : createEmptyYearData();
+};
+
+const persistSummaryFallback = (year: number, data: SummaryYearlyData) => {
+  const storage = readSummaryStorage();
+  storage[year] = cloneYearData(data);
+  writeSummaryStorage(storage);
+};
+
 import {
   fetchErpProjects,
   type ErpProject as ErpProjectApi,
@@ -99,6 +166,98 @@ import {
   type Department,
   type EmployeeAllocation,
 } from "../api/hr";
+
+const YEAR_FILTER_OPTIONS = [2024, 2025, 2026, 2027];
+
+const fetchSummaryData = async (year: number): Promise<SummaryYearlyData> => {
+  try {
+    const response = await fetch(`/api/erp/summary/${year}`);
+    if (response.status === 404) {
+      return loadSummaryFallback(year);
+    }
+    if (!response.ok) {
+      throw new Error(`No se pudo cargar los datos del resumen para ${year}`);
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      console.warn(
+        `Respuesta inesperada para el resumen ${year}, se usa almacenamiento local (content-type=${contentType})`,
+      );
+      return loadSummaryFallback(year);
+    }
+    const data = await response.json();
+    return {
+      projectJustify: data.projectJustify ?? {},
+      projectJustified: data.projectJustified ?? {},
+      summaryMilestones: data.summaryMilestones ?? {},
+    };
+  } catch (err) {
+    console.warn("Fallo al cargar resumen, usando almacenamiento local", err);
+    return loadSummaryFallback(year);
+  }
+};
+
+const saveSummaryData = async ({
+  year,
+  payload,
+}: {
+  year: number;
+  payload: SummaryYearlyData;
+}): Promise<void> => {
+  const response = await fetch(`/api/erp/summary/${year}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (response.status === 404) {
+    persistSummaryFallback(year, payload);
+    return;
+  }
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(
+      `Error guardando el resumen para ${year}: ${response.status} ${response.statusText} ${message}`,
+    );
+  }
+};
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+function useDebouncedSave<T>(
+  fn: (value: T) => Promise<void>,
+  delay = 600,
+  onStatus?: (status: SaveStatus) => void,
+) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const trigger = (value: T) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    onStatus?.("saving");
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        await fn(value);
+        onStatus?.("saved");
+        setTimeout(() => onStatus?.("idle"), 800);
+      } catch (err) {
+        console.error(err);
+        onStatus?.("error");
+      }
+    }, delay);
+  };
+
+  return trigger;
+}
 
 type ViewMode = "week" | "month";
 
@@ -935,10 +1094,6 @@ export const ErpProjectsPage: React.FC = () => {
     new Date().getFullYear(),
   );
 
-  const [allocationDrafts, setAllocationDrafts] = useState<
-    Record<string, string>
-  >({});
-
   const [summarySearch, setSummarySearch] = useState("");
 
   const [summaryEditMode, setSummaryEditMode] = useState(false);
@@ -954,6 +1109,66 @@ export const ErpProjectsPage: React.FC = () => {
   const [summaryMilestones, setSummaryMilestones] = useState<
     Record<number, Array<{ label: string; hours: number }>>
   >({});
+
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const skipAutoSaveRef = useRef(true);
+
+  const {
+    data: storedYearData,
+    isFetching: loadingSummaryYear,
+  } = useQuery<SummaryYearlyData | undefined>({
+    queryKey: ["erp-summary", summaryYear],
+    queryFn: () => fetchSummaryData(summaryYear),
+    keepPreviousData: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const saveSummaryMutation = useMutation({
+    mutationFn: saveSummaryData,
+  });
+
+  const saveSummaryDebounced = useDebouncedSave<
+    { year: number; payload: SummaryYearlyData }
+  >(
+    (value) => saveSummaryMutation.mutateAsync(value),
+    700,
+    setSaveStatus,
+  );
+
+  const saveStatusLabel = {
+    idle: "",
+    saving: "Guardando los cambios...",
+    saved: "Cambios guardados",
+    error: "Error al guardar",
+  }[saveStatus];
+
+  useEffect(() => {
+    skipAutoSaveRef.current = true;
+    if (storedYearData) {
+      setProjectJustify(storedYearData.projectJustify ?? {});
+      setProjectJustified(storedYearData.projectJustified ?? {});
+      setSummaryMilestones(storedYearData.summaryMilestones ?? {});
+    } else {
+      setProjectJustify({});
+      setProjectJustified({});
+      setSummaryMilestones({});
+    }
+  }, [storedYearData]);
+
+  useEffect(() => {
+    if (skipAutoSaveRef.current) {
+      skipAutoSaveRef.current = false;
+      return;
+    }
+    saveSummaryDebounced({
+      year: summaryYear,
+      payload: {
+        projectJustify,
+        projectJustified,
+        summaryMilestones,
+      },
+    });
+  }, [projectJustify, projectJustified, summaryMilestones, summaryYear]);
 
   const milestoneTotals = useMemo(() => {
     const totals: Record<number, number> = {};
@@ -1056,6 +1271,19 @@ export const ErpProjectsPage: React.FC = () => {
 
     enabled: canFetchHr,
   });
+
+  const getAllocationTotal = useCallback(
+    (projectId: number, milestoneLabel: string) => {
+      return allocations.reduce((sum, alloc) => {
+        if (alloc.year !== summaryYear) return sum;
+        if (alloc.project_id !== projectId) return sum;
+        const label = alloc.milestone || "Sin hitos";
+        if (label !== milestoneLabel) return sum;
+        return sum + Number(alloc.allocated_hours ?? 0);
+      }, 0);
+    },
+    [allocations, summaryYear],
+  );
 
   // Sincroniza el formulario de edici├│n con el proyecto seleccionado.
 
@@ -2217,6 +2445,35 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrEmployees]);
 
+  const employeeNameMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    hrEmployees.forEach((emp) => {
+      map[emp.id] = `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() || emp.full_name || "Empleado";
+    });
+    return map;
+  }, [hrEmployees]);
+
+  const milestoneContributions = useMemo(() => {
+    const map: Record<number, Record<string, Array<{ name: string; hours: number }>>> =
+      {};
+    allocations.forEach((alloc) => {
+      if (!alloc.project_id || alloc.year !== summaryYear) return;
+      const name = employeeNameMap[alloc.employee_id] ?? `${alloc.employee_id}`;
+      const label = alloc.milestone || "Sin hitos";
+      const projectMap = map[alloc.project_id] ?? {};
+      const list = projectMap[label] ?? [];
+      const existing = list.find((entry) => entry.name === name);
+      if (existing) {
+        existing.hours += Number(alloc.allocated_hours ?? 0);
+      } else {
+        list.push({ name, hours: Number(alloc.allocated_hours ?? 0) });
+      }
+      projectMap[label] = list;
+      map[alloc.project_id] = projectMap;
+    });
+    return map;
+  }, [allocations, summaryYear, employeeNameMap]);
+
   const projectTotals = useMemo(() => {
     const totals: Record<number, number> = {};
 
@@ -2229,6 +2486,22 @@ export const ErpProjectsPage: React.FC = () => {
 
     return totals;
   }, [allocations]);
+
+  const employeeMilestoneHours = useMemo(() => {
+    const map: Record<number, Record<number, Record<string, number>>> = {};
+    allocations.forEach((alloc) => {
+      if (alloc.year !== summaryYear) return;
+      if (!alloc.employee_id || !alloc.project_id) return;
+      const employeeMap = map[alloc.employee_id] ?? {};
+      const projectMap = employeeMap[alloc.project_id] ?? {};
+      const milestoneLabel = alloc.milestone || "Sin hitos";
+      projectMap[milestoneLabel] =
+        (projectMap[milestoneLabel] ?? 0) + Number(alloc.allocated_hours ?? 0);
+      employeeMap[alloc.project_id] = projectMap;
+      map[alloc.employee_id] = employeeMap;
+    });
+    return map;
+  }, [allocations, summaryYear]);
 
   useEffect(() => {
     if (projectColumns.length === 0) return;
@@ -2347,13 +2620,6 @@ export const ErpProjectsPage: React.FC = () => {
       });
     }
 
-    setAllocationDrafts((prev) => {
-      const next = { ...prev };
-
-      delete next[key];
-
-      return next;
-    });
   };
 
   // Render principal.
@@ -2439,13 +2705,30 @@ export const ErpProjectsPage: React.FC = () => {
               >
                 <Box>
                   <Heading size="md" mb={1}>
-                    Gestión y seguimiento de proyectos 2024-2025
+                    Gestión y seguimiento de proyectos
                   </Heading>
-
+                  <HStack spacing={2} mb={1}>
+                    <Tag colorScheme="green" size="sm">
+                      Año {summaryYear}
+                    </Tag>
+                    <Text fontSize="xs" color={subtleText}>
+                      Filtrando por año {summaryYear}
+                    </Text>
+                  </HStack>
                   <Text fontSize="sm" color={subtleText}>
                     Tablero tipo Excel con horas a justificar, justificadas y
                     asignación por empleado.
                   </Text>
+                  {loadingSummaryYear && (
+                    <Text fontSize="xs" color={subtleText} mt={1}>
+                      Cargando los datos del año {summaryYear}…
+                    </Text>
+                  )}
+                  {saveStatusLabel && !loadingSummaryYear && (
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      {saveStatusLabel}
+                    </Text>
+                  )}
                 </Box>
 
                 <HStack spacing={3} align="flex-end">
@@ -2467,20 +2750,24 @@ export const ErpProjectsPage: React.FC = () => {
                       Año
                     </FormLabel>
 
-                    <Input
+                    <Select
                       size="sm"
-                      type="number"
                       value={summaryYear}
                       onChange={(e) => {
                         const parsed = Number(e.target.value);
-
                         setSummaryYear(
                           Number.isFinite(parsed)
                             ? parsed
                             : new Date().getFullYear(),
                         );
                       }}
-                    />
+                    >
+                      {YEAR_FILTER_OPTIONS.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </Select>
                   </FormControl>
 
                   <Button
@@ -2809,50 +3096,66 @@ export const ErpProjectsPage: React.FC = () => {
                           );
                         }
 
-                        return ms.map((item, idx) => (
-                          <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
-                            <HStack justify="center" spacing={1} mb={1}>
-                              <Text fontSize="xs" fontWeight="semibold">
-                                {item.label || `H${idx + 1}`}
+                        return ms.map((item, idx) => {
+                          const milestoneLabel = item.label || `H${idx + 1}`;
+                          const allocationTotal = getAllocationTotal(
+                            Number(p.id),
+                            milestoneLabel,
+                          );
+                          const contributions =
+                            milestoneContributions[p.id]?.[milestoneLabel] ?? [];
+                          return (
+                            <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
+                              <HStack justify="center" spacing={1} mb={1}>
+                                <Text fontSize="xs" fontWeight="semibold">
+                                  {milestoneLabel}
+                                </Text>
+
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  colorScheme="red"
+                                  p={0}
+                                  minW="18px"
+                                  h="18px"
+                                  onClick={() =>
+                                    setSummaryMilestones((prev) => {
+                                      const list = prev[p.id] ?? [];
+                                      const next = list.filter((_, mIdx) => mIdx !== idx);
+                                      return { ...prev, [p.id]: next };
+                                    })
+                                  }
+                                >
+                                  <Text fontSize="xs">x</Text>
+                                </Button>
+                              </HStack>
+
+                              <InputGroup size="xs">
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  value={item.hours ?? 0}
+                                  onChange={(e) =>
+                                    updateMilestoneRow(p.id, idx, "hours", e.target.value)
+                                  }
+                                  textAlign="center"
+                                />
+                                <InputRightAddon>h</InputRightAddon>
+                              </InputGroup>
+
+                              <Text fontSize="xs" color="gray.700" textAlign="center" mt={1}>
+                                TOTAL: {allocationTotal} h
                               </Text>
-
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                colorScheme="red"
-                                p={0}
-                                minW="18px"
-                                h="18px"
-                                onClick={() =>
-                                  setSummaryMilestones((prev) => {
-                                    const list = prev[p.id] ?? [];
-                                    const next = list.filter((_, mIdx) => mIdx !== idx);
-                                    return { ...prev, [p.id]: next };
-                                  })
-                                }
-                              >
-                                <Text fontSize="xs">x</Text>
-                              </Button>
-                            </HStack>
-
-                            <InputGroup size="xs">
-                              <Input
-                                type="number"
-                                placeholder="0"
-                                value={item.hours ?? 0}
-                                onChange={(e) =>
-                                  updateMilestoneRow(p.id, idx, "hours", e.target.value)
-                                }
-                                textAlign="center"
-                              />
-                              <InputRightAddon>h</InputRightAddon>
-                            </InputGroup>
-
-                            <Text fontSize="xs" color="gray.700" textAlign="center" mt={1}>
-                              TOTAL: {item.hours ?? 0} h
-                            </Text>
-                          </Th>
-                        ));
+                              {contributions.length > 0 && (
+                                <Text fontSize="xx-small" color="gray.500">
+                                  {contributions
+                                    .map((c) => `${c.name}: ${c.hours} h`)
+                                    .join(" · ")}
+                                </Text>
+                              )}
+                            </Th>
+                          );
+                        });
                       })}
 
                       <Th colSpan={6} />
@@ -2912,67 +3215,30 @@ export const ErpProjectsPage: React.FC = () => {
                             </Td>
 
                             {projectColumns.map((p) => {
-                              const count = (summaryMilestones[p.id] ?? []).length || 1;
-                              const key = allocationKey(
-                                emp.id,
-
-                                p.id,
-
-                                summaryYear,
-                              );
-
-                              const existing = allocationIndex.get(key);
-
-                              const value =
-                                allocationDrafts[key] ??
-                                existing?.allocated_hours?.toString() ??
-                                "";
-
-                              const numericValue = Number(
-                                value || existing?.allocated_hours || 0,
-                              );
-
-                              totalEmpAllocated += Number.isFinite(numericValue)
-                                ? numericValue
-                                : 0;
-
-                              return (
-                                <Td
-                                  key={`${emp.id}-${p.id}`}
-                                  textAlign="center"
-                                  colSpan={count}
-                                >
-                                  {summaryEditMode ? (
-                                    <Input
-                                      size="sm"
-                                      type="number"
-                                      min={0}
-                                      value={value}
-                                      onChange={(e) =>
-                                        setAllocationDrafts((prev) => ({
-                                          ...prev,
-
-                                          [key]: e.target.value,
-                                        }))
-                                      }
-                                      onBlur={(e) =>
-                                        handleAllocationBlur(
-                                          emp,
-
-                                          p.id,
-
-                                          e.target.value,
-                                        )
-                                      }
-                                      textAlign="center"
-                                    />
-                                  ) : (
-                                    <Text>
-                                      {existing?.allocated_hours ?? 0} h
+                              const hits = summaryMilestones[p.id] ?? [];
+                              const columns =
+                                hits.length > 0
+                                  ? hits
+                                  : [{ label: "Sin hitos", hours: 0 }];
+                              return columns.map((milestone, mIdx) => {
+                                const milestoneLabel =
+                                  milestone.label || `H${mIdx + 1}`;
+                                const employeeValue =
+                                  employeeMilestoneHours[emp.id]?.[p.id]?.[
+                                    milestoneLabel
+                                  ] ?? 0;
+                                totalEmpAllocated += employeeValue;
+                                return (
+                                  <Td
+                                    key={`${emp.id}-${p.id}-${milestoneLabel}`}
+                                    textAlign="center"
+                                  >
+                                    <Text fontSize="xs" color="gray.600">
+                                      {employeeValue} h
                                     </Text>
-                                  )}
-                                </Td>
-                              );
+                                  </Td>
+                                );
+                              });
                             })}
 
                             <Td
@@ -3035,18 +3301,6 @@ export const ErpProjectsPage: React.FC = () => {
                               {available - totalEmpAllocated}
                             </Td>
 
-                            <Td textAlign="center">
-                              <Button
-                                size="xs"
-                                colorScheme="red"
-                                variant="ghost"
-                                onClick={() =>
-                                  setAllocationDrafts((prev) => prev)
-                                }
-                              >
-                                ✕
-                              </Button>
-                            </Td>
                           </Tr>
                         );
                       })
