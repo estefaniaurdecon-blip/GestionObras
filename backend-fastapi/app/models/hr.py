@@ -39,6 +39,13 @@ class EmployeeProfile(SQLModel, table=True):
     email: Optional[str] = Field(default=None, max_length=255)
     hourly_rate: Optional[Decimal] = Field(default=None)
 
+    available_hours: Optional[Decimal] = Field(
+        default=None, description="Horas disponibles al año para asignación."
+    )
+    availability_percentage: Optional[Decimal] = Field(
+        default=None, description="Porcentaje de disponibilidad sobre las horas base."
+    )
+
     position: Optional[str] = None
     employment_type: str = Field(
         default="permanent",
@@ -50,6 +57,24 @@ class EmployeeProfile(SQLModel, table=True):
 
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class EmployeeAllocation(SQLModel, table=True):
+    """
+    Asignación de horas de un empleado a un proyecto/departamento concreto.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    employee_id: int = Field(foreign_key="employeeprofile.id", index=True)
+    department_id: Optional[int] = Field(default=None, foreign_key="department.id", index=True)
+    project_id: Optional[int] = Field(default=None, foreign_key="erp_project.id", index=True)
+    milestone: Optional[str] = Field(default=None, max_length=50)
+    year: int = Field(default=datetime.utcnow().year, index=True)
+    allocated_hours: Optional[Decimal] = Field(default=None)
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class EmployeeDepartment(SQLModel, table=True):

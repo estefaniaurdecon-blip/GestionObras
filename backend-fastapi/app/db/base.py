@@ -16,7 +16,12 @@ from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401
 from app.models.ticket_message import TicketMessage  # noqa: F401
 from app.models.ticket_participant import TicketParticipant  # noqa: F401
-from app.models.hr import Department, EmployeeProfile, EmployeeDepartment  # noqa: F401
+from app.models.hr import (  # noqa: F401
+    Department,
+    EmployeeProfile,
+    EmployeeDepartment,
+    EmployeeAllocation,
+)  # noqa: F401
 from app.models.user_invitation import UserInvitation  # noqa: F401
 from app.models.erp import (  # noqa: F401
     Activity,

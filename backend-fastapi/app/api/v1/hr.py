@@ -13,6 +13,9 @@ from app.schemas.hr import (
     EmployeeProfileCreate,
     EmployeeProfileRead,
     EmployeeProfileUpdate,
+    EmployeeAllocationCreate,
+    EmployeeAllocationRead,
+    EmployeeAllocationUpdate,
     HeadcountItem,
 )
 from app.services.hr_service import (
@@ -24,6 +27,10 @@ from app.services.hr_service import (
     update_employee_profile,
     delete_employee_profile,
     get_headcount_by_department,
+    list_employee_allocations,
+    create_employee_allocation,
+    update_employee_allocation,
+    delete_employee_allocation,
 )
 
 
@@ -273,6 +280,125 @@ def api_headcount_report(
     except PermissionError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/allocations",
+    response_model=List[EmployeeAllocationRead],
+    summary="Listar asignaciones de horas por empleado/proyecto",
+)
+def api_list_allocations(
+    tenant_id: Optional[int] = Query(
+        default=None,
+        description="Filtrar por tenant (solo Super Admin).",
+    ),
+    project_id: Optional[int] = Query(default=None, description="Filtrar por proyecto"),
+    employee_id: Optional[int] = Query(default=None, description="Filtrar por empleado"),
+    year: Optional[int] = Query(default=None, description="Año de las asignaciones"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["hr:read"])),
+) -> List[EmployeeAllocationRead]:
+    try:
+        return list_employee_allocations(
+            session=session,
+            current_user=current_user,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            employee_id=employee_id,
+            year=year,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/allocations",
+    response_model=EmployeeAllocationRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear asignación de horas",
+)
+def api_create_allocation(
+    data: EmployeeAllocationCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["hr:manage"])),
+) -> EmployeeAllocationRead:
+    try:
+        return create_employee_allocation(
+            session=session,
+            current_user=current_user,
+            data=data,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.patch(
+    "/allocations/{allocation_id}",
+    response_model=EmployeeAllocationRead,
+    summary="Actualizar asignación de horas",
+)
+def api_update_allocation(
+    allocation_id: int,
+    data: EmployeeAllocationUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["hr:manage"])),
+) -> EmployeeAllocationRead:
+    try:
+        return update_employee_allocation(
+            session=session,
+            current_user=current_user,
+            allocation_id=allocation_id,
+            data=data,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.delete(
+    "/allocations/{allocation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar asignación de horas",
+)
+def api_delete_allocation(
+    allocation_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["hr:manage"])),
+) -> None:
+    try:
+        delete_employee_allocation(
+            session=session,
+            current_user=current_user,
+            allocation_id=allocation_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 

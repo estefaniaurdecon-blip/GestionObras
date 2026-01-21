@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlmodel import Session, select, func
 
 from app.core.audit import log_action
-from app.models.hr import Department, EmployeeProfile, EmployeeDepartment
+from app.models.hr import Department, EmployeeProfile, EmployeeDepartment, EmployeeAllocation
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.hr import (
@@ -14,6 +14,9 @@ from app.schemas.hr import (
     EmployeeProfileRead,
     EmployeeProfileUpdate,
     HeadcountItem,
+    EmployeeAllocationCreate,
+    EmployeeAllocationRead,
+    EmployeeAllocationUpdate,
 )
 
 
@@ -198,6 +201,8 @@ def create_employee_profile(
         full_name=data.full_name or (user.full_name if user else None),
         email=email,
         hourly_rate=data.hourly_rate,
+        available_hours=data.available_hours,
+        availability_percentage=data.availability_percentage,
         position=data.position,
         employment_type=data.employment_type,
         hire_date=data.hire_date,
@@ -244,6 +249,8 @@ def create_employee_profile(
         full_name=profile.full_name or (user.full_name if user else None),
         email=profile.email or (user.email if user else None),
         hourly_rate=profile.hourly_rate,
+        available_hours=profile.available_hours,
+        availability_percentage=profile.availability_percentage,
         position=profile.position,
         employment_type=profile.employment_type,
         hire_date=profile.hire_date,
@@ -261,15 +268,11 @@ def list_employee_profiles(
 ) -> List[EmployeeProfileRead]:
     if not current_user.is_super_admin:
         tenant_id = current_user.tenant_id
-    elif tenant_id is None:
-        return []
+    stmt = select(EmployeeProfile)
+    if tenant_id is not None:
+        stmt = stmt.where(EmployeeProfile.tenant_id == tenant_id)
 
-    if tenant_id is None:
-        return []
-
-    profiles = session.exec(
-        select(EmployeeProfile).where(EmployeeProfile.tenant_id == tenant_id),
-    ).all()
+    profiles = session.exec(stmt).all()
 
     user_map = {}
     user_ids = [p.user_id for p in profiles if p.user_id]
@@ -300,6 +303,8 @@ def list_employee_profiles(
                 full_name=p.full_name or (user_map.get(p.user_id).full_name if p.user_id else None),
                 email=p.email or (user_map.get(p.user_id).email if p.user_id else None),
                 hourly_rate=p.hourly_rate,
+                available_hours=p.available_hours,
+                availability_percentage=p.availability_percentage,
                 position=p.position,
                 employment_type=p.employment_type,
                 hire_date=p.hire_date,
@@ -311,6 +316,140 @@ def list_employee_profiles(
         )
 
     return result
+
+
+# ----- Employee allocations (horas asignadas) -----
+def list_employee_allocations(
+    session: Session,
+    current_user: User,
+    tenant_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    employee_id: Optional[int] = None,
+    year: Optional[int] = None,
+) -> List[EmployeeAllocationRead]:
+    if not current_user.is_super_admin:
+        tenant_id = current_user.tenant_id
+
+    stmt = select(EmployeeAllocation)
+    if tenant_id is not None:
+        stmt = stmt.where(EmployeeAllocation.tenant_id == tenant_id)
+    if project_id is not None:
+        stmt = stmt.where(EmployeeAllocation.project_id == project_id)
+    if employee_id is not None:
+        stmt = stmt.where(EmployeeAllocation.employee_id == employee_id)
+    if year is not None:
+        stmt = stmt.where(EmployeeAllocation.year == year)
+
+    allocations = session.exec(stmt).all()
+    return [
+        EmployeeAllocationRead(
+            id=a.id,
+            tenant_id=a.tenant_id,
+            employee_id=a.employee_id,
+            department_id=a.department_id,
+            project_id=a.project_id,
+            milestone=a.milestone,
+            year=a.year,
+            allocated_hours=a.allocated_hours,
+            notes=a.notes,
+            created_at=a.created_at,
+            updated_at=a.updated_at,
+        )
+        for a in allocations
+    ]
+
+
+def create_employee_allocation(
+    session: Session,
+    current_user: User,
+    data: EmployeeAllocationCreate,
+) -> EmployeeAllocationRead:
+    _ensure_same_tenant(data.tenant_id, current_user)
+
+    allocation = EmployeeAllocation(
+        tenant_id=data.tenant_id,
+        employee_id=data.employee_id,
+        department_id=data.department_id,
+        project_id=data.project_id,
+        milestone=data.milestone,
+        year=data.year,
+        allocated_hours=data.allocated_hours,
+        notes=data.notes,
+    )
+    session.add(allocation)
+    session.commit()
+    session.refresh(allocation)
+
+    return EmployeeAllocationRead(
+        id=allocation.id,
+        tenant_id=allocation.tenant_id,
+        employee_id=allocation.employee_id,
+        department_id=allocation.department_id,
+        project_id=allocation.project_id,
+        milestone=allocation.milestone,
+        year=allocation.year,
+        allocated_hours=allocation.allocated_hours,
+        notes=allocation.notes,
+        created_at=allocation.created_at,
+        updated_at=allocation.updated_at,
+    )
+
+
+def update_employee_allocation(
+    session: Session,
+    current_user: User,
+    allocation_id: int,
+    data: EmployeeAllocationUpdate,
+) -> EmployeeAllocationRead:
+    allocation = session.get(EmployeeAllocation, allocation_id)
+    if not allocation:
+        raise ValueError("Asignación no encontrada")
+    _ensure_same_tenant(allocation.tenant_id, current_user)
+
+    if data.department_id is not None:
+        allocation.department_id = data.department_id
+    if data.project_id is not None:
+        allocation.project_id = data.project_id
+    if data.milestone is not None:
+        allocation.milestone = data.milestone
+    if data.year is not None:
+        allocation.year = data.year
+    if data.allocated_hours is not None:
+        allocation.allocated_hours = data.allocated_hours
+    if data.notes is not None:
+        allocation.notes = data.notes
+
+    allocation.updated_at = datetime.utcnow()
+    session.add(allocation)
+    session.commit()
+    session.refresh(allocation)
+
+    return EmployeeAllocationRead(
+        id=allocation.id,
+        tenant_id=allocation.tenant_id,
+        employee_id=allocation.employee_id,
+        department_id=allocation.department_id,
+        project_id=allocation.project_id,
+        milestone=allocation.milestone,
+        year=allocation.year,
+        allocated_hours=allocation.allocated_hours,
+        notes=allocation.notes,
+        created_at=allocation.created_at,
+        updated_at=allocation.updated_at,
+    )
+
+
+def delete_employee_allocation(
+    session: Session,
+    current_user: User,
+    allocation_id: int,
+) -> None:
+    allocation = session.get(EmployeeAllocation, allocation_id)
+    if not allocation:
+        return
+    _ensure_same_tenant(allocation.tenant_id, current_user)
+    session.delete(allocation)
+    session.commit()
 
 
 def update_employee_profile(
@@ -365,6 +504,10 @@ def update_employee_profile(
         profile.end_date = data.end_date
     if data.is_active is not None:
         profile.is_active = data.is_active
+    if data.available_hours is not None:
+        profile.available_hours = data.available_hours
+    if data.availability_percentage is not None:
+        profile.availability_percentage = data.availability_percentage
 
     session.add(profile)
     session.commit()
@@ -432,6 +575,8 @@ def update_employee_profile(
         full_name=profile.full_name,
         email=profile.email,
         hourly_rate=profile.hourly_rate,
+        available_hours=profile.available_hours,
+        availability_percentage=profile.availability_percentage,
         position=profile.position,
         employment_type=profile.employment_type,
         hire_date=profile.hire_date,
