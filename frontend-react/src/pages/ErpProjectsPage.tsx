@@ -40,15 +40,24 @@ import {
   Tooltip,
   Textarea,
   Table,
-  Thead,
   Tbody,
+  Thead,
   Tr,
   Th,
   Td,
   useColorModeValue,
+  useDisclosure,
   useToast,
   Switch,
   Tag,
+  VStack,
+  Wrap,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
@@ -56,6 +65,8 @@ import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import axios from "axios";
+import { apiClient } from "../api/client";
 
 type SummaryYearlyData = {
   projectJustify: Record<number, number>;
@@ -66,6 +77,19 @@ type SummaryYearlyData = {
 type SummaryStorage = Record<number, SummaryYearlyData>;
 
 const SUMMARY_STORAGE_KEY = "erp-summary-table-by-year";
+
+const DEPARTMENT_COLOR_SCHEMES = [
+  "teal",
+  "cyan",
+  "green",
+  "orange",
+  "purple",
+  "pink",
+  "blue",
+  "red",
+  "yellow",
+  "gray",
+];
 
 const createEmptyYearData = (): SummaryYearlyData => ({
   projectJustify: {},
@@ -171,27 +195,15 @@ const YEAR_FILTER_OPTIONS = [2024, 2025, 2026, 2027];
 
 const fetchSummaryData = async (year: number): Promise<SummaryYearlyData> => {
   try {
-    const response = await fetch(`/api/erp/summary/${year}`);
-    if (response.status === 404) {
-      return loadSummaryFallback(year);
-    }
-    if (!response.ok) {
-      throw new Error(`No se pudo cargar los datos del resumen para ${year}`);
-    }
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) {
-      console.warn(
-        `Respuesta inesperada para el resumen ${year}, se usa almacenamiento local (content-type=${contentType})`,
-      );
-      return loadSummaryFallback(year);
-    }
-    const data = await response.json();
-    return {
-      projectJustify: data.projectJustify ?? {},
-      projectJustified: data.projectJustified ?? {},
-      summaryMilestones: data.summaryMilestones ?? {},
-    };
+    const response = await apiClient.get<SummaryYearlyData>(
+      `/api/v1/erp/summary/${year}`,
+    );
+    await persistSummaryFallback(year, response.data);
+    return response.data;
   } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return loadSummaryFallback(year);
+    }
     console.warn("Fallo al cargar resumen, usando almacenamiento local", err);
     return loadSummaryFallback(year);
   }
@@ -204,20 +216,22 @@ const saveSummaryData = async ({
   year: number;
   payload: SummaryYearlyData;
 }): Promise<void> => {
-  const response = await fetch(`/api/erp/summary/${year}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (response.status === 404) {
-    persistSummaryFallback(year, payload);
-    return;
-  }
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(
-      `Error guardando el resumen para ${year}: ${response.status} ${response.statusText} ${message}`,
+  try {
+    await apiClient.put<SummaryYearlyData>(
+      `/api/v1/erp/summary/${year}`,
+      payload,
     );
+    await persistSummaryFallback(year, payload);
+  } catch (err) {
+    if (
+      axios.isAxiosError(err) &&
+      (err.response?.status === 404 || err.code === "ERR_NETWORK")
+    ) {
+      persistSummaryFallback(year, payload);
+      return;
+    }
+    console.error(err);
+    throw err;
   }
 };
 
@@ -983,7 +997,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   );
 };
 
-// P├ígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
+// Paígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
 
 export const ErpProjectsPage: React.FC = () => {
   // Tokens de estilo y animaci├│n para la cabecera hero.
@@ -1110,13 +1124,30 @@ export const ErpProjectsPage: React.FC = () => {
     Record<number, Array<{ label: string; hours: number }>>
   >({});
 
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState<number | "all">(
+    "all",
+  );
+  const {
+    isOpen: isAddModalOpen,
+    onOpen: onOpenAddModal,
+    onClose: onCloseAddModal,
+  } = useDisclosure();
+  const [addDrawerDeptFilter, setAddDrawerDeptFilter] = useState<
+    number | "all"
+  >("all");
+  const [addDrawerSearch, setAddDrawerSearch] = useState("");
+
+  const [allocationEdits, setAllocationEdits] = useState<
+    Record<string, string>
+  >({});
+
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const skipAutoSaveRef = useRef(true);
 
-  const {
-    data: storedYearData,
-    isFetching: loadingSummaryYear,
-  } = useQuery<SummaryYearlyData | undefined>({
+  const { data: storedYearData, isFetching: loadingSummaryYear } = useQuery<
+    SummaryYearlyData | undefined
+  >({
     queryKey: ["erp-summary", summaryYear],
     queryFn: () => fetchSummaryData(summaryYear),
     keepPreviousData: false,
@@ -1127,13 +1158,10 @@ export const ErpProjectsPage: React.FC = () => {
     mutationFn: saveSummaryData,
   });
 
-  const saveSummaryDebounced = useDebouncedSave<
-    { year: number; payload: SummaryYearlyData }
-  >(
-    (value) => saveSummaryMutation.mutateAsync(value),
-    700,
-    setSaveStatus,
-  );
+  const saveSummaryDebounced = useDebouncedSave<{
+    year: number;
+    payload: SummaryYearlyData;
+  }>((value) => saveSummaryMutation.mutateAsync(value), 700, setSaveStatus);
 
   const saveStatusLabel = {
     idle: "",
@@ -1225,9 +1253,17 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Si es super admin sin tenant seleccionado, traemos todos los empleados (sin filtro de tenant).
 
-  const hrTenantId = currentUser?.tenant_id ?? undefined;
+  const hrTenantId =
+    currentUser?.tenant_id ?? (currentUser?.is_super_admin ? null : undefined);
 
-  const canFetchHr = Boolean(currentUser);
+  useEffect(() => {
+    console.log("DEBUG ErpProjectsPage:", {
+      currentUserId: currentUser?.id,
+      currentUserTenantId: currentUser?.tenant_id,
+      hrTenantId: hrTenantId,
+      isSuperAdmin: currentUser?.is_super_admin,
+    });
+  }, [currentUser, hrTenantId]);
 
   const { data: activities = [] } = useQuery<ErpActivity[]>({
     queryKey: ["erp-activities"],
@@ -1247,29 +1283,56 @@ export const ErpProjectsPage: React.FC = () => {
     queryFn: () => fetchMilestones(),
   });
 
-  const { data: hrEmployees = [] } = useQuery<EmployeeProfile[]>({
+  const {
+    data: hrEmployees = [],
+    isError: employeesError,
+    error: employeesErrorMsg,
+    isLoading: employeesLoading,
+  } = useQuery<EmployeeProfile[]>({
     queryKey: ["hr-employees", hrTenantId],
 
-    queryFn: () => fetchEmployees(hrTenantId),
+    queryFn: () => {
+      console.log("Fetching employees with tenantId:", hrTenantId);
+      return fetchEmployees(hrTenantId);
+    },
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  const { data: hrDepartments = [] } = useQuery<Department[]>({
+  const {
+    data: hrDepartments = [],
+    isError: departmentsError,
+    error: departmentsErrorMsg,
+    isLoading: departmentsLoading,
+  } = useQuery<Department[]>({
     queryKey: ["hr-departments", hrTenantId],
 
-    queryFn: () => fetchDepartments(hrTenantId),
+    queryFn: () => {
+      console.log("Fetching departments with tenantId:", hrTenantId);
+      return fetchDepartments(hrTenantId);
+    },
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  const { data: allocations = [] } = useQuery<EmployeeAllocation[]>({
+  const { data: allocations = [], isError: allocationsError } = useQuery<
+    EmployeeAllocation[]
+  >({
     queryKey: ["hr-allocations", summaryYear, hrTenantId],
 
     queryFn: () =>
       fetchEmployeeAllocations({ year: summaryYear, tenantId: hrTenantId }),
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   const getAllocationTotal = useCallback(
@@ -2397,19 +2460,64 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrDepartments]);
 
+  const departmentColorMap = useMemo<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    hrDepartments.forEach((dept, idx) => {
+      map[dept.id] =
+        DEPARTMENT_COLOR_SCHEMES[idx % DEPARTMENT_COLOR_SCHEMES.length] ??
+        "gray";
+    });
+    return map;
+  }, [hrDepartments]);
+
+  useEffect(() => {
+    if (hrEmployees.length === 0) return;
+    setSelectedEmployeeIds((prev) => {
+      if (prev.length === 0) {
+        return hrEmployees.map((emp) => emp.id);
+      }
+      const next = new Set(prev);
+      let changed = false;
+      hrEmployees.forEach((emp) => {
+        if (!next.has(emp.id)) {
+          next.add(emp.id);
+          changed = true;
+        }
+      });
+      return changed ? Array.from(next) : prev;
+    });
+  }, [hrEmployees]);
+
+  const departmentAllocationPercentMap = useMemo<Record<number, number>>(() => {
+    const map: Record<number, number> = {};
+    hrDepartments.forEach((dept) => {
+      map[dept.id] = Number(dept.project_allocation_percentage ?? 100);
+    });
+    return map;
+  }, [hrDepartments]);
+
   const allocationKey = (
     employeeId: number,
 
     projectId?: number | null,
 
     year?: number | null,
-  ) => `${employeeId}-${projectId ?? "none"}-${year ?? ""}`;
+
+    milestone?: string | null,
+  ) =>
+    `${employeeId}-${projectId ?? "none"}-${year ?? ""}-${milestone ?? "default"}`;
 
   const allocationIndex = useMemo(() => {
     const map = new Map<string, EmployeeAllocation>();
 
     allocations.forEach((a) => {
-      map.set(allocationKey(a.employee_id, a.project_id, a.year), a);
+      const key = allocationKey(
+        a.employee_id,
+        a.project_id,
+        a.year,
+        a.milestone ?? "Sin hitos",
+      );
+      map.set(key, a);
     });
 
     return map;
@@ -2445,17 +2553,79 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrEmployees]);
 
+  const employeeDepartmentPercentages = useMemo(() => {
+    const records: Record<number, Record<number, number>> = {};
+
+    allocations.forEach((alloc) => {
+      if (alloc.year !== summaryYear) return;
+      if (!alloc.employee_id || !alloc.department_id) return;
+      const hours = Number(alloc.allocated_hours ?? 0);
+      const employeeRecords = records[alloc.employee_id] ?? {};
+      employeeRecords[alloc.department_id] =
+        (employeeRecords[alloc.department_id] ?? 0) + hours;
+      records[alloc.employee_id] = employeeRecords;
+    });
+
+    const result: Record<
+      number,
+      Array<{
+        departmentId: number;
+        departmentName: string;
+        limitPercent: number;
+        usedPercent: number;
+        limitHours: number;
+        usedHours: number;
+      }>
+    > = {};
+
+    Object.entries(records).forEach(([employeeIdStr, deptMap]) => {
+      const employeeId = Number(employeeIdStr);
+      const available = employeeAvailability[employeeId] ?? 0;
+      const list = Object.entries(deptMap)
+        .map(([deptIdStr, hours]) => {
+          const deptId = Number(deptIdStr);
+          const limitPercent = departmentAllocationPercentMap[deptId] ?? 100;
+          const limitHours = Math.round((available * limitPercent) / 100);
+          const usedPercent =
+            limitHours > 0 ? Math.round((hours / limitHours) * 100) : 0;
+          return {
+            departmentId: deptId,
+            departmentName: departmentMap[deptId] ?? "Sin departamento",
+            limitPercent,
+            usedPercent,
+            limitHours,
+            usedHours: Math.round(hours),
+          };
+        })
+        .sort((a, b) => b.usedPercent - a.usedPercent);
+      result[employeeId] = list;
+    });
+
+    return result;
+  }, [
+    allocations,
+    summaryYear,
+    employeeAvailability,
+    departmentMap,
+    departmentAllocationPercentMap,
+  ]);
+
   const employeeNameMap = useMemo(() => {
     const map: Record<number, string> = {};
     hrEmployees.forEach((emp) => {
-      map[emp.id] = `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() || emp.full_name || "Empleado";
+      map[emp.id] =
+        `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() ||
+        emp.full_name ||
+        "Empleado";
     });
     return map;
   }, [hrEmployees]);
 
   const milestoneContributions = useMemo(() => {
-    const map: Record<number, Record<string, Array<{ name: string; hours: number }>>> =
-      {};
+    const map: Record<
+      number,
+      Record<string, Array<{ name: string; hours: number }>>
+    > = {};
     allocations.forEach((alloc) => {
       if (!alloc.project_id || alloc.year !== summaryYear) return;
       const name = employeeNameMap[alloc.employee_id] ?? `${alloc.employee_id}`;
@@ -2516,16 +2686,11 @@ export const ErpProjectsPage: React.FC = () => {
       return next;
     });
 
-    setProjectJustified((prev) => {
-      const next = { ...prev };
+    setProjectJustified(() => {
+      const next: Record<number, number> = {};
 
       projectColumns.forEach((p) => {
-        if (next[p.id] === undefined)
-          next[p.id] = Math.min(
-            projectTotals[p.id] ?? 0,
-
-            projectJustify[p.id] ?? projectTotals[p.id] ?? 0,
-          );
+        next[p.id] = projectTotals[p.id] ?? 0;
       });
 
       return next;
@@ -2555,27 +2720,58 @@ export const ErpProjectsPage: React.FC = () => {
     [allocations],
   );
 
-  const filteredSummaryEmployees = useMemo(
-    () =>
-      hrEmployees.filter((emp) =>
-        (emp.full_name || "")
+  const filteredSummaryEmployees = useMemo(() => {
+    const searchLower = summarySearch.toLowerCase();
+    return hrEmployees.filter((emp) => {
+      if (!selectedEmployeeIds.includes(emp.id)) return false;
+      const matchesName = (emp.full_name || "")
+        .toLowerCase()
+        .includes(searchLower);
+      const matchesDepartment =
+        departmentFilter === "all"
+          ? true
+          : emp.primary_department_id === departmentFilter;
+      return matchesName && matchesDepartment;
+    });
+  }, [hrEmployees, summarySearch, selectedEmployeeIds, departmentFilter]);
 
-          .toLowerCase()
+  const employeesAvailableToAdd = useMemo(() => {
+    const searchLower = addDrawerSearch.toLowerCase();
+    return hrEmployees.filter((emp) => {
+      if (selectedEmployeeIds.includes(emp.id)) return false;
+      if (
+        addDrawerDeptFilter !== "all" &&
+        emp.primary_department_id !== addDrawerDeptFilter
+      ) {
+        return false;
+      }
+      return (emp.full_name || "").toLowerCase().includes(searchLower);
+    });
+  }, [hrEmployees, selectedEmployeeIds, addDrawerDeptFilter, addDrawerSearch]);
 
-          .includes(summarySearch.toLowerCase()),
-      ),
-
-    [hrEmployees, summarySearch],
-  );
+  const handleAddEmployee = (employeeId: number) => {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(employeeId) ? prev : [...prev, employeeId],
+    );
+    onCloseAddModal();
+  };
 
   const handleAllocationBlur = (
     employee: EmployeeProfile,
 
     projectId: number,
 
+    milestoneLabel: string,
+
     value: string,
   ) => {
-    const key = allocationKey(employee.id, projectId, summaryYear);
+    if (!summaryEditMode) return;
+    const key = allocationKey(
+      employee.id,
+      projectId,
+      summaryYear,
+      milestoneLabel,
+    );
 
     const parsed = Number(value || 0);
 
@@ -2598,6 +2794,8 @@ export const ErpProjectsPage: React.FC = () => {
             employee.primary_department_id ?? existing.department_id ?? null,
 
           year: summaryYear,
+
+          milestone: milestoneLabel,
         },
       });
     } else {
@@ -2610,7 +2808,7 @@ export const ErpProjectsPage: React.FC = () => {
 
         project_id: projectId,
 
-        milestone: null,
+        milestone: milestoneLabel,
 
         year: summaryYear,
 
@@ -2620,6 +2818,32 @@ export const ErpProjectsPage: React.FC = () => {
       });
     }
 
+    setAllocationEdits((prev) => {
+      const { [key]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const handleAllocationChange = (
+    employeeId: number,
+
+    projectId: number,
+
+    milestoneLabel: string,
+
+    value: string,
+  ) => {
+    if (!summaryEditMode) return;
+    const key = allocationKey(
+      employeeId,
+      projectId,
+      summaryYear,
+      milestoneLabel,
+    );
+    setAllocationEdits((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   // Render principal.
@@ -2731,7 +2955,7 @@ export const ErpProjectsPage: React.FC = () => {
                   )}
                 </Box>
 
-                <HStack spacing={3} align="flex-end">
+                <HStack spacing={3} align="flex-end" flexWrap="wrap">
                   <FormControl maxW="220px">
                     <FormLabel fontSize="xs" mb={1}>
                       Buscar empleado
@@ -2743,6 +2967,29 @@ export const ErpProjectsPage: React.FC = () => {
                       value={summarySearch}
                       onChange={(e) => setSummarySearch(e.target.value)}
                     />
+                  </FormControl>
+
+                  <FormControl maxW="180px">
+                    <FormLabel fontSize="xs" mb={1}>
+                      Departamento
+                    </FormLabel>
+                    <Select
+                      size="sm"
+                      value={departmentFilter}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDepartmentFilter(
+                          value === "all" ? "all" : Number(value),
+                        );
+                      }}
+                    >
+                      <option value="all">Todos</option>
+                      {hrDepartments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </Select>
                   </FormControl>
 
                   <FormControl maxW="120px">
@@ -2785,6 +3032,15 @@ export const ErpProjectsPage: React.FC = () => {
 
                   <Button
                     size="sm"
+                    variant="outline"
+                    colorScheme="blue"
+                    onClick={onOpenAddModal}
+                  >
+                    Añadir empleado
+                  </Button>
+
+                  <Button
+                    size="sm"
                     variant={summaryEditMode ? "solid" : "outline"}
                     colorScheme={summaryEditMode ? "green" : "gray"}
                     onClick={() => setSummaryEditMode((v) => !v)}
@@ -2792,6 +3048,21 @@ export const ErpProjectsPage: React.FC = () => {
                     {summaryEditMode ? "Guardar" : "Editar"}
                   </Button>
                 </HStack>
+                <Flex wrap="wrap" gap={3} mt={2} mb={4}>
+                  {hrDepartments.map((dept) => (
+                    <HStack key={`legend-${dept.id}`} spacing={2}>
+                      <Box
+                        w="12px"
+                        h="12px"
+                        borderRadius="full"
+                        bg={departmentColorMap[dept.id] ?? "gray.300"}
+                      />
+                      <Text fontSize="xs" color="gray.600">
+                        {dept.name}
+                      </Text>
+                    </HStack>
+                  ))}
+                </Flex>
               </Flex>
 
               <Box
@@ -2804,31 +3075,35 @@ export const ErpProjectsPage: React.FC = () => {
                 <Table size="sm" variant="simple" minW="1400px">
                   <Thead>
                     <Tr bg="gray.200">
-                      <Th position="sticky" left={0} zIndex={4} minW="60px" />
+                      <Th position="sticky" left={0} zIndex={4} minW="60px">
+                        Nº
+                      </Th>
 
-                      <Th
-                        position="sticky"
-                        left="60px"
-                        zIndex={4}
-                        minW="170px"
-                      />
+                      <Th position="sticky" left="60px" zIndex={4} minW="170px">
+                        Nombre
+                      </Th>
 
                       <Th
                         position="sticky"
                         left="230px"
                         zIndex={4}
                         minW="190px"
-                      />
+                      >
+                        Apellidos
+                      </Th>
 
                       <Th
                         position="sticky"
                         left="420px"
                         zIndex={4}
-                        minW="120px"
-                      />
+                        minW="130px"
+                      >
+                        Departamento
+                      </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -2909,7 +3184,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -2961,7 +3237,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -2973,13 +3250,8 @@ export const ErpProjectsPage: React.FC = () => {
                               size="xs"
                               type="number"
                               value={projectJustified[p.id] ?? 0}
-                              onChange={(e) =>
-                                setProjectJustified((prev) => ({
-                                  ...prev,
-
-                                  [p.id]: Number(e.target.value || 0),
-                                }))
-                              }
+                              isReadOnly
+                              focusBorderColor="green.400"
                               textAlign="center"
                               px={2}
                               py={1}
@@ -3008,7 +3280,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         const falt =
                           (projectJustify[p.id] ?? 0) -
                           (projectJustified[p.id] ?? 0);
@@ -3048,7 +3321,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         const justify = projectJustify[p.id] ?? 0;
 
                         const just = projectJustified[p.id] ?? 0;
@@ -3071,7 +3345,11 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th colSpan={6} />
                     </Tr>
 
-                    <Tr bg="green.50" borderBottomWidth="2px" borderColor="green.200">
+                    <Tr
+                      bg="green.50"
+                      borderBottomWidth="2px"
+                      borderColor="green.200"
+                    >
                       <Th
                         position="sticky"
                         left={0}
@@ -3088,7 +3366,11 @@ export const ErpProjectsPage: React.FC = () => {
                         const ms = summaryMilestones[p.id] ?? [];
                         if (ms.length === 0) {
                           return (
-                            <Th key={`${p.id}-ms-empty`} textAlign="center" color="green.800">
+                            <Th
+                              key={`${p.id}-ms-empty`}
+                              textAlign="center"
+                              color="green.800"
+                            >
                               <Text fontSize="xs" color="teal.600">
                                 Añade hitos con el +
                               </Text>
@@ -3103,9 +3385,14 @@ export const ErpProjectsPage: React.FC = () => {
                             milestoneLabel,
                           );
                           const contributions =
-                            milestoneContributions[p.id]?.[milestoneLabel] ?? [];
+                            milestoneContributions[p.id]?.[milestoneLabel] ??
+                            [];
                           return (
-                            <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
+                            <Th
+                              key={`${p.id}-ms-${idx}`}
+                              textAlign="center"
+                              p={2}
+                            >
                               <HStack justify="center" spacing={1} mb={1}>
                                 <Text fontSize="xs" fontWeight="semibold">
                                   {milestoneLabel}
@@ -3121,7 +3408,9 @@ export const ErpProjectsPage: React.FC = () => {
                                   onClick={() =>
                                     setSummaryMilestones((prev) => {
                                       const list = prev[p.id] ?? [];
-                                      const next = list.filter((_, mIdx) => mIdx !== idx);
+                                      const next = list.filter(
+                                        (_, mIdx) => mIdx !== idx,
+                                      );
                                       return { ...prev, [p.id]: next };
                                     })
                                   }
@@ -3136,23 +3425,17 @@ export const ErpProjectsPage: React.FC = () => {
                                   placeholder="0"
                                   value={item.hours ?? 0}
                                   onChange={(e) =>
-                                    updateMilestoneRow(p.id, idx, "hours", e.target.value)
+                                    updateMilestoneRow(
+                                      p.id,
+                                      idx,
+                                      "hours",
+                                      e.target.value,
+                                    )
                                   }
                                   textAlign="center"
                                 />
                                 <InputRightAddon>h</InputRightAddon>
                               </InputGroup>
-
-                              <Text fontSize="xs" color="gray.700" textAlign="center" mt={1}>
-                                TOTAL: {allocationTotal} h
-                              </Text>
-                              {contributions.length > 0 && (
-                                <Text fontSize="xx-small" color="gray.500">
-                                  {contributions
-                                    .map((c) => `${c.name}: ${c.hours} h`)
-                                    .join(" · ")}
-                                </Text>
-                              )}
                             </Th>
                           );
                         });
@@ -3177,19 +3460,27 @@ export const ErpProjectsPage: React.FC = () => {
                     ) : (
                       filteredSummaryEmployees.map((emp, idx) => {
                         const available = employeeAvailability[emp.id] ?? 0;
+                        const deptId = emp.primary_department_id ?? -1;
+                        const deptColor = departmentColorMap[deptId] ?? "gray";
+                        const bgColor =
+                          idx % 2 === 0
+                            ? `${deptColor}.50`
+                            : `${deptColor}.100`;
 
                         let totalEmpAllocated = 0;
 
                         return (
                           <Tr
                             key={emp.id}
-                            bg={idx % 2 === 0 ? "white" : "gray.50"}
+                            bg={bgColor}
+                            borderLeftWidth="3px"
+                            borderLeftColor={`${deptColor}.500`}
                           >
                             <Td
                               position="sticky"
                               left={0}
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                             >
                               {idx + 1}
                             </Td>
@@ -3198,7 +3489,7 @@ export const ErpProjectsPage: React.FC = () => {
                               position="sticky"
                               left="70px"
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                               fontWeight="semibold"
                             >
                               {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
@@ -3208,10 +3499,65 @@ export const ErpProjectsPage: React.FC = () => {
                               position="sticky"
                               left="230px"
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                             >
                               {emp.full_name?.split(" ").slice(1).join(" ") ||
                                 "-"}
+                            </Td>
+
+                            <Td
+                              position="sticky"
+                              left="420px"
+                              zIndex={3}
+                              bg={bgColor}
+                              minW="180px"
+                              px={2}
+                            >
+                              <Flex align="center" gap={2}>
+                                <Box
+                                  w="12px"
+                                  h="12px"
+                                  borderRadius="full"
+                                  bg={
+                                    departmentColorMap[
+                                      emp.primary_department_id ?? -1
+                                    ] ?? "gray.300"
+                                  }
+                                />
+                                <VStack align="flex-start" spacing={0}>
+                                  <Text fontSize="sm" fontWeight="semibold">
+                                    {departmentMap[
+                                      emp.primary_department_id ?? -1
+                                    ] ?? "Sin departamento"}
+                                  </Text>
+                                  {(() => {
+                                    const usage =
+                                      (
+                                        employeeDepartmentPercentages[emp.id] ??
+                                        []
+                                      ).find(
+                                        (entry) =>
+                                          entry.departmentId ===
+                                          emp.primary_department_id,
+                                      ) ??
+                                      employeeDepartmentPercentages[
+                                        emp.id
+                                      ]?.[0];
+                                    if (!usage) return null;
+                                    return (
+                                      <Text
+                                        fontSize="xx-small"
+                                        color="gray.500"
+                                      >
+                                        {usage.usedPercent}% usado /{" "}
+                                        {usage.limitPercent}% cuota (
+                                        {usage.usedHours}h/
+                                        {usage.limitHours}h)
+                                      </Text>
+                                    );
+                                  })()}
+                                </VStack>
+                              </Flex>
                             </Td>
 
                             {projectColumns.map((p) => {
@@ -3228,14 +3574,59 @@ export const ErpProjectsPage: React.FC = () => {
                                     milestoneLabel
                                   ] ?? 0;
                                 totalEmpAllocated += employeeValue;
+                                const inputKey = allocationKey(
+                                  emp.id,
+                                  p.id,
+                                  summaryYear,
+                                  milestoneLabel,
+                                );
+                                const bufferValue = allocationEdits[inputKey];
+                                const displayValue =
+                                  bufferValue !== undefined
+                                    ? bufferValue
+                                    : String(employeeValue);
                                 return (
                                   <Td
                                     key={`${emp.id}-${p.id}-${milestoneLabel}`}
                                     textAlign="center"
+                                    px={1}
                                   >
-                                    <Text fontSize="xs" color="gray.600">
-                                      {employeeValue} h
-                                    </Text>
+                                    <InputGroup size="xs">
+                                      <Input
+                                        type="number"
+                                        value={displayValue}
+                                        onChange={(e) =>
+                                          handleAllocationChange(
+                                            emp.id,
+                                            p.id,
+                                            milestoneLabel,
+                                            e.target.value,
+                                          )
+                                        }
+                                        onBlur={(e) =>
+                                          handleAllocationBlur(
+                                            emp,
+                                            p.id,
+                                            milestoneLabel,
+                                            e.target.value,
+                                          )
+                                        }
+                                        textAlign="center"
+                                        px={1}
+                                        min={0}
+                                        isReadOnly={!summaryEditMode}
+                                        cursor={
+                                          summaryEditMode
+                                            ? "text"
+                                            : "not-allowed"
+                                        }
+                                        bg={
+                                          summaryEditMode ? "white" : "gray.50"
+                                        }
+                                        focusBorderColor="green.400"
+                                      />
+                                      <InputRightAddon>h</InputRightAddon>
+                                    </InputGroup>
                                   </Td>
                                 );
                               });
@@ -3300,7 +3691,6 @@ export const ErpProjectsPage: React.FC = () => {
                             >
                               {available - totalEmpAllocated}
                             </Td>
-
                           </Tr>
                         );
                       })
@@ -3308,6 +3698,273 @@ export const ErpProjectsPage: React.FC = () => {
                   </Tbody>
                 </Table>
               </Box>
+
+              <Modal
+                isOpen={isAddModalOpen}
+                onClose={onCloseAddModal}
+                size="md"
+              >
+                <ModalOverlay />
+                <ModalContent>
+                  <ModalHeader>Agregar empleados</ModalHeader>
+                  <ModalBody>
+                    <Stack spacing={3}>
+                      {/* Debug info */}
+                      <Box
+                        p={2}
+                        bg="gray.100"
+                        borderRadius="md"
+                        fontSize="xs"
+                        display="none"
+                      >
+                        <Text>Tenant ID: {hrTenantId ?? "undefined"}</Text>
+                        <Text>Empleados cargados: {hrEmployees.length}</Text>
+                        <Text>
+                          Departamentos cargados: {hrDepartments.length}
+                        </Text>
+                        <Text>
+                          Empleados seleccionados: {selectedEmployeeIds.length}
+                        </Text>
+                        <Text>
+                          Cargando empleados: {employeesLoading ? "sí" : "no"}
+                        </Text>
+                        <Text>
+                          Cargando depts: {departmentsLoading ? "sí" : "no"}
+                        </Text>
+                      </Box>
+
+                      {(employeesLoading || departmentsLoading) && (
+                        <Box
+                          p={3}
+                          bg="blue.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="blue.200"
+                        >
+                          <Text fontSize="xs" color="blue.800">
+                            ⏳ Cargando empleados y departamentos...
+                          </Text>
+                        </Box>
+                      )}
+
+                      {(employeesError || departmentsError) && (
+                        <Box
+                          p={3}
+                          bg="red.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="red.200"
+                        >
+                          <Text fontSize="xs" color="red.800" fontWeight="bold">
+                            ⚠️ Error al cargar datos
+                          </Text>
+                          {employeesError && (
+                            <Text fontSize="xs" color="red.700" mt={1}>
+                              Error cargando empleados:{" "}
+                              {employeesErrorMsg?.toString() || "Desconocido"}
+                            </Text>
+                          )}
+                          {departmentsError && (
+                            <Text fontSize="xs" color="red.700" mt={1}>
+                              Error cargando departamentos:{" "}
+                              {departmentsErrorMsg?.toString() || "Desconocido"}
+                            </Text>
+                          )}
+                          <Button
+                            size="xs"
+                            mt={2}
+                            colorScheme="red"
+                            onClick={() => {
+                              queryClient.invalidateQueries({
+                                queryKey: ["hr-employees", hrTenantId],
+                              });
+                              queryClient.invalidateQueries({
+                                queryKey: ["hr-departments", hrTenantId],
+                              });
+                            }}
+                          >
+                            Reintentar
+                          </Button>
+                        </Box>
+                      )}
+
+                      {!employeesError &&
+                        !departmentsError &&
+                        hrDepartments.length === 0 &&
+                        hrEmployees.length === 0 && (
+                          <Box
+                            p={3}
+                            bg="orange.50"
+                            borderRadius="md"
+                            borderWidth="1px"
+                            borderColor="orange.200"
+                          >
+                            <Text fontSize="xs" color="orange.800">
+                              ⚠️ Cargando datos de departamentos y empleados...
+                            </Text>
+                            <Button
+                              size="xs"
+                              mt={2}
+                              colorScheme="orange"
+                              onClick={() => {
+                                queryClient.invalidateQueries({
+                                  queryKey: ["hr-employees", hrTenantId],
+                                });
+                                queryClient.invalidateQueries({
+                                  queryKey: ["hr-departments", hrTenantId],
+                                });
+                              }}
+                            >
+                              Recargar datos
+                            </Button>
+                          </Box>
+                        )}
+
+                      {/* Leyenda de departamentos */}
+                      {hrDepartments.length > 0 && (
+                        <Box
+                          p={3}
+                          bg="gray.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="gray.200"
+                        >
+                          <Text fontSize="xs" fontWeight="bold" mb={2}>
+                            📋 Leyenda de departamentos:
+                          </Text>
+                          <Wrap spacing={2}>
+                            {hrDepartments.map((dept, idx) => (
+                              <Box
+                                key={dept.id}
+                                display="flex"
+                                alignItems="center"
+                                gap={1}
+                              >
+                                <Box
+                                  width="12px"
+                                  height="12px"
+                                  borderRadius="full"
+                                  bg={`${DEPARTMENT_COLOR_SCHEMES[idx % DEPARTMENT_COLOR_SCHEMES.length]}.500`}
+                                />
+                                <Text fontSize="xs">{dept.name}</Text>
+                              </Box>
+                            ))}
+                          </Wrap>
+                        </Box>
+                      )}
+
+                      <FormControl>
+                        <FormLabel fontSize="xs" mb={1}>
+                          Departamento
+                        </FormLabel>
+                        <Select
+                          size="sm"
+                          value={addDrawerDeptFilter}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setAddDrawerDeptFilter(
+                              value === "all" ? "all" : Number(value),
+                            );
+                          }}
+                        >
+                          <option value="all">Todos los departamentos</option>
+                          {hrDepartments.map((dept, idx) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel fontSize="xs" mb={1}>
+                          Buscar
+                        </FormLabel>
+                        <Input
+                          size="sm"
+                          placeholder="Nombre"
+                          value={addDrawerSearch}
+                          onChange={(e) => setAddDrawerSearch(e.target.value)}
+                        />
+                      </FormControl>
+
+                      <VStack align="stretch" spacing={2}>
+                        {employeesAvailableToAdd.length === 0 ? (
+                          <Text fontSize="xs" color="gray.500">
+                            No hay empleados disponibles para agregar.
+                          </Text>
+                        ) : (
+                          employeesAvailableToAdd.map((emp) => {
+                            const deptId = emp.primary_department_id ?? -1;
+                            const deptIndex = hrDepartments.findIndex(
+                              (d) => d.id === deptId,
+                            );
+                            const colorScheme =
+                              DEPARTMENT_COLOR_SCHEMES[
+                                deptIndex >= 0 ? deptIndex : 0
+                              ];
+                            const deptName =
+                              departmentMap[deptId] ?? "Sin departamento";
+
+                            return (
+                              <Flex
+                                key={emp.id}
+                                align="center"
+                                justify="space-between"
+                                px={3}
+                                py={2}
+                                borderWidth="1px"
+                                borderRadius="md"
+                                borderColor={`${colorScheme}.200`}
+                                bg={`${colorScheme}.50`}
+                                _hover={{ bg: `${colorScheme}.100` }}
+                              >
+                                <Box flex={1}>
+                                  <Text
+                                    fontSize="sm"
+                                    fontWeight="semibold"
+                                    color="gray.800"
+                                  >
+                                    {emp.full_name}
+                                  </Text>
+                                  <Flex align="center" gap={1} mt={1}>
+                                    <Box
+                                      width="10px"
+                                      height="10px"
+                                      borderRadius="full"
+                                      bg={`${colorScheme}.500`}
+                                    />
+                                    <Text
+                                      fontSize="xs"
+                                      color={`${colorScheme}.700`}
+                                      fontWeight="500"
+                                    >
+                                      {deptName}
+                                    </Text>
+                                  </Flex>
+                                </Box>
+                                <Button
+                                  size="xs"
+                                  colorScheme={colorScheme}
+                                  ml={2}
+                                  onClick={() => handleAddEmployee(emp.id)}
+                                >
+                                  Agregar
+                                </Button>
+                              </Flex>
+                            );
+                          })
+                        )}
+                      </VStack>
+                    </Stack>
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button variant="ghost" onClick={onCloseAddModal}>
+                      Cerrar
+                    </Button>
+                  </ModalFooter>
+                </ModalContent>
+              </Modal>
 
               <SimpleGrid columns={{ base: 1, md: 3 }} gap={4}>
                 <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">

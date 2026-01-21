@@ -23,6 +23,10 @@ class Department(SQLModel, table=True):
     )
 
     is_active: bool = Field(default=True)
+    project_allocation_percentage: Optional[Decimal] = Field(
+        default=Decimal(100),
+        description="Porcentaje máximo del tiempo disponible que el departamento puede dedicar a proyectos.",
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

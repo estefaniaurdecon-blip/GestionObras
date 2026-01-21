@@ -78,14 +78,11 @@ def list_departments(
 ) -> List[DepartmentRead]:
     if not current_user.is_super_admin:
         tenant_id = current_user.tenant_id
-    elif tenant_id is None:
-        # Super Admin sin tenant_id explícito no lista nada (evita listar todo por defecto).
-        return []
 
-    if tenant_id is None:
-        return []
+    stmt = select(Department)
+    if tenant_id is not None:
+        stmt = stmt.where(Department.tenant_id == tenant_id)
 
-    stmt = select(Department).where(Department.tenant_id == tenant_id)
     depts = session.exec(stmt).all()
 
     return [
