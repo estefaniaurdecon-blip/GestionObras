@@ -48,12 +48,6 @@ import {
   Tabs,
   Table,
   Tbody,
-<<<<<<< HEAD
-  Thead,
-  Tr,
-  Th,
-=======
->>>>>>> dev
   Td,
   Text,
   Textarea,
@@ -69,12 +63,6 @@ import {
   Tag,
   VStack,
   Wrap,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
@@ -347,6 +335,28 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const formatPercent = (value: number) => `${value.toFixed(2)}%`;
+
+const formatEuroValue = (value: number) =>
+  new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: true,
+  }).format(value);
+
+const EuroCell: React.FC<{ value: number; color?: string; bold?: boolean }> = ({
+  value,
+  color,
+  bold = true,
+}) => (
+  <Text
+    color={color ?? "green.700"}
+    fontWeight={bold ? "semibold" : "normal"}
+    fontFamily="mono"
+    whiteSpace="nowrap"
+  >
+    {formatEuroValue(value)} €
+  </Text>
+);
 
 interface GanttTask {
   id: string;
@@ -1052,9 +1062,6 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   );
 };
 
-<<<<<<< HEAD
-// Paígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
-=======
 interface BudgetModalForm {
   concept: string;
   hito1_budget: string;
@@ -1268,8 +1275,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   );
 };
 
-// P├ígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
->>>>>>> dev
+// Pagina principal de proyectos: resumen, listado, Gantt, creacion y edicion detallada.
 
 export const ErpProjectsPage: React.FC = () => {
   // Tokens de estilo y animaci├│n para la cabecera hero.
@@ -1340,13 +1346,9 @@ export const ErpProjectsPage: React.FC = () => {
     Array<{ id: string; name: string; start: string; end: string }>
   >([]);
 
-<<<<<<< HEAD
-  // Estado del drawer de detalle/edicion.
-=======
   const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
 
-  // Estado del drawer de detalle/edici├│n.
->>>>>>> dev
+  // Estado del drawer de detalle/edicion.
 
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -2351,9 +2353,6 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
-<<<<<<< HEAD
-  // Mutaciones de edicion en cascada para actividad, subactividad e hito.
-=======
   const selectedBudgetProjectId = budgetProjectFilter
     ? Number(budgetProjectFilter)
     : null;
@@ -2822,7 +2821,7 @@ export const ErpProjectsPage: React.FC = () => {
     field: "amount" | "justified",
     value: string,
   ) => {
-    if (!selectedBudgetProjectId || !budgetsEditMode) return;
+    if (!selectedBudgetProjectId || !budgetsEditMode || !hasRealBudgets) return;
     const num = Number(value);
     if (!Number.isFinite(num)) return;
     const current = budget.milestones ?? [];
@@ -2921,8 +2920,7 @@ export const ErpProjectsPage: React.FC = () => {
     });
   };
 
-  // Mutaciones de edici├│n en cascada para actividad, subactividad e hito.
->>>>>>> dev
+  // Mutaciones de edicion en cascada para actividad, subactividad e hito.
 
   const updateActivityMutation = useMutation({
     mutationFn: async (input: {
@@ -5129,101 +5127,101 @@ export const ErpProjectsPage: React.FC = () => {
                                   key={`concept-${budget.id}-${budget.concept}`}
                                   defaultValue={budget.concept}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "concept", value)
-                                  }
-                                >
-                                  <EditablePreview fontWeight="semibold" />
-                                  <EditableInput />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
-                                  submitOnBlur
-                                  selectAllOnFocus
-                                  key={`hito1-${budget.id}-${budget.hito1_budget}`}
-                                  defaultValue={String(budget.hito1_budget ?? 0)}
-                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "hito1_budget", value)
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.hito1_budget ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "concept", value)
+                              }
+                            >
+                              <EditablePreview fontWeight="semibold" />
+                              <EditableInput />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
+                              submitOnBlur
+                              selectAllOnFocus
+                              key={`hito1-${budget.id}-${budget.hito1_budget}`}
+                              defaultValue={String(budget.hito1_budget ?? 0)}
+                              isDisabled={!hasRealBudgets || !budgetsEditMode}
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "hito1_budget", value)
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.hito1_budget ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
                                   submitOnBlur
                                   selectAllOnFocus
                                   key={`justificado1-${budget.id}-${budget.justified_hito1}`}
                                   defaultValue={String(budget.justified_hito1 ?? 0)}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "justified_hito1", value)
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.justified_hito1 ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "justified_hito1", value)
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.justified_hito1 ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
                                   submitOnBlur
                                   selectAllOnFocus
                                   key={`hito2-${budget.id}-${budget.hito2_budget}`}
                                   defaultValue={String(budget.hito2_budget ?? 0)}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "hito2_budget", value)
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.hito2_budget ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "hito2_budget", value)
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.hito2_budget ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
                                   submitOnBlur
                                   selectAllOnFocus
                                   key={`justificado2-${budget.id}-${budget.justified_hito2}`}
                                   defaultValue={String(budget.justified_hito2 ?? 0)}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "justified_hito2", value)
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.justified_hito2 ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "justified_hito2", value)
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.justified_hito2 ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
                                   submitOnBlur
                                   selectAllOnFocus
                                   key={`approved-${budget.id}-${budget.approved_budget}`}
                                   defaultValue={String(budget.approved_budget ?? 0)}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "approved_budget", value)
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.approved_budget ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
-                                <Editable
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(budget.id, "approved_budget", value)
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.approved_budget ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
+                          <Td textAlign="right">
+                            <Editable
                                   submitOnBlur
                                   selectAllOnFocus
                                   key={`percent-${budget.id}-${budget.percent_spent}`}
@@ -5246,20 +5244,20 @@ export const ErpProjectsPage: React.FC = () => {
                                   key={`forecast-${budget.id}-${budget.forecasted_spent}`}
                                   defaultValue={String(budget.forecasted_spent ?? 0)}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "forecasted_spent",
-                                      value,
-                                    )
-                                  }
-                                >
-                                  <EditablePreview>
-                                    {formatCurrency(budget.forecasted_spent ?? 0)}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" />
-                                </Editable>
-                              </Td>
+                              onSubmit={(value) =>
+                                handleBudgetCellSave(
+                                  budget.id,
+                                  "forecasted_spent",
+                                  value,
+                                )
+                              }
+                            >
+                              <EditablePreview>
+                                <EuroCell value={budget.forecasted_spent ?? 0} />
+                              </EditablePreview>
+                              <EditableInput type="number" step="0.01" min="0" />
+                            </Editable>
+                          </Td>
                               <Td>
                                 {hasRealBudgets ? (
                                   <Flex gap={2} flexWrap="wrap">
@@ -5294,23 +5292,31 @@ export const ErpProjectsPage: React.FC = () => {
                       <Tfoot>
                         <Tr bg="rgba(196,116,255,0.15)" fontWeight="semibold">
                           <Td>Total</Td>
-                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.hito1)}</Td>
                           <Td textAlign="right">
-                            {formatCurrency(budgetsTabTotals.justificados?.[0] ?? 0)}
+                            <EuroCell value={budgetsTabTotals.hito1} />
                           </Td>
-                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.hito2)}</Td>
                           <Td textAlign="right">
-                            {formatCurrency(budgetsTabTotals.justificados?.[1] ?? 0)}
+                            <EuroCell value={budgetsTabTotals.justificados?.[0] ?? 0} />
                           </Td>
-                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.approved)}</Td>
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsTabTotals.hito2} />
+                          </Td>
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsTabTotals.justificados?.[1] ?? 0} />
+                          </Td>
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsTabTotals.approved} />
+                          </Td>
                           <Td />
-                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.gasto)}</Td>
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsTabTotals.gasto} />
+                          </Td>
                           <Td />
                         </Tr>
                         <Tr bg="rgba(196,116,255,0.2)" fontWeight="semibold">
                           <Td>Diferencia</Td>
                           <Td colSpan={8} textAlign="right">
-                            {formatCurrency(Math.abs(budgetsDifference))}{" "}
+                            <EuroCell value={Math.abs(budgetsDifference)} />{" "}
                             {budgetsDifference === 0
                               ? "la suma cuadra con los hitos."
                               : budgetsDifference > 0
@@ -5740,12 +5746,9 @@ export const ErpProjectsPage: React.FC = () => {
               </Button>
             </Stack>
           </TabPanel>
-        </TabPanels>
+      </TabPanels>
       </Tabs>
 
-<<<<<<< HEAD
-      {/* Drawer de detalle/edicion del proyecto seleccionado */}
-=======
       <BudgetModal
         isOpen={budgetModalOpen}
         onClose={() => setBudgetModalOpen(false)}
@@ -5760,8 +5763,7 @@ export const ErpProjectsPage: React.FC = () => {
         }
       />
 
-      {/* Drawer de detalle/edici├│n del proyecto seleccionado */}
->>>>>>> dev
+      {/* Drawer de detalle/edicion del proyecto seleccionado */}
 
       <Drawer
         isOpen={detailsOpen}

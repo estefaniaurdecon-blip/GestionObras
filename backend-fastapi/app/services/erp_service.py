@@ -87,7 +87,9 @@ def _validate_budget_totals(
         raise ValueError("El total aprobado debe coincidir con la suma de los hitos.")
 
 
-def list_project_budget_lines(session: Session, project_id: int) -> list[ProjectBudgetLine]:
+def list_project_budget_lines(
+    session: Session, project_id: int
+) -> tuple[list[ProjectBudgetLine], dict[int, list[BudgetLineMilestone]]]:
     lines = session.exec(
         select(ProjectBudgetLine)
         .where(ProjectBudgetLine.project_id == project_id)
@@ -151,13 +153,14 @@ def delete_project_budget_milestone(session: Session, project_id: int, milestone
     session.commit()
 
 
-def _attach_line_milestones(session: Session, lines: list[ProjectBudgetLine]) -> list[ProjectBudgetLine]:
+def _attach_line_milestones(
+    session: Session, lines: list[ProjectBudgetLine]
+) -> tuple[list[ProjectBudgetLine], dict[int, list[BudgetLineMilestone]]]:
     if not lines:
-        return lines
+        return lines, {}
     line_ids = [line.id for line in lines if line.id is not None]
     if not line_ids:
-        return lines
-    # Map milestone_id to milestone metadata
+        return lines, {}
     project_id = lines[0].project_id
     milestones = {m.id: m for m in list_project_budget_milestones(session, project_id)}
     links = session.exec(
@@ -166,15 +169,15 @@ def _attach_line_milestones(session: Session, lines: list[ProjectBudgetLine]) ->
     links_by_line: dict[int, list[BudgetLineMilestone]] = {}
     for link in links:
         links_by_line.setdefault(link.budget_line_id, []).append(link)
-    for line in lines:
-        mlinks = links_by_line.get(line.id, [])
-        # order by milestone order_index if available
+    # ordenamos los enlaces por order_index para cada línea
+    sorted_links: dict[int, list[BudgetLineMilestone]] = {}
+    for line_id, mlinks in links_by_line.items():
         mlinks_sorted = sorted(
             mlinks,
             key=lambda l: milestones.get(l.milestone_id).order_index if milestones.get(l.milestone_id) else 0,
         )
-        setattr(line, "milestones", mlinks_sorted)
-    return lines
+        sorted_links[line_id] = mlinks_sorted
+    return lines, sorted_links
 
 
 def create_project_budget_line(

@@ -28,13 +28,13 @@ def create_app() -> FastAPI:
             cors_origins.append(origin)
 
     # Configuracion CORS basica.
-    # Para desarrollo abrimos a todos para evitar bloqueos al probar; en prod deberia restringirse.
-    allow_origins = ["*"]
+    # Permitimos solo los orígenes conocidos (se rellenan arriba con localhost y el frontend configurado).
+    allow_origins = cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
-        allow_origin_regex=".*",
+        allow_origin_regex=".*",  # en desarrollo permitimos cualquiera para evitar bloqueos locales
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
