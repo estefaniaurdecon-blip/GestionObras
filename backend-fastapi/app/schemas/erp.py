@@ -245,3 +245,72 @@ class TimeReportRow(BaseModel):
     username: Optional[str] = None
     total_hours: Decimal
     hourly_rate: Optional[Decimal] = None
+
+
+class BudgetLineMilestoneBase(BaseModel):
+    milestone_id: int
+    amount: Decimal
+    justified: Decimal
+
+
+class BudgetLineMilestoneCreate(BudgetLineMilestoneBase):
+    pass
+
+
+class BudgetLineMilestoneRead(BudgetLineMilestoneBase):
+    id: int
+    created_at: datetime
+
+
+class ProjectBudgetMilestoneBase(BaseModel):
+    name: str
+    order_index: int = 0
+
+
+class ProjectBudgetMilestoneCreate(ProjectBudgetMilestoneBase):
+    pass
+
+
+class ProjectBudgetMilestoneUpdate(BaseModel):
+    name: Optional[str] = None
+    order_index: Optional[int] = None
+
+
+class ProjectBudgetMilestoneRead(ProjectBudgetMilestoneBase):
+    id: int
+    project_id: int
+    created_at: datetime
+
+
+class ProjectBudgetLineBase(BaseModel):
+    concept: str
+    hito1_budget: Decimal
+    justified_hito1: Decimal
+    hito2_budget: Decimal
+    justified_hito2: Decimal
+    approved_budget: Decimal
+    percent_spent: Decimal
+    forecasted_spent: Decimal
+    milestones: Optional[list[BudgetLineMilestoneRead]] = None
+
+
+class ProjectBudgetLineCreate(ProjectBudgetLineBase):
+    milestones: Optional[list[BudgetLineMilestoneCreate]] = None
+
+
+class ProjectBudgetLineUpdate(BaseModel):
+    concept: Optional[str] = None
+    hito1_budget: Optional[Decimal] = None
+    justified_hito1: Optional[Decimal] = None
+    hito2_budget: Optional[Decimal] = None
+    justified_hito2: Optional[Decimal] = None
+    approved_budget: Optional[Decimal] = None
+    percent_spent: Optional[Decimal] = None
+    forecasted_spent: Optional[Decimal] = None
+    milestones: Optional[list[BudgetLineMilestoneCreate]] = None
+
+
+class ProjectBudgetLineRead(ProjectBudgetLineBase):
+    id: int
+    project_id: int
+    created_at: datetime

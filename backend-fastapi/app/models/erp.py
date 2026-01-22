@@ -131,3 +131,40 @@ class TimeSession(SQLModel, table=True):
     duration_seconds: int = Field(default=0)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ProjectBudgetLine(SQLModel, table=True):
+    __tablename__ = "erp_project_budget_line"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="erp_project.id")
+    concept: str
+    hito1_budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    justified_hito1: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    hito2_budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    justified_hito2: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    approved_budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    percent_spent: Decimal = Field(sa_column=Column(Numeric(6, 2), nullable=False))
+    forecasted_spent: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ProjectBudgetMilestone(SQLModel, table=True):
+    __tablename__ = "erp_project_budget_milestone"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="erp_project.id")
+    name: str
+    order_index: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class BudgetLineMilestone(SQLModel, table=True):
+    __tablename__ = "erp_budget_line_milestone"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_line_id: int = Field(foreign_key="erp_project_budget_line.id")
+    milestone_id: int = Field(foreign_key="erp_project_budget_milestone.id")
+    amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    justified: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow)

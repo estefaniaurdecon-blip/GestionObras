@@ -173,6 +173,53 @@ def init_db() -> None:
                     )
                 )
 
+    # Migración sencilla a hitos dinámicos: si no hay hitos de presupuesto creados,
+    # creamos dos por proyecto y volcamos los valores existentes de hito1/hito2.
+    if "erp_project_budget_milestone" in table_names and "erp_project_budget_line" in table_names:
+        from sqlmodel import select
+        from app.models.erp import ProjectBudgetMilestone, ProjectBudgetLine, BudgetLineMilestone, Project
+
+        with Session(engine) as session:
+            existing = session.exec(select(ProjectBudgetMilestone)).first()
+            if not existing:
+                projects = session.exec(select(Project)).all()
+                # crea dos hitos por proyecto
+                created_milestones: dict[tuple[int, int], ProjectBudgetMilestone] = {}
+                for project in projects:
+                    m1 = ProjectBudgetMilestone(project_id=project.id, name="HITO 1", order_index=1)
+                    m2 = ProjectBudgetMilestone(project_id=project.id, name="HITO 2", order_index=2)
+                    session.add(m1)
+                    session.add(m2)
+                    session.commit()
+                    session.refresh(m1)
+                    session.refresh(m2)
+                    created_milestones[(project.id, 1)] = m1
+                    created_milestones[(project.id, 2)] = m2
+
+                lines = session.exec(select(ProjectBudgetLine)).all()
+                for line in lines:
+                    m1 = created_milestones.get((line.project_id, 1))
+                    m2 = created_milestones.get((line.project_id, 2))
+                    if m1:
+                        session.add(
+                            BudgetLineMilestone(
+                                budget_line_id=line.id,
+                                milestone_id=m1.id,
+                                amount=line.hito1_budget or 0,
+                                justified=line.justified_hito1 or 0,
+                            )
+                        )
+                    if m2:
+                        session.add(
+                            BudgetLineMilestone(
+                                budget_line_id=line.id,
+                                milestone_id=m2.id,
+                                amount=line.hito2_budget or 0,
+                                justified=line.justified_hito2 or 0,
+                            )
+                        )
+                session.commit()
+
 def get_session() -> Iterator[Session]:
     """
     Proveedor de sesiones de base de datos para FastAPI.

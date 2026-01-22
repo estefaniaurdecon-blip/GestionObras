@@ -7,9 +7,12 @@ from sqlalchemy import func
 
 from app.models.erp import (
     Activity,
+    BudgetLineMilestone,
     Deliverable,
     Milestone,
     Project,
+    ProjectBudgetLine,
+    ProjectBudgetMilestone,
     SubActivity,
     Task,
     TaskTemplate,
@@ -33,6 +36,13 @@ from app.schemas.erp import (
     TaskCreate,
     TaskTemplateCreate,
     TaskUpdate,
+    BudgetLineMilestoneCreate,
+    BudgetLineMilestoneRead,
+    ProjectBudgetMilestoneCreate,
+    ProjectBudgetMilestoneRead,
+    ProjectBudgetMilestoneUpdate,
+    ProjectBudgetLineCreate,
+    ProjectBudgetLineUpdate,
 )
 from app.services.notification_service import create_notification
 
@@ -64,6 +74,263 @@ def list_tasks(session: Session) -> list[Task]:
         .where(Task.status != "deleted")
         .order_by(Task.created_at.desc())
     ).all()
+
+
+def _validate_budget_totals(
+    *,
+    hito1_budget: Decimal,
+    hito2_budget: Decimal,
+    approved_budget: Decimal,
+) -> None:
+    total = hito1_budget + hito2_budget
+    if approved_budget != total:
+        raise ValueError("El total aprobado debe coincidir con la suma de los hitos.")
+
+
+def list_project_budget_lines(session: Session, project_id: int) -> list[ProjectBudgetLine]:
+    lines = session.exec(
+        select(ProjectBudgetLine)
+        .where(ProjectBudgetLine.project_id == project_id)
+        .order_by(ProjectBudgetLine.created_at.asc()),
+    ).all()
+    return _attach_line_milestones(session, lines)
+
+
+def list_project_budget_milestones(session: Session, project_id: int) -> list[ProjectBudgetMilestone]:
+    return session.exec(
+        select(ProjectBudgetMilestone)
+        .where(ProjectBudgetMilestone.project_id == project_id)
+        .order_by(ProjectBudgetMilestone.order_index.asc(), ProjectBudgetMilestone.id.asc())
+    ).all()
+
+
+def create_project_budget_milestone(
+    session: Session, project_id: int, data: ProjectBudgetMilestoneCreate
+) -> ProjectBudgetMilestone:
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+    milestone = ProjectBudgetMilestone(
+        project_id=project_id,
+        name=data.name.strip() or "Hito",
+        order_index=data.order_index or 0,
+    )
+    session.add(milestone)
+    session.commit()
+    session.refresh(milestone)
+    return milestone
+
+
+def update_project_budget_milestone(
+    session: Session, project_id: int, milestone_id: int, data: ProjectBudgetMilestoneUpdate
+) -> ProjectBudgetMilestone:
+    milestone = session.get(ProjectBudgetMilestone, milestone_id)
+    if not milestone or milestone.project_id != project_id:
+        raise ValueError("Hito de presupuesto no encontrado.")
+    if data.name is not None:
+        milestone.name = data.name.strip() or milestone.name
+    if data.order_index is not None:
+        milestone.order_index = data.order_index
+    session.add(milestone)
+    session.commit()
+    session.refresh(milestone)
+    return milestone
+
+
+def delete_project_budget_milestone(session: Session, project_id: int, milestone_id: int) -> None:
+    milestone = session.get(ProjectBudgetMilestone, milestone_id)
+    if not milestone or milestone.project_id != project_id:
+        raise ValueError("Hito de presupuesto no encontrado.")
+    # Borra las relaciones de líneas asociadas.
+    line_links = session.exec(
+        select(BudgetLineMilestone).where(BudgetLineMilestone.milestone_id == milestone_id)
+    ).all()
+    for link in line_links:
+        session.delete(link)
+    session.delete(milestone)
+    session.commit()
+
+
+def _attach_line_milestones(session: Session, lines: list[ProjectBudgetLine]) -> list[ProjectBudgetLine]:
+    if not lines:
+        return lines
+    line_ids = [line.id for line in lines if line.id is not None]
+    if not line_ids:
+        return lines
+    # Map milestone_id to milestone metadata
+    project_id = lines[0].project_id
+    milestones = {m.id: m for m in list_project_budget_milestones(session, project_id)}
+    links = session.exec(
+        select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id.in_(line_ids))
+    ).all()
+    links_by_line: dict[int, list[BudgetLineMilestone]] = {}
+    for link in links:
+        links_by_line.setdefault(link.budget_line_id, []).append(link)
+    for line in lines:
+        mlinks = links_by_line.get(line.id, [])
+        # order by milestone order_index if available
+        mlinks_sorted = sorted(
+            mlinks,
+            key=lambda l: milestones.get(l.milestone_id).order_index if milestones.get(l.milestone_id) else 0,
+        )
+        setattr(line, "milestones", mlinks_sorted)
+    return lines
+
+
+def create_project_budget_line(
+    session: Session, project_id: int, data: ProjectBudgetLineCreate
+) -> ProjectBudgetLine:
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+    # Si vienen hitos dinámicos, recalculamos totales.
+    milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
+    if milestones_payload:
+        total_amount = sum(Decimal(m.amount) for m in milestones_payload)
+        total_justified = sum(Decimal(m.justified) for m in milestones_payload)
+        percent_spent = Decimal(0)
+        if total_amount and total_amount != 0:
+            percent_spent = (total_justified / total_amount) * Decimal(100)
+        line = ProjectBudgetLine(
+            project_id=project_id,
+            concept=data.concept.strip() or "Concepto",
+            hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
+            justified_hito1=milestones_payload[0].justified if len(milestones_payload) > 0 else Decimal(0),
+            hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
+            justified_hito2=milestones_payload[1].justified if len(milestones_payload) > 1 else Decimal(0),
+            approved_budget=total_amount,
+            percent_spent=percent_spent,
+            forecasted_spent=data.forecasted_spent,
+        )
+        session.add(line)
+        session.commit()
+        session.refresh(line)
+        for m in milestones_payload:
+            link = BudgetLineMilestone(
+                budget_line_id=line.id,
+                milestone_id=m.milestone_id,
+                amount=m.amount,
+                justified=m.justified,
+            )
+            session.add(link)
+        session.commit()
+        line.milestones = session.exec(
+            select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id == line.id)
+        ).all()
+        session.refresh(line)
+        return line
+
+    _validate_budget_totals(
+        hito1_budget=data.hito1_budget,
+        hito2_budget=data.hito2_budget,
+        approved_budget=data.approved_budget,
+    )
+    line = ProjectBudgetLine(
+        project_id=project_id,
+        concept=data.concept.strip() or "Concepto",
+        hito1_budget=data.hito1_budget,
+        justified_hito1=data.justified_hito1,
+        hito2_budget=data.hito2_budget,
+        justified_hito2=data.justified_hito2,
+        approved_budget=data.approved_budget,
+        percent_spent=data.percent_spent,
+        forecasted_spent=data.forecasted_spent,
+    )
+    session.add(line)
+    session.commit()
+    session.refresh(line)
+    return line
+
+
+def update_project_budget_line(
+    session: Session,
+    project_id: int,
+    budget_id: int,
+    data: ProjectBudgetLineUpdate,
+) -> ProjectBudgetLine:
+    line = session.get(ProjectBudgetLine, budget_id)
+    if not line or line.project_id != project_id:
+        raise ValueError("Presupuesto no encontrado para el proyecto.")
+
+    milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
+    if milestones_payload:
+        # Recalcula totales desde hitos.
+        total_amount = sum(Decimal(m.amount) for m in milestones_payload)
+        total_justified = sum(Decimal(m.justified) for m in milestones_payload)
+        line.hito1_budget = milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0)
+        line.justified_hito1 = milestones_payload[0].justified if len(milestones_payload) > 0 else Decimal(0)
+        line.hito2_budget = milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0)
+        line.justified_hito2 = milestones_payload[1].justified if len(milestones_payload) > 1 else Decimal(0)
+        line.approved_budget = total_amount
+        line.percent_spent = (total_justified / total_amount * Decimal(100)) if total_amount else Decimal(0)
+        if data.forecasted_spent is not None:
+            line.forecasted_spent = data.forecasted_spent
+        # Reemplaza enlaces existentes.
+        existing_links = session.exec(
+            select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id == line.id)
+        ).all()
+        for link in existing_links:
+            session.delete(link)
+        session.commit()
+        for m in milestones_payload:
+            link = BudgetLineMilestone(
+                budget_line_id=line.id,
+                milestone_id=m.milestone_id,
+                amount=m.amount,
+                justified=m.justified,
+            )
+            session.add(link)
+        session.commit()
+        line.milestones = session.exec(
+            select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id == line.id)
+        ).all()
+        session.refresh(line)
+        return line
+
+    hito1_budget = data.hito1_budget if data.hito1_budget is not None else line.hito1_budget
+    hito2_budget = data.hito2_budget if data.hito2_budget is not None else line.hito2_budget
+    approved_budget = data.approved_budget if data.approved_budget is not None else line.approved_budget
+
+    _validate_budget_totals(
+        hito1_budget=hito1_budget,
+        hito2_budget=hito2_budget,
+        approved_budget=approved_budget,
+    )
+
+    if data.concept is not None:
+        line.concept = data.concept.strip() or line.concept
+    if data.hito1_budget is not None:
+        line.hito1_budget = data.hito1_budget
+    if data.justified_hito1 is not None:
+        line.justified_hito1 = data.justified_hito1
+    if data.hito2_budget is not None:
+        line.hito2_budget = data.hito2_budget
+    if data.justified_hito2 is not None:
+        line.justified_hito2 = data.justified_hito2
+    if data.approved_budget is not None:
+        line.approved_budget = data.approved_budget
+    if data.percent_spent is not None:
+        line.percent_spent = data.percent_spent
+    if data.forecasted_spent is not None:
+        line.forecasted_spent = data.forecasted_spent
+
+    session.add(line)
+    session.commit()
+    session.refresh(line)
+    return line
+
+
+def delete_project_budget_line(session: Session, project_id: int, budget_id: int) -> None:
+    line = session.get(ProjectBudgetLine, budget_id)
+    if not line or line.project_id != project_id:
+        raise ValueError("Presupuesto no encontrado para el proyecto.")
+    links = session.exec(
+        select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id == budget_id)
+    ).all()
+    for link in links:
+        session.delete(link)
+    session.delete(line)
+    session.commit()
 
 
 def create_project(session: Session, data: ProjectCreate) -> Project:
