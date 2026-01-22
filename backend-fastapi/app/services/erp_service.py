@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+﻿from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -143,7 +143,7 @@ def delete_project_budget_milestone(session: Session, project_id: int, milestone
     milestone = session.get(ProjectBudgetMilestone, milestone_id)
     if not milestone or milestone.project_id != project_id:
         raise ValueError("Hito de presupuesto no encontrado.")
-    # Borra las relaciones de líneas asociadas.
+    # Borra las relaciones de lÃ­neas asociadas.
     line_links = session.exec(
         select(BudgetLineMilestone).where(BudgetLineMilestone.milestone_id == milestone_id)
     ).all()
@@ -169,10 +169,10 @@ def _attach_line_milestones(
     links_by_line: dict[int, list[BudgetLineMilestone]] = {}
     for link in links:
         links_by_line.setdefault(link.budget_line_id, []).append(link)
-<<<<<<< HEAD
-    # ordenamos los enlaces por order_index para cada línea
-=======
->>>>>>> dev
+
+    # ordenamos los enlaces por order_index para cada linea
+
+
     sorted_links: dict[int, list[BudgetLineMilestone]] = {}
     for line_id, mlinks in links_by_line.items():
         mlinks_sorted = sorted(
@@ -189,7 +189,7 @@ def create_project_budget_line(
     project = session.get(Project, project_id)
     if not project:
         raise ValueError("Proyecto no encontrado.")
-    # Si vienen hitos dinámicos, recalculamos totales.
+    # Si vienen hitos dinÃ¡micos, recalculamos totales.
     milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
     if milestones_payload:
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
@@ -1111,5 +1111,7 @@ def delete_time_session(session: Session, user: User, session_id: int) -> None:
         session.delete(entry)
     session.delete(ts)
     session.commit()
+
+
 
 
