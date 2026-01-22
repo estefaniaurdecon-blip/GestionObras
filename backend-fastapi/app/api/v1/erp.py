@@ -151,10 +151,10 @@ def api_list_project_budgets(
         get_project(session, project_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    lines = list_project_budget_lines(session, project_id)
+    lines, milestones_by_line = list_project_budget_lines(session, project_id)
     result: list[ProjectBudgetLineRead] = []
     for line in lines:
-        milestones = getattr(line, "milestones", [])
+        milestones = milestones_by_line.get(line.id, [])
         result.append(
           ProjectBudgetLineRead(
             id=line.id,
