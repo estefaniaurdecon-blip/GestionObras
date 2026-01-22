@@ -1018,7 +1018,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   `;
 
-  // Estado de navegaci├│n, filtros y utilidades.
+  // Estado de navegacion, filtros y utilidades.
 
   const [activeTab, setActiveTab] = useState(0);
 
@@ -1028,7 +1028,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // Formulario de creaci├│n de proyectos.
+  // Formulario de creacion de proyectos.
 
   const [projectName, setProjectName] = useState("");
 
@@ -1068,7 +1068,7 @@ export const ErpProjectsPage: React.FC = () => {
     Array<{ id: string; name: string; start: string; end: string }>
   >([]);
 
-  // Estado del drawer de detalle/edici├│n.
+  // Estado del drawer de detalle/edicion.
 
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -1237,7 +1237,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
 
-  // Fetch b├ísico: proyectos, tareas, actividades, subactividades e hitos.
+  // Fetch basíco: proyectos, tareas, actividades, subactividades e hitos.
 
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects"],
@@ -1255,15 +1255,6 @@ export const ErpProjectsPage: React.FC = () => {
 
   const hrTenantId =
     currentUser?.tenant_id ?? (currentUser?.is_super_admin ? null : undefined);
-
-  useEffect(() => {
-    console.log("DEBUG ErpProjectsPage:", {
-      currentUserId: currentUser?.id,
-      currentUserTenantId: currentUser?.tenant_id,
-      hrTenantId: hrTenantId,
-      isSuperAdmin: currentUser?.is_super_admin,
-    });
-  }, [currentUser, hrTenantId]);
 
   const { data: activities = [] } = useQuery<ErpActivity[]>({
     queryKey: ["erp-activities"],
@@ -1291,10 +1282,7 @@ export const ErpProjectsPage: React.FC = () => {
   } = useQuery<EmployeeProfile[]>({
     queryKey: ["hr-employees", hrTenantId],
 
-    queryFn: () => {
-      console.log("Fetching employees with tenantId:", hrTenantId);
-      return fetchEmployees(hrTenantId);
-    },
+    queryFn: () => fetchEmployees(hrTenantId),
 
     enabled: !!currentUser?.id,
     retry: 3,
@@ -1310,10 +1298,7 @@ export const ErpProjectsPage: React.FC = () => {
   } = useQuery<Department[]>({
     queryKey: ["hr-departments", hrTenantId],
 
-    queryFn: () => {
-      console.log("Fetching departments with tenantId:", hrTenantId);
-      return fetchDepartments(hrTenantId);
-    },
+    queryFn: () => fetchDepartments(hrTenantId),
 
     enabled: !!currentUser?.id,
     retry: 3,
@@ -1348,7 +1333,7 @@ export const ErpProjectsPage: React.FC = () => {
     [allocations, summaryYear],
   );
 
-  // Sincroniza el formulario de edici├│n con el proyecto seleccionado.
+  // Sincroniza el formulario de edicion con el proyecto seleccionado.
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -1364,7 +1349,7 @@ export const ErpProjectsPage: React.FC = () => {
     setEditActive(selectedProject.is_active ?? true);
   }, [selectedProject]);
 
-  // Normaliza tareas para calcular progreso y alimentar m├®tricas.
+  // Normaliza tareas para calcular progreso y alimentar metricas.
 
   const tasks: ErpTask[] = useMemo(() => {
     const now = new Date();
@@ -1579,7 +1564,7 @@ export const ErpProjectsPage: React.FC = () => {
     return Math.round(ratio * 100);
   };
 
-  // Construye la colecci├│n de ├¡tems de Gantt (proyectos, actividades, subactividades, hitos).
+  // Construye la coleccion de items de Gantt (proyectos, actividades, subactividades, hitos).
 
   const ganttItems: GanttTask[] = useMemo(() => {
     const items: GanttTask[] = [];
@@ -2082,7 +2067,7 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
-  // Mutaciones de edici├│n en cascada para actividad, subactividad e hito.
+  // Mutaciones de edicion en cascada para actividad, subactividad e hito.
 
   const updateActivityMutation = useMutation({
     mutationFn: async (input: {
@@ -2352,7 +2337,7 @@ export const ErpProjectsPage: React.FC = () => {
     createProjectMutation.mutate();
   };
 
-  // Guarda edici├│n del proyecto actual.
+  // Guarda edicion del proyecto actual.
 
   const handleUpdateProject = () => {
     if (!selectedProject) {
@@ -3016,19 +3001,6 @@ export const ErpProjectsPage: React.FC = () => {
                       ))}
                     </Select>
                   </FormControl>
-
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    variant="solid"
-                    onClick={() =>
-                      queryClient.invalidateQueries({
-                        queryKey: ["hr-allocations", summaryYear, hrTenantId],
-                      })
-                    }
-                  >
-                    Refrescar
-                  </Button>
 
                   <Button
                     size="sm"
@@ -4018,7 +3990,7 @@ export const ErpProjectsPage: React.FC = () => {
             </Stack>
           </TabPanel>
 
-          {/* Listado detallado por proyecto con bot├│n de edici├│n */}
+          {/* Listado detallado por proyecto con boton de edicion */}
 
           <TabPanel px={0}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -4183,7 +4155,7 @@ export const ErpProjectsPage: React.FC = () => {
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel>Descripci├│n</FormLabel>
+                  <FormLabel>Descripcion</FormLabel>
 
                   <Input
                     value={projectDescription}
@@ -4216,14 +4188,14 @@ export const ErpProjectsPage: React.FC = () => {
                 <Heading size="sm">Actividades</Heading>
 
                 <Button size="sm" onClick={handleAddActivity}>
-                  + A├▒adir actividad
+                  + Añadir actividad
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectActivities.length === 0 && (
                   <Text fontSize="sm" color={subtleText}>
-                    A├▒ade actividades con peso y fechas.
+                    Añade actividades con peso y fechas.
                   </Text>
                 )}
 
@@ -4329,7 +4301,7 @@ export const ErpProjectsPage: React.FC = () => {
                       mt={2}
                       onClick={() => handleAddSubactivity(act.id)}
                     >
-                      + A├▒adir subactividad
+                      + Añadir subactividad
                     </Button>
 
                     <Stack mt={2} spacing={2}>
@@ -4479,18 +4451,19 @@ export const ErpProjectsPage: React.FC = () => {
                 ))}
               </Stack>
 
+              {/* Hitos */}
               <Flex justify="space-between" align="center">
                 <Heading size="sm">Hitos</Heading>
 
                 <Button size="sm" onClick={handleAddMilestone}>
-                  + A├▒adir hito
+                  + Añadir hito
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectMilestones.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
-                    A├▒ade hitos con fechas.
+                    Añade hitos con fechas.
                   </Text>
                 ) : (
                   projectMilestones.map((mil, idx) => (
@@ -4583,7 +4556,7 @@ export const ErpProjectsPage: React.FC = () => {
         </TabPanels>
       </Tabs>
 
-      {/* Drawer de detalle/edici├│n del proyecto seleccionado */}
+      {/* Drawer de detalle/edicion del proyecto seleccionado */}
 
       <Drawer
         isOpen={detailsOpen}

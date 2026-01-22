@@ -60,7 +60,9 @@ def get_project(session: Session, project_id: int) -> Project:
 
 def list_tasks(session: Session) -> list[Task]:
     return session.exec(
-        select(Task).order_by(Task.created_at.desc()),
+        select(Task)
+        .where(Task.status != "deleted")
+        .order_by(Task.created_at.desc())
     ).all()
 
 
@@ -315,8 +317,8 @@ def delete_task(session: Session, task_id: int) -> None:
     task = session.get(Task, task_id)
     if not task:
         raise ValueError("Tarea no encontrada.")
-    # Soft delete: marca como completada y remueve referencias opcionales para evitar errores de FK.
-    task.status = "done"
+    # Soft delete: marca la tarea como eliminada para que no aparezca en los listados.
+    task.status = "deleted"
     task.is_completed = True
     task.subactivity_id = None
     session.add(task)
