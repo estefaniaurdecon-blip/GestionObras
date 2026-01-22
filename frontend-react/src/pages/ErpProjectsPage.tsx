@@ -2144,16 +2144,17 @@ export const ErpProjectsPage: React.FC = () => {
       toast({
         title: "Error al guardar presupuesto",
         description:
-          error?.response?.data?.detail ??
-          "No se pudo guardar el presupuesto.",
+          error?.response?.data?.detail ?? "No se pudo guardar el presupuesto.",
         status: "error",
       });
     },
   });
 
   const createBudgetMilestoneMutation = useMutation({
-    mutationFn: (input: { projectId: number; payload: { name: string; order_index?: number } }) =>
-      createBudgetMilestone(input.projectId, input.payload),
+    mutationFn: (input: {
+      projectId: number;
+      payload: { name: string; order_index?: number };
+    }) => createBudgetMilestone(input.projectId, input.payload),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["project-budget-milestones", variables.projectId],
@@ -2166,7 +2167,8 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al crear hito",
-        description: error?.response?.data?.detail ?? "No se pudo crear el hito.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo crear el hito.",
         status: "error",
       });
     },
@@ -2187,7 +2189,8 @@ export const ErpProjectsPage: React.FC = () => {
     onError: (error: any) => {
       toast({
         title: "Error al eliminar hito",
-        description: error?.response?.data?.detail ?? "No se pudo eliminar el hito.",
+        description:
+          error?.response?.data?.detail ?? "No se pudo eliminar el hito.",
         status: "error",
       });
     },
@@ -2242,7 +2245,8 @@ export const ErpProjectsPage: React.FC = () => {
   const hasRealBudgets = budgetRows.length > 0;
   const [budgetsEditMode, setBudgetsEditMode] = useState(false);
   const [seedingTemplate, setSeedingTemplate] = useState(false);
-  const [seedingProjectMilestones, setSeedingProjectMilestones] = useState(false);
+  const [seedingProjectMilestones, setSeedingProjectMilestones] =
+    useState(false);
 
   const DEFAULT_BUDGET_TEMPLATE: ProjectBudgetLine[] = useMemo(
     () => [
@@ -2406,17 +2410,25 @@ export const ErpProjectsPage: React.FC = () => {
     [],
   );
 
-  const displayBudgetRows = hasRealBudgets ? budgetRows : DEFAULT_BUDGET_TEMPLATE;
+  const displayBudgetRows = hasRealBudgets
+    ? budgetRows
+    : DEFAULT_BUDGET_TEMPLATE;
 
   const budgetsTabTotals = useMemo(() => {
-    const totalsByMilestone: Record<number, { amount: number; justified: number }> = {};
+    const totalsByMilestone: Record<
+      number,
+      { amount: number; justified: number }
+    > = {};
     let approved = 0;
     let forecasted = 0;
     budgetRows.forEach((row) => {
       approved += Number(row.approved_budget || 0);
       forecasted += Number(row.forecasted_spent || 0);
       (row.milestones ?? []).forEach((m) => {
-        const current = totalsByMilestone[m.milestone_id] ?? { amount: 0, justified: 0 };
+        const current = totalsByMilestone[m.milestone_id] ?? {
+          amount: 0,
+          justified: 0,
+        };
         current.amount += Number(m.amount || 0);
         current.justified += Number(m.justified || 0);
         totalsByMilestone[m.milestone_id] = current;
@@ -2505,7 +2517,9 @@ export const ErpProjectsPage: React.FC = () => {
         // Ordena por fecha si existe; si no, por id.
         const ordered = [...projectMilestones].sort((a, b) => {
           if (a.due_date && b.due_date) {
-            return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+            return (
+              new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+            );
           }
           return (a.id ?? 0) - (b.id ?? 0);
         });
@@ -2513,7 +2527,10 @@ export const ErpProjectsPage: React.FC = () => {
           const m = ordered[idx];
           await createBudgetMilestoneMutation.mutateAsync({
             projectId: selectedBudgetProjectId,
-            payload: { name: m.title || `Hito ${idx + 1}`, order_index: idx + 1 },
+            payload: {
+              name: m.title || `Hito ${idx + 1}`,
+              order_index: idx + 1,
+            },
           });
         }
         queryClient.invalidateQueries({
@@ -2613,13 +2630,12 @@ export const ErpProjectsPage: React.FC = () => {
   };
 
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
-  const [budgetModalMode, setBudgetModalMode] = useState<BudgetModalMode>("create");
-  const [budgetModalInitial, setBudgetModalInitial] = useState<ProjectBudgetLinePayload>(
-    DEFAULT_BUDGET_PAYLOAD,
-  );
-  const [activeBudgetLine, setActiveBudgetLine] = useState<ProjectBudgetLine | null>(
-    null,
-  );
+  const [budgetModalMode, setBudgetModalMode] =
+    useState<BudgetModalMode>("create");
+  const [budgetModalInitial, setBudgetModalInitial] =
+    useState<ProjectBudgetLinePayload>(DEFAULT_BUDGET_PAYLOAD);
+  const [activeBudgetLine, setActiveBudgetLine] =
+    useState<ProjectBudgetLine | null>(null);
 
   const openBudgetModal = (mode: BudgetModalMode, line?: ProjectBudgetLine) => {
     setBudgetModalMode(mode);
@@ -3331,7 +3347,7 @@ export const ErpProjectsPage: React.FC = () => {
               >
                 <Box>
                   <Heading size="md" mb={1}>
-                    Gestión y seguimiento de proyectos 2024-2025
+                    Gestión y seguimiento de proyectos
                   </Heading>
 
                   <Text fontSize="sm" color={subtleText}>
@@ -3374,19 +3390,6 @@ export const ErpProjectsPage: React.FC = () => {
                       }}
                     />
                   </FormControl>
-
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    variant="solid"
-                    onClick={() =>
-                      queryClient.invalidateQueries({
-                        queryKey: ["hr-allocations", summaryYear, hrTenantId],
-                      })
-                    }
-                  >
-                    Refrescar
-                  </Button>
 
                   <Button
                     size="sm"
@@ -3433,7 +3436,8 @@ export const ErpProjectsPage: React.FC = () => {
                       />
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -3493,7 +3497,7 @@ export const ErpProjectsPage: React.FC = () => {
                         color="white"
                         minW="150px"
                       >
-                        Horas disponibles para 2025
+                        Horas disponibles para
                       </Th>
 
                       <Th textAlign="center" minW="90px">
@@ -3514,7 +3518,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -3566,7 +3571,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         return (
                           <Th
                             key={p.id}
@@ -3613,7 +3619,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         const falt =
                           (projectJustify[p.id] ?? 0) -
                           (projectJustified[p.id] ?? 0);
@@ -3653,7 +3660,8 @@ export const ErpProjectsPage: React.FC = () => {
                       </Th>
 
                       {projectColumns.map((p) => {
-                        const count = (summaryMilestones[p.id] ?? []).length || 1;
+                        const count =
+                          (summaryMilestones[p.id] ?? []).length || 1;
                         const justify = projectJustify[p.id] ?? 0;
 
                         const just = projectJustified[p.id] ?? 0;
@@ -3676,7 +3684,11 @@ export const ErpProjectsPage: React.FC = () => {
                       <Th colSpan={6} />
                     </Tr>
 
-                    <Tr bg="green.50" borderBottomWidth="2px" borderColor="green.200">
+                    <Tr
+                      bg="green.50"
+                      borderBottomWidth="2px"
+                      borderColor="green.200"
+                    >
                       <Th
                         position="sticky"
                         left={0}
@@ -3693,7 +3705,11 @@ export const ErpProjectsPage: React.FC = () => {
                         const ms = summaryMilestones[p.id] ?? [];
                         if (ms.length === 0) {
                           return (
-                            <Th key={`${p.id}-ms-empty`} textAlign="center" color="green.800">
+                            <Th
+                              key={`${p.id}-ms-empty`}
+                              textAlign="center"
+                              color="green.800"
+                            >
                               <Text fontSize="xs" color="teal.600">
                                 Añade hitos con el +
                               </Text>
@@ -3702,7 +3718,11 @@ export const ErpProjectsPage: React.FC = () => {
                         }
 
                         return ms.map((item, idx) => (
-                          <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
+                          <Th
+                            key={`${p.id}-ms-${idx}`}
+                            textAlign="center"
+                            p={2}
+                          >
                             <HStack justify="center" spacing={1} mb={1}>
                               <Text fontSize="xs" fontWeight="semibold">
                                 {item.label || `H${idx + 1}`}
@@ -3718,7 +3738,9 @@ export const ErpProjectsPage: React.FC = () => {
                                 onClick={() =>
                                   setSummaryMilestones((prev) => {
                                     const list = prev[p.id] ?? [];
-                                    const next = list.filter((_, mIdx) => mIdx !== idx);
+                                    const next = list.filter(
+                                      (_, mIdx) => mIdx !== idx,
+                                    );
                                     return { ...prev, [p.id]: next };
                                   })
                                 }
@@ -3733,14 +3755,24 @@ export const ErpProjectsPage: React.FC = () => {
                                 placeholder="0"
                                 value={item.hours ?? 0}
                                 onChange={(e) =>
-                                  updateMilestoneRow(p.id, idx, "hours", e.target.value)
+                                  updateMilestoneRow(
+                                    p.id,
+                                    idx,
+                                    "hours",
+                                    e.target.value,
+                                  )
                                 }
                                 textAlign="center"
                               />
                               <InputRightAddon>h</InputRightAddon>
                             </InputGroup>
 
-                            <Text fontSize="xs" color="gray.700" textAlign="center" mt={1}>
+                            <Text
+                              fontSize="xs"
+                              color="gray.700"
+                              textAlign="center"
+                              mt={1}
+                            >
                               TOTAL: {item.hours ?? 0} h
                             </Text>
                           </Th>
@@ -3804,7 +3836,8 @@ export const ErpProjectsPage: React.FC = () => {
                             </Td>
 
                             {projectColumns.map((p) => {
-                              const count = (summaryMilestones[p.id] ?? []).length || 1;
+                              const count =
+                                (summaryMilestones[p.id] ?? []).length || 1;
                               const key = allocationKey(
                                 emp.id,
 
@@ -4153,22 +4186,27 @@ export const ErpProjectsPage: React.FC = () => {
             <Stack spacing={6}>
               <Heading size="md">Presupuestos</Heading>
 
-             <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
-               <FormControl minW="220px" maxW="320px">
-                 <FormLabel>Proyecto</FormLabel>
-                 <Select
-                   size="sm"
-                   value={budgetProjectFilter}
-                   onChange={(e) => setBudgetProjectFilter(e.target.value)}
-                 >
-                   <option value="">Selecciona un proyecto</option>
-                   {projects.map((project) => (
-                     <option key={project.id} value={String(project.id)}>
-                       {project.name}
-                     </option>
-                   ))}
-                 </Select>
-               </FormControl>
+              <Flex
+                justify="space-between"
+                align="flex-end"
+                wrap="wrap"
+                gap={4}
+              >
+                <FormControl minW="220px" maxW="320px">
+                  <FormLabel>Proyecto</FormLabel>
+                  <Select
+                    size="sm"
+                    value={budgetProjectFilter}
+                    onChange={(e) => setBudgetProjectFilter(e.target.value)}
+                  >
+                    <option value="">Selecciona un proyecto</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={String(project.id)}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
                 <HStack spacing={2}>
                   <Button
                     size="sm"
@@ -4207,7 +4245,7 @@ export const ErpProjectsPage: React.FC = () => {
                     </Button>
                   )}
                 </HStack>
-             </Flex>
+              </Flex>
 
               {!selectedBudgetProjectId ? (
                 <Text fontSize="sm" color={subtleText}>
@@ -4227,39 +4265,92 @@ export const ErpProjectsPage: React.FC = () => {
                     <Table size="sm" variant="simple" minW="960px">
                       <Thead>
                         <Tr bg="#0a3d2a">
-                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                          <Th
+                            rowSpan={2}
+                            className="text-sm"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             CONCEPTO
                           </Th>
-                          <Th colSpan={2} className="text-sm" textAlign="center" color="white" fontWeight="bold">
+                          <Th
+                            colSpan={2}
+                            className="text-sm"
+                            textAlign="center"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             HITO 1
                           </Th>
-                          <Th colSpan={2} className="text-sm" textAlign="center" color="white" fontWeight="bold">
+                          <Th
+                            colSpan={2}
+                            className="text-sm"
+                            textAlign="center"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             HITO 2
                           </Th>
-                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                          <Th
+                            rowSpan={2}
+                            className="text-sm"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             PRES. APROBADO
                           </Th>
-                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                          <Th
+                            rowSpan={2}
+                            className="text-sm"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             % GASTO
                           </Th>
-                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                          <Th
+                            rowSpan={2}
+                            className="text-sm"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             GASTO PREVISTO
                           </Th>
-                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                          <Th
+                            rowSpan={2}
+                            className="text-sm"
+                            color="white"
+                            fontWeight="bold"
+                          >
                             ACCIONES
                           </Th>
                         </Tr>
                         <Tr bg="#0f5d3f">
-                          <Th className="text-sm" color="white" fontWeight="semibold">
-                            VALOR
+                          <Th
+                            className="text-sm"
+                            color="white"
+                            fontWeight="semibold"
+                          >
+                            APROBADO
                           </Th>
-                          <Th className="text-sm" color="white" fontWeight="semibold">
+                          <Th
+                            className="text-sm"
+                            color="white"
+                            fontWeight="semibold"
+                          >
                             JUSTIFICADO
                           </Th>
-                          <Th className="text-sm" color="white" fontWeight="semibold">
-                            VALOR
+                          <Th
+                            className="text-sm"
+                            color="white"
+                            fontWeight="semibold"
+                          >
+                            APROBADO
                           </Th>
-                          <Th className="text-sm" color="white" fontWeight="semibold">
+                          <Th
+                            className="text-sm"
+                            color="white"
+                            fontWeight="semibold"
+                          >
                             JUSTIFICADO
                           </Th>
                         </Tr>
@@ -4267,8 +4358,14 @@ export const ErpProjectsPage: React.FC = () => {
                       <Tbody>
                         {displayBudgetRows.length === 0 ? (
                           <Tr>
-                            <Td colSpan={budgetMilestones.length * 2 + 4 || 9} textAlign="center" py={10} color="gray.500">
-                              Aún no hay presupuestos guardados para este proyecto.
+                            <Td
+                              colSpan={budgetMilestones.length * 2 + 4 || 9}
+                              textAlign="center"
+                              py={10}
+                              color="gray.500"
+                            >
+                              Aún no hay presupuestos guardados para este
+                              proyecto.
                             </Td>
                           </Tr>
                         ) : (
@@ -4280,9 +4377,15 @@ export const ErpProjectsPage: React.FC = () => {
                                   selectAllOnFocus
                                   key={`concept-${budget.id}-${budget.concept}`}
                                   defaultValue={budget.concept}
-                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  isDisabled={
+                                    !hasRealBudgets || !budgetsEditMode
+                                  }
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "concept", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "concept",
+                                      value,
+                                    )
                                   }
                                 >
                                   <EditablePreview fontWeight="semibold" />
@@ -4294,7 +4397,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   value={budget.hito1_budget ?? 0}
                                   isEditing={hasRealBudgets && budgetsEditMode}
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "hito1_budget", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "hito1_budget",
+                                      value,
+                                    )
                                   }
                                 />
                               </Td>
@@ -4303,7 +4410,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   value={budget.justified_hito1 ?? 0}
                                   isEditing={hasRealBudgets && budgetsEditMode}
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "justified_hito1", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "justified_hito1",
+                                      value,
+                                    )
                                   }
                                 />
                               </Td>
@@ -4312,7 +4423,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   value={budget.hito2_budget ?? 0}
                                   isEditing={hasRealBudgets && budgetsEditMode}
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "hito2_budget", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "hito2_budget",
+                                      value,
+                                    )
                                   }
                                 />
                               </Td>
@@ -4321,7 +4436,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   value={budget.justified_hito2 ?? 0}
                                   isEditing={hasRealBudgets && budgetsEditMode}
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "justified_hito2", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "justified_hito2",
+                                      value,
+                                    )
                                   }
                                 />
                               </Td>
@@ -4330,7 +4449,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   value={budget.approved_budget ?? 0}
                                   isEditing={hasRealBudgets && budgetsEditMode}
                                   onSubmit={(value) =>
-                                    handleBudgetCellSave(budget.id, "approved_budget", value)
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "approved_budget",
+                                      value,
+                                    )
                                   }
                                 />
                               </Td>
@@ -4362,7 +4485,9 @@ export const ErpProjectsPage: React.FC = () => {
                                   />
                                 ) : (
                                   <Text fontFamily="mono">
-                                    {formatPercent(Number(budget.percent_spent ?? 0))}
+                                    {formatPercent(
+                                      Number(budget.percent_spent ?? 0),
+                                    )}
                                   </Text>
                                 )}
                               </Td>
@@ -4386,7 +4511,9 @@ export const ErpProjectsPage: React.FC = () => {
                                       size="xs"
                                       variant="outline"
                                       isDisabled={!budgetsEditMode}
-                                      onClick={() => openBudgetModal("edit", budget)}
+                                      onClick={() =>
+                                        openBudgetModal("edit", budget)
+                                      }
                                     >
                                       Editar
                                     </Button>
@@ -4395,7 +4522,9 @@ export const ErpProjectsPage: React.FC = () => {
                                       colorScheme="red"
                                       variant="ghost"
                                       isDisabled={!budgetsEditMode}
-                                      onClick={() => handleBudgetDelete(budget.id)}
+                                      onClick={() =>
+                                        handleBudgetDelete(budget.id)
+                                      }
                                     >
                                       Eliminar
                                     </Button>
@@ -4417,13 +4546,17 @@ export const ErpProjectsPage: React.FC = () => {
                             <EuroCell value={budgetsTabTotals.hito1} />
                           </Td>
                           <Td textAlign="right">
-                            <EuroCell value={budgetsTabTotals.justificados?.[0] ?? 0} />
+                            <EuroCell
+                              value={budgetsTabTotals.justificados?.[0] ?? 0}
+                            />
                           </Td>
                           <Td textAlign="right">
                             <EuroCell value={budgetsTabTotals.hito2} />
                           </Td>
                           <Td textAlign="right">
-                            <EuroCell value={budgetsTabTotals.justificados?.[1] ?? 0} />
+                            <EuroCell
+                              value={budgetsTabTotals.justificados?.[1] ?? 0}
+                            />
                           </Td>
                           <Td textAlign="right">
                             <EuroCell value={budgetsTabTotals.approved} />
@@ -4855,7 +4988,6 @@ export const ErpProjectsPage: React.FC = () => {
                 )}
               </Stack>
 
-
               <Button
                 alignSelf="flex-start"
                 colorScheme="green"
@@ -4874,7 +5006,11 @@ export const ErpProjectsPage: React.FC = () => {
         onClose={() => setBudgetModalOpen(false)}
         onSave={handleBudgetSave}
         initialValues={budgetModalInitial}
-        title={budgetModalMode === "edit" ? "Editar presupuesto" : "Agregar presupuesto"}
+        title={
+          budgetModalMode === "edit"
+            ? "Editar presupuesto"
+            : "Agregar presupuesto"
+        }
         submitLabel={budgetModalMode === "edit" ? "Actualizar" : "Guardar"}
         isSaving={
           budgetModalMode === "edit"
