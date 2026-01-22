@@ -19,6 +19,9 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerOverlay,
+  Editable,
+  EditableInput,
+  EditablePreview,
   Flex,
   FormControl,
   FormLabel,
@@ -27,6 +30,13 @@ import {
   Input,
   InputGroup,
   InputRightAddon,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Select,
   SimpleGrid,
   Stack,
@@ -35,15 +45,16 @@ import {
   TabPanel,
   TabPanels,
   Tabs,
-  Text,
-  Tooltip,
-  Textarea,
   Table,
-  Thead,
   Tbody,
-  Tr,
-  Th,
   Td,
+  Text,
+  Textarea,
+  Thead,
+  Th,
+  Tooltip,
+  Tr,
+  Tfoot,
   useColorModeValue,
   useToast,
   Switch,
@@ -73,6 +84,22 @@ import {
 } from "../api/erpTimeTracking";
 
 import { useCurrentUser } from "../hooks/useCurrentUser";
+
+import {
+  createProjectBudgetLine,
+  deleteProjectBudgetLine,
+  fetchProjectBudgets,
+  fetchBudgetMilestones,
+  type ProjectBudgetLine,
+  type ProjectBudgetLinePayload,
+  type BudgetLineMilestone,
+  type ProjectBudgetMilestone,
+  createBudgetMilestone,
+  deleteBudgetMilestone,
+  updateBudgetMilestone,
+  type ProjectBudgetLineUpdatePayload,
+  updateProjectBudgetLine,
+} from "../api/erpBudgets";
 
 import {
   createActivity,
@@ -119,6 +146,28 @@ interface ErpTask {
 
   progress?: number;
 }
+
+type BudgetModalMode = "create" | "edit";
+
+const DEFAULT_BUDGET_PAYLOAD: ProjectBudgetLinePayload = {
+  concept: "",
+  hito1_budget: 0,
+  justified_hito1: 0,
+  hito2_budget: 0,
+  justified_hito2: 0,
+  approved_budget: 0,
+  percent_spent: 0,
+  forecasted_spent: 0,
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(value);
+
+const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 
 interface GanttTask {
   id: string;
@@ -824,6 +873,219 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
   );
 };
 
+interface BudgetModalForm {
+  concept: string;
+  hito1_budget: string;
+  justified_hito1: string;
+  hito2_budget: string;
+  justified_hito2: string;
+  approved_budget: string;
+  percent_spent: string;
+  forecasted_spent: string;
+}
+
+interface BudgetModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (payload: ProjectBudgetLinePayload) => void;
+  initialValues?: ProjectBudgetLinePayload;
+  title: string;
+  submitLabel?: string;
+  isSaving?: boolean;
+}
+
+const BudgetModal: React.FC<BudgetModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialValues,
+  title,
+  submitLabel,
+  isSaving = false,
+}) => {
+  const [form, setForm] = useState<BudgetModalForm>({
+    concept: "",
+    hito1_budget: "",
+    justified_hito1: "",
+    hito2_budget: "",
+    justified_hito2: "",
+    approved_budget: "",
+    percent_spent: "",
+    forecasted_spent: "",
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm({
+      concept: initialValues?.concept ?? "",
+      hito1_budget:
+        initialValues?.hito1_budget !== undefined
+          ? String(initialValues.hito1_budget)
+          : "",
+      justified_hito1:
+        initialValues?.justified_hito1 !== undefined
+          ? String(initialValues.justified_hito1)
+          : "",
+      hito2_budget:
+        initialValues?.hito2_budget !== undefined
+          ? String(initialValues.hito2_budget)
+          : "",
+      justified_hito2:
+        initialValues?.justified_hito2 !== undefined
+          ? String(initialValues.justified_hito2)
+          : "",
+      approved_budget:
+        initialValues?.approved_budget !== undefined
+          ? String(initialValues.approved_budget)
+          : "",
+      percent_spent:
+        initialValues?.percent_spent !== undefined
+          ? String(initialValues.percent_spent)
+          : "",
+      forecasted_spent:
+        initialValues?.forecasted_spent !== undefined
+          ? String(initialValues.forecasted_spent)
+          : "",
+    });
+  }, [initialValues, isOpen]);
+
+  const parseNumber = (value: string) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const hitoSum =
+    parseNumber(form.hito1_budget) + parseNumber(form.hito2_budget);
+  const approvedValue = parseNumber(form.approved_budget);
+  const totalsMatch = Math.abs(hitoSum - approvedValue) < 0.01;
+
+  const handleSubmit = () => {
+    onSave({
+      concept: form.concept.trim(),
+      hito1_budget: parseNumber(form.hito1_budget),
+      justified_hito1: parseNumber(form.justified_hito1),
+      hito2_budget: parseNumber(form.hito2_budget),
+      justified_hito2: parseNumber(form.justified_hito2),
+      approved_budget: parseNumber(form.approved_budget),
+      percent_spent: parseNumber(form.percent_spent),
+      forecasted_spent: parseNumber(form.forecasted_spent),
+    });
+  };
+
+  const updateField = (field: keyof BudgetModalForm, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>{title}</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <Stack spacing={3}>
+            <FormControl isRequired>
+              <FormLabel>Concepto</FormLabel>
+              <Input
+                value={form.concept}
+                onChange={(e) => updateField("concept", e.target.value)}
+              />
+            </FormControl>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+              <FormControl>
+                <FormLabel>Hito 1</FormLabel>
+                <Input
+                  type="number"
+                  value={form.hito1_budget}
+                  onChange={(e) => updateField("hito1_budget", e.target.value)}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Justificado H1</FormLabel>
+                <Input
+                  type="number"
+                  value={form.justified_hito1}
+                  onChange={(e) =>
+                    updateField("justified_hito1", e.target.value)
+                  }
+                />
+              </FormControl>
+            </SimpleGrid>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+              <FormControl>
+                <FormLabel>Hito 2</FormLabel>
+                <Input
+                  type="number"
+                  value={form.hito2_budget}
+                  onChange={(e) => updateField("hito2_budget", e.target.value)}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Justificado H2</FormLabel>
+                <Input
+                  type="number"
+                  value={form.justified_hito2}
+                  onChange={(e) =>
+                    updateField("justified_hito2", e.target.value)
+                  }
+                />
+              </FormControl>
+            </SimpleGrid>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+              <FormControl>
+                <FormLabel>Total aprobado</FormLabel>
+                <Input
+                  type="number"
+                  value={form.approved_budget}
+                  onChange={(e) =>
+                    updateField("approved_budget", e.target.value)
+                  }
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>% Gastado</FormLabel>
+                <Input
+                  type="number"
+                  value={form.percent_spent}
+                  onChange={(e) => updateField("percent_spent", e.target.value)}
+                />
+              </FormControl>
+            </SimpleGrid>
+            <FormControl>
+              <FormLabel>Gasto previsto</FormLabel>
+              <Input
+                type="number"
+                value={form.forecasted_spent}
+                onChange={(e) =>
+                  updateField("forecasted_spent", e.target.value)
+                }
+              />
+            </FormControl>
+            <Text color={totalsMatch ? "green.500" : "red.500"} fontSize="sm">
+              {totalsMatch
+                ? "El total aprobado coincide con la suma de Hito 1 y Hito 2."
+                : "El total aprobado debe igualar la suma de los hitos."}
+            </Text>
+          </Stack>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="ghost" mr={3} onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            colorScheme="green"
+            onClick={handleSubmit}
+            isDisabled={!totalsMatch || !form.concept.trim()}
+            isLoading={isSaving}
+          >
+            {submitLabel ?? "Guardar"}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+};
+
 // P├ígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
 
 export const ErpProjectsPage: React.FC = () => {
@@ -894,6 +1156,8 @@ export const ErpProjectsPage: React.FC = () => {
   const [projectMilestones, setProjectMilestones] = useState<
     Array<{ id: string; name: string; start: string; end: string }>
   >([]);
+
+  const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
 
   // Estado del drawer de detalle/edici├│n.
 
@@ -1001,6 +1265,12 @@ export const ErpProjectsPage: React.FC = () => {
 
     queryFn: fetchErpProjects,
   });
+
+  useEffect(() => {
+    if (!budgetProjectFilter && projects.length > 0) {
+      setBudgetProjectFilter(String(projects[0].id));
+    }
+  }, [budgetProjectFilter, projects]);
 
   const { data: rawTasks = [] } = useQuery<ErpTaskApi[]>({
     queryKey: ["erp-tasks"],
@@ -1791,6 +2061,573 @@ export const ErpProjectsPage: React.FC = () => {
     },
   });
 
+  const selectedBudgetProjectId = budgetProjectFilter
+    ? Number(budgetProjectFilter)
+    : null;
+
+  const budgetsQuery = useQuery({
+    queryKey: ["project-budgets", selectedBudgetProjectId],
+    queryFn: () =>
+      selectedBudgetProjectId
+        ? fetchProjectBudgets(selectedBudgetProjectId)
+        : Promise.resolve([]),
+    enabled: selectedBudgetProjectId !== null,
+  });
+
+  const budgetMilestonesQuery = useQuery({
+    queryKey: ["project-budget-milestones", selectedBudgetProjectId],
+    queryFn: () =>
+      selectedBudgetProjectId
+        ? fetchBudgetMilestones(selectedBudgetProjectId)
+        : Promise.resolve([] as ProjectBudgetMilestone[]),
+    enabled: selectedBudgetProjectId !== null,
+  });
+
+  const createBudgetMutation = useMutation({
+    mutationFn: (input: {
+      projectId: number;
+      payload: ProjectBudgetLinePayload;
+    }) => createProjectBudgetLine(input.projectId, input.payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["project-budgets", variables.projectId],
+      });
+      toast({ title: "Presupuesto guardado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al guardar presupuesto",
+        description:
+          error?.response?.data?.detail ??
+          "No se pudo guardar el presupuesto.",
+        status: "error",
+      });
+    },
+  });
+
+  const createBudgetMilestoneMutation = useMutation({
+    mutationFn: (input: { projectId: number; payload: { name: string; order_index?: number } }) =>
+      createBudgetMilestone(input.projectId, input.payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["project-budget-milestones", variables.projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project-budgets", variables.projectId],
+      });
+      toast({ title: "Hito creado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al crear hito",
+        description: error?.response?.data?.detail ?? "No se pudo crear el hito.",
+        status: "error",
+      });
+    },
+  });
+
+  const deleteBudgetMilestoneMutation = useMutation({
+    mutationFn: (input: { projectId: number; milestoneId: number }) =>
+      deleteBudgetMilestone(input.projectId, input.milestoneId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["project-budget-milestones", variables.projectId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["project-budgets", variables.projectId],
+      });
+      toast({ title: "Hito eliminado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al eliminar hito",
+        description: error?.response?.data?.detail ?? "No se pudo eliminar el hito.",
+        status: "error",
+      });
+    },
+  });
+
+  const updateBudgetMutation = useMutation({
+    mutationFn: (input: {
+      projectId: number;
+      budgetId: number;
+      payload: ProjectBudgetLineUpdatePayload;
+    }) =>
+      updateProjectBudgetLine(input.projectId, input.budgetId, input.payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["project-budgets", variables.projectId],
+      });
+      toast({ title: "Presupuesto actualizado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al actualizar presupuesto",
+        description:
+          error?.response?.data?.detail ??
+          "No se pudo actualizar el presupuesto.",
+        status: "error",
+      });
+    },
+  });
+
+  const deleteBudgetMutation = useMutation({
+    mutationFn: (input: { projectId: number; budgetId: number }) =>
+      deleteProjectBudgetLine(input.projectId, input.budgetId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["project-budgets", variables.projectId],
+      });
+      toast({ title: "Presupuesto eliminado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al eliminar presupuesto",
+        description:
+          error?.response?.data?.detail ??
+          "No se pudo eliminar el presupuesto.",
+        status: "error",
+      });
+    },
+  });
+
+  const budgetRows = budgetsQuery.data ?? [];
+  const budgetMilestones = budgetMilestonesQuery.data ?? [];
+  const hasRealBudgets = budgetRows.length > 0;
+  const [budgetsEditMode, setBudgetsEditMode] = useState(false);
+  const [seedingTemplate, setSeedingTemplate] = useState(false);
+  const [seedingProjectMilestones, setSeedingProjectMilestones] = useState(false);
+
+  const DEFAULT_BUDGET_TEMPLATE: ProjectBudgetLine[] = useMemo(
+    () => [
+      {
+        id: -1,
+        project_id: 0,
+        concept: "EQUIPOS (Amortización)",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -2,
+        project_id: 0,
+        concept: "PERSONAL",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -3,
+        project_id: 0,
+        concept: "Titulados universitarios",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -4,
+        project_id: 0,
+        concept: "No titulado",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -5,
+        project_id: 0,
+        concept: "MATERIAL FUNGIBLE",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -6,
+        project_id: 0,
+        concept: "Materiales para pruebas y ensayos",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -7,
+        project_id: 0,
+        concept: "COLABORACIONES EXTERNAS",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -8,
+        project_id: 0,
+        concept: "Centros Tecnológicos (CETIM)",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -9,
+        project_id: 0,
+        concept: "GASTOS GENERALES (19%)",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -10,
+        project_id: 0,
+        concept: "OTROS GASTOS",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -11,
+        project_id: 0,
+        concept: "Auditoría",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -12,
+        project_id: 0,
+        concept: "Dictamen acreditado ENAC de informe DNSH",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+    ],
+    [],
+  );
+
+  const displayBudgetRows = hasRealBudgets ? budgetRows : DEFAULT_BUDGET_TEMPLATE;
+
+  const budgetsTabTotals = useMemo(() => {
+    const totalsByMilestone: Record<number, { amount: number; justified: number }> = {};
+    let approved = 0;
+    let forecasted = 0;
+    budgetRows.forEach((row) => {
+      approved += Number(row.approved_budget || 0);
+      forecasted += Number(row.forecasted_spent || 0);
+      (row.milestones ?? []).forEach((m) => {
+        const current = totalsByMilestone[m.milestone_id] ?? { amount: 0, justified: 0 };
+        current.amount += Number(m.amount || 0);
+        current.justified += Number(m.justified || 0);
+        totalsByMilestone[m.milestone_id] = current;
+      });
+    });
+    return { totalsByMilestone, approved, forecasted };
+  }, [budgetRows]);
+
+  const sumMilestoneAmounts = useMemo(() => {
+    return Object.values(budgetsTabTotals.totalsByMilestone).reduce(
+      (acc, val) => acc + Number(val.amount || 0),
+      0,
+    );
+  }, [budgetsTabTotals]);
+
+  const budgetsDifference = budgetsTabTotals.approved - sumMilestoneAmounts;
+
+  const seedTemplateBudgetLines = async () => {
+    if (!selectedBudgetProjectId || hasRealBudgets || seedingTemplate) return;
+    setSeedingTemplate(true);
+    try {
+      // Crea hitos por defecto si no existen
+      let currentMilestones = budgetMilestones;
+      if (!currentMilestones || currentMilestones.length === 0) {
+        const m1 = await createBudgetMilestoneMutation.mutateAsync({
+          projectId: selectedBudgetProjectId,
+          payload: { name: "HITO 1", order_index: 1 },
+        });
+        const m2 = await createBudgetMilestoneMutation.mutateAsync({
+          projectId: selectedBudgetProjectId,
+          payload: { name: "HITO 2", order_index: 2 },
+        });
+        currentMilestones = [m1, m2];
+      }
+
+      for (const row of DEFAULT_BUDGET_TEMPLATE) {
+        await createBudgetMutation.mutateAsync({
+          projectId: selectedBudgetProjectId,
+          payload: {
+            concept: row.concept,
+            hito1_budget: row.hito1_budget ?? 0,
+            justified_hito1: row.justified_hito1 ?? 0,
+            hito2_budget: row.hito2_budget ?? 0,
+            justified_hito2: row.justified_hito2 ?? 0,
+            approved_budget: (row.hito1_budget ?? 0) + (row.hito2_budget ?? 0),
+            percent_spent: 0,
+            forecasted_spent: 0,
+          },
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["project-budgets", selectedBudgetProjectId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["project-budget-milestones", selectedBudgetProjectId],
+      });
+      toast({ title: "Plantilla creada en el proyecto", status: "success" });
+    } catch (err: any) {
+      toast({
+        title: "No se pudo crear la plantilla",
+        description: err?.response?.data?.detail ?? "Revisa el backend.",
+        status: "error",
+      });
+    } finally {
+      setSeedingTemplate(false);
+    }
+  };
+
+  // Crea hitos de presupuesto a partir de los hitos del proyecto (ERP) si no hay hitos de presupuesto.
+  useEffect(() => {
+    const autoSeed = async () => {
+      if (
+        !selectedBudgetProjectId ||
+        seedingProjectMilestones ||
+        budgetMilestonesQuery.isFetching ||
+        (budgetMilestones && budgetMilestones.length > 0)
+      ) {
+        return;
+      }
+      const projectMilestones = milestones.filter(
+        (m) => m.project_id === selectedBudgetProjectId,
+      );
+      if (projectMilestones.length === 0) return;
+      setSeedingProjectMilestones(true);
+      try {
+        // Ordena por fecha si existe; si no, por id.
+        const ordered = [...projectMilestones].sort((a, b) => {
+          if (a.due_date && b.due_date) {
+            return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+          }
+          return (a.id ?? 0) - (b.id ?? 0);
+        });
+        for (let idx = 0; idx < ordered.length; idx += 1) {
+          const m = ordered[idx];
+          await createBudgetMilestoneMutation.mutateAsync({
+            projectId: selectedBudgetProjectId,
+            payload: { name: m.title || `Hito ${idx + 1}`, order_index: idx + 1 },
+          });
+        }
+        queryClient.invalidateQueries({
+          queryKey: ["project-budget-milestones", selectedBudgetProjectId],
+        });
+      } catch (err: any) {
+        toast({
+          title: "No se pudieron crear los hitos de presupuesto",
+          description: err?.response?.data?.detail ?? "Revisa el backend.",
+          status: "error",
+        });
+      } finally {
+        setSeedingProjectMilestones(false);
+      }
+    };
+    autoSeed();
+  }, [
+    selectedBudgetProjectId,
+    budgetMilestones,
+    budgetMilestonesQuery.isFetching,
+    milestones,
+    createBudgetMilestoneMutation,
+    queryClient,
+    seedingProjectMilestones,
+    toast,
+  ]);
+
+  const handleBudgetCellSave = (
+    budgetId: number,
+    field: keyof ProjectBudgetLineUpdatePayload,
+    value: string,
+  ) => {
+    if (!selectedBudgetProjectId || !hasRealBudgets) return;
+
+    if (field === "concept") {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      updateBudgetMutation.mutate({
+        projectId: selectedBudgetProjectId,
+        budgetId,
+        payload: { concept: trimmed },
+      });
+      return;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+
+    updateBudgetMutation.mutate({
+      projectId: selectedBudgetProjectId,
+      budgetId,
+      payload: { [field]: numericValue },
+    });
+  };
+
+  const handleBudgetMilestoneChange = (
+    budget: ProjectBudgetLine,
+    milestoneId: number,
+    field: "amount" | "justified",
+    value: string,
+  ) => {
+    if (!selectedBudgetProjectId || !budgetsEditMode) return;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return;
+    const current = budget.milestones ?? [];
+    const updated = current.map((m) =>
+      m.milestone_id === milestoneId ? { ...m, [field]: num } : m,
+    );
+    // Si el hito no existía en la línea, lo añadimos.
+    if (!current.find((m) => m.milestone_id === milestoneId)) {
+      updated.push({
+        id: -1,
+        milestone_id: milestoneId,
+        amount: field === "amount" ? num : 0,
+        justified: field === "justified" ? num : 0,
+        created_at: new Date().toISOString(),
+      } as any);
+    }
+    updateBudgetMutation.mutate({
+      projectId: selectedBudgetProjectId,
+      budgetId: budget.id,
+      payload: {
+        milestones: updated.map((m) => ({
+          milestone_id: m.milestone_id,
+          amount: m.amount,
+          justified: m.justified,
+        })) as any,
+      },
+    });
+  };
+
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [budgetModalMode, setBudgetModalMode] = useState<BudgetModalMode>("create");
+  const [budgetModalInitial, setBudgetModalInitial] = useState<ProjectBudgetLinePayload>(
+    DEFAULT_BUDGET_PAYLOAD,
+  );
+  const [activeBudgetLine, setActiveBudgetLine] = useState<ProjectBudgetLine | null>(
+    null,
+  );
+
+  const openBudgetModal = (mode: BudgetModalMode, line?: ProjectBudgetLine) => {
+    setBudgetModalMode(mode);
+    if (line) {
+      setBudgetModalInitial({
+        concept: line.concept,
+        hito1_budget: line.hito1_budget,
+        justified_hito1: line.justified_hito1,
+        hito2_budget: line.hito2_budget,
+        justified_hito2: line.justified_hito2,
+        approved_budget: line.approved_budget,
+        percent_spent: line.percent_spent,
+        forecasted_spent: line.forecasted_spent,
+      });
+      setActiveBudgetLine(line);
+    } else {
+      setBudgetModalInitial(DEFAULT_BUDGET_PAYLOAD);
+      setActiveBudgetLine(null);
+    }
+    setBudgetModalOpen(true);
+  };
+
+  const handleBudgetSave = (payload: ProjectBudgetLinePayload) => {
+    if (!payload.concept.trim()) {
+      toast({ title: "Concepto requerido", status: "warning" });
+      return;
+    }
+    if (selectedBudgetProjectId === null) {
+      toast({ title: "Selecciona un proyecto", status: "warning" });
+      return;
+    }
+    const projectId = selectedBudgetProjectId;
+    if (budgetModalMode === "edit" && activeBudgetLine) {
+      updateBudgetMutation.mutate(
+        {
+          projectId,
+          budgetId: activeBudgetLine.id,
+          payload,
+        },
+        {
+          onSuccess: () => setBudgetModalOpen(false),
+        },
+      );
+      return;
+    }
+    createBudgetMutation.mutate(
+      { projectId, payload },
+      {
+        onSuccess: () => setBudgetModalOpen(false),
+      },
+    );
+  };
+
+  const handleBudgetDelete = (budgetId: number) => {
+    if (selectedBudgetProjectId === null) return;
+    deleteBudgetMutation.mutate({
+      projectId: selectedBudgetProjectId,
+      budgetId,
+    });
+  };
+
   // Mutaciones de edici├│n en cascada para actividad, subactividad e hito.
 
   const updateActivityMutation = useMutation({
@@ -2422,6 +3259,8 @@ export const ErpProjectsPage: React.FC = () => {
           <Tab>Proyectos</Tab>
 
           <Tab>Diagrama de Gantt</Tab>
+
+          <Tab>Presupuestos</Tab>
 
           <Tab>Crear</Tab>
         </TabList>
@@ -3257,6 +4096,335 @@ export const ErpProjectsPage: React.FC = () => {
             </Stack>
           </TabPanel>
 
+          <TabPanel px={0}>
+            <Stack spacing={6}>
+              <Heading size="md">Presupuestos</Heading>
+
+             <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
+               <FormControl minW="220px" maxW="320px">
+                 <FormLabel>Proyecto</FormLabel>
+                 <Select
+                   size="sm"
+                   value={budgetProjectFilter}
+                   onChange={(e) => setBudgetProjectFilter(e.target.value)}
+                 >
+                   <option value="">Selecciona un proyecto</option>
+                   {projects.map((project) => (
+                     <option key={project.id} value={String(project.id)}>
+                       {project.name}
+                     </option>
+                   ))}
+                 </Select>
+               </FormControl>
+                <HStack spacing={2}>
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    onClick={() => {
+                      if (!selectedBudgetProjectId) return;
+                      createBudgetMilestoneMutation.mutate({
+                        projectId: selectedBudgetProjectId,
+                        payload: {
+                          name: `Hito ${budgetMilestones.length + 1}`,
+                          order_index: budgetMilestones.length + 1,
+                        },
+                      });
+                    }}
+                    isDisabled={!selectedBudgetProjectId}
+                  >
+                    + Hito
+                  </Button>
+                  <Button
+                    size="sm"
+                    colorScheme={budgetsEditMode ? "orange" : "blue"}
+                    onClick={() => setBudgetsEditMode((prev) => !prev)}
+                    isDisabled={!selectedBudgetProjectId || !hasRealBudgets}
+                  >
+                    {budgetsEditMode ? "Cerrar edición" : "Editar tabla"}
+                  </Button>
+                  {!hasRealBudgets && (
+                    <Button
+                      size="sm"
+                      colorScheme="purple"
+                      onClick={seedTemplateBudgetLines}
+                      isDisabled={!selectedBudgetProjectId || seedingTemplate}
+                      isLoading={seedingTemplate}
+                    >
+                      Crear plantilla en proyecto
+                    </Button>
+                  )}
+                </HStack>
+             </Flex>
+
+              {!selectedBudgetProjectId ? (
+                <Text fontSize="sm" color={subtleText}>
+                  Selecciona un proyecto para ver sus presupuestos.
+                </Text>
+              ) : budgetsQuery.isFetching ? (
+                <Text fontSize="sm" color={subtleText}>
+                  Cargando presupuestos…
+                </Text>
+              ) : budgetsQuery.isError ? (
+                <Text fontSize="sm" color="red.500">
+                  No se pudieron cargar los presupuestos.
+                </Text>
+              ) : (
+                <Box borderWidth="1px" borderRadius="xl" overflow="hidden">
+                  <Box overflowX="auto">
+                    <Table size="sm" variant="simple" minW="960px">
+                      <Thead>
+                        <Tr bg="#0a3d2a">
+                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                            CONCEPTO
+                          </Th>
+                          <Th colSpan={2} className="text-sm" textAlign="center" color="white" fontWeight="bold">
+                            HITO 1
+                          </Th>
+                          <Th colSpan={2} className="text-sm" textAlign="center" color="white" fontWeight="bold">
+                            HITO 2
+                          </Th>
+                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                            PRES. APROBADO
+                          </Th>
+                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                            % GASTO
+                          </Th>
+                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                            GASTO PREVISTO
+                          </Th>
+                          <Th rowSpan={2} className="text-sm" color="white" fontWeight="bold">
+                            ACCIONES
+                          </Th>
+                        </Tr>
+                        <Tr bg="#0f5d3f">
+                          <Th className="text-sm" color="white" fontWeight="semibold">
+                            VALOR
+                          </Th>
+                          <Th className="text-sm" color="white" fontWeight="semibold">
+                            JUSTIFICADO
+                          </Th>
+                          <Th className="text-sm" color="white" fontWeight="semibold">
+                            VALOR
+                          </Th>
+                          <Th className="text-sm" color="white" fontWeight="semibold">
+                            JUSTIFICADO
+                          </Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {displayBudgetRows.length === 0 ? (
+                          <Tr>
+                            <Td colSpan={budgetMilestones.length * 2 + 4 || 9} textAlign="center" py={10} color="gray.500">
+                              Aún no hay presupuestos guardados para este proyecto.
+                            </Td>
+                          </Tr>
+                        ) : (
+                          displayBudgetRows.map((budget) => (
+                            <Tr key={budget.id} className="even:bg-gray-50">
+                              <Td>
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`concept-${budget.id}-${budget.concept}`}
+                                  defaultValue={budget.concept}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "concept", value)
+                                  }
+                                >
+                                  <EditablePreview fontWeight="semibold" />
+                                  <EditableInput />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`hito1-${budget.id}-${budget.hito1_budget}`}
+                                  defaultValue={String(budget.hito1_budget ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "hito1_budget", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.hito1_budget ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`justificado1-${budget.id}-${budget.justified_hito1}`}
+                                  defaultValue={String(budget.justified_hito1 ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "justified_hito1", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.justified_hito1 ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`hito2-${budget.id}-${budget.hito2_budget}`}
+                                  defaultValue={String(budget.hito2_budget ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "hito2_budget", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.hito2_budget ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`justificado2-${budget.id}-${budget.justified_hito2}`}
+                                  defaultValue={String(budget.justified_hito2 ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "justified_hito2", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.justified_hito2 ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`approved-${budget.id}-${budget.approved_budget}`}
+                                  defaultValue={String(budget.approved_budget ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "approved_budget", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.approved_budget ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`percent-${budget.id}-${budget.percent_spent}`}
+                                  defaultValue={String(budget.percent_spent ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "percent_spent", value)
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatPercent(Number(budget.percent_spent ?? 0))}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" max="100" />
+                                </Editable>
+                              </Td>
+                              <Td textAlign="right">
+                                <Editable
+                                  submitOnBlur
+                                  selectAllOnFocus
+                                  key={`forecast-${budget.id}-${budget.forecasted_spent}`}
+                                  defaultValue={String(budget.forecasted_spent ?? 0)}
+                                  isDisabled={!hasRealBudgets || !budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "forecasted_spent",
+                                      value,
+                                    )
+                                  }
+                                >
+                                  <EditablePreview>
+                                    {formatCurrency(budget.forecasted_spent ?? 0)}
+                                  </EditablePreview>
+                                  <EditableInput type="number" step="0.01" min="0" />
+                                </Editable>
+                              </Td>
+                              <Td>
+                                {hasRealBudgets ? (
+                                  <Flex gap={2} flexWrap="wrap">
+                                    <Button
+                                      size="xs"
+                                      variant="outline"
+                                      isDisabled={!budgetsEditMode}
+                                      onClick={() => openBudgetModal("edit", budget)}
+                                    >
+                                      Editar
+                                    </Button>
+                                    <Button
+                                      size="xs"
+                                      colorScheme="red"
+                                      variant="ghost"
+                                      isDisabled={!budgetsEditMode}
+                                      onClick={() => handleBudgetDelete(budget.id)}
+                                    >
+                                      Eliminar
+                                    </Button>
+                                  </Flex>
+                                ) : (
+                                  <Text fontSize="xs" color="gray.500">
+                                    Añade presupuestos para editarlos aquí.
+                                  </Text>
+                                )}
+                              </Td>
+                            </Tr>
+                          ))
+                        )}
+                      </Tbody>
+                      <Tfoot>
+                        <Tr bg="rgba(196,116,255,0.15)" fontWeight="semibold">
+                          <Td>Total</Td>
+                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.hito1)}</Td>
+                          <Td textAlign="right">
+                            {formatCurrency(budgetsTabTotals.justificados?.[0] ?? 0)}
+                          </Td>
+                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.hito2)}</Td>
+                          <Td textAlign="right">
+                            {formatCurrency(budgetsTabTotals.justificados?.[1] ?? 0)}
+                          </Td>
+                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.approved)}</Td>
+                          <Td />
+                          <Td textAlign="right">{formatCurrency(budgetsTabTotals.gasto)}</Td>
+                          <Td />
+                        </Tr>
+                        <Tr bg="rgba(196,116,255,0.2)" fontWeight="semibold">
+                          <Td>Diferencia</Td>
+                          <Td colSpan={8} textAlign="right">
+                            {formatCurrency(Math.abs(budgetsDifference))}{" "}
+                            {budgetsDifference === 0
+                              ? "la suma cuadra con los hitos."
+                              : budgetsDifference > 0
+                                ? "sobra presupuesto."
+                                : "falta presupuesto."}
+                          </Td>
+                        </Tr>
+                      </Tfoot>
+                    </Table>
+                  </Box>
+                </Box>
+              )}
+            </Stack>
+          </TabPanel>
+
           {/* Alta de proyecto con actividades, subactividades e hitos locales */}
 
           <TabPanel px={0}>
@@ -3659,6 +4827,7 @@ export const ErpProjectsPage: React.FC = () => {
                 )}
               </Stack>
 
+
               <Button
                 alignSelf="flex-start"
                 colorScheme="green"
@@ -3671,6 +4840,20 @@ export const ErpProjectsPage: React.FC = () => {
           </TabPanel>
         </TabPanels>
       </Tabs>
+
+      <BudgetModal
+        isOpen={budgetModalOpen}
+        onClose={() => setBudgetModalOpen(false)}
+        onSave={handleBudgetSave}
+        initialValues={budgetModalInitial}
+        title={budgetModalMode === "edit" ? "Editar presupuesto" : "Agregar presupuesto"}
+        submitLabel={budgetModalMode === "edit" ? "Actualizar" : "Guardar"}
+        isSaving={
+          budgetModalMode === "edit"
+            ? updateBudgetMutation.isPending
+            : createBudgetMutation.isPending
+        }
+      />
 
       {/* Drawer de detalle/edici├│n del proyecto seleccionado */}
 

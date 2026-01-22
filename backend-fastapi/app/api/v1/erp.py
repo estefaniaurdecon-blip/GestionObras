@@ -11,12 +11,20 @@ from app.schemas.erp import (
     ActivityCreate,
     ActivityRead,
     ActivityUpdate,
+    BudgetLineMilestoneCreate,
+    BudgetLineMilestoneRead,
     DeliverableCreate,
     DeliverableRead,
     DeliverableUpdate,
     MilestoneCreate,
     MilestoneRead,
     MilestoneUpdate,
+    ProjectBudgetLineCreate,
+    ProjectBudgetLineRead,
+    ProjectBudgetLineUpdate,
+    ProjectBudgetMilestoneCreate,
+    ProjectBudgetMilestoneRead,
+    ProjectBudgetMilestoneUpdate,
     ProjectCreate,
     ProjectRead,
     ProjectUpdate,
@@ -39,12 +47,17 @@ from app.services.erp_service import (
     create_deliverable,
     create_milestone,
     create_project,
+    create_project_budget_line,
+    create_project_budget_milestone,
     create_subactivity,
     create_task,
     create_task_template,
     create_manual_time_session,
+    delete_project,
     delete_task,
     delete_time_session,
+    delete_project_budget_line,
+    delete_project_budget_milestone,
     get_active_time_session,
     get_project,
     get_time_report,
@@ -52,6 +65,8 @@ from app.services.erp_service import (
     list_deliverables,
     list_milestones,
     list_projects,
+    list_project_budget_lines,
+    list_project_budget_milestones,
     list_subactivities,
     list_tasks,
     list_task_templates,
@@ -61,11 +76,11 @@ from app.services.erp_service import (
     update_activity,
     update_deliverable,
     update_milestone,
-    delete_project,
-    update_task,
     update_project,
+    update_project_budget_milestone,
     update_subactivity,
     update_time_session,
+    update_project_budget_line,
 )
 
 
@@ -122,6 +137,201 @@ def api_delete_project(
 ) -> None:
     try:
         delete_project(session, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/budgets", response_model=list[ProjectBudgetLineRead])
+def api_list_project_budgets(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[ProjectBudgetLineRead]:
+    try:
+        get_project(session, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    lines = list_project_budget_lines(session, project_id)
+    result: list[ProjectBudgetLineRead] = []
+    for line in lines:
+        milestones = getattr(line, "milestones", [])
+        result.append(
+          ProjectBudgetLineRead(
+            id=line.id,
+            project_id=line.project_id,
+            concept=line.concept,
+            hito1_budget=line.hito1_budget,
+            justified_hito1=line.justified_hito1,
+            hito2_budget=line.hito2_budget,
+            justified_hito2=line.justified_hito2,
+            approved_budget=line.approved_budget,
+            percent_spent=line.percent_spent,
+            forecasted_spent=line.forecasted_spent,
+            created_at=line.created_at,
+            milestones=[
+              BudgetLineMilestoneRead(
+                id=m.id,
+                milestone_id=m.milestone_id,
+                amount=m.amount,
+                justified=m.justified,
+                created_at=m.created_at,
+              )
+              for m in milestones
+            ],
+          )
+        )
+    return result
+
+
+@router.get("/projects/{project_id}/budget-milestones", response_model=list[ProjectBudgetMilestoneRead])
+def api_list_project_budget_milestones(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+) -> list[ProjectBudgetMilestoneRead]:
+    try:
+        get_project(session, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return list_project_budget_milestones(session, project_id)
+
+
+@router.post(
+    "/projects/{project_id}/budget-milestones",
+    response_model=ProjectBudgetMilestoneRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def api_create_project_budget_milestone(
+    project_id: int,
+    payload: ProjectBudgetMilestoneCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ProjectBudgetMilestoneRead:
+    try:
+        return create_project_budget_milestone(session, project_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch(
+    "/projects/{project_id}/budget-milestones/{milestone_id}",
+    response_model=ProjectBudgetMilestoneRead,
+)
+def api_update_project_budget_milestone(
+    project_id: int,
+    milestone_id: int,
+    payload: ProjectBudgetMilestoneUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ProjectBudgetMilestoneRead:
+    try:
+        return update_project_budget_milestone(session, project_id, milestone_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/projects/{project_id}/budget-milestones/{milestone_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_project_budget_milestone(
+    project_id: int,
+    milestone_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> None:
+    try:
+        delete_project_budget_milestone(session, project_id, milestone_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/projects/{project_id}/budgets",
+    response_model=ProjectBudgetLineRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def api_create_project_budget_line(
+    project_id: int,
+    payload: ProjectBudgetLineCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ProjectBudgetLineRead:
+    try:
+        get_project(session, project_id)
+        line = create_project_budget_line(session, project_id, payload)
+        milestones = getattr(line, "milestones", [])
+        return ProjectBudgetLineRead(
+            id=line.id,
+            project_id=line.project_id,
+            concept=line.concept,
+            hito1_budget=line.hito1_budget,
+            justified_hito1=line.justified_hito1,
+            hito2_budget=line.hito2_budget,
+            justified_hito2=line.justified_hito2,
+            approved_budget=line.approved_budget,
+            percent_spent=line.percent_spent,
+            forecasted_spent=line.forecasted_spent,
+            created_at=line.created_at,
+            milestones=[
+                BudgetLineMilestoneRead(
+                    id=m.id,
+                    milestone_id=m.milestone_id,
+                    amount=m.amount,
+                    justified=m.justified,
+                    created_at=m.created_at,
+                )
+                for m in milestones
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/projects/{project_id}/budgets/{budget_id}", response_model=ProjectBudgetLineRead)
+def api_update_project_budget_line(
+    project_id: int,
+    budget_id: int,
+    payload: ProjectBudgetLineUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> ProjectBudgetLineRead:
+    try:
+        line = update_project_budget_line(session, project_id, budget_id, payload)
+        milestones = getattr(line, "milestones", [])
+        return ProjectBudgetLineRead(
+            id=line.id,
+            project_id=line.project_id,
+            concept=line.concept,
+            hito1_budget=line.hito1_budget,
+            justified_hito1=line.justified_hito1,
+            hito2_budget=line.hito2_budget,
+            justified_hito2=line.justified_hito2,
+            approved_budget=line.approved_budget,
+            percent_spent=line.percent_spent,
+            forecasted_spent=line.forecasted_spent,
+            created_at=line.created_at,
+            milestones=[
+                BudgetLineMilestoneRead(
+                    id=m.id,
+                    milestone_id=m.milestone_id,
+                    amount=m.amount,
+                    justified=m.justified,
+                    created_at=m.created_at,
+                )
+                for m in milestones
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/projects/{project_id}/budgets/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_project_budget_line(
+    project_id: int,
+    budget_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+) -> None:
+    try:
+        delete_project_budget_line(session, project_id, budget_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
