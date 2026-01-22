@@ -169,7 +169,10 @@ def _attach_line_milestones(
     links_by_line: dict[int, list[BudgetLineMilestone]] = {}
     for link in links:
         links_by_line.setdefault(link.budget_line_id, []).append(link)
+<<<<<<< HEAD
     # ordenamos los enlaces por order_index para cada línea
+=======
+>>>>>>> dev
     sorted_links: dict[int, list[BudgetLineMilestone]] = {}
     for line_id, mlinks in links_by_line.items():
         mlinks_sorted = sorted(
@@ -217,10 +220,6 @@ def create_project_budget_line(
             )
             session.add(link)
         session.commit()
-        line.milestones = session.exec(
-            select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id == line.id)
-        ).all()
-        session.refresh(line)
         return line
 
     _validate_budget_totals(

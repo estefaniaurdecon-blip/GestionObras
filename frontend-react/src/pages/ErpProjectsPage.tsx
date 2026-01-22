@@ -358,6 +358,33 @@ const EuroCell: React.FC<{ value: number; color?: string; bold?: boolean }> = ({
   </Text>
 );
 
+<<<<<<< HEAD
+=======
+const BudgetNumberCell: React.FC<{
+  value: number;
+  onSubmit: (value: string) => void;
+  isEditing: boolean;
+  min?: number;
+}> = ({ value, onSubmit, isEditing, min = 0 }) =>
+  isEditing ? (
+    <Input
+      size="sm"
+      type="number"
+      min={min}
+      step="0.01"
+      defaultValue={value}
+      onBlur={(e) => onSubmit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          onSubmit((e.target as HTMLInputElement).value);
+        }
+      }}
+    />
+  ) : (
+    <EuroCell value={value} />
+  );
+
+>>>>>>> dev
 interface GanttTask {
   id: string;
 
@@ -2792,7 +2819,7 @@ export const ErpProjectsPage: React.FC = () => {
     field: keyof ProjectBudgetLineUpdatePayload,
     value: string,
   ) => {
-    if (!selectedBudgetProjectId || !hasRealBudgets) return;
+    if (!selectedBudgetProjectId || !hasRealBudgets || budgetId <= 0) return;
 
     if (field === "concept") {
       const trimmed = value.trim();
@@ -2821,7 +2848,18 @@ export const ErpProjectsPage: React.FC = () => {
     field: "amount" | "justified",
     value: string,
   ) => {
+<<<<<<< HEAD
     if (!selectedBudgetProjectId || !budgetsEditMode || !hasRealBudgets) return;
+=======
+    if (
+      !selectedBudgetProjectId ||
+      !budgetsEditMode ||
+      !hasRealBudgets ||
+      !budget ||
+      budget.id <= 0
+    )
+      return;
+>>>>>>> dev
     const num = Number(value);
     if (!Number.isFinite(num)) return;
     const current = budget.milestones ?? [];
@@ -5127,6 +5165,7 @@ export const ErpProjectsPage: React.FC = () => {
                                   key={`concept-${budget.id}-${budget.concept}`}
                                   defaultValue={budget.concept}
                                   isDisabled={!hasRealBudgets || !budgetsEditMode}
+<<<<<<< HEAD
                               onSubmit={(value) =>
                                 handleBudgetCellSave(budget.id, "concept", value)
                               }
@@ -5232,12 +5271,95 @@ export const ErpProjectsPage: React.FC = () => {
                                   }
                                 >
                                   <EditablePreview>
-                                    {formatPercent(Number(budget.percent_spent ?? 0))}
-                                  </EditablePreview>
-                                  <EditableInput type="number" step="0.01" min="0" max="100" />
+=======
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "concept", value)
+                                  }
+                                >
+                                  <EditablePreview fontWeight="semibold" />
+                                  <EditableInput />
                                 </Editable>
                               </Td>
                               <Td textAlign="right">
+                                <BudgetNumberCell
+                                  value={budget.hito1_budget ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "hito1_budget", value)
+                                  }
+                                />
+                              </Td>
+                              <Td textAlign="right">
+                                <BudgetNumberCell
+                                  value={budget.justified_hito1 ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "justified_hito1", value)
+                                  }
+                                />
+                              </Td>
+                              <Td textAlign="right">
+                                <BudgetNumberCell
+                                  value={budget.hito2_budget ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "hito2_budget", value)
+                                  }
+                                />
+                              </Td>
+                              <Td textAlign="right">
+                                <BudgetNumberCell
+                                  value={budget.justified_hito2 ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "justified_hito2", value)
+                                  }
+                                />
+                              </Td>
+                              <Td textAlign="right">
+                                <BudgetNumberCell
+                                  value={budget.approved_budget ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(budget.id, "approved_budget", value)
+                                  }
+                                />
+                              </Td>
+                              <Td textAlign="right">
+                                {hasRealBudgets && budgetsEditMode ? (
+                                  <Input
+                                    size="sm"
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step="0.01"
+                                    defaultValue={budget.percent_spent ?? 0}
+                                    onBlur={(e) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "percent_spent",
+                                        e.target.value,
+                                      )
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleBudgetCellSave(
+                                          budget.id,
+                                          "percent_spent",
+                                          (e.target as HTMLInputElement).value,
+                                        );
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <Text fontFamily="mono">
+>>>>>>> dev
+                                    {formatPercent(Number(budget.percent_spent ?? 0))}
+                                  </Text>
+                                )}
+                              </Td>
+                              <Td textAlign="right">
+<<<<<<< HEAD
                                 <Editable
                                   submitOnBlur
                                   selectAllOnFocus
@@ -5258,6 +5380,20 @@ export const ErpProjectsPage: React.FC = () => {
                               <EditableInput type="number" step="0.01" min="0" />
                             </Editable>
                           </Td>
+=======
+                                <BudgetNumberCell
+                                  value={budget.forecasted_spent ?? 0}
+                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  onSubmit={(value) =>
+                                    handleBudgetCellSave(
+                                      budget.id,
+                                      "forecasted_spent",
+                                      value,
+                                    )
+                                  }
+                                />
+                              </Td>
+>>>>>>> dev
                               <Td>
                                 {hasRealBudgets ? (
                                   <Flex gap={2} flexWrap="wrap">
