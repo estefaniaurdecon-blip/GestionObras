@@ -59,7 +59,15 @@ export async function createProjectBudgetLine(
   return response.data;
 }
 
-export type ProjectBudgetLineUpdatePayload = Partial<ProjectBudgetLinePayload>;
+export type ProjectBudgetLineUpdatePayload = Partial<
+  ProjectBudgetLinePayload & {
+    milestones: Array<{
+      milestone_id: number;
+      amount?: number | null;
+      justified?: number | null;
+    }>;
+  }
+>;
 
 export async function updateProjectBudgetLine(
   projectId: number,

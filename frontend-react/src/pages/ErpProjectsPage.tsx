@@ -1458,7 +1458,6 @@ export const ErpProjectsPage: React.FC = () => {
   >({
     queryKey: ["erp-summary", summaryYear],
     queryFn: () => fetchSummaryData(summaryYear),
-    keepPreviousData: false,
     refetchOnWindowFocus: false,
   });
 
@@ -1567,8 +1566,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Si es super admin sin tenant seleccionado, traemos todos los empleados (sin filtro de tenant).
 
-  const hrTenantId =
-    currentUser?.tenant_id ?? (currentUser?.is_super_admin ? null : undefined);
+  const hrTenantId = currentUser?.tenant_id ?? undefined;
 
   const { data: activities = [] } = useQuery<ErpActivity[]>({
     queryKey: ["erp-activities"],
@@ -1626,7 +1624,10 @@ export const ErpProjectsPage: React.FC = () => {
     queryKey: ["hr-allocations", summaryYear, hrTenantId],
 
     queryFn: () =>
-      fetchEmployeeAllocations({ year: summaryYear, tenantId: hrTenantId }),
+      fetchEmployeeAllocations({
+        year: summaryYear,
+        tenantId: hrTenantId ?? undefined,
+      }),
 
     enabled: !!currentUser?.id,
     retry: 3,
@@ -2180,13 +2181,18 @@ export const ErpProjectsPage: React.FC = () => {
     if (projectRow) ordered.push(projectRow);
 
     activityRows.forEach((act) => {
+      const actIds = [act.activityId, act.id].filter(
+        (v): v is number => typeof v === "number",
+      );
+
       ordered.push(act);
 
       subRows
 
         .filter(
           (sub) =>
-            sub.activityId === act.activityId || sub.activityId === act.id,
+            typeof sub.activityId === "number" &&
+            actIds.includes(sub.activityId),
         )
 
         .forEach((sub) => ordered.push(sub));
@@ -2195,8 +2201,7 @@ export const ErpProjectsPage: React.FC = () => {
 
         .filter(
           (mil) =>
-            mil.activityId &&
-            (mil.activityId === act.activityId || mil.activityId === act.id),
+            typeof mil.activityId === "number" && actIds.includes(mil.activityId),
         )
 
         .forEach((mil) => ordered.push(mil));
@@ -2708,7 +2713,16 @@ export const ErpProjectsPage: React.FC = () => {
         totalsByMilestone[m.milestone_id] = current;
       });
     });
-    return { totalsByMilestone, approved, forecasted };
+    const totalsArray = Object.values(totalsByMilestone);
+    const hito1 = totalsArray[0]?.amount ?? 0;
+    const hito2 = totalsArray[1]?.amount ?? 0;
+    const justificados: number[] = [
+      totalsArray[0]?.justified ?? 0,
+      totalsArray[1]?.justified ?? 0,
+    ];
+    const gasto = forecasted;
+
+    return { totalsByMilestone, approved, forecasted, hito1, hito2, justificados, gasto };
   }, [budgetRows]);
 
   const sumMilestoneAmounts = useMemo(() => {
@@ -3502,10 +3516,7 @@ export const ErpProjectsPage: React.FC = () => {
   const employeeNameMap = useMemo(() => {
     const map: Record<number, string> = {};
     hrEmployees.forEach((emp) => {
-      map[emp.id] =
-        `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() ||
-        emp.full_name ||
-        "Empleado";
+      map[emp.id] = emp.full_name?.trim() || "Empleado";
     });
     return map;
   }, [hrEmployees]);
@@ -3969,7 +3980,6 @@ export const ErpProjectsPage: React.FC = () => {
                   variant="simple"
                   minW="1400px"
                   w="max-content"
-                  tableLayout="auto"
                 >
                   <Thead>
                     <Tr bg="gray.200">
@@ -4400,9 +4410,25 @@ export const ErpProjectsPage: React.FC = () => {
                           );
                         }
 
-                        const cells = [];
+                        const cells: JSX.Element[] = [];
 
                         for (let mIdx = 0; mIdx < count; mIdx += 1) {
+                          const milestoneLabel =
+                            summaryMilestones[p.id]?.[mIdx]?.label ??
+                            `H${mIdx + 1}`;
+
+                          const cellKey = allocationKey(
+                            emp.id,
+                            p.id,
+                            summaryYear,
+                            milestoneLabel,
+                          );
+                          const cellExisting = allocationIndex.get(cellKey);
+                          const cellValue =
+                            allocationDraftsState[cellKey] ??
+                            cellExisting?.allocated_hours?.toString() ??
+                            "";
+
                           cells.push(
                             <Td key={`${emp.id}-${p.id}-${mIdx}`} textAlign="center">
                               {summaryEditMode ? (
@@ -4410,12 +4436,12 @@ export const ErpProjectsPage: React.FC = () => {
                                   size="sm"
                                   type="number"
                                   min={0}
-                                  value={value}
+                                  value={cellValue}
                                   onChange={(e) =>
                                     setAllocationDrafts((prev) => ({
                                       ...prev,
 
-                                      [key]: e.target.value,
+                                      [cellKey]: e.target.value,
                                     }))
                                   }
                                   onBlur={(e) =>
@@ -4424,6 +4450,8 @@ export const ErpProjectsPage: React.FC = () => {
 
                                       p.id,
 
+                                      milestoneLabel,
+
                                       e.target.value,
                                     )
                                   }
@@ -4431,7 +4459,7 @@ export const ErpProjectsPage: React.FC = () => {
                                 />
                               ) : (
                                 <Text>
-                                  {existing?.allocated_hours ?? 0} h
+                                  {cellExisting?.allocated_hours ?? 0} h
                                 </Text>
                               )}
                             </Td>,
