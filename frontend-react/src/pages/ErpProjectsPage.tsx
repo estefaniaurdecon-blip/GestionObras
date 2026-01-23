@@ -1,4 +1,4 @@
-// Vista principal de proyectos: creaci+n, resumen, diagrama Gantt y edici+n detallada.
+﻿// Vista principal de proyectos: creaci+n, resumen, diagrama Gantt y edici+n detallada.
 
 import React, {
   useCallback,
@@ -108,13 +108,6 @@ const normalizeConceptKey = (value?: string) =>
 
 // Estilos por categoría para la tabla de presupuestos.
 const CATEGORY_COLOR_MAP: Record<string, string | undefined> = {
-  [normalizeConceptKey("EQUIPOS (Amortizacion)")]: "#dff0d8",
-  [normalizeConceptKey("PERSONAL")]: "#e0f7da",
-  [normalizeConceptKey("Doctores")]: undefined,
-  [normalizeConceptKey("MATERIAL FUNGIBLE")]: "#e9f7ef",
-  [normalizeConceptKey("COLABORACIONES EXTERNAS")]: "#e8f4fd",
-  [normalizeConceptKey("GASTOS GENERALES (19%)")]: "#efe9ff",
-  [normalizeConceptKey("OTROS GASTOS")]: "#f8f9d2",
   [normalizeConceptKey("Total")]: "#d9c2f0",
   [normalizeConceptKey("Diferencia")]: "#e7c4f7",
 };
@@ -411,7 +404,7 @@ const EuroCell: React.FC<{ value: number; color?: string; bold?: boolean }> = ({
     fontFamily="mono"
     whiteSpace="nowrap"
   >
-    {formatEuroValue(value)} 
+    {formatEuroValue(value)}
   </Text>
 );
 
@@ -2598,8 +2591,6 @@ export const ErpProjectsPage: React.FC = () => {
   const [seedingProjectMilestones, setSeedingProjectMilestones] =
     useState(false);
 
-
-
   const DEFAULT_BUDGET_TEMPLATE: ProjectBudgetLine[] = useMemo(
     () => [
       {
@@ -2826,11 +2817,7 @@ export const ErpProjectsPage: React.FC = () => {
     // Asegura que existan filas minimas para categorias esperadas.
     DEFAULT_BUDGET_TEMPLATE.forEach((tpl) => {
       const tplKey = normalizeConceptKey(tpl.concept);
-      if (
-        !baseRows.some(
-          (r) => normalizeConceptKey(r.concept) === tplKey,
-        )
-      ) {
+      if (!baseRows.some((r) => normalizeConceptKey(r.concept) === tplKey)) {
         baseRows.push(tpl);
       }
     });
@@ -2853,7 +2840,9 @@ export const ErpProjectsPage: React.FC = () => {
       const forecast =
         Number(current.forecasted_spent ?? 0) +
         Number(row.forecasted_spent ?? 0);
-      const approved = h1 + h2;
+      const approved =
+        Number(current.approved_budget ?? 0) +
+        Number(row.approved_budget ?? 0);
       const percent =
         approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
       map.set(key, {
@@ -2862,7 +2851,7 @@ export const ErpProjectsPage: React.FC = () => {
         hito2_budget: h2,
         justified_hito1: j1,
         justified_hito2: j2,
-        approved_budget: approved,
+        approved_budget: approved || h1 + h2,
         forecasted_spent: forecast,
         percent_spent: percent,
       });
@@ -2885,6 +2874,19 @@ export const ErpProjectsPage: React.FC = () => {
     () => buildParentChildMap(DEFAULT_BUDGET_TEMPLATE),
     [DEFAULT_BUDGET_TEMPLATE],
   );
+
+  const budgetParentKeys = useMemo(
+    () => new Set(Object.keys(budgetParentMap)),
+    [budgetParentMap],
+  );
+
+  const budgetChildKeys = useMemo(() => {
+    const keys = new Set<string>();
+    Object.values(budgetParentMap).forEach((children) => {
+      children.forEach((child) => keys.add(child));
+    });
+    return keys;
+  }, [budgetParentMap]);
 
   const budgetParentTotals = useMemo(() => {
     const totals = new Map<string, { j1: number; j2: number }>();
@@ -2915,11 +2917,16 @@ export const ErpProjectsPage: React.FC = () => {
     let approved = 0;
     let forecasted = 0;
     groupedBudgetRows.forEach((row) => {
+      const key = normalizeConceptKey(row.concept);
+      const isParent = budgetParentKeys.has(key);
+      const isChild = budgetChildKeys.has(key);
+      if (isChild) return;
+      const parentTotals = isParent ? budgetParentTotals.get(key) : undefined;
       const h1 = Number(row.hito1_budget ?? 0);
       const h2 = Number(row.hito2_budget ?? 0);
-      const j1 = Number(row.justified_hito1 ?? 0);
-      const j2 = Number(row.justified_hito2 ?? 0);
-      approved += h1 + h2;
+      const j1 = Number(parentTotals?.j1 ?? row.justified_hito1 ?? 0);
+      const j2 = Number(parentTotals?.j2 ?? row.justified_hito2 ?? 0);
+      approved += Number(row.approved_budget ?? h1 + h2);
       forecasted += Number(row.forecasted_spent ?? 0);
       totalsByMilestone[1].amount += h1;
       totalsByMilestone[2].amount += h2;
@@ -2943,7 +2950,7 @@ export const ErpProjectsPage: React.FC = () => {
       justificados,
       gasto,
     };
-  }, [groupedBudgetRows]);
+  }, [groupedBudgetRows, budgetParentKeys, budgetChildKeys, budgetParentTotals]);
 
   const budgetsDiffH1 =
     Number(budgetsTabTotals.hito1 || 0) -
@@ -3100,11 +3107,11 @@ export const ErpProjectsPage: React.FC = () => {
       DEFAULT_BUDGET_TEMPLATE.find((b) => b.id === budgetId);
     if (!currentRow) return;
 
-  const draft = budgetDrafts[budgetId] ?? {};
-  const currentH1 =
-    draft.hito1_budget ?? Number(currentRow.hito1_budget ?? 0);
-  const currentH2 =
-    draft.hito2_budget ?? Number(currentRow.hito2_budget ?? 0);
+    const draft = budgetDrafts[budgetId] ?? {};
+    const currentH1 =
+      draft.hito1_budget ?? Number(currentRow.hito1_budget ?? 0);
+    const currentH2 =
+      draft.hito2_budget ?? Number(currentRow.hito2_budget ?? 0);
 
     // Solo guardamos en borradores; el usuario confirma con un boton.
     if (field === "hito1_budget" || field === "hito2_budget") {
@@ -3116,7 +3123,8 @@ export const ErpProjectsPage: React.FC = () => {
           budgetDrafts[budgetId]?.approved_budget ??
             currentRow.approved_budget ??
             0,
-        ) || hito1 + hito2);
+        ) ||
+          hito1 + hito2);
 
       setBudgetDrafts((prev) => ({
         ...prev,
@@ -3229,15 +3237,19 @@ export const ErpProjectsPage: React.FC = () => {
         }
         const baseKey = normalizeConceptKey(base.concept);
         const parentTotals = budgetParentTotals.get(baseKey);
+        const isChildRow = budgetChildKeys.has(baseKey);
         const h1 = safeNumber(
           draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
         );
         const h2 = safeNumber(
           draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
         );
-        const approved = safeNumber(
+        let approved = safeNumber(
           draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
         );
+        if (isChildRow && approved <= 0 && h1 + h2 > 0) {
+          approved = h1 + h2;
+        }
         const j1 = parentTotals
           ? parentTotals.j1
           : safeNumber(
@@ -3276,9 +3288,11 @@ export const ErpProjectsPage: React.FC = () => {
         ([id, draftPayload]) => {
           const numericId = Number(id);
           const conceptValue =
-            (draftPayload.concept ??
+            (
+              draftPayload.concept ??
               mergedBudgetRows.find((r) => r.id === numericId)?.concept ??
-              "")?.trim() ?? "";
+              ""
+            )?.trim() ?? "";
           const matchedByConcept = conceptValue
             ? findBudgetByConcept(conceptValue)
             : undefined;
@@ -3288,100 +3302,112 @@ export const ErpProjectsPage: React.FC = () => {
       );
 
       await Promise.all(
-        normalizedDrafts.map(async ({ targetId, draftPayload, conceptValue, numericId }) => {
-          const baseExisting = targetId > 0
-            ? latestBudgets.find((r) => r.id === targetId)
-            : null;
-          const base =
-            baseExisting ??
-            mergedBudgetRows.find((r) => r.id === numericId) ??
-            groupedBudgetRows.find((r) => r.id === numericId) ??
-            DEFAULT_BUDGET_TEMPLATE.find((r) => r.id === numericId);
-          if (!base) return Promise.resolve();
-          if (!conceptValue) return Promise.resolve();
-          const h1 = safeNumber(
-            draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
-          );
-          const h2 = safeNumber(
-            draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
-          );
-          const approved = safeNumber(
-            draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
-          );
-          const baseKey = normalizeConceptKey(base.concept ?? "");
-          const parentTotals = budgetParentTotals.get(baseKey);
-          const j1 = parentTotals
-            ? parentTotals.j1
-            : safeNumber(
-                draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0,
-              );
-          const j2 = parentTotals
-            ? parentTotals.j2
-            : safeNumber(
-                draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0,
-              );
-          const forecast = safeNumber(
-            draftPayload.forecasted_spent ?? base.forecasted_spent ?? 0,
-          );
-          const percent =
-            approved > 0
-              ? safeNumber(((forecast / approved) * 100).toFixed(2), 0)
-              : 0;
-
-          const createPayload: ProjectBudgetLinePayload = {
-            concept: conceptValue,
-            hito1_budget: h1,
-            justified_hito1: j1,
-            hito2_budget: h2,
-            justified_hito2: j2,
-            approved_budget: approved,
-            forecasted_spent: forecast,
-            percent_spent: percent,
-          };
-
-          // Si la fila no existe en backend (id negativo o no encontrada), intentamos actualizar por concepto o crear.
-          if (targetId <= 0 || !baseExisting) {
-            return createProjectBudgetLine(selectedBudgetProjectId, createPayload);
-          }
-
-          const payloadForUpdate: ProjectBudgetLineUpdatePayload = {
-            ...draftPayload,
-            concept: draftPayload.concept ?? base.concept,
-            hito1_budget: h1,
-            justified_hito1: j1,
-            hito2_budget: h2,
-            justified_hito2: j2,
-            approved_budget: approved,
-            forecasted_spent: forecast,
-            percent_spent: percent,
-          };
-
-          try {
-            return await updateProjectBudgetLine(
-              selectedBudgetProjectId,
-              targetId,
-              payloadForUpdate,
+        normalizedDrafts.map(
+          async ({ targetId, draftPayload, conceptValue, numericId }) => {
+            const baseExisting =
+              targetId > 0
+                ? latestBudgets.find((r) => r.id === targetId)
+                : null;
+            const base =
+              baseExisting ??
+              mergedBudgetRows.find((r) => r.id === numericId) ??
+              groupedBudgetRows.find((r) => r.id === numericId) ??
+              DEFAULT_BUDGET_TEMPLATE.find((r) => r.id === numericId);
+            if (!base) return Promise.resolve();
+            if (!conceptValue) return Promise.resolve();
+            const h1 = safeNumber(
+              draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
             );
-          } catch (err: any) {
-            // Si la linea ya no existe (404), buscamos por concepto en un refetch o la recreamos.
-            if (err?.response?.status === 404) {
-              await refreshBudgets();
-              const existingByConcept = findBudgetByConcept(createPayload.concept);
-              if (existingByConcept && existingByConcept.id !== targetId) {
-                return updateProjectBudgetLine(
-                  selectedBudgetProjectId,
-                  existingByConcept.id,
-                  payloadForUpdate,
+            const h2 = safeNumber(
+              draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
+            );
+            const baseKey = normalizeConceptKey(base.concept ?? "");
+            const parentTotals = budgetParentTotals.get(baseKey);
+            const isChildRow = budgetChildKeys.has(baseKey);
+            let approved = safeNumber(
+              draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
+            );
+            if (isChildRow && approved <= 0 && h1 + h2 > 0) {
+              approved = h1 + h2;
+            }
+            const j1 = parentTotals
+              ? parentTotals.j1
+              : safeNumber(
+                  draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0,
                 );
-              }
+            const j2 = parentTotals
+              ? parentTotals.j2
+              : safeNumber(
+                  draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0,
+                );
+            const forecast = safeNumber(
+              draftPayload.forecasted_spent ?? base.forecasted_spent ?? 0,
+            );
+            const percent =
+              approved > 0
+                ? safeNumber(((forecast / approved) * 100).toFixed(2), 0)
+                : 0;
+
+            const createPayload: ProjectBudgetLinePayload = {
+              concept: conceptValue,
+              hito1_budget: h1,
+              justified_hito1: j1,
+              hito2_budget: h2,
+              justified_hito2: j2,
+              approved_budget: approved,
+              forecasted_spent: forecast,
+              percent_spent: percent,
+            };
+
+            // Si la fila no existe en backend (id negativo o no encontrada), intentamos actualizar por concepto o crear.
+            if (targetId <= 0 || !baseExisting) {
               return createProjectBudgetLine(
                 selectedBudgetProjectId,
                 createPayload,
               );
             }
-            throw err;
-          }
-        }),
+
+            const payloadForUpdate: ProjectBudgetLineUpdatePayload = {
+              ...draftPayload,
+              concept: draftPayload.concept ?? base.concept,
+              hito1_budget: h1,
+              justified_hito1: j1,
+              hito2_budget: h2,
+              justified_hito2: j2,
+              approved_budget: approved,
+              forecasted_spent: forecast,
+              percent_spent: percent,
+            };
+
+            try {
+              return await updateProjectBudgetLine(
+                selectedBudgetProjectId,
+                targetId,
+                payloadForUpdate,
+              );
+            } catch (err: any) {
+              // Si la linea ya no existe (404), buscamos por concepto en un refetch o la recreamos.
+              if (err?.response?.status === 404) {
+                await refreshBudgets();
+                const existingByConcept = findBudgetByConcept(
+                  createPayload.concept,
+                );
+                if (existingByConcept && existingByConcept.id !== targetId) {
+                  return updateProjectBudgetLine(
+                    selectedBudgetProjectId,
+                    existingByConcept.id,
+                    payloadForUpdate,
+                  );
+                }
+                return createProjectBudgetLine(
+                  selectedBudgetProjectId,
+                  createPayload,
+                );
+              }
+              throw err;
+            }
+          },
+        ),
       );
       setBudgetDrafts({});
       await queryClient.invalidateQueries({
@@ -5682,7 +5708,9 @@ export const ErpProjectsPage: React.FC = () => {
                           groupedBudgetRows.map((budget) => {
                             const h1 = Number(budget.hito1_budget ?? 0);
                             const h2 = Number(budget.hito2_budget ?? 0);
-                            const approved = h1 + h2;
+                            const approved = Number(
+                              budget.approved_budget ?? h1 + h2,
+                            );
                             const forecast = Number(
                               budget.forecasted_spent ?? 0,
                             );
@@ -5691,12 +5719,15 @@ export const ErpProjectsPage: React.FC = () => {
                             const baseKey = normalizeConceptKey(
                               budget.concept || "",
                             );
-                            const rowBg =
+                            let rowBg =
                               CATEGORY_COLOR_MAP[baseKey] ?? undefined;
                             const isParentRow =
                               budgetParentMap[baseKey] !== undefined;
                             const parentTotals =
                               budgetParentTotals.get(baseKey);
+                            if (isParentRow && !rowBg) {
+                              rowBg = "#e6f7e6";
+                            }
                             return (
                               <Tr
                                 key={budget.id}
@@ -5748,11 +5779,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   <BudgetNumberCell
                                     value={
                                       isParentRow
-                                        ? parentTotals?.j1 ?? 0
-                                        : budgetDrafts[budget.id]
+                                        ? (parentTotals?.j1 ?? 0)
+                                        : (budgetDrafts[budget.id]
                                             ?.justified_hito1 ??
                                           budget.justified_hito1 ??
-                                          0
+                                          0)
                                     }
                                     isEditing={
                                       hasRealBudgets &&
@@ -5791,11 +5822,11 @@ export const ErpProjectsPage: React.FC = () => {
                                   <BudgetNumberCell
                                     value={
                                       isParentRow
-                                        ? parentTotals?.j2 ?? 0
-                                        : budgetDrafts[budget.id]
+                                        ? (parentTotals?.j2 ?? 0)
+                                        : (budgetDrafts[budget.id]
                                             ?.justified_hito2 ??
                                           budget.justified_hito2 ??
-                                          0
+                                          0)
                                     }
                                     isEditing={
                                       hasRealBudgets &&
@@ -5812,17 +5843,20 @@ export const ErpProjectsPage: React.FC = () => {
                                   />
                                 </Td>
                                 <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budgetDrafts[budget.id]?.approved_budget ?? approved}
-                                  isEditing={budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "approved_budget",
-                                      value,
-                                    )
-                                  }
-                                />
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]
+                                        ?.approved_budget ?? approved
+                                    }
+                                    isEditing={budgetsEditMode}
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "approved_budget",
+                                        value,
+                                      )
+                                    }
+                                  />
                                 </Td>
                                 <Td textAlign="right">
                                   <Text fontFamily="mono">
@@ -6929,5 +6963,3 @@ export const ErpProjectsPage: React.FC = () => {
 };
 
 export default ErpProjectsPage;
-
-
