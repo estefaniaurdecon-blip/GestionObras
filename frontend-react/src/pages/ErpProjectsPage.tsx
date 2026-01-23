@@ -1412,13 +1412,10 @@ export const ErpProjectsPage: React.FC = () => {
     new Date().getFullYear(),
   );
 
-<<<<<<< HEAD
   const [allocationDraftsState, setAllocationDrafts] = useState<
     Record<string, string>
   >({});
 
-=======
->>>>>>> main
   const [summarySearch, setSummarySearch] = useState("");
 
   const [summaryEditMode, setSummaryEditMode] = useState(false);
@@ -3810,11 +3807,11 @@ export const ErpProjectsPage: React.FC = () => {
           <Tab>Crear</Tab>
         </TabList>
 
-        <TabPanels mt={4}>
-          {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
+          <TabPanels mt={4}>
+            {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
 
-          <TabPanel px={0}>
-            <Stack spacing={5}>
+          <TabPanel px={0} minW="0" overflowX="hidden">
+            <Stack spacing={5} minW="0">
               <Flex
                 align="center"
                 justify="space-between"
@@ -3950,39 +3947,45 @@ export const ErpProjectsPage: React.FC = () => {
                 </Flex>
               </Flex>
 
+            <Box
+              borderWidth="1px"
+              borderRadius="xl"
+              bg="white"
+              boxShadow="md"
+              w="100%"
+              maxW="100%"
+              minW="0"
+              overflow="hidden"
+            >
               <Box
-                borderWidth="1px"
-                borderRadius="xl"
-                overflow="auto"
-                bg="white"
-                boxShadow="md"
+                w="100%"
+                maxW="100%"
+                minW="0"
+                overflowX="auto"
+                overflowY="hidden"
               >
-                <Table size="sm" variant="simple" minW="1400px">
+                <Table
+                  size="sm"
+                  variant="simple"
+                  minW="1400px"
+                  w="max-content"
+                  tableLayout="auto"
+                >
                   <Thead>
                     <Tr bg="gray.200">
-                      <Th position="sticky" left={0} zIndex={4} minW="60px">
+                      <Th minW="60px">
                         Nº
                       </Th>
 
-                      <Th position="sticky" left="60px" zIndex={4} minW="170px">
+                      <Th minW="170px">
                         Nombre
                       </Th>
 
-                      <Th
-                        position="sticky"
-                        left="230px"
-                        zIndex={4}
-                        minW="190px"
-                      >
+                      <Th minW="190px">
                         Apellidos
                       </Th>
 
-                      <Th
-                        position="sticky"
-                        left="420px"
-                        zIndex={4}
-                        minW="130px"
-                      >
+                      <Th minW="130px">
                         Departamento
                       </Th>
 
@@ -4057,14 +4060,7 @@ export const ErpProjectsPage: React.FC = () => {
                     </Tr>
 
                     <Tr bg="gray.50" borderBottomWidth="1px">
-                      <Th
-                        position="sticky"
-                        left={0}
-                        zIndex={3}
-                        bg="gray.50"
-                        colSpan={4}
-                        textAlign="left"
-                      >
+                      <Th bg="gray.50" colSpan={4} textAlign="left">
                         Horas a justificar
                       </Th>
 
@@ -4110,14 +4106,7 @@ export const ErpProjectsPage: React.FC = () => {
                     </Tr>
 
                     <Tr bg="green.50" borderBottomWidth="1px">
-                      <Th
-                        position="sticky"
-                        left={0}
-                        zIndex={3}
-                        bg="gray.50"
-                        colSpan={4}
-                        textAlign="left"
-                      >
+                      <Th bg="gray.50" colSpan={4} textAlign="left">
                         Justificadas
                       </Th>
 
@@ -4153,14 +4142,7 @@ export const ErpProjectsPage: React.FC = () => {
                     </Tr>
 
                     <Tr bg="orange.50" borderBottomWidth="1px">
-                      <Th
-                        position="sticky"
-                        left={0}
-                        zIndex={3}
-                        bg="orange.50"
-                        colSpan={4}
-                        textAlign="left"
-                      >
+                      <Th bg="orange.50" colSpan={4} textAlign="left">
                         Faltan
                       </Th>
 
@@ -4194,9 +4176,6 @@ export const ErpProjectsPage: React.FC = () => {
                       borderColor="blue.200"
                     >
                       <Th
-                        position="sticky"
-                        left={0}
-                        zIndex={3}
                         bg="blue.100"
                         colSpan={4}
                         textAlign="left"
@@ -4236,9 +4215,6 @@ export const ErpProjectsPage: React.FC = () => {
                       borderColor="green.200"
                     >
                       <Th
-                        position="sticky"
-                        left={0}
-                        zIndex={3}
                         bg="green.50"
                         colSpan={4}
                         textAlign="left"
@@ -4360,43 +4336,20 @@ export const ErpProjectsPage: React.FC = () => {
                             borderLeftWidth="3px"
                             borderLeftColor={`${deptColor}.500`}
                           >
-                            <Td
-                              position="sticky"
-                              left={0}
-                              zIndex={3}
-                              bg={bgColor}
-                            >
+                            <Td bg={bgColor}>
                               {idx + 1}
                             </Td>
 
-                            <Td
-                              position="sticky"
-                              left="70px"
-                              zIndex={3}
-                              bg={bgColor}
-                              fontWeight="semibold"
-                            >
+                            <Td bg={bgColor} fontWeight="semibold">
                               {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
                             </Td>
 
-                            <Td
-                              position="sticky"
-                              left="230px"
-                              zIndex={3}
-                              bg={bgColor}
-                            >
+                            <Td bg={bgColor}>
                               {emp.full_name?.split(" ").slice(1).join(" ") ||
                                 "-"}
                             </Td>
 
-                            <Td
-                              position="sticky"
-                              left="420px"
-                              zIndex={3}
-                              bg={bgColor}
-                              minW="180px"
-                              px={2}
-                            >
+                            <Td bg={bgColor} minW="180px" px={2}>
                               <Flex align="center" gap={2}>
                                 <Box
                                   w="12px"
@@ -4576,10 +4529,13 @@ export const ErpProjectsPage: React.FC = () => {
                 </Table>
               </Box>
 
-              <Modal
-                isOpen={isAddModalOpen}
-                onClose={onCloseAddModal}
-                size="md"
+              {/* Contenedor de la tabla (scroll horizontal solo aquí) */}
+            </Box>
+
+            <Modal
+              isOpen={isAddModalOpen}
+              onClose={onCloseAddModal}
+              size="md"
               >
                 <ModalOverlay />
                 <ModalContent>

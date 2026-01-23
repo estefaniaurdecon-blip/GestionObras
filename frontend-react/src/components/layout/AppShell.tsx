@@ -79,6 +79,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       <Box
         as="nav"
         w="300px"
+        flexShrink={0}
         borderRightWidth="1px"
         bg={sidebarBg}
         px={5}
@@ -247,7 +248,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       </Box>
 
       {/* CONTENT */}
-      <Flex direction="column" flex="1">
+      <Flex direction="column" flex="1" minW="0">
         {/* HEADER */}
         <Flex as="header" bg={headerBg} borderBottomWidth="1px" px={6} py={4}>
           <Flex
@@ -297,8 +298,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </Flex>
 
         {/* MAIN */}
-        <Box as="main" px={{ base: 4, md: 6 }} py={6} w="100%">
-          <Box maxW="100%" mx={0} w="100%">
+        <Box
+          as="main"
+          px={{ base: 4, md: 6 }}
+          py={6}
+          w="100%"
+          minW="0"
+          overflowX="hidden"
+        >
+          <Box maxW="100%" mx={0} w="100%" minW="0">
             {children}
           </Box>
         </Box>
