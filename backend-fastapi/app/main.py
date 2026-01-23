@@ -23,16 +23,25 @@ def create_app() -> FastAPI:
     cors_origins = [o for o in list(settings.frontend_cors_origins or []) if o and o != "*"]
     if settings.frontend_base_url and settings.frontend_base_url not in cors_origins:
         cors_origins.append(settings.frontend_base_url)
-    for origin in ("http://localhost:5173", "http://127.0.0.1:5173"):
+
+    localhost_defaults = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    )
+    for origin in localhost_defaults:
         if origin not in cors_origins:
             cors_origins.append(origin)
 
-    # Configuracion CORS basica: solo orígenes conocidos (localhost y los configurados).
-    allow_origins = cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # Configuracion CORS basica: orígenes conocidos y un regex amplio para localhost en desarrollo.
+    allow_origins = cors_origins or list(localhost_defaults)
+    allow_origin_regex = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
+        allow_origin_regex=allow_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

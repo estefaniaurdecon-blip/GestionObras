@@ -55,9 +55,10 @@ const HOURS = Array.from({ length: 24 }, (_, idx) => idx);
 // Altura de cada bloque de hora en el calendario (px).
 const HOUR_HEIGHT = 48;
 // Duracion minima por sesion de tiempo (min).
-const MIN_SESSION_MINUTES = 30;
+// Duracion mínima por sesión de tiempo (min). Se usa para defaults en UI, no redondea el backend.
+const MIN_SESSION_MINUTES = 1;
 // Opciones de granularidad para ajustar/arrastrar sesiones (min).
-const MINUTES_STEP_OPTIONS = [15, 30, 60];
+const MINUTES_STEP_OPTIONS = [5, 15, 30, 60];
 
 // Convierte segundos a formato HH:mm:ss.
 const formatSeconds = (total: number): string => {

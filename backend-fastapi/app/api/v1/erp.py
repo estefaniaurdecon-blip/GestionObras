@@ -74,6 +74,7 @@ from app.services.erp_service import (
     start_time_session,
     stop_time_session,
     update_activity,
+    update_task,
     update_deliverable,
     update_milestone,
     update_project,

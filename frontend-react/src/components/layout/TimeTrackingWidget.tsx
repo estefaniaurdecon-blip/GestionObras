@@ -15,6 +15,8 @@ import {
   stopTimeSession,
   TimeSession,
 } from "../../api/erpTimeTracking";
+import { updateErpTask } from "../../api/erpManagement";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Widget flotante de tracking de tiempo (play/stop) contra el ERP.
@@ -29,6 +31,7 @@ export const TimeTrackingWidget: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const bg = useColorModeValue("white", "gray.800");
   const border = useColorModeValue("gray.200", "gray.700");
@@ -107,6 +110,9 @@ export const TimeTrackingWidget: React.FC = () => {
     try {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
+      // Marcar la tarea como "in_progress" al iniciar el tracking.
+      await updateErpTask(taskId, { status: "in_progress" });
+      queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
       setActiveSession(session);
       toast({
         title: "Tracking iniciado",
@@ -210,4 +216,3 @@ export const TimeTrackingWidget: React.FC = () => {
     </Box>
   );
 };
-
