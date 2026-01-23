@@ -4241,7 +4241,7 @@ export const ErpProjectsPage: React.FC = () => {
                             textAlign="center"
                             p={2}
                           >
-                            <HStack justify="center" spacing={1} mb={1}>
+                            <HStack justify="center" spacing={1}>
                               <Text fontSize="xs" fontWeight="semibold">
                                 {item.label || `H${idx + 1}`}
                               </Text>
@@ -4266,33 +4266,6 @@ export const ErpProjectsPage: React.FC = () => {
                                 <Text fontSize="xs">x</Text>
                               </Button>
                             </HStack>
-
-                            <InputGroup size="xs">
-                              <Input
-                                type="number"
-                                placeholder="0"
-                                value={item.hours ?? 0}
-                                onChange={(e) =>
-                                  updateMilestoneRow(
-                                    p.id,
-                                    idx,
-                                    "hours",
-                                    e.target.value,
-                                  )
-                                }
-                                textAlign="center"
-                              />
-                              <InputRightAddon>h</InputRightAddon>
-                            </InputGroup>
-
-                            <Text
-                              fontSize="xs"
-                              color="gray.700"
-                              textAlign="center"
-                              mt={1}
-                            >
-                              TOTAL: {item.hours ?? 0} h
-                            </Text>
                           </Th>
                         ));
                       })}
@@ -4419,46 +4392,56 @@ export const ErpProjectsPage: React.FC = () => {
                                 ? numericValue
                                 : 0;
 
-                              return (
-                                <Td
-                                  key={`${emp.id}-${p.id}`}
+                        if (count === 0) {
+                          return (
+                            <Td key={`${emp.id}-${p.id}-empty`} textAlign="center">
+                              -
+                            </Td>
+                          );
+                        }
+
+                        const cells = [];
+
+                        for (let mIdx = 0; mIdx < count; mIdx += 1) {
+                          cells.push(
+                            <Td key={`${emp.id}-${p.id}-${mIdx}`} textAlign="center">
+                              {summaryEditMode ? (
+                                <Input
+                                  size="sm"
+                                  type="number"
+                                  min={0}
+                                  value={value}
+                                  onChange={(e) =>
+                                    setAllocationDrafts((prev) => ({
+                                      ...prev,
+
+                                      [key]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={(e) =>
+                                    handleAllocationBlur(
+                                      emp,
+
+                                      p.id,
+
+                                      e.target.value,
+                                    )
+                                  }
                                   textAlign="center"
-                                  colSpan={count}
-                                >
-                                  {summaryEditMode ? (
-                                    <Input
-                                      size="sm"
-                                      type="number"
-                                      min={0}
-                                      value={value}
-                                      onChange={(e) =>
-                                        setAllocationDrafts((prev) => ({
-                                          ...prev,
+                                />
+                              ) : (
+                                <Text>
+                                  {existing?.allocated_hours ?? 0} h
+                                </Text>
+                              )}
+                            </Td>,
+                          );
+                        }
 
-                                          [key]: e.target.value,
-                                        }))
-                                      }
-                                      onBlur={(e) =>
-                                        handleAllocationBlur(
-                                          emp,
+                        return cells;
+                      })}
 
-                                          p.id,
-
-                                          e.target.value,
-                                        )
-                                      }
-                                      textAlign="center"
-                                    />
-                                  ) : (
-                                    <Text>
-                                      {existing?.allocated_hours ?? 0} h
-                                    </Text>
-                                  )}
-                                </Td>
-                              );
-                            })}
-
-                            <Td
+                      <Td
                               textAlign="center"
                               fontWeight="bold"
                               color="white"
