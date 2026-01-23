@@ -4051,11 +4051,7 @@ export const ErpProjectsPage: React.FC = () => {
                         color="white"
                         minW="150px"
                       >
-                        Horas disponibles para
-                      </Th>
-
-                      <Th textAlign="center" minW="90px">
-                        Acciones
+                        Horas disponibles para {summaryYear}
                       </Th>
                     </Tr>
 
@@ -4471,55 +4467,37 @@ export const ErpProjectsPage: React.FC = () => {
                               {totalEmpAllocated} h
                             </Td>
 
+                            <Td textAlign="center" bg="white">
+                              -
+                            </Td>
+
+                            <Td textAlign="center" bg="white">
+                              -
+                            </Td>
+
+                            <Td textAlign="center" bg="white">
+                              -
+                            </Td>
+
+                            <Td textAlign="center" bg="white">
+                              -
+                            </Td>
+
                             <Td
                               textAlign="center"
-                              bg="green.50"
+                              bg={
+                                available - totalEmpAllocated < 0
+                                  ? "red.50"
+                                  : "green.50"
+                              }
                               color={
                                 available - totalEmpAllocated < 0
-                                  ? "red.600"
+                                  ? "red.700"
                                   : "green.700"
                               }
-                            >
-                              {available - totalEmpAllocated} h
-                            </Td>
-
-                            <Td
-                              textAlign="center"
-                              bg="green.50"
-                              color={
-                                available > 0 && totalEmpAllocated > available
-                                  ? "red.600"
-                                  : "green.700"
-                              }
-                            >
-                              {available > 0
-                                ? `${Math.round((totalEmpAllocated / available) * 100)}%`
-                                : "0%"}
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td
-                              textAlign="center"
-                              bg="red.50"
-                              color="red.700"
                               fontWeight="semibold"
                             >
-                              {available - totalEmpAllocated}
+                              {available - totalEmpAllocated} h
                             </Td>
                           </Tr>
                         );
