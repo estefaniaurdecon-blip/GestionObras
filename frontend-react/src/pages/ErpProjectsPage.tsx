@@ -100,9 +100,11 @@ const createEmptyYearData = (): SummaryYearlyData => ({
 const normalizeConceptKey = (value?: string) =>
   (value || "")
     .trim()
+    .replace(/\s+/g, " ")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, "");
 
 // Estilos por categoría para la tabla de presupuestos.
 const CATEGORY_COLOR_MAP: Record<string, string | undefined> = {
@@ -126,12 +128,36 @@ const BUDGET_ORDER = [
   normalizeConceptKey("MATERIAL FUNGIBLE"),
   normalizeConceptKey("Materiales para pruebas y ensayos"),
   normalizeConceptKey("COLABORACIONES EXTERNAS"),
-  normalizeConceptKey("Centros Tecnologicos (CETIM)"),
+  normalizeConceptKey("Centros Tecnologicos"),
   normalizeConceptKey("GASTOS GENERALES (19%)"),
   normalizeConceptKey("OTROS GASTOS"),
   normalizeConceptKey("Auditoria"),
   normalizeConceptKey("Dictamen acreditado ENAC de informe DNSH"),
 ];
+
+const isAllCapsConcept = (value?: string) => {
+  const text = (value ?? "").trim();
+  if (!text) return false;
+  return text === text.toUpperCase();
+};
+
+const buildParentChildMap = (rows: ProjectBudgetLine[]) => {
+  const map: Record<string, string[]> = {};
+  let currentParent: string | null = null;
+  rows.forEach((row) => {
+    const concept = row.concept ?? "";
+    const key = normalizeConceptKey(concept);
+    if (isAllCapsConcept(concept)) {
+      currentParent = key;
+      if (!map[currentParent]) map[currentParent] = [];
+      return;
+    }
+    if (currentParent) {
+      map[currentParent].push(key);
+    }
+  });
+  return map;
+};
 
 const cloneYearData = (data: SummaryYearlyData): SummaryYearlyData => ({
   projectJustify: { ...data.projectJustify },
@@ -2683,7 +2709,7 @@ export const ErpProjectsPage: React.FC = () => {
       {
         id: -8,
         project_id: 0,
-        concept: "Centros Tecnologicos ",
+        concept: "Centros Tecnologicos",
         hito1_budget: 0,
         justified_hito1: 0,
         hito2_budget: 0,
@@ -2753,12 +2779,21 @@ export const ErpProjectsPage: React.FC = () => {
     ? budgetRows
     : DEFAULT_BUDGET_TEMPLATE;
 
+  const filteredBudgetRows = useMemo(
+    () =>
+      displayBudgetRows.filter(
+        (row) => !(row.concept ?? "").toLowerCase().includes("cetim"),
+      ),
+    [displayBudgetRows],
+  );
+
   const mergedBudgetRows = useMemo(() => {
-    return displayBudgetRows.map((row) => {
+    return filteredBudgetRows.map((row) => {
       const draft = budgetDrafts[row.id];
       const h1 = draft?.hito1_budget ?? Number(row.hito1_budget ?? 0);
       const h2 = draft?.hito2_budget ?? Number(row.hito2_budget ?? 0);
-      const approved_budget = draft?.approved_budget ?? h1 + h2;
+      const approved_budget =
+        draft?.approved_budget ?? Number(row.approved_budget ?? h1 + h2);
       const justified_hito1 =
         draft?.justified_hito1 ?? Number(row.justified_hito1 ?? 0);
       const justified_hito2 =
@@ -2782,7 +2817,7 @@ export const ErpProjectsPage: React.FC = () => {
         milestones: draft?.milestones ?? row.milestones,
       } as ProjectBudgetLine;
     });
-  }, [displayBudgetRows, budgetDrafts]);
+  }, [filteredBudgetRows, budgetDrafts]);
 
   // Agrupa por concepto para evitar repeticiones y sumar importes de subconceptos.
   const groupedBudgetRows = useMemo(() => {
@@ -2845,6 +2880,27 @@ export const ErpProjectsPage: React.FC = () => {
     });
     return ordered;
   }, [mergedBudgetRows]);
+
+  const budgetParentMap = useMemo(
+    () => buildParentChildMap(DEFAULT_BUDGET_TEMPLATE),
+    [DEFAULT_BUDGET_TEMPLATE],
+  );
+
+  const budgetParentTotals = useMemo(() => {
+    const totals = new Map<string, { j1: number; j2: number }>();
+    Object.entries(budgetParentMap).forEach(([parentKey, children]) => {
+      let j1 = 0;
+      let j2 = 0;
+      mergedBudgetRows.forEach((row) => {
+        const rowKey = normalizeConceptKey(row.concept);
+        if (!children.includes(rowKey)) return;
+        j1 += Number(row.justified_hito1 ?? 0);
+        j2 += Number(row.justified_hito2 ?? 0);
+      });
+      totals.set(parentKey, { j1, j2 });
+    });
+    return totals;
+  }, [mergedBudgetRows, budgetParentMap]);
 
   const canEditBudgets = groupedBudgetRows.length > 0;
 
@@ -3020,7 +3076,7 @@ export const ErpProjectsPage: React.FC = () => {
     field: keyof ProjectBudgetLineUpdatePayload,
     value: string,
   ) => {
-    if (!selectedBudgetProjectId || budgetId <= 0) return;
+    if (!selectedBudgetProjectId) return;
 
     if (field === "concept") {
       const trimmed = value.trim();
@@ -3038,8 +3094,11 @@ export const ErpProjectsPage: React.FC = () => {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return;
 
-    const currentRow = budgetRows.find((b) => b.id === budgetId);
-  if (!currentRow) return;
+    const currentRow =
+      budgetRows.find((b) => b.id === budgetId) ??
+      groupedBudgetRows.find((b) => b.id === budgetId) ??
+      DEFAULT_BUDGET_TEMPLATE.find((b) => b.id === budgetId);
+    if (!currentRow) return;
 
   const draft = budgetDrafts[budgetId] ?? {};
   const currentH1 =
@@ -3047,11 +3106,17 @@ export const ErpProjectsPage: React.FC = () => {
   const currentH2 =
     draft.hito2_budget ?? Number(currentRow.hito2_budget ?? 0);
 
-  // Solo guardamos en borradores; el usuario confirma con un boton.
-  if (field === "hito1_budget" || field === "hito2_budget") {
-    const hito1 = field === "hito1_budget" ? numericValue : currentH1;
-    const hito2 = field === "hito2_budget" ? numericValue : currentH2;
-    const approvedBudget = hito1 + hito2;
+    // Solo guardamos en borradores; el usuario confirma con un boton.
+    if (field === "hito1_budget" || field === "hito2_budget") {
+      const hito1 = field === "hito1_budget" ? numericValue : currentH1;
+      const hito2 = field === "hito2_budget" ? numericValue : currentH2;
+      const approvedBudget =
+        draft.approved_budget ??
+        (Number(
+          budgetDrafts[budgetId]?.approved_budget ??
+            currentRow.approved_budget ??
+            0,
+        ) || hito1 + hito2);
 
       setBudgetDrafts((prev) => ({
         ...prev,
@@ -3065,27 +3130,12 @@ export const ErpProjectsPage: React.FC = () => {
       return;
     }
 
-  if (field === "approved_budget") {
-    const currentTotal = currentH1 + currentH2;
-    let hito1: number;
-    let hito2: number;
-    if (currentTotal > 0) {
-      const ratio = currentH1 / currentTotal;
-      hito1 = Math.max(0, Number((numericValue * ratio).toFixed(2)));
-      hito2 = Math.max(0, Number((numericValue - hito1).toFixed(2)));
-    } else {
-      hito1 = Number((numericValue / 2).toFixed(2));
-      hito2 = Number((numericValue - hito1).toFixed(2));
-    }
-    const approvedBudget = hito1 + hito2;
-
-    setBudgetDrafts((prev) => ({
-      ...prev,
-      [budgetId]: {
-        ...(prev[budgetId] ?? {}),
-          approved_budget: approvedBudget,
-          hito1_budget: hito1,
-          hito2_budget: hito2,
+    if (field === "approved_budget") {
+      setBudgetDrafts((prev) => ({
+        ...prev,
+        [budgetId]: {
+          ...(prev[budgetId] ?? {}),
+          approved_budget: numericValue,
         },
       }));
       return;
@@ -3149,63 +3199,188 @@ export const ErpProjectsPage: React.FC = () => {
     if (!selectedBudgetProjectId || !hasBudgetDrafts) return;
     try {
       setSavingBudgets(true);
+      let latestBudgets = await fetchProjectBudgets(selectedBudgetProjectId);
+      const refreshBudgets = async () => {
+        latestBudgets = await fetchProjectBudgets(selectedBudgetProjectId);
+        return latestBudgets;
+      };
+      const safeNumber = (value: unknown, fallback = 0) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : fallback;
+      };
+      const findBudgetByConcept = (concept: string) => {
+        const key = normalizeConceptKey(concept);
+        return latestBudgets.find(
+          (r) => normalizeConceptKey(r.concept ?? "") === key,
+        );
+      };
 
-      // Validaciones por fila antes de guardar
-      for (const row of mergedBudgetRows) {
-        if (!budgetDrafts[row.id]) continue;
-        const h1 = Number(row.hito1_budget ?? 0);
-        const h2 = Number(row.hito2_budget ?? 0);
-        const approved = h1 + h2;
-        const j1 = Number(row.justified_hito1 ?? 0);
-        const j2 = Number(row.justified_hito2 ?? 0);
+      // Valida cada borrador con sus valores combinados (draft + base).
+      for (const [idStr, draftPayload] of Object.entries(budgetDrafts)) {
+        const id = Number(idStr);
+        const base =
+          latestBudgets.find((r) => r.id === id) ??
+          mergedBudgetRows.find((r) => r.id === id) ??
+          groupedBudgetRows.find((r) => r.id === id) ??
+          DEFAULT_BUDGET_TEMPLATE.find((r) => r.id === id);
+        if (!base) continue;
+        if (!base.concept) {
+          throw new Error("Concepto requerido en todas las filas.");
+        }
+        const baseKey = normalizeConceptKey(base.concept);
+        const parentTotals = budgetParentTotals.get(baseKey);
+        const h1 = safeNumber(
+          draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
+        );
+        const h2 = safeNumber(
+          draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
+        );
+        const approved = safeNumber(
+          draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
+        );
+        const j1 = parentTotals
+          ? parentTotals.j1
+          : safeNumber(
+              draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0,
+            );
+        const j2 = parentTotals
+          ? parentTotals.j2
+          : safeNumber(
+              draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0,
+            );
         if (j1 > h1) {
           throw new Error(
-            `Justificado H1 no puede superar Hito 1 en "${row.concept}".`,
+            `Justificado H1 no puede superar Hito 1 en "${base.concept}".`,
           );
         }
         if (j2 > h2) {
           throw new Error(
-            `Justificado H2 no puede superar Hito 2 en "${row.concept}".`,
+            `Justificado H2 no puede superar Hito 2 en "${base.concept}".`,
           );
         }
-        const pending = h1 + h2 - (j1 + j2);
+        if (h1 + h2 > approved) {
+          throw new Error(
+            `La suma de Hito 1 y Hito 2 no puede superar el Pres. aprobado en "${base.concept}".`,
+          );
+        }
+        const pending = approved - (j1 + j2);
         if (pending < 0) {
           throw new Error(
-            `El justificado total supera el presupuesto aprobado en "${row.concept}".`,
-          );
-        }
-        if (approved <= 0) {
-          throw new Error(
-            `El presupuesto aprobado debe ser mayor que 0 en "${row.concept}".`,
+            `El justificado total supera el presupuesto aprobado en "${base.concept}".`,
           );
         }
       }
 
+      // Normaliza borradores contra IDs actuales para evitar parches a filas inexistentes.
+      const normalizedDrafts = Object.entries(budgetDrafts).map(
+        ([id, draftPayload]) => {
+          const numericId = Number(id);
+          const conceptValue =
+            (draftPayload.concept ??
+              mergedBudgetRows.find((r) => r.id === numericId)?.concept ??
+              "")?.trim() ?? "";
+          const matchedByConcept = conceptValue
+            ? findBudgetByConcept(conceptValue)
+            : undefined;
+          const targetId = matchedByConcept?.id ?? -1;
+          return { targetId, draftPayload, conceptValue, numericId };
+        },
+      );
+
       await Promise.all(
-        Object.entries(budgetDrafts).map(([id, draftPayload]) => {
-          const base = mergedBudgetRows.find((r) => r.id === Number(id));
+        normalizedDrafts.map(async ({ targetId, draftPayload, conceptValue, numericId }) => {
+          const baseExisting = targetId > 0
+            ? latestBudgets.find((r) => r.id === targetId)
+            : null;
+          const base =
+            baseExisting ??
+            mergedBudgetRows.find((r) => r.id === numericId) ??
+            groupedBudgetRows.find((r) => r.id === numericId) ??
+            DEFAULT_BUDGET_TEMPLATE.find((r) => r.id === numericId);
           if (!base) return Promise.resolve();
-          const h1 = Number(
+          if (!conceptValue) return Promise.resolve();
+          const h1 = safeNumber(
             draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
           );
-          const h2 = Number(
+          const h2 = safeNumber(
             draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
           );
-          const approved = h1 + h2;
-          const forecast = Number(
+          const approved = safeNumber(
+            draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
+          );
+          const baseKey = normalizeConceptKey(base.concept ?? "");
+          const parentTotals = budgetParentTotals.get(baseKey);
+          const j1 = parentTotals
+            ? parentTotals.j1
+            : safeNumber(
+                draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0,
+              );
+          const j2 = parentTotals
+            ? parentTotals.j2
+            : safeNumber(
+                draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0,
+              );
+          const forecast = safeNumber(
             draftPayload.forecasted_spent ?? base.forecasted_spent ?? 0,
           );
           const percent =
-            approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
+            approved > 0
+              ? safeNumber(((forecast / approved) * 100).toFixed(2), 0)
+              : 0;
 
-          return updateProjectBudgetLine(selectedBudgetProjectId, Number(id), {
-            ...draftPayload,
+          const createPayload: ProjectBudgetLinePayload = {
+            concept: conceptValue,
             hito1_budget: h1,
+            justified_hito1: j1,
             hito2_budget: h2,
+            justified_hito2: j2,
             approved_budget: approved,
             forecasted_spent: forecast,
             percent_spent: percent,
-          });
+          };
+
+          // Si la fila no existe en backend (id negativo o no encontrada), intentamos actualizar por concepto o crear.
+          if (targetId <= 0 || !baseExisting) {
+            return createProjectBudgetLine(selectedBudgetProjectId, createPayload);
+          }
+
+          const payloadForUpdate: ProjectBudgetLineUpdatePayload = {
+            ...draftPayload,
+            concept: draftPayload.concept ?? base.concept,
+            hito1_budget: h1,
+            justified_hito1: j1,
+            hito2_budget: h2,
+            justified_hito2: j2,
+            approved_budget: approved,
+            forecasted_spent: forecast,
+            percent_spent: percent,
+          };
+
+          try {
+            return await updateProjectBudgetLine(
+              selectedBudgetProjectId,
+              targetId,
+              payloadForUpdate,
+            );
+          } catch (err: any) {
+            // Si la linea ya no existe (404), buscamos por concepto en un refetch o la recreamos.
+            if (err?.response?.status === 404) {
+              await refreshBudgets();
+              const existingByConcept = findBudgetByConcept(createPayload.concept);
+              if (existingByConcept && existingByConcept.id !== targetId) {
+                return updateProjectBudgetLine(
+                  selectedBudgetProjectId,
+                  existingByConcept.id,
+                  payloadForUpdate,
+                );
+              }
+              return createProjectBudgetLine(
+                selectedBudgetProjectId,
+                createPayload,
+              );
+            }
+            throw err;
+          }
         }),
       );
       setBudgetDrafts({});
@@ -5513,11 +5688,15 @@ export const ErpProjectsPage: React.FC = () => {
                             );
                             const percentSpent =
                               approved > 0 ? (forecast / approved) * 100 : 0;
-                            const baseKey = (budget.concept || "")
-                              .trim()
-                              .toLowerCase();
+                            const baseKey = normalizeConceptKey(
+                              budget.concept || "",
+                            );
                             const rowBg =
                               CATEGORY_COLOR_MAP[baseKey] ?? undefined;
+                            const isParentRow =
+                              budgetParentMap[baseKey] !== undefined;
+                            const parentTotals =
+                              budgetParentTotals.get(baseKey);
                             return (
                               <Tr
                                 key={budget.id}
@@ -5568,13 +5747,17 @@ export const ErpProjectsPage: React.FC = () => {
                                 <Td textAlign="right">
                                   <BudgetNumberCell
                                     value={
-                                      budgetDrafts[budget.id]
-                                        ?.justified_hito1 ??
-                                      budget.justified_hito1 ??
-                                      0
+                                      isParentRow
+                                        ? parentTotals?.j1 ?? 0
+                                        : budgetDrafts[budget.id]
+                                            ?.justified_hito1 ??
+                                          budget.justified_hito1 ??
+                                          0
                                     }
                                     isEditing={
-                                      hasRealBudgets && budgetsEditMode
+                                      hasRealBudgets &&
+                                      budgetsEditMode &&
+                                      !isParentRow
                                     }
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
@@ -5607,13 +5790,17 @@ export const ErpProjectsPage: React.FC = () => {
                                 <Td textAlign="right">
                                   <BudgetNumberCell
                                     value={
-                                      budgetDrafts[budget.id]
-                                        ?.justified_hito2 ??
-                                      budget.justified_hito2 ??
-                                      0
+                                      isParentRow
+                                        ? parentTotals?.j2 ?? 0
+                                        : budgetDrafts[budget.id]
+                                            ?.justified_hito2 ??
+                                          budget.justified_hito2 ??
+                                          0
                                     }
                                     isEditing={
-                                      hasRealBudgets && budgetsEditMode
+                                      hasRealBudgets &&
+                                      budgetsEditMode &&
+                                      !isParentRow
                                     }
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(

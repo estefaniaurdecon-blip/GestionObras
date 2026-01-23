@@ -83,8 +83,10 @@ def _validate_budget_totals(
     approved_budget: Decimal,
 ) -> None:
     total = hito1_budget + hito2_budget
-    if approved_budget != total:
-        raise ValueError("El total aprobado debe coincidir con la suma de los hitos.")
+    if total > approved_budget:
+        raise ValueError(
+            "La suma de los hitos no puede superar el presupuesto aprobado."
+        )
 
 
 def list_project_budget_lines(
@@ -194,9 +196,15 @@ def create_project_budget_line(
     if milestones_payload:
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
+        approved_budget = data.approved_budget
+        _validate_budget_totals(
+            hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
+            hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
+            approved_budget=approved_budget,
+        )
         percent_spent = Decimal(0)
-        if total_amount and total_amount != 0:
-            percent_spent = (total_justified / total_amount) * Decimal(100)
+        if approved_budget and approved_budget != 0:
+            percent_spent = (total_justified / approved_budget) * Decimal(100)
         line = ProjectBudgetLine(
             project_id=project_id,
             concept=data.concept.strip() or "Concepto",
@@ -204,7 +212,7 @@ def create_project_budget_line(
             justified_hito1=milestones_payload[0].justified if len(milestones_payload) > 0 else Decimal(0),
             hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
             justified_hito2=milestones_payload[1].justified if len(milestones_payload) > 1 else Decimal(0),
-            approved_budget=total_amount,
+            approved_budget=approved_budget,
             percent_spent=percent_spent,
             forecasted_spent=data.forecasted_spent,
         )
@@ -259,12 +267,20 @@ def update_project_budget_line(
         # Recalcula totales desde hitos.
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
+        approved_budget = data.approved_budget if data.approved_budget is not None else line.approved_budget
+        _validate_budget_totals(
+            hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
+            hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
+            approved_budget=approved_budget,
+        )
         line.hito1_budget = milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0)
         line.justified_hito1 = milestones_payload[0].justified if len(milestones_payload) > 0 else Decimal(0)
         line.hito2_budget = milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0)
         line.justified_hito2 = milestones_payload[1].justified if len(milestones_payload) > 1 else Decimal(0)
-        line.approved_budget = total_amount
-        line.percent_spent = (total_justified / total_amount * Decimal(100)) if total_amount else Decimal(0)
+        line.approved_budget = approved_budget
+        line.percent_spent = (
+            (total_justified / approved_budget * Decimal(100)) if approved_budget else Decimal(0)
+        )
         if data.forecasted_spent is not None:
             line.forecasted_spent = data.forecasted_spent
         # Reemplaza enlaces existentes.
