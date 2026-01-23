@@ -1245,7 +1245,7 @@ export const ErpProjectsPage: React.FC = () => {
     new Date().getFullYear(),
   );
 
-  const [allocationDrafts, setAllocationDrafts] = useState<
+  const [allocationDraftsState, setAllocationDrafts] = useState<
     Record<string, string>
   >({});
 
@@ -3849,7 +3849,7 @@ export const ErpProjectsPage: React.FC = () => {
                               const existing = allocationIndex.get(key);
 
                               const value =
-                                allocationDrafts[key] ??
+                                allocationDraftsState[key] ??
                                 existing?.allocated_hours?.toString() ??
                                 "";
 
