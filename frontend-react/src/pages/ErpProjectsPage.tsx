@@ -14,12 +14,6 @@ import {
   Box,
   Button,
   Divider,
-  Drawer,
-  DrawerBody,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerOverlay,
   Editable,
   EditableInput,
   EditablePreview,
@@ -4851,6 +4845,17 @@ export const ErpProjectsPage: React.FC = () => {
                   borderRadius="lg"
                   p={4}
                   bg={cardBg}
+                  role="button"
+                  tabIndex={0}
+                  cursor="pointer"
+                  onClick={() => openProjectDetails(project)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openProjectDetails(project);
+                    }
+                  }}
+                  _hover={{ boxShadow: "md" }}
                 >
                   <Flex justify="space-between" align="flex-start" mb={2}>
                     <Heading size="sm">{project.name}</Heading>
@@ -4911,14 +4916,6 @@ export const ErpProjectsPage: React.FC = () => {
                       </Text>
                     </HStack>
                   </Stack>
-
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    onClick={() => openProjectDetails(project)}
-                  >
-                    Ver detalle y editar
-                  </Button>
                 </Box>
               ))}
             </SimpleGrid>
@@ -5828,22 +5825,24 @@ export const ErpProjectsPage: React.FC = () => {
         }
       />
 
-      {/* Drawer de detalle/edicion del proyecto seleccionado */}
+      {/* Popup centrado de detalle/edicion del proyecto seleccionado */}
 
-      <Drawer
+      <Modal
         isOpen={detailsOpen}
-        placement="right"
         onClose={closeProjectDetails}
-        size="xl"
+        size="6xl"
+        scrollBehavior="inside"
+        isCentered
       >
-        <DrawerOverlay />
+        <ModalOverlay />
 
-        <DrawerContent>
-          <DrawerHeader borderBottomWidth="1px">
+        <ModalContent>
+          <ModalHeader borderBottomWidth="1px">
             {selectedProject ? `Proyecto: ${selectedProject.name}` : "Proyecto"}
-          </DrawerHeader>
+          </ModalHeader>
+          <ModalCloseButton />
 
-          <DrawerBody>
+          <ModalBody>
             {selectedProject ? (
               <Stack spacing={4}>
                 <Stack spacing={1} fontSize="sm" color={subtleText}>
@@ -6358,9 +6357,9 @@ export const ErpProjectsPage: React.FC = () => {
                 Selecciona un proyecto para ver los detalles.
               </Text>
             )}
-          </DrawerBody>
+          </ModalBody>
 
-          <DrawerFooter borderTopWidth="1px">
+          <ModalFooter borderTopWidth="1px">
             <Button variant="ghost" mr={3} onClick={closeProjectDetails}>
               Cerrar
             </Button>
@@ -6384,9 +6383,9 @@ export const ErpProjectsPage: React.FC = () => {
             >
               Guardar cambios
             </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
 };
