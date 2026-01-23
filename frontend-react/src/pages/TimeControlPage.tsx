@@ -1146,21 +1146,7 @@ export const TimeControlPage: React.FC = () => {
                 bg="red.400"
                 boxShadow="sm"
                 zIndex={2}
-              >
-                <Box
-                  position="absolute"
-                  top="-8px"
-                  left="calc(12.5% + 8px)"
-                  bg="red.400"
-                  color="white"
-                  px={2}
-                  py={0.5}
-                  borderRadius="full"
-                  fontSize="xs"
-                >
-                  Ahora
-                </Box>
-              </Box>
+              />
             )}
             {dragState &&
               (dragState.mode === "move" || dragState.mode === "resize") &&
