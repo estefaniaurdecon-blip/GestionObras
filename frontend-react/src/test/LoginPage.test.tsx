@@ -2,8 +2,9 @@ import React from "react";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { renderWithProviders } from "./testUtils";
+import { login } from "../api/auth";
 import { LoginPage } from "./LoginPage";
+import { renderWithProviders } from "./testUtils";
 
 // Mock del módulo de API de autenticación
 vi.mock("../api/auth", () => ({
@@ -20,10 +21,7 @@ vi.mock("@tanstack/react-router", () => ({
   }),
 }));
 
-const mockedLogin = vi.mocked(
-  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-  require("../api/auth").login
-);
+const mockedLogin = vi.mocked(login);
 
 describe("LoginPage", () => {
   beforeEach(() => {

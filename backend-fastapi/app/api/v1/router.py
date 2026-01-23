@@ -14,6 +14,7 @@ from . import (
     tickets,
     tools,
     users,
+    summary,
 )
 
 
@@ -46,4 +47,9 @@ api_router.include_router(
     internal.router,
     prefix="/internal",
     tags=["internal"],
+)
+api_router.include_router(
+    summary.router,
+    prefix="/erp",
+    tags=["erp"],
 )

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
@@ -27,8 +27,7 @@ def create_app() -> FastAPI:
         if origin not in cors_origins:
             cors_origins.append(origin)
 
-    # Configuracion CORS basica.
-    # En desarrollo permitimos localhost, pero no usamos "*" para que funcione con credenciales.
+    # Configuracion CORS basica: solo orígenes conocidos (localhost y los configurados).
     allow_origins = cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     app.add_middleware(
@@ -51,3 +50,5 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+

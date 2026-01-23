@@ -441,12 +441,12 @@ export const ErpTasksPage: React.FC = () => {
       in_progress: [],
       done: [],
     };
-    (tasks ?? []).forEach((task) => {
+    allTasks.forEach((task) => {
       const status = optimisticStatus[task.id] ?? getTaskStatus(task);
       groups[status].push(task);
     });
     return groups;
-  }, [tasks, optimisticStatus]);
+  }, [allTasks, optimisticStatus]);
 
   // Manejo de drag and drop en Kanban.
   const handleDragStart = (

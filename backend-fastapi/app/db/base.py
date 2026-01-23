@@ -37,3 +37,4 @@ from app.models.erp import (  # noqa: F401
     TimeEntry,
     TimeSession,
 )
+from app.models.summary import SummaryYear  # noqa: F401

@@ -1,6 +1,7 @@
-﻿// Vista principal de proyectos: creaci├│n, resumen, diagrama Gantt y edici├│n detallada.
+﻿// Vista principal de proyectos: creaci+¦n, resumen, diagrama Gantt y edici+¦n detallada.
 
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -56,9 +57,12 @@ import {
   Tr,
   Tfoot,
   useColorModeValue,
+  useDisclosure,
   useToast,
   Switch,
   Tag,
+  VStack,
+  Wrap,
 } from "@chakra-ui/react";
 
 import { keyframes } from "@emotion/react";
@@ -66,6 +70,87 @@ import { keyframes } from "@emotion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import axios from "axios";
+import { apiClient } from "../api/client";
+
+type SummaryYearlyData = {
+  projectJustify: Record<number, number>;
+  projectJustified: Record<number, number>;
+  summaryMilestones: Record<number, Array<{ label: string; hours: number }>>;
+};
+
+type SummaryStorage = Record<number, SummaryYearlyData>;
+
+const SUMMARY_STORAGE_KEY = "erp-summary-table-by-year";
+
+const DEPARTMENT_COLOR_SCHEMES = [
+  "teal",
+  "cyan",
+  "green",
+  "orange",
+  "purple",
+  "pink",
+  "blue",
+  "red",
+  "yellow",
+  "gray",
+];
+
+const createEmptyYearData = (): SummaryYearlyData => ({
+  projectJustify: {},
+  projectJustified: {},
+  summaryMilestones: {},
+});
+
+const cloneYearData = (data: SummaryYearlyData): SummaryYearlyData => ({
+  projectJustify: { ...data.projectJustify },
+  projectJustified: { ...data.projectJustified },
+  summaryMilestones: Object.fromEntries(
+    Object.entries(data.summaryMilestones || {}).map(([projId, items]) => [
+      Number(projId),
+      (items || []).map((item) => ({
+        label: item.label,
+        hours: item.hours,
+      })),
+    ]),
+  ),
+});
+
+const readSummaryStorage = (): SummaryStorage => {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = window.localStorage.getItem(SUMMARY_STORAGE_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    if (parsed && typeof parsed === "object") {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn("Failed to read summary storage", err);
+  }
+  return {};
+};
+
+const writeSummaryStorage = (value: SummaryStorage) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(value));
+  } catch (err) {
+    console.warn("Failed to write summary storage", err);
+  }
+};
+
+const loadSummaryFallback = (year: number): SummaryYearlyData => {
+  const storage = readSummaryStorage();
+  const entry = storage[year];
+  return entry ? cloneYearData(entry) : createEmptyYearData();
+};
+
+const persistSummaryFallback = (year: number, data: SummaryYearlyData) => {
+  const storage = readSummaryStorage();
+  storage[year] = cloneYearData(data);
+  writeSummaryStorage(storage);
+};
 
 import {
   fetchErpProjects,
@@ -126,6 +211,88 @@ import {
   type Department,
   type EmployeeAllocation,
 } from "../api/hr";
+
+const YEAR_FILTER_OPTIONS = [2024, 2025, 2026, 2027];
+
+const fetchSummaryData = async (year: number): Promise<SummaryYearlyData> => {
+  try {
+    const response = await apiClient.get<SummaryYearlyData>(
+      `/api/v1/erp/summary/${year}`,
+    );
+    await persistSummaryFallback(year, response.data);
+    return response.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) {
+      return loadSummaryFallback(year);
+    }
+    console.warn("Fallo al cargar resumen, usando almacenamiento local", err);
+    return loadSummaryFallback(year);
+  }
+};
+
+const saveSummaryData = async ({
+  year,
+  payload,
+}: {
+  year: number;
+  payload: SummaryYearlyData;
+}): Promise<void> => {
+  try {
+    await apiClient.put<SummaryYearlyData>(
+      `/api/v1/erp/summary/${year}`,
+      payload,
+    );
+    await persistSummaryFallback(year, payload);
+  } catch (err) {
+    if (
+      axios.isAxiosError(err) &&
+      (err.response?.status === 404 || err.code === "ERR_NETWORK")
+    ) {
+      persistSummaryFallback(year, payload);
+      return;
+    }
+    console.error(err);
+    throw err;
+  }
+};
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+function useDebouncedSave<T>(
+  fn: (value: T) => Promise<void>,
+  delay = 600,
+  onStatus?: (status: SaveStatus) => void,
+) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const trigger = (value: T) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    onStatus?.("saving");
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        await fn(value);
+        onStatus?.("saved");
+        setTimeout(() => onStatus?.("idle"), 800);
+      } catch (err) {
+        console.error(err);
+        onStatus?.("error");
+      }
+    }, delay);
+  };
+
+  return trigger;
+}
 
 type ViewMode = "week" | "month";
 
@@ -314,7 +481,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
 
   const [todayLeftPx, setTodayLeftPx] = useState<number | null>(null);
 
-  // Calcula rango de fechas a mostrar seg├║n las tareas cargadas.
+  // Calcula rango de fechas a mostrar seg+¦n las tareas cargadas.
 
   const dateRange = useMemo(() => {
     if (tasks.length === 0) {
@@ -362,7 +529,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { start: paddedStart, end: paddedEnd };
   }, [tasks, viewMode]);
 
-  // Genera columnas de tiempo (d├¡as o meses) para el encabezado.
+  // Genera columnas de tiempo (d+¡as o meses) para el encabezado.
 
   const timeColumns = useMemo(() => {
     const columns: Date[] = [];
@@ -409,7 +576,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { left: `${left}%`, width: `${width}%` };
   };
 
-  // Posiciones verticales de hitos (porcentaje sobre el timeline) para dibujar l├¡neas globales.
+  // Posiciones verticales de hitos (porcentaje sobre el timeline) para dibujar l+¡neas globales.
 
   const milestoneLines = useMemo(() => {
     if (!showMilestoneLines) return [];
@@ -492,7 +659,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     }
   };
 
-  // L├¡nea de hoy en el Gantt.
+  // L+¡nea de hoy en el Gantt.
 
   const getTodayPosition = () => {
     const today = new Date();
@@ -526,7 +693,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     container.scrollTo({ left: Math.max(target, 0), behavior: "smooth" });
   }, [centerOnToday, tasks, viewMode, dateRange]);
 
-  // Calcula posici├│n de la l├¡nea "hoy" respecto al ├írea de timeline (sin la columna izquierda).
+  // Calcula posici+¦n de la l+¡nea "hoy" respecto al +írea de timeline (sin la columna izquierda).
 
   useLayoutEffect(() => {
     if (!contentRef.current) return;
@@ -807,8 +974,8 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   />
 
                   <Tooltip
-                    label={`${task.name} ┬À ${typeLabel}${
-                      task.project ? ` ┬À ${task.project}` : ""
+                    label={`${task.name} -À ${typeLabel}${
+                      task.project ? ` -À ${task.project}` : ""
                     }\n${task.start.toLocaleDateString("es-ES")} ÔÇö ${task.end.toLocaleDateString("es-ES")}`}
                     hasArrow
                     bg="gray.800"
@@ -1132,10 +1299,10 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
   );
 };
 
-// P├ígina principal de proyectos: resumen, listado, Gantt, creaci├│n y edici├│n detallada.
+// Pagina principal de proyectos: resumen, listado, Gantt, creacion y edicion detallada.
 
 export const ErpProjectsPage: React.FC = () => {
-  // Tokens de estilo y animaci├│n para la cabecera hero.
+  // Tokens de estilo y animaci+¦n para la cabecera hero.
 
   const cardBg = useColorModeValue("white", "gray.700");
 
@@ -1153,7 +1320,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   `;
 
-  // Estado de navegaci├│n, filtros y utilidades.
+  // Estado de navegacion, filtros y utilidades.
 
   const [activeTab, setActiveTab] = useState(0);
 
@@ -1163,7 +1330,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // Formulario de creaci├│n de proyectos.
+  // Formulario de creacion de proyectos.
 
   const [projectName, setProjectName] = useState("");
 
@@ -1205,7 +1372,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
 
-  // Estado del drawer de detalle/edici├│n.
+  // Estado del drawer de detalle/edicion.
 
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -1245,10 +1412,13 @@ export const ErpProjectsPage: React.FC = () => {
     new Date().getFullYear(),
   );
 
+<<<<<<< HEAD
   const [allocationDraftsState, setAllocationDrafts] = useState<
     Record<string, string>
   >({});
 
+=======
+>>>>>>> main
   const [summarySearch, setSummarySearch] = useState("");
 
   const [summaryEditMode, setSummaryEditMode] = useState(false);
@@ -1264,6 +1434,80 @@ export const ErpProjectsPage: React.FC = () => {
   const [summaryMilestones, setSummaryMilestones] = useState<
     Record<number, Array<{ label: string; hours: number }>>
   >({});
+
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState<number | "all">(
+    "all",
+  );
+  const {
+    isOpen: isAddModalOpen,
+    onOpen: onOpenAddModal,
+    onClose: onCloseAddModal,
+  } = useDisclosure();
+  const [addDrawerDeptFilter, setAddDrawerDeptFilter] = useState<
+    number | "all"
+  >("all");
+  const [addDrawerSearch, setAddDrawerSearch] = useState("");
+
+  const [allocationEdits, setAllocationEdits] = useState<
+    Record<string, string>
+  >({});
+
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const skipAutoSaveRef = useRef(true);
+
+  const { data: storedYearData, isFetching: loadingSummaryYear } = useQuery<
+    SummaryYearlyData | undefined
+  >({
+    queryKey: ["erp-summary", summaryYear],
+    queryFn: () => fetchSummaryData(summaryYear),
+    keepPreviousData: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const saveSummaryMutation = useMutation({
+    mutationFn: saveSummaryData,
+  });
+
+  const saveSummaryDebounced = useDebouncedSave<{
+    year: number;
+    payload: SummaryYearlyData;
+  }>((value) => saveSummaryMutation.mutateAsync(value), 700, setSaveStatus);
+
+  const saveStatusLabel = {
+    idle: "",
+    saving: "Guardando los cambios...",
+    saved: "Cambios guardados",
+    error: "Error al guardar",
+  }[saveStatus];
+
+  useEffect(() => {
+    skipAutoSaveRef.current = true;
+    if (storedYearData) {
+      setProjectJustify(storedYearData.projectJustify ?? {});
+      setProjectJustified(storedYearData.projectJustified ?? {});
+      setSummaryMilestones(storedYearData.summaryMilestones ?? {});
+    } else {
+      setProjectJustify({});
+      setProjectJustified({});
+      setSummaryMilestones({});
+    }
+  }, [storedYearData]);
+
+  useEffect(() => {
+    if (skipAutoSaveRef.current) {
+      skipAutoSaveRef.current = false;
+      return;
+    }
+    saveSummaryDebounced({
+      year: summaryYear,
+      payload: {
+        projectJustify,
+        projectJustified,
+        summaryMilestones,
+      },
+    });
+  }, [projectJustify, projectJustified, summaryMilestones, summaryYear]);
 
   const milestoneTotals = useMemo(() => {
     const totals: Record<number, number> = {};
@@ -1304,7 +1548,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
 
-  // Fetch b├ísico: proyectos, tareas, actividades, subactividades e hitos.
+  // Fetch basíco: proyectos, tareas, actividades, subactividades e hitos.
 
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects"],
@@ -1326,9 +1570,8 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Si es super admin sin tenant seleccionado, traemos todos los empleados (sin filtro de tenant).
 
-  const hrTenantId = currentUser?.tenant_id ?? undefined;
-
-  const canFetchHr = Boolean(currentUser);
+  const hrTenantId =
+    currentUser?.tenant_id ?? (currentUser?.is_super_admin ? null : undefined);
 
   const { data: activities = [] } = useQuery<ErpActivity[]>({
     queryKey: ["erp-activities"],
@@ -1348,32 +1591,66 @@ export const ErpProjectsPage: React.FC = () => {
     queryFn: () => fetchMilestones(),
   });
 
-  const { data: hrEmployees = [] } = useQuery<EmployeeProfile[]>({
+  const {
+    data: hrEmployees = [],
+    isError: employeesError,
+    error: employeesErrorMsg,
+    isLoading: employeesLoading,
+  } = useQuery<EmployeeProfile[]>({
     queryKey: ["hr-employees", hrTenantId],
 
     queryFn: () => fetchEmployees(hrTenantId),
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  const { data: hrDepartments = [] } = useQuery<Department[]>({
+  const {
+    data: hrDepartments = [],
+    isError: departmentsError,
+    error: departmentsErrorMsg,
+    isLoading: departmentsLoading,
+  } = useQuery<Department[]>({
     queryKey: ["hr-departments", hrTenantId],
 
     queryFn: () => fetchDepartments(hrTenantId),
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  const { data: allocations = [] } = useQuery<EmployeeAllocation[]>({
+  const { data: allocations = [], isError: allocationsError } = useQuery<
+    EmployeeAllocation[]
+  >({
     queryKey: ["hr-allocations", summaryYear, hrTenantId],
 
     queryFn: () =>
       fetchEmployeeAllocations({ year: summaryYear, tenantId: hrTenantId }),
 
-    enabled: canFetchHr,
+    enabled: !!currentUser?.id,
+    retry: 3,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  // Sincroniza el formulario de edici├│n con el proyecto seleccionado.
+  const getAllocationTotal = useCallback(
+    (projectId: number, milestoneLabel: string) => {
+      return allocations.reduce((sum, alloc) => {
+        if (alloc.year !== summaryYear) return sum;
+        if (alloc.project_id !== projectId) return sum;
+        const label = alloc.milestone || "Sin hitos";
+        if (label !== milestoneLabel) return sum;
+        return sum + Number(alloc.allocated_hours ?? 0);
+      }, 0);
+    },
+    [allocations, summaryYear],
+  );
+
+  // Sincroniza el formulario de edicion con el proyecto seleccionado.
 
   useEffect(() => {
     if (!selectedProject) return;
@@ -1389,7 +1666,7 @@ export const ErpProjectsPage: React.FC = () => {
     setEditActive(selectedProject.is_active ?? true);
   }, [selectedProject]);
 
-  // Normaliza tareas para calcular progreso y alimentar m├®tricas.
+  // Normaliza tareas para calcular progreso y alimentar metricas.
 
   const tasks: ErpTask[] = useMemo(() => {
     const now = new Date();
@@ -1604,7 +1881,7 @@ export const ErpProjectsPage: React.FC = () => {
     return Math.round(ratio * 100);
   };
 
-  // Construye la colecci├│n de ├¡tems de Gantt (proyectos, actividades, subactividades, hitos).
+  // Construye la coleccion de items de Gantt (proyectos, actividades, subactividades, hitos).
 
   const ganttItems: GanttTask[] = useMemo(() => {
     const items: GanttTask[] = [];
@@ -1799,7 +2076,7 @@ export const ErpProjectsPage: React.FC = () => {
       });
     });
 
-    // Tareas sueltas (sin subactividad) tambi├®n al Gantt.
+    // Tareas sueltas (sin subactividad) tambi+®n al Gantt.
 
     rawTasks.forEach((task) => {
       if (!task.start_date || !task.end_date) return;
@@ -2697,7 +2974,7 @@ export const ErpProjectsPage: React.FC = () => {
     });
   };
 
-  // Mutaciones de edici├│n en cascada para actividad, subactividad e hito.
+  // Mutaciones de edicion en cascada para actividad, subactividad e hito.
 
   const updateActivityMutation = useMutation({
     mutationFn: async (input: {
@@ -2882,7 +3159,7 @@ export const ErpProjectsPage: React.FC = () => {
             title: "Proyecto desactivado",
 
             description:
-              "El backend no permite eliminar; se marc├│ como inactivo.",
+              "El backend no permite eliminar; se marc+¦ como inactivo.",
 
             status: "info",
           });
@@ -2898,7 +3175,7 @@ export const ErpProjectsPage: React.FC = () => {
 
             description:
               fallbackError?.response?.data?.detail ??
-              "No se pudo desactivar el proyecto despu├®s del 405.",
+              "No se pudo desactivar el proyecto despu+®s del 405.",
 
             status: "error",
           });
@@ -2967,7 +3244,7 @@ export const ErpProjectsPage: React.FC = () => {
     createProjectMutation.mutate();
   };
 
-  // Guarda edici├│n del proyecto actual.
+  // Guarda edicion del proyecto actual.
 
   const handleUpdateProject = () => {
     if (!selectedProject) {
@@ -3075,19 +3352,64 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrDepartments]);
 
+  const departmentColorMap = useMemo<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    hrDepartments.forEach((dept, idx) => {
+      map[dept.id] =
+        DEPARTMENT_COLOR_SCHEMES[idx % DEPARTMENT_COLOR_SCHEMES.length] ??
+        "gray";
+    });
+    return map;
+  }, [hrDepartments]);
+
+  useEffect(() => {
+    if (hrEmployees.length === 0) return;
+    setSelectedEmployeeIds((prev) => {
+      if (prev.length === 0) {
+        return hrEmployees.map((emp) => emp.id);
+      }
+      const next = new Set(prev);
+      let changed = false;
+      hrEmployees.forEach((emp) => {
+        if (!next.has(emp.id)) {
+          next.add(emp.id);
+          changed = true;
+        }
+      });
+      return changed ? Array.from(next) : prev;
+    });
+  }, [hrEmployees]);
+
+  const departmentAllocationPercentMap = useMemo<Record<number, number>>(() => {
+    const map: Record<number, number> = {};
+    hrDepartments.forEach((dept) => {
+      map[dept.id] = Number(dept.project_allocation_percentage ?? 100);
+    });
+    return map;
+  }, [hrDepartments]);
+
   const allocationKey = (
     employeeId: number,
 
     projectId?: number | null,
 
     year?: number | null,
-  ) => `${employeeId}-${projectId ?? "none"}-${year ?? ""}`;
+
+    milestone?: string | null,
+  ) =>
+    `${employeeId}-${projectId ?? "none"}-${year ?? ""}-${milestone ?? "default"}`;
 
   const allocationIndex = useMemo(() => {
     const map = new Map<string, EmployeeAllocation>();
 
     allocations.forEach((a) => {
-      map.set(allocationKey(a.employee_id, a.project_id, a.year), a);
+      const key = allocationKey(
+        a.employee_id,
+        a.project_id,
+        a.year,
+        a.milestone ?? "Sin hitos",
+      );
+      map.set(key, a);
     });
 
     return map;
@@ -3123,6 +3445,97 @@ export const ErpProjectsPage: React.FC = () => {
     return map;
   }, [hrEmployees]);
 
+  const employeeDepartmentPercentages = useMemo(() => {
+    const records: Record<number, Record<number, number>> = {};
+
+    allocations.forEach((alloc) => {
+      if (alloc.year !== summaryYear) return;
+      if (!alloc.employee_id || !alloc.department_id) return;
+      const hours = Number(alloc.allocated_hours ?? 0);
+      const employeeRecords = records[alloc.employee_id] ?? {};
+      employeeRecords[alloc.department_id] =
+        (employeeRecords[alloc.department_id] ?? 0) + hours;
+      records[alloc.employee_id] = employeeRecords;
+    });
+
+    const result: Record<
+      number,
+      Array<{
+        departmentId: number;
+        departmentName: string;
+        limitPercent: number;
+        usedPercent: number;
+        limitHours: number;
+        usedHours: number;
+      }>
+    > = {};
+
+    Object.entries(records).forEach(([employeeIdStr, deptMap]) => {
+      const employeeId = Number(employeeIdStr);
+      const available = employeeAvailability[employeeId] ?? 0;
+      const list = Object.entries(deptMap)
+        .map(([deptIdStr, hours]) => {
+          const deptId = Number(deptIdStr);
+          const limitPercent = departmentAllocationPercentMap[deptId] ?? 100;
+          const limitHours = Math.round((available * limitPercent) / 100);
+          const usedPercent =
+            limitHours > 0 ? Math.round((hours / limitHours) * 100) : 0;
+          return {
+            departmentId: deptId,
+            departmentName: departmentMap[deptId] ?? "Sin departamento",
+            limitPercent,
+            usedPercent,
+            limitHours,
+            usedHours: Math.round(hours),
+          };
+        })
+        .sort((a, b) => b.usedPercent - a.usedPercent);
+      result[employeeId] = list;
+    });
+
+    return result;
+  }, [
+    allocations,
+    summaryYear,
+    employeeAvailability,
+    departmentMap,
+    departmentAllocationPercentMap,
+  ]);
+
+  const employeeNameMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    hrEmployees.forEach((emp) => {
+      map[emp.id] =
+        `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim() ||
+        emp.full_name ||
+        "Empleado";
+    });
+    return map;
+  }, [hrEmployees]);
+
+  const milestoneContributions = useMemo(() => {
+    const map: Record<
+      number,
+      Record<string, Array<{ name: string; hours: number }>>
+    > = {};
+    allocations.forEach((alloc) => {
+      if (!alloc.project_id || alloc.year !== summaryYear) return;
+      const name = employeeNameMap[alloc.employee_id] ?? `${alloc.employee_id}`;
+      const label = alloc.milestone || "Sin hitos";
+      const projectMap = map[alloc.project_id] ?? {};
+      const list = projectMap[label] ?? [];
+      const existing = list.find((entry) => entry.name === name);
+      if (existing) {
+        existing.hours += Number(alloc.allocated_hours ?? 0);
+      } else {
+        list.push({ name, hours: Number(alloc.allocated_hours ?? 0) });
+      }
+      projectMap[label] = list;
+      map[alloc.project_id] = projectMap;
+    });
+    return map;
+  }, [allocations, summaryYear, employeeNameMap]);
+
   const projectTotals = useMemo(() => {
     const totals: Record<number, number> = {};
 
@@ -3135,6 +3548,22 @@ export const ErpProjectsPage: React.FC = () => {
 
     return totals;
   }, [allocations]);
+
+  const employeeMilestoneHours = useMemo(() => {
+    const map: Record<number, Record<number, Record<string, number>>> = {};
+    allocations.forEach((alloc) => {
+      if (alloc.year !== summaryYear) return;
+      if (!alloc.employee_id || !alloc.project_id) return;
+      const employeeMap = map[alloc.employee_id] ?? {};
+      const projectMap = employeeMap[alloc.project_id] ?? {};
+      const milestoneLabel = alloc.milestone || "Sin hitos";
+      projectMap[milestoneLabel] =
+        (projectMap[milestoneLabel] ?? 0) + Number(alloc.allocated_hours ?? 0);
+      employeeMap[alloc.project_id] = projectMap;
+      map[alloc.employee_id] = employeeMap;
+    });
+    return map;
+  }, [allocations, summaryYear]);
 
   useEffect(() => {
     if (projectColumns.length === 0) return;
@@ -3149,16 +3578,11 @@ export const ErpProjectsPage: React.FC = () => {
       return next;
     });
 
-    setProjectJustified((prev) => {
-      const next = { ...prev };
+    setProjectJustified(() => {
+      const next: Record<number, number> = {};
 
       projectColumns.forEach((p) => {
-        if (next[p.id] === undefined)
-          next[p.id] = Math.min(
-            projectTotals[p.id] ?? 0,
-
-            projectJustify[p.id] ?? projectTotals[p.id] ?? 0,
-          );
+        next[p.id] = projectTotals[p.id] ?? 0;
       });
 
       return next;
@@ -3188,27 +3612,58 @@ export const ErpProjectsPage: React.FC = () => {
     [allocations],
   );
 
-  const filteredSummaryEmployees = useMemo(
-    () =>
-      hrEmployees.filter((emp) =>
-        (emp.full_name || "")
+  const filteredSummaryEmployees = useMemo(() => {
+    const searchLower = summarySearch.toLowerCase();
+    return hrEmployees.filter((emp) => {
+      if (!selectedEmployeeIds.includes(emp.id)) return false;
+      const matchesName = (emp.full_name || "")
+        .toLowerCase()
+        .includes(searchLower);
+      const matchesDepartment =
+        departmentFilter === "all"
+          ? true
+          : emp.primary_department_id === departmentFilter;
+      return matchesName && matchesDepartment;
+    });
+  }, [hrEmployees, summarySearch, selectedEmployeeIds, departmentFilter]);
 
-          .toLowerCase()
+  const employeesAvailableToAdd = useMemo(() => {
+    const searchLower = addDrawerSearch.toLowerCase();
+    return hrEmployees.filter((emp) => {
+      if (selectedEmployeeIds.includes(emp.id)) return false;
+      if (
+        addDrawerDeptFilter !== "all" &&
+        emp.primary_department_id !== addDrawerDeptFilter
+      ) {
+        return false;
+      }
+      return (emp.full_name || "").toLowerCase().includes(searchLower);
+    });
+  }, [hrEmployees, selectedEmployeeIds, addDrawerDeptFilter, addDrawerSearch]);
 
-          .includes(summarySearch.toLowerCase()),
-      ),
-
-    [hrEmployees, summarySearch],
-  );
+  const handleAddEmployee = (employeeId: number) => {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(employeeId) ? prev : [...prev, employeeId],
+    );
+    onCloseAddModal();
+  };
 
   const handleAllocationBlur = (
     employee: EmployeeProfile,
 
     projectId: number,
 
+    milestoneLabel: string,
+
     value: string,
   ) => {
-    const key = allocationKey(employee.id, projectId, summaryYear);
+    if (!summaryEditMode) return;
+    const key = allocationKey(
+      employee.id,
+      projectId,
+      summaryYear,
+      milestoneLabel,
+    );
 
     const parsed = Number(value || 0);
 
@@ -3231,6 +3686,8 @@ export const ErpProjectsPage: React.FC = () => {
             employee.primary_department_id ?? existing.department_id ?? null,
 
           year: summaryYear,
+
+          milestone: milestoneLabel,
         },
       });
     } else {
@@ -3243,7 +3700,7 @@ export const ErpProjectsPage: React.FC = () => {
 
         project_id: projectId,
 
-        milestone: null,
+        milestone: milestoneLabel,
 
         year: summaryYear,
 
@@ -3253,16 +3710,35 @@ export const ErpProjectsPage: React.FC = () => {
       });
     }
 
-    setAllocationDrafts((prev) => {
-      const next = { ...prev };
-
-      delete next[key];
-
-      return next;
+    setAllocationEdits((prev) => {
+      const { [key]: _, ...rest } = prev;
+      return rest;
     });
   };
 
-  // Render principal.
+  const handleAllocationChange = (
+    employeeId: number,
+
+    projectId: number,
+
+    milestoneLabel: string,
+
+    value: string,
+  ) => {
+    if (!summaryEditMode) return;
+    const key = allocationKey(
+      employeeId,
+      projectId,
+      summaryYear,
+      milestoneLabel,
+    );
+    setAllocationEdits((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  //////////////////////////////////////Render principal./////////////////////////////////////////////////////////////////////////////
 
   return (
     <AppShell>
@@ -3349,14 +3825,31 @@ export const ErpProjectsPage: React.FC = () => {
                   <Heading size="md" mb={1}>
                     Gestión y seguimiento de proyectos
                   </Heading>
-
+                  <HStack spacing={2} mb={1}>
+                    <Tag colorScheme="green" size="sm">
+                      Año {summaryYear}
+                    </Tag>
+                    <Text fontSize="xs" color={subtleText}>
+                      Filtrando por año {summaryYear}
+                    </Text>
+                  </HStack>
                   <Text fontSize="sm" color={subtleText}>
                     Tablero tipo Excel con horas a justificar, justificadas y
                     asignación por empleado.
                   </Text>
+                  {loadingSummaryYear && (
+                    <Text fontSize="xs" color={subtleText} mt={1}>
+                      Cargando los datos del año {summaryYear}…
+                    </Text>
+                  )}
+                  {saveStatusLabel && !loadingSummaryYear && (
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      {saveStatusLabel}
+                    </Text>
+                  )}
                 </Box>
 
-                <HStack spacing={3} align="flex-end">
+                <HStack spacing={3} align="flex-end" flexWrap="wrap">
                   <FormControl maxW="220px">
                     <FormLabel fontSize="xs" mb={1}>
                       Buscar empleado
@@ -3370,26 +3863,66 @@ export const ErpProjectsPage: React.FC = () => {
                     />
                   </FormControl>
 
+                  <FormControl maxW="180px">
+                    <FormLabel fontSize="xs" mb={1}>
+                      Departamento
+                    </FormLabel>
+                    <Select
+                      size="sm"
+                      value={departmentFilter}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setDepartmentFilter(
+                          value === "all" ? "all" : Number(value),
+                        );
+                      }}
+                    >
+                      <option value="all">Todos</option>
+                      {hrDepartments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+
                   <FormControl maxW="120px">
                     <FormLabel fontSize="xs" mb={1}>
                       Año
                     </FormLabel>
 
-                    <Input
+                    <Select
                       size="sm"
-                      type="number"
                       value={summaryYear}
                       onChange={(e) => {
                         const parsed = Number(e.target.value);
-
                         setSummaryYear(
                           Number.isFinite(parsed)
                             ? parsed
                             : new Date().getFullYear(),
                         );
                       }}
-                    />
+                    >
+                      {YEAR_FILTER_OPTIONS.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </Select>
                   </FormControl>
+
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    variant="solid"
+                    onClick={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["hr-allocations", summaryYear, hrTenantId],
+                      })
+                    }
+                  >
+                    Refrescar
+                  </Button>
 
                   <Button
                     size="sm"
@@ -3400,6 +3933,21 @@ export const ErpProjectsPage: React.FC = () => {
                     {summaryEditMode ? "Guardar" : "Editar"}
                   </Button>
                 </HStack>
+                <Flex wrap="wrap" gap={3} mt={2} mb={4}>
+                  {hrDepartments.map((dept) => (
+                    <HStack key={`legend-${dept.id}`} spacing={2}>
+                      <Box
+                        w="12px"
+                        h="12px"
+                        borderRadius="full"
+                        bg={departmentColorMap[dept.id] ?? "gray.300"}
+                      />
+                      <Text fontSize="xs" color="gray.600">
+                        {dept.name}
+                      </Text>
+                    </HStack>
+                  ))}
+                </Flex>
               </Flex>
 
               <Box
@@ -3412,28 +3960,31 @@ export const ErpProjectsPage: React.FC = () => {
                 <Table size="sm" variant="simple" minW="1400px">
                   <Thead>
                     <Tr bg="gray.200">
-                      <Th position="sticky" left={0} zIndex={4} minW="60px" />
+                      <Th position="sticky" left={0} zIndex={4} minW="60px">
+                        Nº
+                      </Th>
 
-                      <Th
-                        position="sticky"
-                        left="60px"
-                        zIndex={4}
-                        minW="170px"
-                      />
+                      <Th position="sticky" left="60px" zIndex={4} minW="170px">
+                        Nombre
+                      </Th>
 
                       <Th
                         position="sticky"
                         left="230px"
                         zIndex={4}
                         minW="190px"
-                      />
+                      >
+                        Apellidos
+                      </Th>
 
                       <Th
                         position="sticky"
                         left="420px"
                         zIndex={4}
-                        minW="120px"
-                      />
+                        minW="130px"
+                      >
+                        Departamento
+                      </Th>
 
                       {projectColumns.map((p) => {
                         const count =
@@ -3584,13 +4135,8 @@ export const ErpProjectsPage: React.FC = () => {
                               size="xs"
                               type="number"
                               value={projectJustified[p.id] ?? 0}
-                              onChange={(e) =>
-                                setProjectJustified((prev) => ({
-                                  ...prev,
-
-                                  [p.id]: Number(e.target.value || 0),
-                                }))
-                              }
+                              isReadOnly
+                              focusBorderColor="green.400"
                               textAlign="center"
                               px={2}
                               py={1}
@@ -3798,19 +4344,27 @@ export const ErpProjectsPage: React.FC = () => {
                     ) : (
                       filteredSummaryEmployees.map((emp, idx) => {
                         const available = employeeAvailability[emp.id] ?? 0;
+                        const deptId = emp.primary_department_id ?? -1;
+                        const deptColor = departmentColorMap[deptId] ?? "gray";
+                        const bgColor =
+                          idx % 2 === 0
+                            ? `${deptColor}.50`
+                            : `${deptColor}.100`;
 
                         let totalEmpAllocated = 0;
 
                         return (
                           <Tr
                             key={emp.id}
-                            bg={idx % 2 === 0 ? "white" : "gray.50"}
+                            bg={bgColor}
+                            borderLeftWidth="3px"
+                            borderLeftColor={`${deptColor}.500`}
                           >
                             <Td
                               position="sticky"
                               left={0}
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                             >
                               {idx + 1}
                             </Td>
@@ -3819,7 +4373,7 @@ export const ErpProjectsPage: React.FC = () => {
                               position="sticky"
                               left="70px"
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                               fontWeight="semibold"
                             >
                               {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
@@ -3829,10 +4383,65 @@ export const ErpProjectsPage: React.FC = () => {
                               position="sticky"
                               left="230px"
                               zIndex={3}
-                              bg={idx % 2 === 0 ? "white" : "gray.50"}
+                              bg={bgColor}
                             >
                               {emp.full_name?.split(" ").slice(1).join(" ") ||
                                 "-"}
+                            </Td>
+
+                            <Td
+                              position="sticky"
+                              left="420px"
+                              zIndex={3}
+                              bg={bgColor}
+                              minW="180px"
+                              px={2}
+                            >
+                              <Flex align="center" gap={2}>
+                                <Box
+                                  w="12px"
+                                  h="12px"
+                                  borderRadius="full"
+                                  bg={
+                                    departmentColorMap[
+                                      emp.primary_department_id ?? -1
+                                    ] ?? "gray.300"
+                                  }
+                                />
+                                <VStack align="flex-start" spacing={0}>
+                                  <Text fontSize="sm" fontWeight="semibold">
+                                    {departmentMap[
+                                      emp.primary_department_id ?? -1
+                                    ] ?? "Sin departamento"}
+                                  </Text>
+                                  {(() => {
+                                    const usage =
+                                      (
+                                        employeeDepartmentPercentages[emp.id] ??
+                                        []
+                                      ).find(
+                                        (entry) =>
+                                          entry.departmentId ===
+                                          emp.primary_department_id,
+                                      ) ??
+                                      employeeDepartmentPercentages[
+                                        emp.id
+                                      ]?.[0];
+                                    if (!usage) return null;
+                                    return (
+                                      <Text
+                                        fontSize="xx-small"
+                                        color="gray.500"
+                                      >
+                                        {usage.usedPercent}% usado /{" "}
+                                        {usage.limitPercent}% cuota (
+                                        {usage.usedHours}h/
+                                        {usage.limitHours}h)
+                                      </Text>
+                                    );
+                                  })()}
+                                </VStack>
+                              </Flex>
                             </Td>
 
                             {projectColumns.map((p) => {
@@ -3959,19 +4568,6 @@ export const ErpProjectsPage: React.FC = () => {
                             >
                               {available - totalEmpAllocated}
                             </Td>
-
-                            <Td textAlign="center">
-                              <Button
-                                size="xs"
-                                colorScheme="red"
-                                variant="ghost"
-                                onClick={() =>
-                                  setAllocationDrafts((prev) => prev)
-                                }
-                              >
-                                ✕
-                              </Button>
-                            </Td>
                           </Tr>
                         );
                       })
@@ -3979,6 +4575,273 @@ export const ErpProjectsPage: React.FC = () => {
                   </Tbody>
                 </Table>
               </Box>
+
+              <Modal
+                isOpen={isAddModalOpen}
+                onClose={onCloseAddModal}
+                size="md"
+              >
+                <ModalOverlay />
+                <ModalContent>
+                  <ModalHeader>Agregar empleados</ModalHeader>
+                  <ModalBody>
+                    <Stack spacing={3}>
+                      {/* Debug info */}
+                      <Box
+                        p={2}
+                        bg="gray.100"
+                        borderRadius="md"
+                        fontSize="xs"
+                        display="none"
+                      >
+                        <Text>Tenant ID: {hrTenantId ?? "undefined"}</Text>
+                        <Text>Empleados cargados: {hrEmployees.length}</Text>
+                        <Text>
+                          Departamentos cargados: {hrDepartments.length}
+                        </Text>
+                        <Text>
+                          Empleados seleccionados: {selectedEmployeeIds.length}
+                        </Text>
+                        <Text>
+                          Cargando empleados: {employeesLoading ? "sí" : "no"}
+                        </Text>
+                        <Text>
+                          Cargando depts: {departmentsLoading ? "sí" : "no"}
+                        </Text>
+                      </Box>
+
+                      {(employeesLoading || departmentsLoading) && (
+                        <Box
+                          p={3}
+                          bg="blue.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="blue.200"
+                        >
+                          <Text fontSize="xs" color="blue.800">
+                            ? Cargando empleados y departamentos...
+                          </Text>
+                        </Box>
+                      )}
+
+                      {(employeesError || departmentsError) && (
+                        <Box
+                          p={3}
+                          bg="red.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="red.200"
+                        >
+                          <Text fontSize="xs" color="red.800" fontWeight="bold">
+                            ?? Error al cargar datos
+                          </Text>
+                          {employeesError && (
+                            <Text fontSize="xs" color="red.700" mt={1}>
+                              Error cargando empleados:{" "}
+                              {employeesErrorMsg?.toString() || "Desconocido"}
+                            </Text>
+                          )}
+                          {departmentsError && (
+                            <Text fontSize="xs" color="red.700" mt={1}>
+                              Error cargando departamentos:{" "}
+                              {departmentsErrorMsg?.toString() || "Desconocido"}
+                            </Text>
+                          )}
+                          <Button
+                            size="xs"
+                            mt={2}
+                            colorScheme="red"
+                            onClick={() => {
+                              queryClient.invalidateQueries({
+                                queryKey: ["hr-employees", hrTenantId],
+                              });
+                              queryClient.invalidateQueries({
+                                queryKey: ["hr-departments", hrTenantId],
+                              });
+                            }}
+                          >
+                            Reintentar
+                          </Button>
+                        </Box>
+                      )}
+
+                      {!employeesError &&
+                        !departmentsError &&
+                        hrDepartments.length === 0 &&
+                        hrEmployees.length === 0 && (
+                          <Box
+                            p={3}
+                            bg="orange.50"
+                            borderRadius="md"
+                            borderWidth="1px"
+                            borderColor="orange.200"
+                          >
+                            <Text fontSize="xs" color="orange.800">
+                              ?? Cargando datos de departamentos y empleados...
+                            </Text>
+                            <Button
+                              size="xs"
+                              mt={2}
+                              colorScheme="orange"
+                              onClick={() => {
+                                queryClient.invalidateQueries({
+                                  queryKey: ["hr-employees", hrTenantId],
+                                });
+                                queryClient.invalidateQueries({
+                                  queryKey: ["hr-departments", hrTenantId],
+                                });
+                              }}
+                            >
+                              Recargar datos
+                            </Button>
+                          </Box>
+                        )}
+
+                      {/* Leyenda de departamentos */}
+                      {hrDepartments.length > 0 && (
+                        <Box
+                          p={3}
+                          bg="gray.50"
+                          borderRadius="md"
+                          borderWidth="1px"
+                          borderColor="gray.200"
+                        >
+                          <Text fontSize="xs" fontWeight="bold" mb={2}>
+                            ?? Leyenda de departamentos:
+                          </Text>
+                          <Wrap spacing={2}>
+                            {hrDepartments.map((dept, idx) => (
+                              <Box
+                                key={dept.id}
+                                display="flex"
+                                alignItems="center"
+                                gap={1}
+                              >
+                                <Box
+                                  width="12px"
+                                  height="12px"
+                                  borderRadius="full"
+                                  bg={`${DEPARTMENT_COLOR_SCHEMES[idx % DEPARTMENT_COLOR_SCHEMES.length]}.500`}
+                                />
+                                <Text fontSize="xs">{dept.name}</Text>
+                              </Box>
+                            ))}
+                          </Wrap>
+                        </Box>
+                      )}
+
+                      <FormControl>
+                        <FormLabel fontSize="xs" mb={1}>
+                          Departamento
+                        </FormLabel>
+                        <Select
+                          size="sm"
+                          value={addDrawerDeptFilter}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setAddDrawerDeptFilter(
+                              value === "all" ? "all" : Number(value),
+                            );
+                          }}
+                        >
+                          <option value="all">Todos los departamentos</option>
+                          {hrDepartments.map((dept, idx) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel fontSize="xs" mb={1}>
+                          Buscar
+                        </FormLabel>
+                        <Input
+                          size="sm"
+                          placeholder="Nombre"
+                          value={addDrawerSearch}
+                          onChange={(e) => setAddDrawerSearch(e.target.value)}
+                        />
+                      </FormControl>
+
+                      <VStack align="stretch" spacing={2}>
+                        {employeesAvailableToAdd.length === 0 ? (
+                          <Text fontSize="xs" color="gray.500">
+                            No hay empleados disponibles para agregar.
+                          </Text>
+                        ) : (
+                          employeesAvailableToAdd.map((emp) => {
+                            const deptId = emp.primary_department_id ?? -1;
+                            const deptIndex = hrDepartments.findIndex(
+                              (d) => d.id === deptId,
+                            );
+                            const colorScheme =
+                              DEPARTMENT_COLOR_SCHEMES[
+                                deptIndex >= 0 ? deptIndex : 0
+                              ];
+                            const deptName =
+                              departmentMap[deptId] ?? "Sin departamento";
+
+                            return (
+                              <Flex
+                                key={emp.id}
+                                align="center"
+                                justify="space-between"
+                                px={3}
+                                py={2}
+                                borderWidth="1px"
+                                borderRadius="md"
+                                borderColor={`${colorScheme}.200`}
+                                bg={`${colorScheme}.50`}
+                                _hover={{ bg: `${colorScheme}.100` }}
+                              >
+                                <Box flex={1}>
+                                  <Text
+                                    fontSize="sm"
+                                    fontWeight="semibold"
+                                    color="gray.800"
+                                  >
+                                    {emp.full_name}
+                                  </Text>
+                                  <Flex align="center" gap={1} mt={1}>
+                                    <Box
+                                      width="10px"
+                                      height="10px"
+                                      borderRadius="full"
+                                      bg={`${colorScheme}.500`}
+                                    />
+                                    <Text
+                                      fontSize="xs"
+                                      color={`${colorScheme}.700`}
+                                      fontWeight="500"
+                                    >
+                                      {deptName}
+                                    </Text>
+                                  </Flex>
+                                </Box>
+                                <Button
+                                  size="xs"
+                                  colorScheme={colorScheme}
+                                  ml={2}
+                                  onClick={() => handleAddEmployee(emp.id)}
+                                >
+                                  Agregar
+                                </Button>
+                              </Flex>
+                            );
+                          })
+                        )}
+                      </VStack>
+                    </Stack>
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button variant="ghost" onClick={onCloseAddModal}>
+                      Cerrar
+                    </Button>
+                  </ModalFooter>
+                </ModalContent>
+              </Modal>
 
               <SimpleGrid columns={{ base: 1, md: 3 }} gap={4}>
                 <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
@@ -4032,7 +4895,7 @@ export const ErpProjectsPage: React.FC = () => {
             </Stack>
           </TabPanel>
 
-          {/* Listado detallado por proyecto con bot├│n de edici├│n */}
+          {/* Listado detallado por proyecto con boton de edicion */}
 
           <TabPanel px={0}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -4601,7 +5464,7 @@ export const ErpProjectsPage: React.FC = () => {
                 </FormControl>
 
                 <FormControl>
-                  <FormLabel>Descripci├│n</FormLabel>
+                  <FormLabel>Descripcion</FormLabel>
 
                   <Input
                     value={projectDescription}
@@ -4634,14 +5497,14 @@ export const ErpProjectsPage: React.FC = () => {
                 <Heading size="sm">Actividades</Heading>
 
                 <Button size="sm" onClick={handleAddActivity}>
-                  + A├▒adir actividad
+                  + Añadir actividad
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectActivities.length === 0 && (
                   <Text fontSize="sm" color={subtleText}>
-                    A├▒ade actividades con peso y fechas.
+                    Añade actividades con peso y fechas.
                   </Text>
                 )}
 
@@ -4747,7 +5610,7 @@ export const ErpProjectsPage: React.FC = () => {
                       mt={2}
                       onClick={() => handleAddSubactivity(act.id)}
                     >
-                      + A├▒adir subactividad
+                      + Añadir subactividad
                     </Button>
 
                     <Stack mt={2} spacing={2}>
@@ -4897,18 +5760,19 @@ export const ErpProjectsPage: React.FC = () => {
                 ))}
               </Stack>
 
+              {/* Hitos */}
               <Flex justify="space-between" align="center">
                 <Heading size="sm">Hitos</Heading>
 
                 <Button size="sm" onClick={handleAddMilestone}>
-                  + A├▒adir hito
+                  + Añadir hito
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectMilestones.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
-                    A├▒ade hitos con fechas.
+                    Añade hitos con fechas.
                   </Text>
                 ) : (
                   projectMilestones.map((mil, idx) => (
@@ -5019,7 +5883,7 @@ export const ErpProjectsPage: React.FC = () => {
         }
       />
 
-      {/* Drawer de detalle/edici├│n del proyecto seleccionado */}
+      {/* Drawer de detalle/edicion del proyecto seleccionado */}
 
       <Drawer
         isOpen={detailsOpen}

@@ -10,6 +10,7 @@ class DepartmentBase(BaseModel):
     description: Optional[str] = None
     manager_id: Optional[int] = None
     is_active: bool = True
+    project_allocation_percentage: Decimal = Decimal(100)
 
 
 class DepartmentCreate(DepartmentBase):
@@ -21,6 +22,7 @@ class DepartmentUpdate(BaseModel):
     description: Optional[str] = None
     manager_id: Optional[int] = None
     is_active: Optional[bool] = None
+    project_allocation_percentage: Optional[Decimal] = None
 
 
 class DepartmentRead(DepartmentBase):

@@ -399,16 +399,6 @@ export const DashboardPage: React.FC = () => {
             />
           </FormControl>
         </SimpleGrid>
-        <HStack justify="flex-end" mt={4}>
-          <Button
-            size="sm"
-            colorScheme="green"
-            onClick={() => reportQuery.refetch()}
-            isLoading={reportQuery.isFetching}
-          >
-            {t("dashboard.report.refresh")}
-          </Button>
-        </HStack>
       </Box>
 
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>

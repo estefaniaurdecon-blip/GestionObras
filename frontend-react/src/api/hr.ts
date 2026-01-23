@@ -8,6 +8,7 @@ export interface Department {
   manager_id?: number | null;
   is_active: boolean;
   created_at: string;
+  project_allocation_percentage?: number | null;
 }
 
 export interface EmployeeProfile {
@@ -135,10 +136,13 @@ export interface AllocationFilters {
 }
 
 export async function fetchDepartments(
-  tenantId?: number,
+  tenantId?: number | null,
 ): Promise<Department[]> {
   const response = await apiClient.get<Department[]>("/api/v1/hr/departments", {
-    params: tenantId ? { tenant_id: tenantId } : undefined,
+    params:
+      tenantId !== undefined && tenantId !== null
+        ? { tenant_id: tenantId }
+        : {},
   });
   return response.data;
 }
@@ -169,12 +173,15 @@ export async function updateDepartment(
 }
 
 export async function fetchEmployees(
-  tenantId?: number,
+  tenantId?: number | null,
 ): Promise<EmployeeProfile[]> {
   const response = await apiClient.get<EmployeeProfile[]>(
     "/api/v1/hr/employees",
     {
-      params: tenantId ? { tenant_id: tenantId } : undefined,
+      params:
+        tenantId !== undefined && tenantId !== null
+          ? { tenant_id: tenantId }
+          : {},
     },
   );
   return response.data;
@@ -209,30 +216,48 @@ export async function deleteEmployee(profileId: number): Promise<void> {
   await apiClient.delete(`/api/v1/hr/employees/${profileId}`);
 }
 
-export async function fetchEmployeeAllocations(filters: AllocationFilters = {}): Promise<EmployeeAllocation[]> {
+export async function fetchEmployeeAllocations(
+  filters: AllocationFilters = {},
+): Promise<EmployeeAllocation[]> {
   const params: Record<string, number> = {};
   if (filters.tenantId) params.tenant_id = filters.tenantId;
   if (filters.projectId) params.project_id = filters.projectId;
   if (filters.employeeId) params.employee_id = filters.employeeId;
   if (filters.year) params.year = filters.year;
 
-  const response = await apiClient.get<EmployeeAllocation[]>("/api/v1/hr/allocations", {
-    params: Object.keys(params).length ? params : undefined,
-  });
+  const response = await apiClient.get<EmployeeAllocation[]>(
+    "/api/v1/hr/allocations",
+    {
+      params: Object.keys(params).length ? params : undefined,
+    },
+  );
   return response.data;
 }
 
-export async function createEmployeeAllocation(data: EmployeeAllocationCreateInput): Promise<EmployeeAllocation> {
-  const response = await apiClient.post<EmployeeAllocation>("/api/v1/hr/allocations", data);
+export async function createEmployeeAllocation(
+  data: EmployeeAllocationCreateInput,
+): Promise<EmployeeAllocation> {
+  const response = await apiClient.post<EmployeeAllocation>(
+    "/api/v1/hr/allocations",
+    data,
+  );
   return response.data;
 }
 
-export async function updateEmployeeAllocation(allocationId: number, data: EmployeeAllocationUpdateInput): Promise<EmployeeAllocation> {
-  const response = await apiClient.patch<EmployeeAllocation>(`/api/v1/hr/allocations/${allocationId}`, data);
+export async function updateEmployeeAllocation(
+  allocationId: number,
+  data: EmployeeAllocationUpdateInput,
+): Promise<EmployeeAllocation> {
+  const response = await apiClient.patch<EmployeeAllocation>(
+    `/api/v1/hr/allocations/${allocationId}`,
+    data,
+  );
   return response.data;
 }
 
-export async function deleteEmployeeAllocation(allocationId: number): Promise<void> {
+export async function deleteEmployeeAllocation(
+  allocationId: number,
+): Promise<void> {
   await apiClient.delete(`/api/v1/hr/allocations/${allocationId}`);
 }
 
