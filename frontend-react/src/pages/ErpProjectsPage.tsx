@@ -1,4 +1,4 @@
-﻿// Vista principal de proyectos: creaci+¦n, resumen, diagrama Gantt y edici+¦n detallada.
+// Vista principal de proyectos: creaci+n, resumen, diagrama Gantt y edici+n detallada.
 
 import React, {
   useCallback,
@@ -95,6 +95,43 @@ const createEmptyYearData = (): SummaryYearlyData => ({
   projectJustified: {},
   summaryMilestones: {},
 });
+
+// Normaliza conceptos (lowercase + sin acentos) para evitar duplicados.
+const normalizeConceptKey = (value?: string) =>
+  (value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+// Estilos por categoría para la tabla de presupuestos.
+const CATEGORY_COLOR_MAP: Record<string, string | undefined> = {
+  [normalizeConceptKey("EQUIPOS (Amortizacion)")]: "#dff0d8",
+  [normalizeConceptKey("PERSONAL")]: "#e0f7da",
+  [normalizeConceptKey("Doctores")]: undefined,
+  [normalizeConceptKey("MATERIAL FUNGIBLE")]: "#e9f7ef",
+  [normalizeConceptKey("COLABORACIONES EXTERNAS")]: "#e8f4fd",
+  [normalizeConceptKey("GASTOS GENERALES (19%)")]: "#efe9ff",
+  [normalizeConceptKey("OTROS GASTOS")]: "#f8f9d2",
+  [normalizeConceptKey("Total")]: "#d9c2f0",
+  [normalizeConceptKey("Diferencia")]: "#e7c4f7",
+};
+
+const BUDGET_ORDER = [
+  normalizeConceptKey("EQUIPOS (Amortizacion)"),
+  normalizeConceptKey("PERSONAL"),
+  normalizeConceptKey("Doctores"),
+  normalizeConceptKey("Titulados universitarios"),
+  normalizeConceptKey("No titulado"),
+  normalizeConceptKey("MATERIAL FUNGIBLE"),
+  normalizeConceptKey("Materiales para pruebas y ensayos"),
+  normalizeConceptKey("COLABORACIONES EXTERNAS"),
+  normalizeConceptKey("Centros Tecnologicos (CETIM)"),
+  normalizeConceptKey("GASTOS GENERALES (19%)"),
+  normalizeConceptKey("OTROS GASTOS"),
+  normalizeConceptKey("Auditoria"),
+  normalizeConceptKey("Dictamen acreditado ENAC de informe DNSH"),
+];
 
 const cloneYearData = (data: SummaryYearlyData): SummaryYearlyData => ({
   projectJustify: { ...data.projectJustify },
@@ -348,7 +385,7 @@ const EuroCell: React.FC<{ value: number; color?: string; bold?: boolean }> = ({
     fontFamily="mono"
     whiteSpace="nowrap"
   >
-    {formatEuroValue(value)} €
+    {formatEuroValue(value)} 
   </Text>
 );
 
@@ -361,14 +398,23 @@ const BudgetNumberCell: React.FC<{
   isEditing ? (
     <Input
       size="sm"
-      type="number"
-      min={min}
-      step="0.01"
-      defaultValue={value}
-      onBlur={(e) => onSubmit(e.target.value)}
+      type="text"
+      inputMode="decimal"
+      pattern="[0-9.,]*"
+      defaultValue={value.toLocaleString("es-ES")}
+      onBlur={(e) => {
+        const raw = e.target.value.trim();
+        const normalized = raw
+          .replace(/\./g, "") // quita separadores de miles
+          .replace(",", "."); // convierte coma decimal a punto
+        onSubmit(normalized === "" ? "0" : normalized);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          onSubmit((e.target as HTMLInputElement).value);
+          const target = e.target as HTMLInputElement;
+          const raw = target.value.trim();
+          const normalized = raw.replace(/\./g, "").replace(",", ".");
+          onSubmit(normalized === "" ? "0" : normalized);
         }
       }}
     />
@@ -475,7 +521,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
 
   const [todayLeftPx, setTodayLeftPx] = useState<number | null>(null);
 
-  // Calcula rango de fechas a mostrar seg+¦n las tareas cargadas.
+  // Calcula rango de fechas a mostrar seg+n las tareas cargadas.
 
   const dateRange = useMemo(() => {
     if (tasks.length === 0) {
@@ -523,7 +569,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { start: paddedStart, end: paddedEnd };
   }, [tasks, viewMode]);
 
-  // Genera columnas de tiempo (d+¡as o meses) para el encabezado.
+  // Genera columnas de tiempo (d+as o meses) para el encabezado.
 
   const timeColumns = useMemo(() => {
     const columns: Date[] = [];
@@ -570,7 +616,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     return { left: `${left}%`, width: `${width}%` };
   };
 
-  // Posiciones verticales de hitos (porcentaje sobre el timeline) para dibujar l+¡neas globales.
+  // Posiciones verticales de hitos (porcentaje sobre el timeline) para dibujar l+neas globales.
 
   const milestoneLines = useMemo(() => {
     if (!showMilestoneLines) return [];
@@ -653,7 +699,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     }
   };
 
-  // L+¡nea de hoy en el Gantt.
+  // L+nea de hoy en el Gantt.
 
   const getTodayPosition = () => {
     const today = new Date();
@@ -687,7 +733,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
     container.scrollTo({ left: Math.max(target, 0), behavior: "smooth" });
   }, [centerOnToday, tasks, viewMode, dateRange]);
 
-  // Calcula posici+¦n de la l+¡nea "hoy" respecto al +írea de timeline (sin la columna izquierda).
+  // Calcula posici+n de la l+nea "hoy" respecto al +irea de timeline (sin la columna izquierda).
 
   useLayoutEffect(() => {
     if (!contentRef.current) return;
@@ -952,7 +998,7 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                     </HStack>
 
                     <Text fontSize="xs" color="gray.500">
-                      {task.start.toLocaleDateString("es-ES")} ÔÇö{" "}
+                      {task.start.toLocaleDateString("es-ES")} OCo{" "}
                       {task.end.toLocaleDateString("es-ES")}
                     </Text>
                   </Box>
@@ -968,9 +1014,9 @@ const ProfessionalGantt: React.FC<ProfessionalGanttProps> = ({
                   />
 
                   <Tooltip
-                    label={`${task.name} -À ${typeLabel}${
-                      task.project ? ` -À ${task.project}` : ""
-                    }\n${task.start.toLocaleDateString("es-ES")} ÔÇö ${task.end.toLocaleDateString("es-ES")}`}
+                    label={`${task.name} -A ${typeLabel}${
+                      task.project ? ` -A ${task.project}` : ""
+                    }\n${task.start.toLocaleDateString("es-ES")} OCo ${task.end.toLocaleDateString("es-ES")}`}
                     hasArrow
                     bg="gray.800"
                     color="white"
@@ -1296,7 +1342,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
 // Pagina principal de proyectos: resumen, listado, Gantt, creacion y edicion detallada.
 
 export const ErpProjectsPage: React.FC = () => {
-  // Tokens de estilo y animaci+¦n para la cabecera hero.
+  // Tokens de estilo y animaci+n para la cabecera hero.
 
   const cardBg = useColorModeValue("white", "gray.700");
 
@@ -1538,7 +1584,7 @@ export const ErpProjectsPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
 
-  // Fetch basíco: proyectos, tareas, actividades, subactividades e hitos.
+  // Fetch basico: proyectos, tareas, actividades, subactividades e hitos.
 
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects"],
@@ -2068,7 +2114,7 @@ export const ErpProjectsPage: React.FC = () => {
       });
     });
 
-    // Tareas sueltas (sin subactividad) tambi+®n al Gantt.
+    // Tareas sueltas (sin subactividad) tambi+n al Gantt.
 
     rawTasks.forEach((task) => {
       if (!task.start_date || !task.end_date) return;
@@ -2195,7 +2241,8 @@ export const ErpProjectsPage: React.FC = () => {
 
         .filter(
           (mil) =>
-            typeof mil.activityId === "number" && actIds.includes(mil.activityId),
+            typeof mil.activityId === "number" &&
+            actIds.includes(mil.activityId),
         )
 
         .forEach((mil) => ordered.push(mil));
@@ -2517,16 +2564,22 @@ export const ErpProjectsPage: React.FC = () => {
   const budgetMilestones = budgetMilestonesQuery.data ?? [];
   const hasRealBudgets = budgetRows.length > 0;
   const [budgetsEditMode, setBudgetsEditMode] = useState(false);
+  const [budgetDrafts, setBudgetDrafts] = useState<
+    Record<number, ProjectBudgetLineUpdatePayload>
+  >({});
+  const [savingBudgets, setSavingBudgets] = useState(false);
   const [seedingTemplate, setSeedingTemplate] = useState(false);
   const [seedingProjectMilestones, setSeedingProjectMilestones] =
     useState(false);
+
+
 
   const DEFAULT_BUDGET_TEMPLATE: ProjectBudgetLine[] = useMemo(
     () => [
       {
         id: -1,
         project_id: 0,
-        concept: "EQUIPOS (Amortización)",
+        concept: "EQUIPOS (Amortizacion)",
         hito1_budget: 0,
         justified_hito1: 0,
         hito2_budget: 0,
@@ -2540,6 +2593,19 @@ export const ErpProjectsPage: React.FC = () => {
         id: -2,
         project_id: 0,
         concept: "PERSONAL",
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        percent_spent: 0,
+        forecasted_spent: 0,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: -14,
+        project_id: 0,
+        concept: "Doctores",
         hito1_budget: 0,
         justified_hito1: 0,
         hito2_budget: 0,
@@ -2617,7 +2683,7 @@ export const ErpProjectsPage: React.FC = () => {
       {
         id: -8,
         project_id: 0,
-        concept: "Centros Tecnológicos (CETIM)",
+        concept: "Centros Tecnologicos ",
         hito1_budget: 0,
         justified_hito1: 0,
         hito2_budget: 0,
@@ -2656,7 +2722,7 @@ export const ErpProjectsPage: React.FC = () => {
       {
         id: -11,
         project_id: 0,
-        concept: "Auditoría",
+        concept: "Auditoria",
         hito1_budget: 0,
         justified_hito1: 0,
         hito2_budget: 0,
@@ -2687,46 +2753,155 @@ export const ErpProjectsPage: React.FC = () => {
     ? budgetRows
     : DEFAULT_BUDGET_TEMPLATE;
 
+  const mergedBudgetRows = useMemo(() => {
+    return displayBudgetRows.map((row) => {
+      const draft = budgetDrafts[row.id];
+      const h1 = draft?.hito1_budget ?? Number(row.hito1_budget ?? 0);
+      const h2 = draft?.hito2_budget ?? Number(row.hito2_budget ?? 0);
+      const approved_budget = draft?.approved_budget ?? h1 + h2;
+      const justified_hito1 =
+        draft?.justified_hito1 ?? Number(row.justified_hito1 ?? 0);
+      const justified_hito2 =
+        draft?.justified_hito2 ?? Number(row.justified_hito2 ?? 0);
+      const forecasted_spent =
+        draft?.forecasted_spent ?? Number(row.forecasted_spent ?? 0);
+      const percent_spent =
+        approved_budget > 0
+          ? Number(((forecasted_spent / approved_budget) * 100).toFixed(2))
+          : 0;
+      return {
+        ...row,
+        ...draft,
+        hito1_budget: h1,
+        hito2_budget: h2,
+        approved_budget,
+        justified_hito1,
+        justified_hito2,
+        forecasted_spent,
+        percent_spent,
+        milestones: draft?.milestones ?? row.milestones,
+      } as ProjectBudgetLine;
+    });
+  }, [displayBudgetRows, budgetDrafts]);
+
+  // Agrupa por concepto para evitar repeticiones y sumar importes de subconceptos.
+  const groupedBudgetRows = useMemo(() => {
+    const map = new Map<string, ProjectBudgetLine>();
+    const baseRows = [...mergedBudgetRows];
+    // Asegura que existan filas minimas para categorias esperadas.
+    DEFAULT_BUDGET_TEMPLATE.forEach((tpl) => {
+      const tplKey = normalizeConceptKey(tpl.concept);
+      if (
+        !baseRows.some(
+          (r) => normalizeConceptKey(r.concept) === tplKey,
+        )
+      ) {
+        baseRows.push(tpl);
+      }
+    });
+
+    baseRows.forEach((row) => {
+      const key = normalizeConceptKey(row.concept || `row-${row.id}`);
+      const current = map.get(key);
+      if (!current) {
+        map.set(key, { ...row });
+        return;
+      }
+      const h1 =
+        Number(current.hito1_budget ?? 0) + Number(row.hito1_budget ?? 0);
+      const h2 =
+        Number(current.hito2_budget ?? 0) + Number(row.hito2_budget ?? 0);
+      const j1 =
+        Number(current.justified_hito1 ?? 0) + Number(row.justified_hito1 ?? 0);
+      const j2 =
+        Number(current.justified_hito2 ?? 0) + Number(row.justified_hito2 ?? 0);
+      const forecast =
+        Number(current.forecasted_spent ?? 0) +
+        Number(row.forecasted_spent ?? 0);
+      const approved = h1 + h2;
+      const percent =
+        approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
+      map.set(key, {
+        ...current,
+        hito1_budget: h1,
+        hito2_budget: h2,
+        justified_hito1: j1,
+        justified_hito2: j2,
+        approved_budget: approved,
+        forecasted_spent: forecast,
+        percent_spent: percent,
+      });
+    });
+    const ordered = Array.from(map.values());
+    ordered.sort((a, b) => {
+      const aKey = normalizeConceptKey(a.concept);
+      const bKey = normalizeConceptKey(b.concept);
+      const aIdx = BUDGET_ORDER.indexOf(aKey);
+      const bIdx = BUDGET_ORDER.indexOf(bKey);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      return aKey.localeCompare(bKey);
+    });
+    return ordered;
+  }, [mergedBudgetRows]);
+
+  const canEditBudgets = groupedBudgetRows.length > 0;
+
   const budgetsTabTotals = useMemo(() => {
     const totalsByMilestone: Record<
       number,
       { amount: number; justified: number }
-    > = {};
+    > = {
+      1: { amount: 0, justified: 0 },
+      2: { amount: 0, justified: 0 },
+    };
     let approved = 0;
     let forecasted = 0;
-    budgetRows.forEach((row) => {
-      approved += Number(row.approved_budget || 0);
-      forecasted += Number(row.forecasted_spent || 0);
-      (row.milestones ?? []).forEach((m) => {
-        const current = totalsByMilestone[m.milestone_id] ?? {
-          amount: 0,
-          justified: 0,
-        };
-        current.amount += Number(m.amount || 0);
-        current.justified += Number(m.justified || 0);
-        totalsByMilestone[m.milestone_id] = current;
-      });
+    groupedBudgetRows.forEach((row) => {
+      const h1 = Number(row.hito1_budget ?? 0);
+      const h2 = Number(row.hito2_budget ?? 0);
+      const j1 = Number(row.justified_hito1 ?? 0);
+      const j2 = Number(row.justified_hito2 ?? 0);
+      approved += h1 + h2;
+      forecasted += Number(row.forecasted_spent ?? 0);
+      totalsByMilestone[1].amount += h1;
+      totalsByMilestone[2].amount += h2;
+      totalsByMilestone[1].justified += j1;
+      totalsByMilestone[2].justified += j2;
     });
-    const totalsArray = Object.values(totalsByMilestone);
-    const hito1 = totalsArray[0]?.amount ?? 0;
-    const hito2 = totalsArray[1]?.amount ?? 0;
+    const hito1 = totalsByMilestone[1].amount;
+    const hito2 = totalsByMilestone[2].amount;
     const justificados: number[] = [
-      totalsArray[0]?.justified ?? 0,
-      totalsArray[1]?.justified ?? 0,
+      totalsByMilestone[1].justified,
+      totalsByMilestone[2].justified,
     ];
     const gasto = forecasted;
 
-    return { totalsByMilestone, approved, forecasted, hito1, hito2, justificados, gasto };
-  }, [budgetRows]);
+    return {
+      totalsByMilestone,
+      approved,
+      forecasted,
+      hito1,
+      hito2,
+      justificados,
+      gasto,
+    };
+  }, [groupedBudgetRows]);
 
-  const sumMilestoneAmounts = useMemo(() => {
-    return Object.values(budgetsTabTotals.totalsByMilestone).reduce(
-      (acc, val) => acc + Number(val.amount || 0),
-      0,
-    );
-  }, [budgetsTabTotals]);
+  const budgetsDiffH1 =
+    Number(budgetsTabTotals.hito1 || 0) -
+    Number(budgetsTabTotals.justificados?.[0] || 0);
+  const budgetsDiffH2 =
+    Number(budgetsTabTotals.hito2 || 0) -
+    Number(budgetsTabTotals.justificados?.[1] || 0);
 
-  const budgetsDifference = budgetsTabTotals.approved - sumMilestoneAmounts;
+  // Limpia borradores al salir del modo edicion de presupuestos.
+  useEffect(() => {
+    if (!budgetsEditMode) {
+      setBudgetDrafts({});
+    }
+  }, [budgetsEditMode]);
 
   const seedTemplateBudgetLines = async () => {
     if (!selectedBudgetProjectId || hasRealBudgets || seedingTemplate) return;
@@ -2845,27 +3020,84 @@ export const ErpProjectsPage: React.FC = () => {
     field: keyof ProjectBudgetLineUpdatePayload,
     value: string,
   ) => {
-    if (!selectedBudgetProjectId || !hasRealBudgets || budgetId <= 0) return;
+    if (!selectedBudgetProjectId || budgetId <= 0) return;
 
     if (field === "concept") {
       const trimmed = value.trim();
       if (!trimmed) return;
-      updateBudgetMutation.mutate({
-        projectId: selectedBudgetProjectId,
-        budgetId,
-        payload: { concept: trimmed },
-      });
+      setBudgetDrafts((prev) => ({
+        ...prev,
+        [budgetId]: {
+          ...(prev[budgetId] ?? {}),
+          concept: trimmed,
+        },
+      }));
       return;
     }
 
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return;
 
-    updateBudgetMutation.mutate({
-      projectId: selectedBudgetProjectId,
-      budgetId,
-      payload: { [field]: numericValue },
-    });
+    const currentRow = budgetRows.find((b) => b.id === budgetId);
+  if (!currentRow) return;
+
+  const draft = budgetDrafts[budgetId] ?? {};
+  const currentH1 =
+    draft.hito1_budget ?? Number(currentRow.hito1_budget ?? 0);
+  const currentH2 =
+    draft.hito2_budget ?? Number(currentRow.hito2_budget ?? 0);
+
+  // Solo guardamos en borradores; el usuario confirma con un boton.
+  if (field === "hito1_budget" || field === "hito2_budget") {
+    const hito1 = field === "hito1_budget" ? numericValue : currentH1;
+    const hito2 = field === "hito2_budget" ? numericValue : currentH2;
+    const approvedBudget = hito1 + hito2;
+
+      setBudgetDrafts((prev) => ({
+        ...prev,
+        [budgetId]: {
+          ...(prev[budgetId] ?? {}),
+          hito1_budget: hito1,
+          hito2_budget: hito2,
+          approved_budget: approvedBudget,
+        },
+      }));
+      return;
+    }
+
+  if (field === "approved_budget") {
+    const currentTotal = currentH1 + currentH2;
+    let hito1: number;
+    let hito2: number;
+    if (currentTotal > 0) {
+      const ratio = currentH1 / currentTotal;
+      hito1 = Math.max(0, Number((numericValue * ratio).toFixed(2)));
+      hito2 = Math.max(0, Number((numericValue - hito1).toFixed(2)));
+    } else {
+      hito1 = Number((numericValue / 2).toFixed(2));
+      hito2 = Number((numericValue - hito1).toFixed(2));
+    }
+    const approvedBudget = hito1 + hito2;
+
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [budgetId]: {
+        ...(prev[budgetId] ?? {}),
+          approved_budget: approvedBudget,
+          hito1_budget: hito1,
+          hito2_budget: hito2,
+        },
+      }));
+      return;
+    }
+
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [budgetId]: {
+        ...(prev[budgetId] ?? {}),
+        [field]: numericValue,
+      },
+    }));
   };
 
   const handleBudgetMilestoneChange = (
@@ -2877,18 +3109,18 @@ export const ErpProjectsPage: React.FC = () => {
     if (
       !selectedBudgetProjectId ||
       !budgetsEditMode ||
-      !hasRealBudgets ||
       !budget ||
       budget.id <= 0
     )
       return;
     const num = Number(value);
     if (!Number.isFinite(num)) return;
-    const current = budget.milestones ?? [];
+    const current =
+      budgetDrafts[budget.id]?.milestones ?? budget.milestones ?? [];
     const updated = current.map((m) =>
       m.milestone_id === milestoneId ? { ...m, [field]: num } : m,
     );
-    // Si el hito no existía en la línea, lo añadimos.
+    // Si el hito no existia en la linea, lo anadimos.
     if (!current.find((m) => m.milestone_id === milestoneId)) {
       updated.push({
         id: -1,
@@ -2898,17 +3130,101 @@ export const ErpProjectsPage: React.FC = () => {
         created_at: new Date().toISOString(),
       } as any);
     }
-    updateBudgetMutation.mutate({
-      projectId: selectedBudgetProjectId,
-      budgetId: budget.id,
-      payload: {
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [budget.id]: {
+        ...(prev[budget.id] ?? {}),
         milestones: updated.map((m) => ({
           milestone_id: m.milestone_id,
           amount: m.amount,
           justified: m.justified,
         })) as any,
       },
-    });
+    }));
+  };
+
+  const hasBudgetDrafts = Object.keys(budgetDrafts).length > 0;
+
+  const handleBudgetSaveAll = async () => {
+    if (!selectedBudgetProjectId || !hasBudgetDrafts) return;
+    try {
+      setSavingBudgets(true);
+
+      // Validaciones por fila antes de guardar
+      for (const row of mergedBudgetRows) {
+        if (!budgetDrafts[row.id]) continue;
+        const h1 = Number(row.hito1_budget ?? 0);
+        const h2 = Number(row.hito2_budget ?? 0);
+        const approved = h1 + h2;
+        const j1 = Number(row.justified_hito1 ?? 0);
+        const j2 = Number(row.justified_hito2 ?? 0);
+        if (j1 > h1) {
+          throw new Error(
+            `Justificado H1 no puede superar Hito 1 en "${row.concept}".`,
+          );
+        }
+        if (j2 > h2) {
+          throw new Error(
+            `Justificado H2 no puede superar Hito 2 en "${row.concept}".`,
+          );
+        }
+        const pending = h1 + h2 - (j1 + j2);
+        if (pending < 0) {
+          throw new Error(
+            `El justificado total supera el presupuesto aprobado en "${row.concept}".`,
+          );
+        }
+        if (approved <= 0) {
+          throw new Error(
+            `El presupuesto aprobado debe ser mayor que 0 en "${row.concept}".`,
+          );
+        }
+      }
+
+      await Promise.all(
+        Object.entries(budgetDrafts).map(([id, draftPayload]) => {
+          const base = mergedBudgetRows.find((r) => r.id === Number(id));
+          if (!base) return Promise.resolve();
+          const h1 = Number(
+            draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
+          );
+          const h2 = Number(
+            draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
+          );
+          const approved = h1 + h2;
+          const forecast = Number(
+            draftPayload.forecasted_spent ?? base.forecasted_spent ?? 0,
+          );
+          const percent =
+            approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
+
+          return updateProjectBudgetLine(selectedBudgetProjectId, Number(id), {
+            ...draftPayload,
+            hito1_budget: h1,
+            hito2_budget: h2,
+            approved_budget: approved,
+            forecasted_spent: forecast,
+            percent_spent: percent,
+          });
+        }),
+      );
+      setBudgetDrafts({});
+      await queryClient.invalidateQueries({
+        queryKey: ["project-budgets", selectedBudgetProjectId],
+      });
+      toast({ title: "Presupuestos guardados", status: "success" });
+    } catch (error: any) {
+      toast({
+        title: "Error al guardar presupuestos",
+        description:
+          error?.message ??
+          error?.response?.data?.detail ??
+          "No se pudieron guardar los cambios de la tabla.",
+        status: "error",
+      });
+    } finally {
+      setSavingBudgets(false);
+    }
   };
 
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
@@ -3071,7 +3387,7 @@ export const ErpProjectsPage: React.FC = () => {
       toast({
         title: "Horas asignadas",
 
-        description: "La asignación se guardó correctamente.",
+        description: "La asignacion se guardo correctamente.",
 
         status: "success",
 
@@ -3085,7 +3401,7 @@ export const ErpProjectsPage: React.FC = () => {
       toast({
         title: "Error al asignar horas",
 
-        description: "Revisa los datos e inténtalo de nuevo.",
+        description: "Revisa los datos e intentalo de nuevo.",
 
         status: "error",
       });
@@ -3111,7 +3427,7 @@ export const ErpProjectsPage: React.FC = () => {
       );
 
       toast({
-        title: "Asignación actualizada",
+        title: "Asignacion actualizada",
 
         status: "success",
 
@@ -3123,7 +3439,7 @@ export const ErpProjectsPage: React.FC = () => {
 
     onError: () => {
       toast({
-        title: "No se pudo actualizar la asignación",
+        title: "No se pudo actualizar la asignacion",
 
         status: "error",
       });
@@ -3164,7 +3480,7 @@ export const ErpProjectsPage: React.FC = () => {
             title: "Proyecto desactivado",
 
             description:
-              "El backend no permite eliminar; se marc+¦ como inactivo.",
+              "El backend no permite eliminar; se marc+ como inactivo.",
 
             status: "info",
           });
@@ -3180,7 +3496,7 @@ export const ErpProjectsPage: React.FC = () => {
 
             description:
               fallbackError?.response?.data?.detail ??
-              "No se pudo desactivar el proyecto despu+®s del 405.",
+              "No se pudo desactivar el proyecto despu+s del 405.",
 
             status: "error",
           });
@@ -3764,10 +4080,10 @@ export const ErpProjectsPage: React.FC = () => {
 
         <Stack position="relative" spacing={4}>
           <Stack spacing={1}>
-            <Heading size="lg">Gestión de Proyectos</Heading>
+            <Heading size="lg">Gestion de Proyectos</Heading>
 
             <Text color="whiteAlpha.800">
-              Control y visualización de proyectos y tareas
+              Control y visualizacion de proyectos y tareas
             </Text>
           </Stack>
 
@@ -3812,8 +4128,8 @@ export const ErpProjectsPage: React.FC = () => {
           <Tab>Crear</Tab>
         </TabList>
 
-          <TabPanels mt={4}>
-            {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
+        <TabPanels mt={4}>
+          {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
 
           <TabPanel px={0} minW="0" overflowX="hidden">
             <Stack spacing={5} minW="0">
@@ -3825,23 +4141,23 @@ export const ErpProjectsPage: React.FC = () => {
               >
                 <Box>
                   <Heading size="md" mb={1}>
-                    Gestión y seguimiento de proyectos
+                    Gestion y seguimiento de proyectos
                   </Heading>
                   <HStack spacing={2} mb={1}>
                     <Tag colorScheme="green" size="sm">
-                      Año {summaryYear}
+                      Ano {summaryYear}
                     </Tag>
                     <Text fontSize="xs" color={subtleText}>
-                      Filtrando por año {summaryYear}
+                      Filtrando por ano {summaryYear}
                     </Text>
                   </HStack>
                   <Text fontSize="sm" color={subtleText}>
                     Tablero tipo Excel con horas a justificar, justificadas y
-                    asignación por empleado.
+                    asignacion por empleado.
                   </Text>
                   {loadingSummaryYear && (
                     <Text fontSize="xs" color={subtleText} mt={1}>
-                      Cargando los datos del año {summaryYear}…
+                      Cargando los datos del ano {summaryYear}...
                     </Text>
                   )}
                   {saveStatusLabel && !loadingSummaryYear && (
@@ -3890,7 +4206,7 @@ export const ErpProjectsPage: React.FC = () => {
 
                   <FormControl maxW="120px">
                     <FormLabel fontSize="xs" mb={1}>
-                      Año
+                      Ano
                     </FormLabel>
 
                     <Select
@@ -3952,573 +4268,576 @@ export const ErpProjectsPage: React.FC = () => {
                 </Flex>
               </Flex>
 
-            <Box
-              borderWidth="1px"
-              borderRadius="xl"
-              bg="white"
-              boxShadow="md"
-              w="100%"
-              maxW="100%"
-              minW="0"
-              overflow="hidden"
-            >
               <Box
+                borderWidth="1px"
+                borderRadius="xl"
+                bg="white"
+                boxShadow="md"
                 w="100%"
                 maxW="100%"
                 minW="0"
-                overflowX="auto"
-                overflowY="hidden"
+                overflow="hidden"
               >
-                <Table
-                  size="sm"
-                  variant="simple"
-                  minW="1400px"
-                  w="max-content"
+                <Box
+                  w="100%"
+                  maxW="100%"
+                  minW="0"
+                  overflowX="auto"
+                  overflowY="hidden"
                 >
-                  <Thead>
-                    <Tr bg="gray.200">
-                      <Th minW="60px">
-                        Nº
-                      </Th>
+                  <Table
+                    size="sm"
+                    variant="simple"
+                    minW="1400px"
+                    w="max-content"
+                  >
+                    <Thead>
+                      <Tr bg="gray.200">
+                        <Th minW="60px">No</Th>
 
-                      <Th minW="170px">
-                        Nombre
-                      </Th>
+                        <Th minW="170px">Nombre</Th>
 
-                      <Th minW="190px">
-                        Apellidos
-                      </Th>
+                        <Th minW="190px">Apellidos</Th>
 
-                      <Th minW="130px">
-                        Departamento
-                      </Th>
+                        <Th minW="130px">Departamento</Th>
 
-                      {projectColumns.map((p) => {
-                        const count =
-                          (summaryMilestones[p.id] ?? []).length || 1;
-                        return (
-                          <Th
-                            key={p.id}
-                            colSpan={count}
-                            textAlign="center"
-                            bg="gray.200"
-                            borderColor="gray.300"
-                          >
-                            <HStack spacing={2} justify="center">
-                              <Text fontWeight="semibold">{p.name}</Text>
-                              <Button
-                                size="xs"
-                                colorScheme="green"
-                                variant="solid"
-                                borderRadius="full"
-                                onClick={() => addMilestoneRow(p.id)}
-                                aria-label={`Añadir hito a ${p.name}`}
-                                minW="22px"
-                                h="22px"
-                                p={0}
-                              >
-                                +
-                              </Button>
-                            </HStack>
-                          </Th>
-                        );
-                      })}
-
-                      <Th
-                        textAlign="center"
-                        bg="green.700"
-                        color="white"
-                        minW="140px"
-                      >
-                        TOTAL HORAS JUSTIFICADAS
-                      </Th>
-
-                      <Th textAlign="center" bg="gray.50" minW="90px">
-                        I+D 100%
-                      </Th>
-
-                      <Th textAlign="center" bg="gray.50" minW="90px">
-                        Estudio 50%
-                      </Th>
-
-                      <Th textAlign="center" bg="gray.50" minW="110px">
-                        Jefes de obra 30%
-                      </Th>
-
-                      <Th textAlign="center" bg="gray.50" minW="110px">
-                        Límites especiales
-                      </Th>
-
-                      <Th
-                        textAlign="center"
-                        bg="red.600"
-                        color="white"
-                        minW="150px"
-                      >
-                        Horas disponibles para {summaryYear}
-                      </Th>
-                    </Tr>
-
-                    <Tr bg="gray.50" borderBottomWidth="1px">
-                      <Th bg="gray.50" colSpan={4} textAlign="left">
-                        Horas a justificar
-                      </Th>
-
-                      {projectColumns.map((p) => {
-                        const count =
-                          (summaryMilestones[p.id] ?? []).length || 1;
-                        return (
-                          <Th
-                            key={p.id}
-                            textAlign="center"
-                            borderColor="gray.200"
-                            colSpan={count}
-                          >
-                            <Input
-                              size="xs"
-                              type="number"
-                              value={projectJustify[p.id] ?? 0}
-                              onChange={(e) =>
-                                setProjectJustify((prev) => ({
-                                  ...prev,
-
-                                  [p.id]: Number(e.target.value || 0),
-                                }))
-                              }
-                              textAlign="center"
-                              px={2}
-                              py={1}
-                            />
-                          </Th>
-                        );
-                      })}
-
-                      <Th textAlign="center" bg="green.50">
-                        {Object.values(projectJustified).reduce(
-                          (a, b) => a + (b || 0),
-
-                          0,
-                        )}{" "}
-                        h
-                      </Th>
-
-                      <Th colSpan={5} />
-                    </Tr>
-
-                    <Tr bg="green.50" borderBottomWidth="1px">
-                      <Th bg="gray.50" colSpan={4} textAlign="left">
-                        Justificadas
-                      </Th>
-
-                      {projectColumns.map((p) => {
-                        const count =
-                          (summaryMilestones[p.id] ?? []).length || 1;
-                        return (
-                          <Th
-                            key={p.id}
-                            textAlign="center"
-                            borderColor="gray.200"
-                            colSpan={count}
-                          >
-                            <Input
-                              size="xs"
-                              type="number"
-                              value={projectJustified[p.id] ?? 0}
-                              isReadOnly
-                              focusBorderColor="green.400"
-                              textAlign="center"
-                              px={2}
-                              py={1}
-                            />
-                          </Th>
-                        );
-                      })}
-
-                      <Th textAlign="center" bg="green.700" color="white">
-                        Justificadas totales
-                      </Th>
-
-                      <Th colSpan={5} />
-                    </Tr>
-
-                    <Tr bg="orange.50" borderBottomWidth="1px">
-                      <Th bg="orange.50" colSpan={4} textAlign="left">
-                        Faltan
-                      </Th>
-
-                      {projectColumns.map((p) => {
-                        const count =
-                          (summaryMilestones[p.id] ?? []).length || 1;
-                        const falt =
-                          (projectJustify[p.id] ?? 0) -
-                          (projectJustified[p.id] ?? 0);
-
-                        return (
-                          <Th
-                            key={p.id}
-                            textAlign="center"
-                            color={falt > 0 ? "orange.600" : "green.600"}
-                            colSpan={count}
-                          >
-                            {falt} h
-                          </Th>
-                        );
-                      })}
-
-                      <Th textAlign="center" bg="orange.50" />
-
-                      <Th colSpan={5} />
-                    </Tr>
-
-                    <Tr
-                      bg="blue.100"
-                      borderBottomWidth="2px"
-                      borderColor="blue.200"
-                    >
-                      <Th
-                        bg="blue.100"
-                        colSpan={4}
-                        textAlign="left"
-                        color="blue.700"
-                      >
-                        % Ejecutado en {summaryYear}
-                      </Th>
-
-                      {projectColumns.map((p) => {
-                        const count =
-                          (summaryMilestones[p.id] ?? []).length || 1;
-                        const justify = projectJustify[p.id] ?? 0;
-
-                        const just = projectJustified[p.id] ?? 0;
-
-                        const pct =
-                          justify > 0 ? Math.round((just / justify) * 100) : 0;
-
-                        return (
-                          <Th
-                            key={p.id}
-                            textAlign="center"
-                            color="blue.700"
-                            colSpan={count}
-                          >
-                            {pct}%
-                          </Th>
-                        );
-                      })}
-
-                      <Th colSpan={6} />
-                    </Tr>
-
-                    <Tr
-                      bg="green.50"
-                      borderBottomWidth="2px"
-                      borderColor="green.200"
-                    >
-                      <Th
-                        bg="green.50"
-                        colSpan={4}
-                        textAlign="left"
-                        color="green.700"
-                      >
-                        Hitos (H1/H2/H3/H4)
-                      </Th>
-
-                      {projectColumns.map((p) => {
-                        const ms = summaryMilestones[p.id] ?? [];
-                        if (ms.length === 0) {
+                        {projectColumns.map((p) => {
+                          const count =
+                            (summaryMilestones[p.id] ?? []).length || 1;
                           return (
                             <Th
-                              key={`${p.id}-ms-empty`}
+                              key={p.id}
+                              colSpan={count}
                               textAlign="center"
-                              color="green.800"
+                              bg="gray.200"
+                              borderColor="gray.300"
                             >
-                              <Text fontSize="xs" color="teal.600">
-                                Añade hitos con el +
-                              </Text>
+                              <HStack spacing={2} justify="center">
+                                <Text fontWeight="semibold">{p.name}</Text>
+                                <Button
+                                  size="xs"
+                                  colorScheme="green"
+                                  variant="solid"
+                                  borderRadius="full"
+                                  onClick={() => addMilestoneRow(p.id)}
+                                  aria-label={`Anadir hito a ${p.name}`}
+                                  minW="22px"
+                                  h="22px"
+                                  p={0}
+                                >
+                                  +
+                                </Button>
+                              </HStack>
                             </Th>
                           );
-                        }
+                        })}
 
-                        return ms.map((item, idx) => (
-                          <Th
-                            key={`${p.id}-ms-${idx}`}
-                            textAlign="center"
-                            p={2}
-                          >
-                            <HStack justify="center" spacing={1}>
-                              <Text fontSize="xs" fontWeight="semibold">
-                                {item.label || `H${idx + 1}`}
-                              </Text>
-
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                colorScheme="red"
-                                p={0}
-                                minW="18px"
-                                h="18px"
-                                onClick={() =>
-                                  setSummaryMilestones((prev) => {
-                                    const list = prev[p.id] ?? [];
-                                    const next = list.filter(
-                                      (_, mIdx) => mIdx !== idx,
-                                    );
-                                    return { ...prev, [p.id]: next };
-                                  })
-                                }
-                              >
-                                <Text fontSize="xs">x</Text>
-                              </Button>
-                            </HStack>
-                          </Th>
-                        ));
-                      })}
-
-                      <Th colSpan={6} />
-                    </Tr>
-                  </Thead>
-
-                  <Tbody>
-                    {filteredSummaryEmployees.length === 0 ? (
-                      <Tr>
-                        <Td
-                          colSpan={projectColumns.length + 9}
+                        <Th
                           textAlign="center"
-                          color={subtleText}
-                          py={6}
+                          bg="green.700"
+                          color="white"
+                          minW="140px"
                         >
-                          No hay empleados registrados en RRHH.
-                        </Td>
+                          TOTAL HORAS JUSTIFICADAS
+                        </Th>
+
+                        <Th textAlign="center" bg="gray.50" minW="90px">
+                          I+D 100%
+                        </Th>
+
+                        <Th textAlign="center" bg="gray.50" minW="90px">
+                          Estudio 50%
+                        </Th>
+
+                        <Th textAlign="center" bg="gray.50" minW="110px">
+                          Jefes de obra 30%
+                        </Th>
+
+                        <Th textAlign="center" bg="gray.50" minW="110px">
+                          Limites especiales
+                        </Th>
+
+                        <Th
+                          textAlign="center"
+                          bg="red.600"
+                          color="white"
+                          minW="150px"
+                        >
+                          Horas disponibles para {summaryYear}
+                        </Th>
                       </Tr>
-                    ) : (
-                      filteredSummaryEmployees.map((emp, idx) => {
-                        const available = employeeAvailability[emp.id] ?? 0;
-                        const deptId = emp.primary_department_id ?? -1;
-                        const deptColor = departmentColorMap[deptId] ?? "gray";
-                        const bgColor =
-                          idx % 2 === 0
-                            ? `${deptColor}.50`
-                            : `${deptColor}.100`;
 
-                        let totalEmpAllocated = 0;
+                      <Tr bg="gray.50" borderBottomWidth="1px">
+                        <Th bg="gray.50" colSpan={4} textAlign="left">
+                          Horas a justificar
+                        </Th>
 
-                        return (
-                          <Tr
-                            key={emp.id}
-                            bg={bgColor}
-                            borderLeftWidth="3px"
-                            borderLeftColor={`${deptColor}.500`}
-                          >
-                            <Td bg={bgColor}>
-                              {idx + 1}
-                            </Td>
-
-                            <Td bg={bgColor} fontWeight="semibold">
-                              {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
-                            </Td>
-
-                            <Td bg={bgColor}>
-                              {emp.full_name?.split(" ").slice(1).join(" ") ||
-                                "-"}
-                            </Td>
-
-                            <Td bg={bgColor} minW="180px" px={2}>
-                              <Flex align="center" gap={2}>
-                                <Box
-                                  w="12px"
-                                  h="12px"
-                                  borderRadius="full"
-                                  bg={
-                                    departmentColorMap[
-                                      emp.primary_department_id ?? -1
-                                    ] ?? "gray.300"
-                                  }
-                                />
-                                <VStack align="flex-start" spacing={0}>
-                                  <Text fontSize="sm" fontWeight="semibold">
-                                    {departmentMap[
-                                      emp.primary_department_id ?? -1
-                                    ] ?? "Sin departamento"}
-                                  </Text>
-                                  {(() => {
-                                    const usage =
-                                      (
-                                        employeeDepartmentPercentages[emp.id] ??
-                                        []
-                                      ).find(
-                                        (entry) =>
-                                          entry.departmentId ===
-                                          emp.primary_department_id,
-                                      ) ??
-                                      employeeDepartmentPercentages[
-                                        emp.id
-                                      ]?.[0];
-                                    if (!usage) return null;
-                                    return (
-                                      <Text
-                                        fontSize="xx-small"
-                                        color="gray.500"
-                                      >
-                                        {usage.usedPercent}% usado /{" "}
-                                        {usage.limitPercent}% cuota (
-                                        {usage.usedHours}h/
-                                        {usage.limitHours}h)
-                                      </Text>
-                                    );
-                                  })()}
-                                </VStack>
-                              </Flex>
-                            </Td>
-
-                            {projectColumns.map((p) => {
-                              const count =
-                                (summaryMilestones[p.id] ?? []).length || 1;
-                              const key = allocationKey(
-                                emp.id,
-
-                                p.id,
-
-                                summaryYear,
-                              );
-
-                              const existing = allocationIndex.get(key);
-
-                              const value =
-                                allocationDraftsState[key] ??
-                                existing?.allocated_hours?.toString() ??
-                                "";
-
-                              const numericValue = Number(
-                                value || existing?.allocated_hours || 0,
-                              );
-
-                              totalEmpAllocated += Number.isFinite(numericValue)
-                                ? numericValue
-                                : 0;
-
-                        if (count === 0) {
+                        {projectColumns.map((p) => {
+                          const count =
+                            (summaryMilestones[p.id] ?? []).length || 1;
                           return (
-                            <Td key={`${emp.id}-${p.id}-empty`} textAlign="center">
-                              -
-                            </Td>
+                            <Th
+                              key={p.id}
+                              textAlign="center"
+                              borderColor="gray.200"
+                              colSpan={count}
+                            >
+                              <Input
+                                size="xs"
+                                type="number"
+                                value={projectJustify[p.id] ?? 0}
+                                onChange={(e) =>
+                                  setProjectJustify((prev) => ({
+                                    ...prev,
+
+                                    [p.id]: Number(e.target.value || 0),
+                                  }))
+                                }
+                                textAlign="center"
+                                px={2}
+                                py={1}
+                              />
+                            </Th>
                           );
-                        }
+                        })}
 
-                        const cells: JSX.Element[] = [];
+                        <Th textAlign="center" bg="green.50">
+                          {Object.values(projectJustified).reduce(
+                            (a, b) => a + (b || 0),
 
-                        for (let mIdx = 0; mIdx < count; mIdx += 1) {
-                          const milestoneLabel =
-                            summaryMilestones[p.id]?.[mIdx]?.label ??
-                            `H${mIdx + 1}`;
+                            0,
+                          )}{" "}
+                          h
+                        </Th>
 
-                          const cellKey = allocationKey(
-                            emp.id,
-                            p.id,
-                            summaryYear,
-                            milestoneLabel,
+                        <Th colSpan={5} />
+                      </Tr>
+
+                      <Tr bg="green.50" borderBottomWidth="1px">
+                        <Th bg="gray.50" colSpan={4} textAlign="left">
+                          Justificadas
+                        </Th>
+
+                        {projectColumns.map((p) => {
+                          const count =
+                            (summaryMilestones[p.id] ?? []).length || 1;
+                          return (
+                            <Th
+                              key={p.id}
+                              textAlign="center"
+                              borderColor="gray.200"
+                              colSpan={count}
+                            >
+                              <Input
+                                size="xs"
+                                type="number"
+                                value={projectJustified[p.id] ?? 0}
+                                isReadOnly
+                                focusBorderColor="green.400"
+                                textAlign="center"
+                                px={2}
+                                py={1}
+                              />
+                            </Th>
                           );
-                          const cellExisting = allocationIndex.get(cellKey);
-                          const cellValue =
-                            allocationDraftsState[cellKey] ??
-                            cellExisting?.allocated_hours?.toString() ??
-                            "";
+                        })}
 
-                          cells.push(
-                            <Td key={`${emp.id}-${p.id}-${mIdx}`} textAlign="center">
-                              {summaryEditMode ? (
-                                <Input
-                                  size="sm"
-                                  type="number"
-                                  min={0}
-                                  value={cellValue}
-                                  onChange={(e) =>
-                                    setAllocationDrafts((prev) => ({
-                                      ...prev,
+                        <Th textAlign="center" bg="green.700" color="white">
+                          Justificadas totales
+                        </Th>
 
-                                      [cellKey]: e.target.value,
-                                    }))
-                                  }
-                                  onBlur={(e) =>
-                                    handleAllocationBlur(
-                                      emp,
+                        <Th colSpan={5} />
+                      </Tr>
 
-                                      p.id,
+                      <Tr bg="orange.50" borderBottomWidth="1px">
+                        <Th bg="orange.50" colSpan={4} textAlign="left">
+                          Faltan
+                        </Th>
 
-                                      milestoneLabel,
+                        {projectColumns.map((p) => {
+                          const count =
+                            (summaryMilestones[p.id] ?? []).length || 1;
+                          const falt =
+                            (projectJustify[p.id] ?? 0) -
+                            (projectJustified[p.id] ?? 0);
 
-                                      e.target.value,
-                                    )
-                                  }
-                                  textAlign="center"
-                                />
-                              ) : (
-                                <Text>
-                                  {cellExisting?.allocated_hours ?? 0} h
+                          return (
+                            <Th
+                              key={p.id}
+                              textAlign="center"
+                              color={falt > 0 ? "orange.600" : "green.600"}
+                              colSpan={count}
+                            >
+                              {falt} h
+                            </Th>
+                          );
+                        })}
+
+                        <Th textAlign="center" bg="orange.50" />
+
+                        <Th colSpan={5} />
+                      </Tr>
+
+                      <Tr
+                        bg="blue.100"
+                        borderBottomWidth="2px"
+                        borderColor="blue.200"
+                      >
+                        <Th
+                          bg="blue.100"
+                          colSpan={4}
+                          textAlign="left"
+                          color="blue.700"
+                        >
+                          % Ejecutado en {summaryYear}
+                        </Th>
+
+                        {projectColumns.map((p) => {
+                          const count =
+                            (summaryMilestones[p.id] ?? []).length || 1;
+                          const justify = projectJustify[p.id] ?? 0;
+
+                          const just = projectJustified[p.id] ?? 0;
+
+                          const pct =
+                            justify > 0
+                              ? Math.round((just / justify) * 100)
+                              : 0;
+
+                          return (
+                            <Th
+                              key={p.id}
+                              textAlign="center"
+                              color="blue.700"
+                              colSpan={count}
+                            >
+                              {pct}%
+                            </Th>
+                          );
+                        })}
+
+                        <Th colSpan={6} />
+                      </Tr>
+
+                      <Tr
+                        bg="green.50"
+                        borderBottomWidth="2px"
+                        borderColor="green.200"
+                      >
+                        <Th
+                          bg="green.50"
+                          colSpan={4}
+                          textAlign="left"
+                          color="green.700"
+                        >
+                          Hitos (H1/H2/H3/H4)
+                        </Th>
+
+                        {projectColumns.map((p) => {
+                          const ms = summaryMilestones[p.id] ?? [];
+                          if (ms.length === 0) {
+                            return (
+                              <Th
+                                key={`${p.id}-ms-empty`}
+                                textAlign="center"
+                                color="green.800"
+                              >
+                                <Text fontSize="xs" color="teal.600">
+                                  Anade hitos con el +
                                 </Text>
-                              )}
-                            </Td>,
+                              </Th>
+                            );
+                          }
+
+                          return ms.map((item, idx) => (
+                            <Th
+                              key={`${p.id}-ms-${idx}`}
+                              textAlign="center"
+                              p={2}
+                            >
+                              <HStack justify="center" spacing={1}>
+                                <Text fontSize="xs" fontWeight="semibold">
+                                  {item.label || `H${idx + 1}`}
+                                </Text>
+
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  colorScheme="red"
+                                  p={0}
+                                  minW="18px"
+                                  h="18px"
+                                  onClick={() =>
+                                    setSummaryMilestones((prev) => {
+                                      const list = prev[p.id] ?? [];
+                                      const next = list.filter(
+                                        (_, mIdx) => mIdx !== idx,
+                                      );
+                                      return { ...prev, [p.id]: next };
+                                    })
+                                  }
+                                >
+                                  <Text fontSize="xs">x</Text>
+                                </Button>
+                              </HStack>
+                            </Th>
+                          ));
+                        })}
+
+                        <Th colSpan={6} />
+                      </Tr>
+                    </Thead>
+
+                    <Tbody>
+                      {filteredSummaryEmployees.length === 0 ? (
+                        <Tr>
+                          <Td
+                            colSpan={projectColumns.length + 9}
+                            textAlign="center"
+                            color={subtleText}
+                            py={6}
+                          >
+                            No hay empleados registrados en RRHH.
+                          </Td>
+                        </Tr>
+                      ) : (
+                        filteredSummaryEmployees.map((emp, idx) => {
+                          const available = employeeAvailability[emp.id] ?? 0;
+                          const deptId = emp.primary_department_id ?? -1;
+                          const deptColor =
+                            departmentColorMap[deptId] ?? "gray";
+                          const bgColor =
+                            idx % 2 === 0
+                              ? `${deptColor}.50`
+                              : `${deptColor}.100`;
+
+                          let totalEmpAllocated = 0;
+
+                          return (
+                            <Tr
+                              key={emp.id}
+                              bg={bgColor}
+                              borderLeftWidth="3px"
+                              borderLeftColor={`${deptColor}.500`}
+                            >
+                              <Td bg={bgColor}>{idx + 1}</Td>
+
+                              <Td bg={bgColor} fontWeight="semibold">
+                                {emp.full_name?.split(" ")[0] ?? "Sin nombre"}
+                              </Td>
+
+                              <Td bg={bgColor}>
+                                {emp.full_name?.split(" ").slice(1).join(" ") ||
+                                  "-"}
+                              </Td>
+
+                              <Td bg={bgColor} minW="180px" px={2}>
+                                <Flex align="center" gap={2}>
+                                  <Box
+                                    w="12px"
+                                    h="12px"
+                                    borderRadius="full"
+                                    bg={
+                                      departmentColorMap[
+                                        emp.primary_department_id ?? -1
+                                      ] ?? "gray.300"
+                                    }
+                                  />
+                                  <VStack align="flex-start" spacing={0}>
+                                    <Text fontSize="sm" fontWeight="semibold">
+                                      {departmentMap[
+                                        emp.primary_department_id ?? -1
+                                      ] ?? "Sin departamento"}
+                                    </Text>
+                                    {(() => {
+                                      const usage =
+                                        (
+                                          employeeDepartmentPercentages[
+                                            emp.id
+                                          ] ?? []
+                                        ).find(
+                                          (entry) =>
+                                            entry.departmentId ===
+                                            emp.primary_department_id,
+                                        ) ??
+                                        employeeDepartmentPercentages[
+                                          emp.id
+                                        ]?.[0];
+                                      if (!usage) return null;
+                                      return (
+                                        <Text
+                                          fontSize="xx-small"
+                                          color="gray.500"
+                                        >
+                                          {usage.usedPercent}% usado /{" "}
+                                          {usage.limitPercent}% cuota (
+                                          {usage.usedHours}h/
+                                          {usage.limitHours}h)
+                                        </Text>
+                                      );
+                                    })()}
+                                  </VStack>
+                                </Flex>
+                              </Td>
+
+                              {projectColumns.map((p) => {
+                                const count =
+                                  (summaryMilestones[p.id] ?? []).length || 1;
+                                const key = allocationKey(
+                                  emp.id,
+
+                                  p.id,
+
+                                  summaryYear,
+                                );
+
+                                const existing = allocationIndex.get(key);
+
+                                const value =
+                                  allocationDraftsState[key] ??
+                                  existing?.allocated_hours?.toString() ??
+                                  "";
+
+                                const numericValue = Number(
+                                  value || existing?.allocated_hours || 0,
+                                );
+
+                                totalEmpAllocated += Number.isFinite(
+                                  numericValue,
+                                )
+                                  ? numericValue
+                                  : 0;
+
+                                if (count === 0) {
+                                  return (
+                                    <Td
+                                      key={`${emp.id}-${p.id}-empty`}
+                                      textAlign="center"
+                                    >
+                                      -
+                                    </Td>
+                                  );
+                                }
+
+                                const cells: JSX.Element[] = [];
+
+                                for (let mIdx = 0; mIdx < count; mIdx += 1) {
+                                  const milestoneLabel =
+                                    summaryMilestones[p.id]?.[mIdx]?.label ??
+                                    `H${mIdx + 1}`;
+
+                                  const cellKey = allocationKey(
+                                    emp.id,
+                                    p.id,
+                                    summaryYear,
+                                    milestoneLabel,
+                                  );
+                                  const cellExisting =
+                                    allocationIndex.get(cellKey);
+                                  const cellValue =
+                                    allocationDraftsState[cellKey] ??
+                                    cellExisting?.allocated_hours?.toString() ??
+                                    "";
+
+                                  cells.push(
+                                    <Td
+                                      key={`${emp.id}-${p.id}-${mIdx}`}
+                                      textAlign="center"
+                                    >
+                                      {summaryEditMode ? (
+                                        <Input
+                                          size="sm"
+                                          type="number"
+                                          min={0}
+                                          value={cellValue}
+                                          onChange={(e) =>
+                                            setAllocationDrafts((prev) => ({
+                                              ...prev,
+
+                                              [cellKey]: e.target.value,
+                                            }))
+                                          }
+                                          onBlur={(e) =>
+                                            handleAllocationBlur(
+                                              emp,
+
+                                              p.id,
+
+                                              milestoneLabel,
+
+                                              e.target.value,
+                                            )
+                                          }
+                                          textAlign="center"
+                                        />
+                                      ) : (
+                                        <Text>
+                                          {cellExisting?.allocated_hours ?? 0} h
+                                        </Text>
+                                      )}
+                                    </Td>,
+                                  );
+                                }
+
+                                return cells;
+                              })}
+
+                              <Td
+                                textAlign="center"
+                                fontWeight="bold"
+                                color="white"
+                                bg="green.700"
+                              >
+                                {totalEmpAllocated} h
+                              </Td>
+
+                              <Td textAlign="center" bg="white">
+                                -
+                              </Td>
+
+                              <Td textAlign="center" bg="white">
+                                -
+                              </Td>
+
+                              <Td textAlign="center" bg="white">
+                                -
+                              </Td>
+
+                              <Td textAlign="center" bg="white">
+                                -
+                              </Td>
+
+                              <Td
+                                textAlign="center"
+                                bg={
+                                  available - totalEmpAllocated < 0
+                                    ? "red.50"
+                                    : "green.50"
+                                }
+                                color={
+                                  available - totalEmpAllocated < 0
+                                    ? "red.700"
+                                    : "green.700"
+                                }
+                                fontWeight="semibold"
+                              >
+                                {available - totalEmpAllocated} h
+                              </Td>
+                            </Tr>
                           );
-                        }
+                        })
+                      )}
+                    </Tbody>
+                  </Table>
+                </Box>
 
-                        return cells;
-                      })}
-
-                      <Td
-                              textAlign="center"
-                              fontWeight="bold"
-                              color="white"
-                              bg="green.700"
-                            >
-                              {totalEmpAllocated} h
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td textAlign="center" bg="white">
-                              -
-                            </Td>
-
-                            <Td
-                              textAlign="center"
-                              bg={
-                                available - totalEmpAllocated < 0
-                                  ? "red.50"
-                                  : "green.50"
-                              }
-                              color={
-                                available - totalEmpAllocated < 0
-                                  ? "red.700"
-                                  : "green.700"
-                              }
-                              fontWeight="semibold"
-                            >
-                              {available - totalEmpAllocated} h
-                            </Td>
-                          </Tr>
-                        );
-                      })
-                    )}
-                  </Tbody>
-                </Table>
+                {/* Contenedor de la tabla (scroll horizontal solo aqui) */}
               </Box>
 
-              {/* Contenedor de la tabla (scroll horizontal solo aquí) */}
-            </Box>
-
-            <Modal
-              isOpen={isAddModalOpen}
-              onClose={onCloseAddModal}
-              size="md"
+              <Modal
+                isOpen={isAddModalOpen}
+                onClose={onCloseAddModal}
+                size="md"
               >
                 <ModalOverlay />
                 <ModalContent>
@@ -4542,10 +4861,10 @@ export const ErpProjectsPage: React.FC = () => {
                           Empleados seleccionados: {selectedEmployeeIds.length}
                         </Text>
                         <Text>
-                          Cargando empleados: {employeesLoading ? "sí" : "no"}
+                          Cargando empleados: {employeesLoading ? "si" : "no"}
                         </Text>
                         <Text>
-                          Cargando depts: {departmentsLoading ? "sí" : "no"}
+                          Cargando depts: {departmentsLoading ? "si" : "no"}
                         </Text>
                       </Box>
 
@@ -4878,7 +5197,7 @@ export const ErpProjectsPage: React.FC = () => {
                       <Badge colorScheme="gray">Fechas</Badge>
 
                       <Text>
-                        {project.start_date || "Sin inicio"} ÔÇö{" "}
+                        {project.start_date || "Sin inicio"} OCo{" "}
                         {project.end_date || "Sin fin"}
                       </Text>
                     </HStack>
@@ -5034,10 +5353,21 @@ export const ErpProjectsPage: React.FC = () => {
                     size="sm"
                     colorScheme={budgetsEditMode ? "orange" : "blue"}
                     onClick={() => setBudgetsEditMode((prev) => !prev)}
-                    isDisabled={!selectedBudgetProjectId || !hasRealBudgets}
+                    isDisabled={!selectedBudgetProjectId || !canEditBudgets}
                   >
-                    {budgetsEditMode ? "Cerrar edición" : "Editar tabla"}
+                    {budgetsEditMode ? "Cerrar edicion" : "Editar tabla"}
                   </Button>
+                  {budgetsEditMode && (
+                    <Button
+                      size="sm"
+                      colorScheme="green"
+                      onClick={handleBudgetSaveAll}
+                      isDisabled={!hasBudgetDrafts || savingBudgets}
+                      isLoading={savingBudgets}
+                    >
+                      Guardar tabla
+                    </Button>
+                  )}
                   {!hasRealBudgets && (
                     <Button
                       size="sm"
@@ -5058,7 +5388,7 @@ export const ErpProjectsPage: React.FC = () => {
                 </Text>
               ) : budgetsQuery.isFetching ? (
                 <Text fontSize="sm" color={subtleText}>
-                  Cargando presupuestos…
+                  Cargando presupuestos...
                 </Text>
               ) : budgetsQuery.isError ? (
                 <Text fontSize="sm" color="red.500">
@@ -5169,90 +5499,135 @@ export const ErpProjectsPage: React.FC = () => {
                               py={10}
                               color="gray.500"
                             >
-                              Aún no hay presupuestos guardados para este
+                              Aun no hay presupuestos guardados para este
                               proyecto.
                             </Td>
                           </Tr>
                         ) : (
-                          displayBudgetRows.map((budget) => (
-                            <Tr key={budget.id} className="even:bg-gray-50">
-                              <Td>
-                                <Editable
-                                  submitOnBlur
-                                  selectAllOnFocus
-                                  key={`concept-${budget.id}-${budget.concept}`}
-                                  defaultValue={budget.concept}
-                                  isDisabled={
-                                    !hasRealBudgets || !budgetsEditMode
-                                  }
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "concept",
-                                      value,
-                                    )
-                                  }
-                                >
-                                  <EditablePreview fontWeight="semibold" />
-                                  <EditableInput />
-                                </Editable>
-                              </Td>
-                              <Td textAlign="right">
+                          groupedBudgetRows.map((budget) => {
+                            const h1 = Number(budget.hito1_budget ?? 0);
+                            const h2 = Number(budget.hito2_budget ?? 0);
+                            const approved = h1 + h2;
+                            const forecast = Number(
+                              budget.forecasted_spent ?? 0,
+                            );
+                            const percentSpent =
+                              approved > 0 ? (forecast / approved) * 100 : 0;
+                            const baseKey = (budget.concept || "")
+                              .trim()
+                              .toLowerCase();
+                            const rowBg =
+                              CATEGORY_COLOR_MAP[baseKey] ?? undefined;
+                            return (
+                              <Tr
+                                key={budget.id}
+                                className="even:bg-gray-50"
+                                bg={rowBg}
+                              >
+                                <Td>
+                                  <Editable
+                                    submitOnBlur
+                                    selectAllOnFocus
+                                    key={`concept-${budget.id}-${(budgetDrafts[budget.id]?.concept as string) ?? budget.concept}`}
+                                    defaultValue={
+                                      (budgetDrafts[budget.id]
+                                        ?.concept as string) ?? budget.concept
+                                    }
+                                    isDisabled={!budgetsEditMode}
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "concept",
+                                        value,
+                                      )
+                                    }
+                                  >
+                                    <EditablePreview fontWeight="semibold" />
+                                    <EditableInput />
+                                  </Editable>
+                                </Td>
+                                <Td textAlign="right">
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]?.hito1_budget ??
+                                      budget.hito1_budget ??
+                                      0
+                                    }
+                                    isEditing={
+                                      hasRealBudgets && budgetsEditMode
+                                    }
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "hito1_budget",
+                                        value,
+                                      )
+                                    }
+                                  />
+                                </Td>
+                                <Td textAlign="right">
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]
+                                        ?.justified_hito1 ??
+                                      budget.justified_hito1 ??
+                                      0
+                                    }
+                                    isEditing={
+                                      hasRealBudgets && budgetsEditMode
+                                    }
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "justified_hito1",
+                                        value,
+                                      )
+                                    }
+                                  />
+                                </Td>
+                                <Td textAlign="right">
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]?.hito2_budget ??
+                                      budget.hito2_budget ??
+                                      0
+                                    }
+                                    isEditing={
+                                      hasRealBudgets && budgetsEditMode
+                                    }
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "hito2_budget",
+                                        value,
+                                      )
+                                    }
+                                  />
+                                </Td>
+                                <Td textAlign="right">
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]
+                                        ?.justified_hito2 ??
+                                      budget.justified_hito2 ??
+                                      0
+                                    }
+                                    isEditing={
+                                      hasRealBudgets && budgetsEditMode
+                                    }
+                                    onSubmit={(value) =>
+                                      handleBudgetCellSave(
+                                        budget.id,
+                                        "justified_hito2",
+                                        value,
+                                      )
+                                    }
+                                  />
+                                </Td>
+                                <Td textAlign="right">
                                 <BudgetNumberCell
-                                  value={budget.hito1_budget ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "hito1_budget",
-                                      value,
-                                    )
-                                  }
-                                />
-                              </Td>
-                              <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budget.justified_hito1 ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "justified_hito1",
-                                      value,
-                                    )
-                                  }
-                                />
-                              </Td>
-                              <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budget.hito2_budget ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "hito2_budget",
-                                      value,
-                                    )
-                                  }
-                                />
-                              </Td>
-                              <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budget.justified_hito2 ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "justified_hito2",
-                                      value,
-                                    )
-                                  }
-                                />
-                              </Td>
-                              <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budget.approved_budget ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
+                                  value={budgetDrafts[budget.id]?.approved_budget ?? approved}
+                                  isEditing={budgetsEditMode}
                                   onSubmit={(value) =>
                                     handleBudgetCellSave(
                                       budget.id,
@@ -5261,87 +5636,55 @@ export const ErpProjectsPage: React.FC = () => {
                                     )
                                   }
                                 />
-                              </Td>
-                              <Td textAlign="right">
-                                {hasRealBudgets && budgetsEditMode ? (
-                                  <Input
-                                    size="sm"
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step="0.01"
-                                    defaultValue={budget.percent_spent ?? 0}
-                                    onBlur={(e) =>
+                                </Td>
+                                <Td textAlign="right">
+                                  <Text fontFamily="mono">
+                                    {formatPercent(percentSpent)}
+                                  </Text>
+                                </Td>
+                                <Td textAlign="right">
+                                  <BudgetNumberCell
+                                    value={
+                                      budgetDrafts[budget.id]
+                                        ?.forecasted_spent ??
+                                      budget.forecasted_spent ??
+                                      0
+                                    }
+                                    isEditing={
+                                      hasRealBudgets && budgetsEditMode
+                                    }
+                                    onSubmit={(value) =>
                                       handleBudgetCellSave(
                                         budget.id,
-                                        "percent_spent",
-                                        e.target.value,
+                                        "forecasted_spent",
+                                        value,
                                       )
                                     }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        handleBudgetCellSave(
-                                          budget.id,
-                                          "percent_spent",
-                                          (e.target as HTMLInputElement).value,
-                                        );
-                                      }
-                                    }}
                                   />
-                                ) : (
-                                  <Text fontFamily="mono">
-                                    {formatPercent(
-                                      Number(budget.percent_spent ?? 0),
-                                    )}
-                                  </Text>
-                                )}
-                              </Td>
-                              <Td textAlign="right">
-                                <BudgetNumberCell
-                                  value={budget.forecasted_spent ?? 0}
-                                  isEditing={hasRealBudgets && budgetsEditMode}
-                                  onSubmit={(value) =>
-                                    handleBudgetCellSave(
-                                      budget.id,
-                                      "forecasted_spent",
-                                      value,
-                                    )
-                                  }
-                                />
-                              </Td>
-                              <Td>
-                                {hasRealBudgets ? (
-                                  <Flex gap={2} flexWrap="wrap">
-                                    <Button
-                                      size="xs"
-                                      variant="outline"
-                                      isDisabled={!budgetsEditMode}
-                                      onClick={() =>
-                                        openBudgetModal("edit", budget)
-                                      }
-                                    >
-                                      Editar
-                                    </Button>
-                                    <Button
-                                      size="xs"
-                                      colorScheme="red"
-                                      variant="ghost"
-                                      isDisabled={!budgetsEditMode}
-                                      onClick={() =>
-                                        handleBudgetDelete(budget.id)
-                                      }
-                                    >
-                                      Eliminar
-                                    </Button>
-                                  </Flex>
-                                ) : (
-                                  <Text fontSize="xs" color="gray.500">
-                                    Añade presupuestos para editarlos aquí.
-                                  </Text>
-                                )}
-                              </Td>
-                            </Tr>
-                          ))
+                                </Td>
+                                <Td>
+                                  {hasRealBudgets ? (
+                                    <Flex gap={2} flexWrap="wrap">
+                                      <Button
+                                        size="xs"
+                                        variant="outline"
+                                        isDisabled={!budgetsEditMode}
+                                        onClick={() =>
+                                          openBudgetModal("edit", budget)
+                                        }
+                                      >
+                                        Editar
+                                      </Button>
+                                    </Flex>
+                                  ) : (
+                                    <Text fontSize="xs" color="gray.500">
+                                      Anade presupuestos para editarlos aqui.
+                                    </Text>
+                                  )}
+                                </Td>
+                              </Tr>
+                            );
+                          })
                         )}
                       </Tbody>
                       <Tfoot>
@@ -5373,15 +5716,23 @@ export const ErpProjectsPage: React.FC = () => {
                           <Td />
                         </Tr>
                         <Tr bg="rgba(196,116,255,0.2)" fontWeight="semibold">
-                          <Td>Diferencia</Td>
-                          <Td colSpan={8} textAlign="right">
-                            <EuroCell value={Math.abs(budgetsDifference)} />{" "}
-                            {budgetsDifference === 0
-                              ? "la suma cuadra con los hitos."
-                              : budgetsDifference > 0
-                                ? "sobra presupuesto."
-                                : "falta presupuesto."}
+                          <Td>Diferencia (por justificar)</Td>
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsDiffH1} />
                           </Td>
+                          <Td />
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsDiffH2} />
+                          </Td>
+                          <Td />
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsDiffH1 + budgetsDiffH2} />
+                          </Td>
+                          <Td />
+                          <Td textAlign="right">
+                            <EuroCell value={budgetsTabTotals.gasto} />
+                          </Td>
+                          <Td />
                         </Tr>
                       </Tfoot>
                     </Table>
@@ -5439,14 +5790,14 @@ export const ErpProjectsPage: React.FC = () => {
                 <Heading size="sm">Actividades</Heading>
 
                 <Button size="sm" onClick={handleAddActivity}>
-                  + Añadir actividad
+                  + Anadir actividad
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectActivities.length === 0 && (
                   <Text fontSize="sm" color={subtleText}>
-                    Añade actividades con peso y fechas.
+                    Anade actividades con peso y fechas.
                   </Text>
                 )}
 
@@ -5552,7 +5903,7 @@ export const ErpProjectsPage: React.FC = () => {
                       mt={2}
                       onClick={() => handleAddSubactivity(act.id)}
                     >
-                      + Añadir subactividad
+                      + Anadir subactividad
                     </Button>
 
                     <Stack mt={2} spacing={2}>
@@ -5707,14 +6058,14 @@ export const ErpProjectsPage: React.FC = () => {
                 <Heading size="sm">Hitos</Heading>
 
                 <Button size="sm" onClick={handleAddMilestone}>
-                  + Añadir hito
+                  + Anadir hito
                 </Button>
               </Flex>
 
               <Stack spacing={3}>
                 {projectMilestones.length === 0 ? (
                   <Text fontSize="sm" color={subtleText}>
-                    Añade hitos con fechas.
+                    Anade hitos con fechas.
                   </Text>
                 ) : (
                   projectMilestones.map((mil, idx) => (
@@ -6338,7 +6689,7 @@ export const ErpProjectsPage: React.FC = () => {
                         </Flex>
 
                         <Text fontSize="xs" color={subtleText}>
-                          {task.start_date || "Sin inicio"} ÔÇö{" "}
+                          {task.start_date || "Sin inicio"} OCo{" "}
                           {task.end_date || "Sin fin"}
                         </Text>
 
@@ -6391,3 +6742,5 @@ export const ErpProjectsPage: React.FC = () => {
 };
 
 export default ErpProjectsPage;
+
+
