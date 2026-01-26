@@ -26,8 +26,20 @@ export interface ErpTask {
   created_at: string;
 }
 
-export async function fetchErpTasks(): Promise<ErpTask[]> {
-  const response = await apiClient.get<ErpTask[]>("/api/v1/erp/tasks");
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
+export async function fetchErpTasks(tenantId?: number): Promise<ErpTask[]> {
+  const response = await apiClient.get<ErpTask[]>(
+    "/api/v1/erp/tasks",
+    buildTenantHeaders(tenantId),
+  );
   return response.data;
 }
 

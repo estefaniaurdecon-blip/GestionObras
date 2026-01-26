@@ -181,3 +181,31 @@ class ExternalCollaboration(SQLModel, table=True):
     contact_email: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SimulationProject(SQLModel, table=True):
+    __tablename__ = "erp_simulation_project"
+
+    # Proyecto de simulacion por tenant.
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    name: str
+    budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False), default=0)
+    subsidy_percent: Decimal = Field(
+        sa_column=Column(Numeric(6, 2), nullable=False),
+        default=0,
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SimulationExpense(SQLModel, table=True):
+    __tablename__ = "erp_simulation_expense"
+
+    # Gasto asociado a un proyecto de simulacion.
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="erp_simulation_project.id")
+    concept: str
+    amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False), default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

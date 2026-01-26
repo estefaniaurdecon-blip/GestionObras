@@ -71,7 +71,9 @@ export const TimeReportPage: React.FC = () => {
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const { data: currentUser } = useCurrentUser();
-  const tenantId = currentUser?.tenant_id ?? undefined;
+  const tenantId = currentUser?.is_super_admin
+    ? undefined
+    : currentUser?.tenant_id ?? undefined;
 
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery<EmployeeProfile[]>({
     queryKey: ["hr-employees", tenantId ?? "all"],
@@ -82,7 +84,7 @@ export const TimeReportPage: React.FC = () => {
     if (projects.length > 0 || isLoadingProjects) return;
     try {
       setIsLoadingProjects(true);
-      const data = await fetchErpProjects();
+      const data = await fetchErpProjects(tenantId);
       setProjects(data);
     } catch (error: any) {
       toast({
@@ -101,12 +103,15 @@ export const TimeReportPage: React.FC = () => {
     e.preventDefault();
     try {
       setIsLoadingReport(true);
-      const data = await fetchTimeReport({
-        projectId: selectedProjectId,
-        dateFrom: dateFrom || null,
-        dateTo: dateTo || null,
-        userIds: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : null,
-      });
+      const data = await fetchTimeReport(
+        {
+          projectId: selectedProjectId,
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+          userIds: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : null,
+        },
+        tenantId,
+      );
       setRows(data);
     } catch (error: any) {
       toast({

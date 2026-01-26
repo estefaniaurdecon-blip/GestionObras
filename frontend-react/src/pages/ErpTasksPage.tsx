@@ -141,26 +141,29 @@ export const ErpTasksPage: React.FC = () => {
   const { data: currentUser } = useCurrentUser();
   const tenantId = currentUser?.tenant_id ?? 1;
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const effectiveTenantId = isSuperAdmin
+    ? undefined
+    : currentUser?.tenant_id ?? undefined;
 
   // Datos principales del ERP.
   const { data: projects } = useQuery<ErpProject[]>({
-    queryKey: ["erp-projects"],
-    queryFn: fetchErpProjects,
+    queryKey: ["erp-projects", effectiveTenantId ?? "all"],
+    queryFn: () => fetchErpProjects(effectiveTenantId),
   });
 
   const { data: activities = [] } = useQuery<ErpActivity[]>({
-    queryKey: ["erp-activities"],
-    queryFn: () => fetchActivities(),
+    queryKey: ["erp-activities", effectiveTenantId ?? "all"],
+    queryFn: () => fetchActivities(undefined, effectiveTenantId),
   });
 
   const { data: tasks } = useQuery<ErpTask[]>({
-    queryKey: ["erp-tasks"],
-    queryFn: fetchErpTasks,
+    queryKey: ["erp-tasks", effectiveTenantId ?? "all"],
+    queryFn: () => fetchErpTasks(effectiveTenantId),
   });
 
   const { data: subactivities = [] } = useQuery<ErpSubActivity[]>({
-    queryKey: ["erp-subactivities"],
-    queryFn: () => fetchSubActivities(),
+    queryKey: ["erp-subactivities", effectiveTenantId ?? "all"],
+    queryFn: () => fetchSubActivities({}, effectiveTenantId),
   });
 
   const { data: users } = useQuery<TenantUserSummary[]>({

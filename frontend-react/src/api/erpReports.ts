@@ -8,6 +8,7 @@ export interface ErpProject {
   end_date?: string | null;
   is_active?: boolean;
   created_at?: string;
+  tenant_id?: number | null;
 }
 
 export interface TimeReportRow {
@@ -28,20 +29,37 @@ export interface TimeReportFilters {
   userIds?: number[] | null;
 }
 
-export async function fetchErpProjects(): Promise<ErpProject[]> {
-  const response = await apiClient.get<ErpProject[]>("/api/v1/erp/projects");
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
+export async function fetchErpProjects(tenantId?: number): Promise<ErpProject[]> {
+  const response = await apiClient.get<ErpProject[]>(
+    "/api/v1/erp/projects",
+    buildTenantHeaders(tenantId),
+  );
   return response.data;
 }
 
-export async function fetchErpProject(projectId: number): Promise<ErpProject> {
+export async function fetchErpProject(
+  projectId: number,
+  tenantId?: number,
+): Promise<ErpProject> {
   const response = await apiClient.get<ErpProject>(
     `/api/v1/erp/projects/${projectId}`,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
 export async function fetchTimeReport(
   filters: TimeReportFilters,
+  tenantId?: number,
 ): Promise<TimeReportRow[]> {
   const params: Record<string, string> = {};
 
@@ -62,6 +80,7 @@ export async function fetchTimeReport(
     "/api/v1/erp/reports/time",
     {
       params,
+      ...(buildTenantHeaders(tenantId) ?? {}),
     },
   );
   return response.data;

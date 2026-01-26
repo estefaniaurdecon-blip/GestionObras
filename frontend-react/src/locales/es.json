@@ -140,7 +140,8 @@
       "support": "Soporte",
       "tools": "Herramientas",
       "audit": "Logs",
-      "tenantSettings": "Ajustes de tenants"
+      "tenantSettings": "Ajustes de tenants",
+      "simulations": "Simulaciones"
     },
     "header": {
       "title": "Panel de control",
@@ -915,10 +916,6 @@
           "atRisk": "Riesgo",
           "overdue": "Fuera de plazo",
           "planned": "Planificado"
-        },
-        "filters": {
-          "showActivities": "Mostrar actividades",
-          "showMilestones": "Mostrar hitos"
         },
         "filters": {
           "showActivities": "Mostrar actividades",

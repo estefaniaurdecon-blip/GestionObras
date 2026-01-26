@@ -140,7 +140,8 @@
       "support": "Support",
       "tools": "Tools",
       "audit": "Audit",
-      "tenantSettings": "Tenant settings"
+      "tenantSettings": "Tenant settings",
+      "simulations": "Simulations"
     },
     "header": {
       "title": "Control panel",

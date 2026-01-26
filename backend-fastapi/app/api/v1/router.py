@@ -16,6 +16,7 @@ from . import (
     tools,
     users,
     summary,
+    simulations,
 )
 
 
@@ -56,6 +57,11 @@ api_router.include_router(
 )
 api_router.include_router(
     summary.router,
+    prefix="/erp",
+    tags=["erp"],
+)
+api_router.include_router(
+    simulations.router,
     prefix="/erp",
     tags=["erp"],
 )

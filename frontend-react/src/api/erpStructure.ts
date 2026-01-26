@@ -1,5 +1,14 @@
 import { apiClient } from "./client";
 
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
 // Tipos y llamadas para estructura del proyecto (actividades, hitos, entregables).
 
 export interface ErpTaskTemplate {
@@ -141,9 +150,11 @@ export async function createTaskTemplate(
 
 export async function fetchActivities(
   projectId?: number | null,
+  tenantId?: number,
 ): Promise<ErpActivity[]> {
   const response = await apiClient.get<ErpActivity[]>("/api/v1/erp/activities", {
     params: projectId ? { project_id: projectId } : undefined,
+    ...(buildTenantHeaders(tenantId) ?? {}),
   });
   return response.data;
 }
@@ -171,13 +182,14 @@ export async function updateActivity(
 
 export async function fetchSubActivities(
   params: { projectId?: number | null; activityId?: number | null } = {},
+  tenantId?: number,
 ): Promise<ErpSubActivity[]> {
   const query: Record<string, number> = {};
   if (params.projectId) query.project_id = params.projectId;
   if (params.activityId) query.activity_id = params.activityId;
   const response = await apiClient.get<ErpSubActivity[]>(
     "/api/v1/erp/subactivities",
-    { params: query },
+    { params: query, ...(buildTenantHeaders(tenantId) ?? {}) },
   );
   return response.data;
 }
@@ -205,13 +217,14 @@ export async function updateSubActivity(
 
 export async function fetchMilestones(
   params: { projectId?: number | null; activityId?: number | null } = {},
+  tenantId?: number,
 ): Promise<ErpMilestone[]> {
   const query: Record<string, number> = {};
   if (params.projectId) query.project_id = params.projectId;
   if (params.activityId) query.activity_id = params.activityId;
   const response = await apiClient.get<ErpMilestone[]>(
     "/api/v1/erp/milestones",
-    { params: query },
+    { params: query, ...(buildTenantHeaders(tenantId) ?? {}) },
   );
   return response.data;
 }

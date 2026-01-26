@@ -27,36 +27,54 @@ export interface ExternalCollaborationCreate {
 
 export type ExternalCollaborationUpdate = Partial<ExternalCollaborationCreate>;
 
-export async function fetchExternalCollaborations() {
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
+export async function fetchExternalCollaborations(tenantId?: number) {
   const response = await apiClient.get<ExternalCollaboration[]>(
-    "/api/v1/erp/external-collaborations"
+    "/api/v1/erp/external-collaborations",
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
 export async function createExternalCollaboration(
-  payload: ExternalCollaborationCreate
+  payload: ExternalCollaborationCreate,
+  tenantId?: number,
 ) {
   const response = await apiClient.post<ExternalCollaboration>(
     "/api/v1/erp/external-collaborations",
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
 export async function updateExternalCollaboration(
   collaborationId: number,
-  payload: ExternalCollaborationUpdate
+  payload: ExternalCollaborationUpdate,
+  tenantId?: number,
 ) {
   const response = await apiClient.patch<ExternalCollaboration>(
     `/api/v1/erp/external-collaborations/${collaborationId}`,
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
-export async function deleteExternalCollaboration(collaborationId: number) {
+export async function deleteExternalCollaboration(
+  collaborationId: number,
+  tenantId?: number,
+) {
   await apiClient.delete(
-    `/api/v1/erp/external-collaborations/${collaborationId}`
+    `/api/v1/erp/external-collaborations/${collaborationId}`,
+    buildTenantHeaders(tenantId),
   );
 }

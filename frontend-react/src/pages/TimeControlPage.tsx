@@ -222,6 +222,9 @@ export const TimeControlPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
+  const effectiveTenantId = currentUser?.is_super_admin
+    ? undefined
+    : currentUser?.tenant_id ?? undefined;
 
   // Flags y derivados del estado actual.
   const isRunning = Boolean(activeSession && activeSession.is_active);
@@ -328,8 +331,8 @@ export const TimeControlPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const list = await fetchErpTasks();
-        const subs = await fetchSubActivities();
+        const list = await fetchErpTasks(effectiveTenantId);
+        const subs = await fetchSubActivities({}, effectiveTenantId);
         if (!cancelled) {
           setTasks(list);
           setSubactivities(subs);

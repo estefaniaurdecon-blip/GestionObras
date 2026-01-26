@@ -10,6 +10,7 @@ import type {
 import { ExternalCollaborationsForm } from "../components/external-collaborations/ExternalCollaborationsForm";
 import { ExternalCollaborationsTable } from "../components/external-collaborations/ExternalCollaborationsTable";
 import { AppShell } from "../components/layout/AppShell";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useExternalCollaborations } from "../hooks/useExternalCollaborations";
 
 export const ErpExternalCollaborationsPage: React.FC = () => {
@@ -18,8 +19,12 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.600", "gray.300");
 
+  const { data: currentUser } = useCurrentUser();
+  const effectiveTenantId = currentUser?.is_super_admin
+    ? undefined
+    : currentUser?.tenant_id ?? undefined;
   const { listQuery, createMutation, updateMutation, deleteMutation } =
-    useExternalCollaborations();
+    useExternalCollaborations(effectiveTenantId);
 
   const typeOptions = useMemo<ExternalCollaborationType[]>(
     () => [

@@ -34,10 +34,20 @@ export interface ProjectBudgetLine extends ProjectBudgetLinePayload {
   milestones?: BudgetLineMilestone[];
 }
 
-export async function fetchProjectBudgets(projectId: number) {
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
+export async function fetchProjectBudgets(projectId: number, tenantId?: number) {
   try {
     const response = await apiClient.get<ProjectBudgetLine[]>(
-      `/api/v1/erp/projects/${projectId}/budgets`
+      `/api/v1/erp/projects/${projectId}/budgets`,
+      buildTenantHeaders(tenantId),
     );
     return response.data;
   } catch (error: any) {
@@ -50,11 +60,13 @@ export async function fetchProjectBudgets(projectId: number) {
 
 export async function createProjectBudgetLine(
   projectId: number,
-  payload: ProjectBudgetLinePayload
+  payload: ProjectBudgetLinePayload,
+  tenantId?: number,
 ) {
   const response = await apiClient.post<ProjectBudgetLine>(
     `/api/v1/erp/projects/${projectId}/budgets`,
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -72,52 +84,73 @@ export type ProjectBudgetLineUpdatePayload = Partial<
 export async function updateProjectBudgetLine(
   projectId: number,
   budgetId: number,
-  payload: ProjectBudgetLineUpdatePayload
+  payload: ProjectBudgetLineUpdatePayload,
+  tenantId?: number,
 ) {
   const response = await apiClient.patch<ProjectBudgetLine>(
     `/api/v1/erp/projects/${projectId}/budgets/${budgetId}`,
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
 export async function deleteProjectBudgetLine(
   projectId: number,
-  budgetId: number
+  budgetId: number,
+  tenantId?: number,
 ) {
-  await apiClient.delete(`/api/v1/erp/projects/${projectId}/budgets/${budgetId}`);
+  await apiClient.delete(
+    `/api/v1/erp/projects/${projectId}/budgets/${budgetId}`,
+    buildTenantHeaders(tenantId),
+  );
 }
 
-export async function fetchBudgetMilestones(projectId: number) {
+export async function fetchBudgetMilestones(
+  projectId: number,
+  tenantId?: number,
+) {
   const response = await apiClient.get<ProjectBudgetMilestone[]>(
-    `/api/v1/erp/projects/${projectId}/budget-milestones`
+    `/api/v1/erp/projects/${projectId}/budget-milestones`,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
 export async function createBudgetMilestone(
   projectId: number,
-  payload: { name: string; order_index?: number }
+  payload: { name: string; order_index?: number },
+  tenantId?: number,
 ) {
   const response = await apiClient.post<ProjectBudgetMilestone>(
     `/api/v1/erp/projects/${projectId}/budget-milestones`,
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
-export async function deleteBudgetMilestone(projectId: number, milestoneId: number) {
-  await apiClient.delete(`/api/v1/erp/projects/${projectId}/budget-milestones/${milestoneId}`);
+export async function deleteBudgetMilestone(
+  projectId: number,
+  milestoneId: number,
+  tenantId?: number,
+) {
+  await apiClient.delete(
+    `/api/v1/erp/projects/${projectId}/budget-milestones/${milestoneId}`,
+    buildTenantHeaders(tenantId),
+  );
 }
 
 export async function updateBudgetMilestone(
   projectId: number,
   milestoneId: number,
-  payload: { name?: string; order_index?: number }
+  payload: { name?: string; order_index?: number },
+  tenantId?: number,
 ) {
   const response = await apiClient.patch<ProjectBudgetMilestone>(
     `/api/v1/erp/projects/${projectId}/budget-milestones/${milestoneId}`,
-    payload
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }

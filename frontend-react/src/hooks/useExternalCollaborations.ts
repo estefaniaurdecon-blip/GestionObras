@@ -11,19 +11,20 @@ import {
 
 const QUERY_KEY = ["external-collaborations"];
 
-export const useExternalCollaborations = () => {
+export const useExternalCollaborations = (tenantId?: number) => {
   const queryClient = useQueryClient();
+  const scopedKey = [...QUERY_KEY, tenantId ?? "all"];
 
   const listQuery = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: fetchExternalCollaborations,
+    queryKey: scopedKey,
+    queryFn: () => fetchExternalCollaborations(tenantId),
   });
 
   const createMutation = useMutation({
     mutationFn: (payload: ExternalCollaborationCreate) =>
-      createExternalCollaboration(payload),
+      createExternalCollaboration(payload, tenantId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: scopedKey });
     },
   });
 
@@ -34,17 +35,17 @@ export const useExternalCollaborations = () => {
     }: {
       collaborationId: number;
       payload: ExternalCollaborationUpdate;
-    }) => updateExternalCollaboration(collaborationId, payload),
+    }) => updateExternalCollaboration(collaborationId, payload, tenantId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: scopedKey });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (collaborationId: number) =>
-      deleteExternalCollaboration(collaborationId),
+      deleteExternalCollaboration(collaborationId, tenantId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: scopedKey });
     },
   });
 

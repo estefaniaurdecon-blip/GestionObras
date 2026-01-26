@@ -24,6 +24,7 @@ import { ErpProjectsPage } from "./pages/ErpProjectsPage";
 import { ErpProjectDetailPage } from "./pages/ErpProjectDetailPage";
 import { ErpTasksPage } from "./pages/ErpTasksPage";
 import { ErpExternalCollaborationsPage } from "./pages/ErpExternalCollaborationsPage";
+import { ErpSimulationsPage } from "./pages/ErpSimulationsPage";
 
 // Layout raíz muy simple: delega en cada página.
 const RootLayout: React.FC = () => <Outlet />;
@@ -100,6 +101,12 @@ const erpExternalCollaborationsRoute = createRoute({
   component: ErpExternalCollaborationsPage,
 });
 
+const erpSimulationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/simulations",
+  component: ErpSimulationsPage,
+});
+
 const erpTimeControlRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/erp/time-control",
@@ -163,6 +170,7 @@ const routeTree = rootRoute.addChildren([
   erpProjectDetailRoute,
   erpTasksRoute,
   erpExternalCollaborationsRoute,
+  erpSimulationsRoute,
   erpTimeControlRoute,
   erpTimeReportRoute,
   timeReportRoute,
