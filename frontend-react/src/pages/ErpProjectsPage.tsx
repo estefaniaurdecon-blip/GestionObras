@@ -106,6 +106,33 @@ const normalizeConceptKey = (value?: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w\s]/g, "");
 
+const GENERAL_EXPENSES_LABEL = "GASTOS GENERALES";
+const GENERAL_EXPENSES_KEY = normalizeConceptKey(GENERAL_EXPENSES_LABEL);
+
+const isGeneralExpensesConcept = (value?: string) =>
+  normalizeConceptKey(value).startsWith(GENERAL_EXPENSES_KEY);
+
+const getBudgetConceptKey = (value?: string) =>
+  isGeneralExpensesConcept(value) ? GENERAL_EXPENSES_KEY : normalizeConceptKey(value);
+
+const parsePercentFromConcept = (value?: string) => {
+  const match = value?.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  if (!match) return null;
+  const numeric = Number(match[1].replace(",", "."));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const formatPercentLabelValue = (value: number) => {
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+};
+
+const formatGeneralExpensesConcept = (percent: number) =>
+  `${GENERAL_EXPENSES_LABEL} (${formatPercentLabelValue(percent)}%)`;
+
+const DEFAULT_GENERAL_EXPENSES_PERCENT = 19;
+const GENERAL_EXPENSES_AMOUNT_LABEL = `${GENERAL_EXPENSES_LABEL} (importe)`;
+
 // Estilos por categoría para la tabla de presupuestos.
 const CATEGORY_COLOR_MAP: Record<string, string | undefined> = {
   [normalizeConceptKey("Total")]: "#d9c2f0",
@@ -122,7 +149,7 @@ const BUDGET_ORDER = [
   normalizeConceptKey("Materiales para pruebas y ensayos"),
   normalizeConceptKey("COLABORACIONES EXTERNAS"),
   normalizeConceptKey("Centros Tecnologicos"),
-  normalizeConceptKey("GASTOS GENERALES (19%)"),
+  GENERAL_EXPENSES_KEY,
   normalizeConceptKey("OTROS GASTOS"),
   normalizeConceptKey("Auditoria"),
   normalizeConceptKey("Dictamen acreditado ENAC de informe DNSH"),
@@ -139,14 +166,14 @@ const buildParentChildMap = (rows: ProjectBudgetLine[]) => {
   let currentParent: string | null = null;
   rows.forEach((row) => {
     const concept = row.concept ?? "";
-    const key = normalizeConceptKey(concept);
+    const key = getBudgetConceptKey(concept);
     if (isAllCapsConcept(concept)) {
       currentParent = key;
       if (!map[currentParent]) map[currentParent] = [];
       return;
     }
     if (currentParent) {
-      map[currentParent].push(key);
+      map[currentParent].push(getBudgetConceptKey(concept));
     }
   });
   return map;
@@ -2586,6 +2613,9 @@ export const ErpProjectsPage: React.FC = () => {
   const [budgetDrafts, setBudgetDrafts] = useState<
     Record<number, ProjectBudgetLineUpdatePayload>
   >({});
+  const [generalExpensesMode, setGeneralExpensesMode] = useState<
+    Record<number, "percent" | "amount">
+  >({});
   const [savingBudgets, setSavingBudgets] = useState(false);
   const [seedingTemplate, setSeedingTemplate] = useState(false);
   const [seedingProjectMilestones, setSeedingProjectMilestones] =
@@ -2816,14 +2846,14 @@ export const ErpProjectsPage: React.FC = () => {
     const baseRows = [...mergedBudgetRows];
     // Asegura que existan filas minimas para categorias esperadas.
     DEFAULT_BUDGET_TEMPLATE.forEach((tpl) => {
-      const tplKey = normalizeConceptKey(tpl.concept);
-      if (!baseRows.some((r) => normalizeConceptKey(r.concept) === tplKey)) {
+      const tplKey = getBudgetConceptKey(tpl.concept);
+      if (!baseRows.some((r) => getBudgetConceptKey(r.concept) === tplKey)) {
         baseRows.push(tpl);
       }
     });
 
     baseRows.forEach((row) => {
-      const key = normalizeConceptKey(row.concept || `row-${row.id}`);
+      const key = getBudgetConceptKey(row.concept || `row-${row.id}`);
       const current = map.get(key);
       if (!current) {
         map.set(key, { ...row });
@@ -2840,9 +2870,7 @@ export const ErpProjectsPage: React.FC = () => {
       const forecast =
         Number(current.forecasted_spent ?? 0) +
         Number(row.forecasted_spent ?? 0);
-      const approved =
-        Number(current.approved_budget ?? 0) +
-        Number(row.approved_budget ?? 0);
+      const approved = h1 + h2;
       const percent =
         approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
       map.set(key, {
@@ -2851,15 +2879,15 @@ export const ErpProjectsPage: React.FC = () => {
         hito2_budget: h2,
         justified_hito1: j1,
         justified_hito2: j2,
-        approved_budget: approved || h1 + h2,
+        approved_budget: approved,
         forecasted_spent: forecast,
         percent_spent: percent,
       });
     });
     const ordered = Array.from(map.values());
     ordered.sort((a, b) => {
-      const aKey = normalizeConceptKey(a.concept);
-      const bKey = normalizeConceptKey(b.concept);
+      const aKey = getBudgetConceptKey(a.concept);
+      const bKey = getBudgetConceptKey(b.concept);
       const aIdx = BUDGET_ORDER.indexOf(aKey);
       const bIdx = BUDGET_ORDER.indexOf(bKey);
       if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
@@ -2875,26 +2903,13 @@ export const ErpProjectsPage: React.FC = () => {
     [DEFAULT_BUDGET_TEMPLATE],
   );
 
-  const budgetParentKeys = useMemo(
-    () => new Set(Object.keys(budgetParentMap)),
-    [budgetParentMap],
-  );
-
-  const budgetChildKeys = useMemo(() => {
-    const keys = new Set<string>();
-    Object.values(budgetParentMap).forEach((children) => {
-      children.forEach((child) => keys.add(child));
-    });
-    return keys;
-  }, [budgetParentMap]);
-
   const budgetParentTotals = useMemo(() => {
     const totals = new Map<string, { j1: number; j2: number }>();
     Object.entries(budgetParentMap).forEach(([parentKey, children]) => {
       let j1 = 0;
       let j2 = 0;
       mergedBudgetRows.forEach((row) => {
-        const rowKey = normalizeConceptKey(row.concept);
+        const rowKey = getBudgetConceptKey(row.concept);
         if (!children.includes(rowKey)) return;
         j1 += Number(row.justified_hito1 ?? 0);
         j2 += Number(row.justified_hito2 ?? 0);
@@ -2902,6 +2917,24 @@ export const ErpProjectsPage: React.FC = () => {
       totals.set(parentKey, { j1, j2 });
     });
     return totals;
+  }, [mergedBudgetRows, budgetParentMap]);
+
+  const generalExpensesBaseTotals = useMemo(() => {
+    const totalKey = normalizeConceptKey("Total");
+    const diffKey = normalizeConceptKey("Diferencia");
+    let h1 = 0;
+    let h2 = 0;
+    mergedBudgetRows.forEach((row) => {
+      const key = getBudgetConceptKey(row.concept);
+      if (!key || key === totalKey || key === diffKey) return;
+      if (isGeneralExpensesConcept(row.concept)) return;
+      const isParentRow = budgetParentMap[key] !== undefined;
+      const hasChildren = (budgetParentMap[key] ?? []).length > 0;
+      if (isParentRow && hasChildren) return;
+      h1 += Number(row.hito1_budget ?? 0);
+      h2 += Number(row.hito2_budget ?? 0);
+    });
+    return { h1, h2 };
   }, [mergedBudgetRows, budgetParentMap]);
 
   const canEditBudgets = groupedBudgetRows.length > 0;
@@ -2917,16 +2950,11 @@ export const ErpProjectsPage: React.FC = () => {
     let approved = 0;
     let forecasted = 0;
     groupedBudgetRows.forEach((row) => {
-      const key = normalizeConceptKey(row.concept);
-      const isParent = budgetParentKeys.has(key);
-      const isChild = budgetChildKeys.has(key);
-      if (isChild) return;
-      const parentTotals = isParent ? budgetParentTotals.get(key) : undefined;
       const h1 = Number(row.hito1_budget ?? 0);
       const h2 = Number(row.hito2_budget ?? 0);
-      const j1 = Number(parentTotals?.j1 ?? row.justified_hito1 ?? 0);
-      const j2 = Number(parentTotals?.j2 ?? row.justified_hito2 ?? 0);
-      approved += Number(row.approved_budget ?? h1 + h2);
+      const j1 = Number(row.justified_hito1 ?? 0);
+      const j2 = Number(row.justified_hito2 ?? 0);
+      approved += h1 + h2;
       forecasted += Number(row.forecasted_spent ?? 0);
       totalsByMilestone[1].amount += h1;
       totalsByMilestone[2].amount += h2;
@@ -2950,7 +2978,7 @@ export const ErpProjectsPage: React.FC = () => {
       justificados,
       gasto,
     };
-  }, [groupedBudgetRows, budgetParentKeys, budgetChildKeys, budgetParentTotals]);
+  }, [groupedBudgetRows]);
 
   const budgetsDiffH1 =
     Number(budgetsTabTotals.hito1 || 0) -
@@ -3077,6 +3105,63 @@ export const ErpProjectsPage: React.FC = () => {
     seedingProjectMilestones,
     toast,
   ]);
+
+  const handleGeneralExpensesPercent = (budgetId: number, rawValue: string) => {
+    if (!selectedBudgetProjectId) return;
+    const normalized = rawValue.trim().replace(/\./g, "").replace(",", ".");
+    const numericValue = Number(normalized);
+    if (!Number.isFinite(numericValue)) return;
+    const percent = Math.max(0, numericValue);
+    const h1 = Number(
+      ((generalExpensesBaseTotals.h1 * percent) / 100).toFixed(2),
+    );
+    const h2 = Number(
+      ((generalExpensesBaseTotals.h2 * percent) / 100).toFixed(2),
+    );
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [budgetId]: {
+        ...(prev[budgetId] ?? {}),
+        concept: formatGeneralExpensesConcept(percent),
+        hito1_budget: h1,
+        hito2_budget: h2,
+        approved_budget: h1 + h2,
+      },
+    }));
+  };
+
+  const handleGeneralExpensesAmount = (budgetId: number, rawValue: string) => {
+    if (!selectedBudgetProjectId) return;
+    const normalized = rawValue.trim().replace(/\./g, "").replace(",", ".");
+    const numericValue = Number(normalized);
+    if (!Number.isFinite(numericValue)) return;
+    const amount = Math.max(0, numericValue);
+    const totalBase =
+      generalExpensesBaseTotals.h1 + generalExpensesBaseTotals.h2;
+    let h1 = 0;
+    let h2 = 0;
+    if (totalBase > 0) {
+      h1 = Number(
+        ((amount * generalExpensesBaseTotals.h1) / totalBase).toFixed(2),
+      );
+      h2 = Number(
+        ((amount * generalExpensesBaseTotals.h2) / totalBase).toFixed(2),
+      );
+    } else {
+      h1 = Number(amount.toFixed(2));
+      h2 = 0;
+    }
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [budgetId]: {
+        ...(prev[budgetId] ?? {}),
+        concept: GENERAL_EXPENSES_AMOUNT_LABEL,
+        hito1_budget: h1,
+        hito2_budget: h2,
+        approved_budget: h1 + h2,
+      },
+    }));
+  };
 
   const handleBudgetCellSave = (
     budgetId: number,
@@ -3217,9 +3302,9 @@ export const ErpProjectsPage: React.FC = () => {
         return Number.isFinite(num) ? num : fallback;
       };
       const findBudgetByConcept = (concept: string) => {
-        const key = normalizeConceptKey(concept);
+        const key = getBudgetConceptKey(concept);
         return latestBudgets.find(
-          (r) => normalizeConceptKey(r.concept ?? "") === key,
+          (r) => getBudgetConceptKey(r.concept ?? "") === key,
         );
       };
 
@@ -3235,21 +3320,17 @@ export const ErpProjectsPage: React.FC = () => {
         if (!base.concept) {
           throw new Error("Concepto requerido en todas las filas.");
         }
-        const baseKey = normalizeConceptKey(base.concept);
+        const baseKey = getBudgetConceptKey(base.concept);
         const parentTotals = budgetParentTotals.get(baseKey);
-        const isChildRow = budgetChildKeys.has(baseKey);
         const h1 = safeNumber(
           draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
         );
         const h2 = safeNumber(
           draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
         );
-        let approved = safeNumber(
+        const approved = safeNumber(
           draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
         );
-        if (isChildRow && approved <= 0 && h1 + h2 > 0) {
-          approved = h1 + h2;
-        }
         const j1 = parentTotals
           ? parentTotals.j1
           : safeNumber(
@@ -3321,15 +3402,11 @@ export const ErpProjectsPage: React.FC = () => {
             const h2 = safeNumber(
               draftPayload.hito2_budget ?? base.hito2_budget ?? 0,
             );
-            const baseKey = normalizeConceptKey(base.concept ?? "");
-            const parentTotals = budgetParentTotals.get(baseKey);
-            const isChildRow = budgetChildKeys.has(baseKey);
-            let approved = safeNumber(
+            const approved = safeNumber(
               draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
             );
-            if (isChildRow && approved <= 0 && h1 + h2 > 0) {
-              approved = h1 + h2;
-            }
+            const baseKey = getBudgetConceptKey(base.concept ?? "");
+            const parentTotals = budgetParentTotals.get(baseKey);
             const j1 = parentTotals
               ? parentTotals.j1
               : safeNumber(
@@ -5708,15 +5785,30 @@ export const ErpProjectsPage: React.FC = () => {
                           groupedBudgetRows.map((budget) => {
                             const h1 = Number(budget.hito1_budget ?? 0);
                             const h2 = Number(budget.hito2_budget ?? 0);
-                            const approved = Number(
-                              budget.approved_budget ?? h1 + h2,
-                            );
+                            const approved = h1 + h2;
                             const forecast = Number(
                               budget.forecasted_spent ?? 0,
                             );
                             const percentSpent =
                               approved > 0 ? (forecast / approved) * 100 : 0;
-                            const baseKey = normalizeConceptKey(
+                            const draftConcept =
+                              (budgetDrafts[budget.id]?.concept as string) ??
+                              budget.concept ??
+                              "";
+                            const isGeneralExpenses =
+                              isGeneralExpensesConcept(draftConcept);
+                            const generalPercent =
+                              parsePercentFromConcept(draftConcept) ??
+                              DEFAULT_GENERAL_EXPENSES_PERCENT;
+                            const generalMode =
+                              generalExpensesMode[budget.id] ??
+                              (draftConcept
+                                .toLowerCase()
+                                .includes("(importe)")
+                                ? "amount"
+                                : "percent");
+                            const canEditRow = hasRealBudgets && budgetsEditMode;
+                            const baseKey = getBudgetConceptKey(
                               budget.concept || "",
                             );
                             let rowBg =
@@ -5735,26 +5827,116 @@ export const ErpProjectsPage: React.FC = () => {
                                 bg={rowBg}
                               >
                                 <Td>
-                                  <Editable
-                                    submitOnBlur
-                                    selectAllOnFocus
-                                    key={`concept-${budget.id}-${(budgetDrafts[budget.id]?.concept as string) ?? budget.concept}`}
-                                    defaultValue={
-                                      (budgetDrafts[budget.id]
-                                        ?.concept as string) ?? budget.concept
-                                    }
-                                    isDisabled={!budgetsEditMode}
-                                    onSubmit={(value) =>
-                                      handleBudgetCellSave(
-                                        budget.id,
-                                        "concept",
-                                        value,
-                                      )
-                                    }
-                                  >
-                                    <EditablePreview fontWeight="semibold" />
-                                    <EditableInput />
-                                  </Editable>
+                                  {isGeneralExpenses ? (
+                                    canEditRow ? (
+                                      <HStack spacing={2} align="center">
+                                        <Text fontWeight="semibold">
+                                          {GENERAL_EXPENSES_LABEL}
+                                        </Text>
+                                        <Select
+                                          size="sm"
+                                          maxW="120px"
+                                          value={generalMode}
+                                          onChange={(e) => {
+                                            const value = e.target
+                                              .value as "percent" | "amount";
+                                            setGeneralExpensesMode((prev) => ({
+                                              ...prev,
+                                              [budget.id]: value,
+                                            }));
+                                          }}
+                                        >
+                                          <option value="percent">%</option>
+                                          <option value="amount">Importe</option>
+                                        </Select>
+                                        {generalMode === "percent" ? (
+                                          <InputGroup size="sm" maxW="120px">
+                                            <Input
+                                              type="text"
+                                              inputMode="decimal"
+                                              pattern="[0-9.,]*"
+                                              defaultValue={formatPercentLabelValue(
+                                                generalPercent,
+                                              )}
+                                              onBlur={(e) =>
+                                                handleGeneralExpensesPercent(
+                                                  budget.id,
+                                                  e.target.value,
+                                                )
+                                              }
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                  const target =
+                                                    e.target as HTMLInputElement;
+                                                  handleGeneralExpensesPercent(
+                                                    budget.id,
+                                                    target.value,
+                                                  );
+                                                }
+                                              }}
+                                            />
+                                            <InputRightAddon>%</InputRightAddon>
+                                          </InputGroup>
+                                        ) : (
+                                          <InputGroup size="sm" maxW="140px">
+                                            <Input
+                                              type="text"
+                                              inputMode="decimal"
+                                              pattern="[0-9.,]*"
+                                              defaultValue={formatEuroValue(
+                                                budgetDrafts[budget.id]
+                                                  ?.approved_budget ?? approved,
+                                              )}
+                                              onBlur={(e) =>
+                                                handleGeneralExpensesAmount(
+                                                  budget.id,
+                                                  e.target.value,
+                                                )
+                                              }
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                  const target =
+                                                    e.target as HTMLInputElement;
+                                                  handleGeneralExpensesAmount(
+                                                    budget.id,
+                                                    target.value,
+                                                  );
+                                                }
+                                              }}
+                                            />
+                                            <InputRightAddon>
+                                              €
+                                            </InputRightAddon>
+                                          </InputGroup>
+                                        )}
+                                      </HStack>
+                                    ) : (
+                                      <Text fontWeight="semibold">
+                                        {draftConcept ||
+                                          formatGeneralExpensesConcept(
+                                            generalPercent,
+                                          )}
+                                      </Text>
+                                    )
+                                  ) : (
+                                    <Editable
+                                      submitOnBlur
+                                      selectAllOnFocus
+                                      key={`concept-${budget.id}-${draftConcept}`}
+                                      defaultValue={draftConcept}
+                                      isDisabled={!budgetsEditMode}
+                                      onSubmit={(value) =>
+                                        handleBudgetCellSave(
+                                          budget.id,
+                                          "concept",
+                                          value,
+                                        )
+                                      }
+                                    >
+                                      <EditablePreview fontWeight="semibold" />
+                                      <EditableInput />
+                                    </Editable>
+                                  )}
                                 </Td>
                                 <Td textAlign="right">
                                   <BudgetNumberCell
@@ -5763,9 +5945,7 @@ export const ErpProjectsPage: React.FC = () => {
                                       budget.hito1_budget ??
                                       0
                                     }
-                                    isEditing={
-                                      hasRealBudgets && budgetsEditMode
-                                    }
+                                    isEditing={canEditRow}
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
                                         budget.id,
@@ -5786,9 +5966,7 @@ export const ErpProjectsPage: React.FC = () => {
                                           0)
                                     }
                                     isEditing={
-                                      hasRealBudgets &&
-                                      budgetsEditMode &&
-                                      !isParentRow
+                                      canEditRow && !isParentRow
                                     }
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
@@ -5806,9 +5984,7 @@ export const ErpProjectsPage: React.FC = () => {
                                       budget.hito2_budget ??
                                       0
                                     }
-                                    isEditing={
-                                      hasRealBudgets && budgetsEditMode
-                                    }
+                                    isEditing={canEditRow}
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
                                         budget.id,
@@ -5829,9 +6005,7 @@ export const ErpProjectsPage: React.FC = () => {
                                           0)
                                     }
                                     isEditing={
-                                      hasRealBudgets &&
-                                      budgetsEditMode &&
-                                      !isParentRow
+                                      canEditRow && !isParentRow
                                     }
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
@@ -5848,7 +6022,7 @@ export const ErpProjectsPage: React.FC = () => {
                                       budgetDrafts[budget.id]
                                         ?.approved_budget ?? approved
                                     }
-                                    isEditing={budgetsEditMode}
+                                    isEditing={canEditRow}
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
                                         budget.id,
@@ -5871,9 +6045,7 @@ export const ErpProjectsPage: React.FC = () => {
                                       budget.forecasted_spent ??
                                       0
                                     }
-                                    isEditing={
-                                      hasRealBudgets && budgetsEditMode
-                                    }
+                                    isEditing={canEditRow}
                                     onSubmit={(value) =>
                                       handleBudgetCellSave(
                                         budget.id,
