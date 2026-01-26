@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session
 
 from app.api.deps import get_current_active_user
@@ -20,12 +22,41 @@ from app.services.external_collaboration_service import (
 router = APIRouter()
 
 
+def _tenant_for_read(current_user: User, x_tenant_id: Optional[int]) -> Optional[int]:
+    if current_user.is_super_admin:
+        return x_tenant_id
+    if current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant requerido.",
+        )
+    return current_user.tenant_id
+
+
+def _tenant_for_write(current_user: User, x_tenant_id: Optional[int]) -> int:
+    if current_user.is_super_admin:
+        if x_tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Tenant-Id requerido para escribir.",
+            )
+        return x_tenant_id
+    if current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant requerido.",
+        )
+    return current_user.tenant_id
+
+
 @router.get("/external-collaborations", response_model=list[ExternalCollaborationRead])
 def api_list_external_collaborations(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ExternalCollaborationRead]:
-    return list_external_collaborations(session)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_external_collaborations(session, tenant_id)
 
 
 @router.post(
@@ -37,9 +68,11 @@ def api_create_external_collaboration(
     payload: ExternalCollaborationCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ExternalCollaborationRead:
     try:
-        return create_external_collaboration(session, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_external_collaboration(session, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -53,9 +86,11 @@ def api_update_external_collaboration(
     payload: ExternalCollaborationUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ExternalCollaborationRead:
     try:
-        return update_external_collaboration(session, collaboration_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_external_collaboration(session, collaboration_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except LookupError as exc:
@@ -70,8 +105,10 @@ def api_delete_external_collaboration(
     collaboration_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_external_collaboration(session, collaboration_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_external_collaboration(session, collaboration_id, tenant_id)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

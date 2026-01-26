@@ -73,6 +73,7 @@ def list_simulation_projects(
             name=project.name,
             budget=project.budget,
             subsidy_percent=project.subsidy_percent,
+            threshold_percent=project.threshold_percent,
             created_at=project.created_at,
             updated_at=project.updated_at,
             expenses=expense_map.get(project.id or 0, []),
@@ -96,6 +97,7 @@ def create_simulation_project(
         name=name,
         budget=Decimal(data.budget or 0),
         subsidy_percent=Decimal(data.subsidy_percent or 0),
+        threshold_percent=Decimal(data.threshold_percent or 50),
         created_at=now,
         updated_at=now,
     )
@@ -108,6 +110,7 @@ def create_simulation_project(
         name=project.name,
         budget=project.budget,
         subsidy_percent=project.subsidy_percent,
+        threshold_percent=project.threshold_percent,
         created_at=project.created_at,
         updated_at=project.updated_at,
         expenses=[],
@@ -135,6 +138,8 @@ def update_simulation_project(
         project.budget = Decimal(data.budget)
     if data.subsidy_percent is not None:
         project.subsidy_percent = Decimal(data.subsidy_percent)
+    if data.threshold_percent is not None:
+        project.threshold_percent = Decimal(data.threshold_percent)
 
     project.updated_at = datetime.utcnow()
     session.add(project)
@@ -150,6 +155,7 @@ def update_simulation_project(
         name=project.name,
         budget=project.budget,
         subsidy_percent=project.subsidy_percent,
+        threshold_percent=project.threshold_percent,
         created_at=project.created_at,
         updated_at=project.updated_at,
         expenses=[

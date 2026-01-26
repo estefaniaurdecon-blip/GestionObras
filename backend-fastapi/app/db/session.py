@@ -32,6 +32,10 @@ def init_db() -> None:
     if "erp_task" in table_names:
         task_columns = {col["name"] for col in inspector.get_columns("erp_task")}
         with engine.begin() as conn:
+            if "tenant_id" not in task_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_task ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "status" not in task_columns:
                 # Backfill rapido para entornos locales sin migraciones.
                 conn.execute(
@@ -79,6 +83,10 @@ def init_db() -> None:
     if "erp_project" in table_names:
         project_columns = {col["name"] for col in inspector.get_columns("erp_project")}
         with engine.begin() as conn:
+            if "tenant_id" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "start_date" not in project_columns:
                 conn.execute(
                     text(
@@ -98,6 +106,10 @@ def init_db() -> None:
     if "erp_activity" in table_names:
         activity_columns = {col["name"] for col in inspector.get_columns("erp_activity")}
         with engine.begin() as conn:
+            if "tenant_id" not in activity_columns:
+                conn.execute(
+                  text("ALTER TABLE erp_activity ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "assigned_to_id" not in activity_columns:
                 conn.execute(
                   text("ALTER TABLE erp_activity ADD COLUMN assigned_to_id INTEGER NULL")
@@ -106,6 +118,10 @@ def init_db() -> None:
     if "erp_subactivity" in table_names:
         sub_columns = {col["name"] for col in inspector.get_columns("erp_subactivity")}
         with engine.begin() as conn:
+            if "tenant_id" not in sub_columns:
+                conn.execute(
+                  text("ALTER TABLE erp_subactivity ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "assigned_to_id" not in sub_columns:
                 conn.execute(
                   text("ALTER TABLE erp_subactivity ADD COLUMN assigned_to_id INTEGER NULL")
@@ -114,6 +130,10 @@ def init_db() -> None:
     if "erp_timesession" in table_names:
         ts_columns = {col["name"] for col in inspector.get_columns("erp_timesession")}
         with engine.begin() as conn:
+            if "tenant_id" not in ts_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_timesession ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "activity_id" not in ts_columns:
                 conn.execute(
                     text("ALTER TABLE erp_timesession ADD COLUMN activity_id INTEGER NULL")
@@ -126,6 +146,10 @@ def init_db() -> None:
     if "erp_timeentry" in table_names:
         te_columns = {col["name"] for col in inspector.get_columns("erp_timeentry")}
         with engine.begin() as conn:
+            if "tenant_id" not in te_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_timeentry ADD COLUMN tenant_id INTEGER NULL")
+                )
             if "activity_id" not in te_columns:
                 conn.execute(
                     text("ALTER TABLE erp_timeentry ADD COLUMN activity_id INTEGER NULL")
@@ -138,6 +162,80 @@ def init_db() -> None:
                 # Asegura que la columna acepte NULL para entradas no ligadas a tareas.
                 conn.execute(
                     text("ALTER TABLE erp_timeentry ALTER COLUMN task_id DROP NOT NULL")
+                )
+
+    if "erp_task_template" in table_names:
+        tmpl_columns = {col["name"] for col in inspector.get_columns("erp_task_template")}
+        with engine.begin() as conn:
+            if "tenant_id" not in tmpl_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_task_template ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_milestone" in table_names:
+        milestone_columns = {col["name"] for col in inspector.get_columns("erp_milestone")}
+        with engine.begin() as conn:
+            if "tenant_id" not in milestone_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_milestone ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_deliverable" in table_names:
+        deliverable_columns = {col["name"] for col in inspector.get_columns("erp_deliverable")}
+        with engine.begin() as conn:
+            if "tenant_id" not in deliverable_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_deliverable ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_project_budget_line" in table_names:
+        budget_line_columns = {col["name"] for col in inspector.get_columns("erp_project_budget_line")}
+        with engine.begin() as conn:
+            if "tenant_id" not in budget_line_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project_budget_line ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_project_budget_milestone" in table_names:
+        budget_milestone_columns = {col["name"] for col in inspector.get_columns("erp_project_budget_milestone")}
+        with engine.begin() as conn:
+            if "tenant_id" not in budget_milestone_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project_budget_milestone ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_budget_line_milestone" in table_names:
+        budget_link_columns = {col["name"] for col in inspector.get_columns("erp_budget_line_milestone")}
+        with engine.begin() as conn:
+            if "tenant_id" not in budget_link_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_budget_line_milestone ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_external_collaboration" in table_names:
+        collab_columns = {col["name"] for col in inspector.get_columns("erp_external_collaboration")}
+        with engine.begin() as conn:
+            if "tenant_id" not in collab_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_external_collaboration ADD COLUMN tenant_id INTEGER NULL")
+                )
+
+    if "erp_simulation_project" in table_names:
+        sim_columns = {col["name"] for col in inspector.get_columns("erp_simulation_project")}
+        with engine.begin() as conn:
+            if "threshold_percent" not in sim_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE erp_simulation_project "
+                        "ADD COLUMN threshold_percent DECIMAL NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE erp_simulation_project "
+                        "SET threshold_percent = 50 "
+                        "WHERE threshold_percent IS NULL"
+                    )
                 )
 
     if "department" in table_names:

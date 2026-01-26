@@ -61,6 +61,7 @@ export const ErpSimulationsPage: React.FC = () => {
     removeExpense,
     setProjectBudget,
     setProjectSubsidyPercent,
+    setProjectThresholdPercent,
     setExpenseAmount,
     isLoading,
   } = useSimulations(effectiveTenantId);
@@ -124,6 +125,9 @@ export const ErpSimulationsPage: React.FC = () => {
               }
               onPercentChange={(value) =>
                 setProjectSubsidyPercent(selectedProject.id, value)
+              }
+              onThresholdChange={(value) =>
+                setProjectThresholdPercent(selectedProject.id, value)
               }
               onAddExpense={() => addExpense(selectedProject.id)}
               onExpenseConceptChange={(expenseId, value) =>

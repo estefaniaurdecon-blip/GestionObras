@@ -309,6 +309,14 @@ export const useSimulations = (tenantId?: number) => {
     updateProject(projectId, { subsidyPercent });
   };
 
+  const setProjectThresholdPercent = (
+    projectId: number,
+    value: string | number,
+  ) => {
+    const thresholdPercent = Math.max(0, Math.min(100, safeNumber(value)));
+    updateProject(projectId, { thresholdPercent });
+  };
+
   const setExpenseAmount = (
     projectId: number,
     expenseId: number,
@@ -330,6 +338,7 @@ export const useSimulations = (tenantId?: number) => {
     removeExpense,
     setProjectBudget,
     setProjectSubsidyPercent,
+    setProjectThresholdPercent,
     setExpenseAmount,
     isLoading: simulationsQuery.isLoading,
   };

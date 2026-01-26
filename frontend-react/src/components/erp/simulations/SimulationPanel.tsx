@@ -24,6 +24,7 @@ interface SimulationPanelProps {
   project: SimulationProject;
   onBudgetChange: (value: string) => void;
   onPercentChange: (value: string) => void;
+  onThresholdChange: (value: string) => void;
   onAddExpense: () => void;
   onExpenseConceptChange: (expenseId: number, value: string) => void;
   onExpenseAmountChange: (expenseId: number, value: string) => void;
@@ -34,6 +35,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   project,
   onBudgetChange,
   onPercentChange,
+  onThresholdChange,
   onAddExpense,
   onExpenseConceptChange,
   onExpenseAmountChange,
@@ -51,16 +53,32 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
     () => (project.budget * project.subsidyPercent) / 100,
     [project.budget, project.subsidyPercent],
   );
+
   const totalExpenses = useMemo(
     () => project.expenses.reduce((sum, item) => sum + (item.amount || 0), 0),
     [project.expenses],
   );
+
   const result = subsidyAmount - totalExpenses;
-  const threshold = subsidyAmount * 0.5;
+  const threshold = subsidyAmount * (project.thresholdPercent / 100);
   const isFavorable = result >= threshold;
 
+  const unfavorablePercent = useMemo(() => {
+    if (threshold <= 0) return 0;
+    if (isFavorable) return 0;
+    const gap = Math.max(0, threshold - result);
+    return Math.min(100, (gap / threshold) * 100);
+  }, [isFavorable, result, threshold]);
+
   return (
-    <Stack spacing={5} bg={panelBg} borderRadius="xl" p={6} borderWidth="1px" borderColor={panelBorder}>
+    <Stack
+      spacing={5}
+      bg={panelBg}
+      borderRadius="xl"
+      p={6}
+      borderWidth="1px"
+      borderColor={panelBorder}
+    >
       <HStack justify="space-between" align="flex-start" flexWrap="wrap">
         <Stack spacing={2}>
           <Text fontSize="lg" fontWeight="bold">
@@ -93,16 +111,35 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
                 maxW="90px"
               />
             </HStack>
+            <HStack>
+              <Text>% umbral:</Text>
+              <Input
+                size="sm"
+                type="text"
+                inputMode="decimal"
+                value={project.thresholdPercent}
+                onChange={(e) => onThresholdChange(e.target.value)}
+                bg={inputBg}
+                borderColor={inputBorder}
+                maxW="90px"
+              />
+            </HStack>
           </HStack>
           <Text color={subtleText}>
             Subvencionado: {formatEuroValue(subsidyAmount)} €
           </Text>
           <Text color={subtleText}>
-            Umbral (50%): {formatEuroValue(threshold)} €
+            Umbral ({project.thresholdPercent}%): {formatEuroValue(threshold)} €
           </Text>
         </Stack>
 
-        <Box textAlign="right" bg={resultBg} color={resultText} p={4} borderRadius="lg">
+        <Box
+          textAlign="right"
+          bg={resultBg}
+          color={resultText}
+          p={4}
+          borderRadius="lg"
+        >
           <Text fontSize="sm" fontWeight="bold" color="gray.200">
             RESULTADO
           </Text>
@@ -110,8 +147,13 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
             {formatEuroValue(result)} €
           </Text>
           <Text color={isFavorable ? "green.300" : "red.300"}>
-            {isFavorable ? "Favorable" : "No favorable"}
+            {isFavorable ? "Favorable" : "Desfavorable"}
           </Text>
+          {!isFavorable && (
+            <Text color="red.200" fontSize="sm">
+              {unfavorablePercent.toFixed(1)}% lejos de ser favorable
+            </Text>
+          )}
         </Box>
       </HStack>
 
@@ -120,7 +162,12 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
       <Stack spacing={3}>
         <HStack justify="space-between">
           <Text fontWeight="semibold">Gastos</Text>
-          <Button size="sm" colorScheme="green" variant="outline" onClick={onAddExpense}>
+          <Button
+            size="sm"
+            colorScheme="green"
+            variant="outline"
+            onClick={onAddExpense}
+          >
             + Anadir gasto
           </Button>
         </HStack>

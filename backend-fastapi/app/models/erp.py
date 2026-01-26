@@ -10,6 +10,7 @@ class Project(SQLModel, table=True):
     __tablename__ = "erp_project"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None
@@ -22,6 +23,7 @@ class Task(SQLModel, table=True):
     __tablename__ = "erp_task"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     project_id: Optional[int] = Field(default=None, foreign_key="erp_project.id")
     # Subactividad dentro del proyecto (opcional para compatibilidad).
     subactivity_id: Optional[int] = Field(default=None, foreign_key="erp_subactivity.id")
@@ -41,6 +43,7 @@ class TaskTemplate(SQLModel, table=True):
     __tablename__ = "erp_task_template"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     title: str
     description: Optional[str] = None
     is_active: bool = Field(default=True)
@@ -51,6 +54,7 @@ class Activity(SQLModel, table=True):
     __tablename__ = "erp_activity"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     project_id: int = Field(foreign_key="erp_project.id")
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     name: str
@@ -64,6 +68,7 @@ class SubActivity(SQLModel, table=True):
     __tablename__ = "erp_subactivity"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     activity_id: int = Field(foreign_key="erp_activity.id")
     assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
     name: str
@@ -77,6 +82,7 @@ class Milestone(SQLModel, table=True):
     __tablename__ = "erp_milestone"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     project_id: int = Field(foreign_key="erp_project.id")
     # Hito opcionalmente ligado a una actividad concreta.
     activity_id: Optional[int] = Field(default=None, foreign_key="erp_activity.id")
@@ -91,6 +97,7 @@ class Deliverable(SQLModel, table=True):
     __tablename__ = "erp_deliverable"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     milestone_id: int = Field(foreign_key="erp_milestone.id")
     title: str
     notes: Optional[str] = None
@@ -107,6 +114,7 @@ class TimeEntry(SQLModel, table=True):
     __tablename__ = "erp_timeentry"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     task_id: Optional[int] = Field(default=None, foreign_key="erp_task.id")
     activity_id: Optional[int] = Field(default=None, foreign_key="erp_activity.id")
     subactivity_id: Optional[int] = Field(default=None, foreign_key="erp_subactivity.id")
@@ -121,6 +129,7 @@ class TimeSession(SQLModel, table=True):
     __tablename__ = "erp_timesession"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     task_id: Optional[int] = Field(default=None, foreign_key="erp_task.id")
     activity_id: Optional[int] = Field(default=None, foreign_key="erp_activity.id")
     subactivity_id: Optional[int] = Field(default=None, foreign_key="erp_subactivity.id")
@@ -137,6 +146,7 @@ class ProjectBudgetLine(SQLModel, table=True):
     __tablename__ = "erp_project_budget_line"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     project_id: int = Field(foreign_key="erp_project.id")
     concept: str
     hito1_budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
@@ -153,6 +163,7 @@ class ProjectBudgetMilestone(SQLModel, table=True):
     __tablename__ = "erp_project_budget_milestone"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     project_id: int = Field(foreign_key="erp_project.id")
     name: str
     order_index: int = Field(default=0)
@@ -163,6 +174,7 @@ class BudgetLineMilestone(SQLModel, table=True):
     __tablename__ = "erp_budget_line_milestone"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     budget_line_id: int = Field(foreign_key="erp_project_budget_line.id")
     milestone_id: int = Field(foreign_key="erp_project_budget_milestone.id")
     amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
@@ -174,6 +186,7 @@ class ExternalCollaboration(SQLModel, table=True):
     __tablename__ = "erp_external_collaboration"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     collaboration_type: str
     name: str
     legal_name: str
@@ -194,6 +207,10 @@ class SimulationProject(SQLModel, table=True):
     subsidy_percent: Decimal = Field(
         sa_column=Column(Numeric(6, 2), nullable=False),
         default=0,
+    )
+    threshold_percent: Decimal = Field(
+        sa_column=Column(Numeric(6, 2), nullable=False),
+        default=50,
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

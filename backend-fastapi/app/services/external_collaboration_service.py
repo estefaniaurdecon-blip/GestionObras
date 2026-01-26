@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -6,15 +7,20 @@ from app.models.erp import ExternalCollaboration
 from app.schemas.erp import ExternalCollaborationCreate, ExternalCollaborationUpdate
 
 
-def list_external_collaborations(session: Session) -> list[ExternalCollaboration]:
-    return session.exec(
-        select(ExternalCollaboration).order_by(ExternalCollaboration.created_at.desc()),
-    ).all()
+def list_external_collaborations(
+    session: Session, tenant_id: Optional[int]
+) -> list[ExternalCollaboration]:
+    stmt = select(ExternalCollaboration).order_by(ExternalCollaboration.created_at.desc())
+    if tenant_id is not None:
+        stmt = stmt.where(ExternalCollaboration.tenant_id == tenant_id)
+    return session.exec(stmt).all()
 
 
 def create_external_collaboration(
-    session: Session, data: ExternalCollaborationCreate
+    session: Session, data: ExternalCollaborationCreate, tenant_id: Optional[int]
 ) -> ExternalCollaboration:
+    if tenant_id is None:
+        raise ValueError("Tenant requerido.")
     name = data.name.strip()
     legal_name = data.legal_name.strip()
     cif = data.cif.strip()
@@ -25,6 +31,7 @@ def create_external_collaboration(
 
     now = datetime.utcnow()
     collaboration = ExternalCollaboration(
+        tenant_id=tenant_id,
         collaboration_type=collaboration_type,
         name=name,
         legal_name=legal_name,
@@ -40,10 +47,13 @@ def create_external_collaboration(
 
 
 def update_external_collaboration(
-    session: Session, collaboration_id: int, data: ExternalCollaborationUpdate
+    session: Session,
+    collaboration_id: int,
+    data: ExternalCollaborationUpdate,
+    tenant_id: Optional[int],
 ) -> ExternalCollaboration:
     collaboration = session.get(ExternalCollaboration, collaboration_id)
-    if not collaboration:
+    if not collaboration or (tenant_id is not None and collaboration.tenant_id != tenant_id):
         raise LookupError("Colaboracion externa no encontrada.")
 
     if data.collaboration_type is not None:
@@ -79,9 +89,11 @@ def update_external_collaboration(
     return collaboration
 
 
-def delete_external_collaboration(session: Session, collaboration_id: int) -> None:
+def delete_external_collaboration(
+    session: Session, collaboration_id: int, tenant_id: Optional[int]
+) -> None:
     collaboration = session.get(ExternalCollaboration, collaboration_id)
-    if not collaboration:
+    if not collaboration or (tenant_id is not None and collaboration.tenant_id != tenant_id):
         raise LookupError("Colaboracion externa no encontrada.")
     session.delete(collaboration)
     session.commit()

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import require_any_permissions, require_permissions
@@ -88,12 +88,41 @@ from app.services.erp_service import (
 router = APIRouter()
 
 
+def _tenant_for_read(current_user: User, x_tenant_id: Optional[int]) -> Optional[int]:
+    if current_user.is_super_admin:
+        return x_tenant_id
+    if current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant requerido.",
+        )
+    return current_user.tenant_id
+
+
+def _tenant_for_write(current_user: User, x_tenant_id: Optional[int]) -> int:
+    if current_user.is_super_admin:
+        if x_tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Tenant-Id requerido para escribir.",
+            )
+        return x_tenant_id
+    if current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant requerido.",
+        )
+    return current_user.tenant_id
+
+
 @router.get("/projects", response_model=list[ProjectRead])
 def api_list_projects(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ProjectRead]:
-    return list_projects(session)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_projects(session, tenant_id)
 
 
 @router.get("/projects/{project_id}", response_model=ProjectRead)
@@ -101,9 +130,11 @@ def api_get_project(
     project_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectRead:
     try:
-        return get_project(session, project_id)
+        tenant_id = _tenant_for_read(current_user, x_tenant_id)
+        return get_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -113,8 +144,10 @@ def api_create_project(
     payload: ProjectCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectRead:
-    return create_project(session, payload)
+    tenant_id = _tenant_for_write(current_user, x_tenant_id)
+    return create_project(session, payload, tenant_id)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectRead)
@@ -123,9 +156,11 @@ def api_update_project(
     payload: ProjectUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectRead:
     try:
-        return update_project(session, project_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_project(session, project_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -135,9 +170,11 @@ def api_delete_project(
     project_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_project(session, project_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -147,12 +184,14 @@ def api_list_project_budgets(
     project_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ProjectBudgetLineRead]:
     try:
-        get_project(session, project_id)
+        tenant_id = _tenant_for_read(current_user, x_tenant_id)
+        get_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    lines, milestones_by_line = list_project_budget_lines(session, project_id)
+    lines, milestones_by_line = list_project_budget_lines(session, project_id, tenant_id)
     result: list[ProjectBudgetLineRead] = []
     for line in lines:
         milestones = milestones_by_line.get(line.id, [])
@@ -189,12 +228,14 @@ def api_list_project_budget_milestones(
     project_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ProjectBudgetMilestoneRead]:
     try:
-        get_project(session, project_id)
+        tenant_id = _tenant_for_read(current_user, x_tenant_id)
+        get_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return list_project_budget_milestones(session, project_id)
+    return list_project_budget_milestones(session, project_id, tenant_id)
 
 
 @router.post(
@@ -207,9 +248,11 @@ def api_create_project_budget_milestone(
     payload: ProjectBudgetMilestoneCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectBudgetMilestoneRead:
     try:
-        return create_project_budget_milestone(session, project_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_project_budget_milestone(session, project_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -224,9 +267,13 @@ def api_update_project_budget_milestone(
     payload: ProjectBudgetMilestoneUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectBudgetMilestoneRead:
     try:
-        return update_project_budget_milestone(session, project_id, milestone_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_project_budget_milestone(
+            session, project_id, milestone_id, payload, tenant_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -237,9 +284,11 @@ def api_delete_project_budget_milestone(
     milestone_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_project_budget_milestone(session, project_id, milestone_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_project_budget_milestone(session, project_id, milestone_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -254,10 +303,12 @@ def api_create_project_budget_line(
     payload: ProjectBudgetLineCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectBudgetLineRead:
     try:
-        get_project(session, project_id)
-        line = create_project_budget_line(session, project_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        get_project(session, project_id, tenant_id)
+        line = create_project_budget_line(session, project_id, payload, tenant_id)
         milestones = getattr(line, "milestones", [])
         return ProjectBudgetLineRead(
             id=line.id,
@@ -293,9 +344,11 @@ def api_update_project_budget_line(
     payload: ProjectBudgetLineUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectBudgetLineRead:
     try:
-        line = update_project_budget_line(session, project_id, budget_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        line = update_project_budget_line(session, project_id, budget_id, payload, tenant_id)
         milestones = getattr(line, "milestones", [])
         return ProjectBudgetLineRead(
             id=line.id,
@@ -330,9 +383,11 @@ def api_delete_project_budget_line(
     budget_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_project_budget_line(session, project_id, budget_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_project_budget_line(session, project_id, budget_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -341,8 +396,10 @@ def api_delete_project_budget_line(
 def api_list_tasks(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TaskRead]:
-    return list_tasks(session)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_tasks(session, tenant_id)
 
 
 @router.post("/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
@@ -350,9 +407,11 @@ def api_create_task(
     payload: TaskCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TaskRead:
     try:
-        return create_task(session, current_user, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_task(session, current_user, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -361,8 +420,10 @@ def api_create_task(
 def api_list_task_templates(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TaskTemplateRead]:
-    return list_task_templates(session)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_task_templates(session, tenant_id)
 
 
 @router.post("/task-templates", response_model=TaskTemplateRead, status_code=status.HTTP_201_CREATED)
@@ -370,8 +431,10 @@ def api_create_task_template(
     payload: TaskTemplateCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TaskTemplateRead:
-    return create_task_template(session, payload)
+    tenant_id = _tenant_for_write(current_user, x_tenant_id)
+    return create_task_template(session, payload, tenant_id)
 
 
 @router.get("/activities", response_model=list[ActivityRead])
@@ -379,8 +442,10 @@ def api_list_activities(
     project_id: Optional[int] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ActivityRead]:
-    return list_activities(session, project_id=project_id)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_activities(session, tenant_id, project_id=project_id)
 
 
 @router.post("/activities", response_model=ActivityRead, status_code=status.HTTP_201_CREATED)
@@ -388,9 +453,11 @@ def api_create_activity(
     payload: ActivityCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ActivityRead:
     try:
-        return create_activity(session, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_activity(session, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -401,9 +468,11 @@ def api_update_activity(
     payload: ActivityUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ActivityRead:
     try:
-        return update_activity(session, activity_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_activity(session, activity_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -414,8 +483,12 @@ def api_list_subactivities(
     activity_id: Optional[int] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[SubActivityRead]:
-    return list_subactivities(session, project_id=project_id, activity_id=activity_id)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_subactivities(
+        session, tenant_id, project_id=project_id, activity_id=activity_id
+    )
 
 
 @router.post("/subactivities", response_model=SubActivityRead, status_code=status.HTTP_201_CREATED)
@@ -423,9 +496,11 @@ def api_create_subactivity(
     payload: SubActivityCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> SubActivityRead:
     try:
-        return create_subactivity(session, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_subactivity(session, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -436,9 +511,11 @@ def api_update_subactivity(
     payload: SubActivityUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> SubActivityRead:
     try:
-        return update_subactivity(session, subactivity_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_subactivity(session, subactivity_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -449,8 +526,10 @@ def api_list_milestones(
     activity_id: Optional[int] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[MilestoneRead]:
-    return list_milestones(session, project_id=project_id, activity_id=activity_id)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_milestones(session, tenant_id, project_id=project_id, activity_id=activity_id)
 
 
 @router.post("/milestones", response_model=MilestoneRead, status_code=status.HTTP_201_CREATED)
@@ -458,9 +537,11 @@ def api_create_milestone(
     payload: MilestoneCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> MilestoneRead:
     try:
-        return create_milestone(session, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_milestone(session, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -471,9 +552,11 @@ def api_update_milestone(
     payload: MilestoneUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> MilestoneRead:
     try:
-        return update_milestone(session, milestone_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_milestone(session, milestone_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -483,8 +566,10 @@ def api_list_deliverables(
     milestone_id: Optional[int] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[DeliverableRead]:
-    return list_deliverables(session, milestone_id=milestone_id)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return list_deliverables(session, tenant_id, milestone_id=milestone_id)
 
 
 @router.post("/deliverables", response_model=DeliverableRead, status_code=status.HTTP_201_CREATED)
@@ -492,9 +577,11 @@ def api_create_deliverable(
     payload: DeliverableCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> DeliverableRead:
     try:
-        return create_deliverable(session, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_deliverable(session, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -505,9 +592,11 @@ def api_update_deliverable(
     payload: DeliverableUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> DeliverableRead:
     try:
-        return update_deliverable(session, deliverable_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_deliverable(session, deliverable_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -518,9 +607,11 @@ def api_update_task(
     payload: TaskUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TaskRead:
     try:
-        return update_task(session, current_user, task_id, payload)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return update_task(session, current_user, task_id, payload, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -530,9 +621,11 @@ def api_delete_task(
     task_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_task(session, task_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_task(session, task_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -541,8 +634,10 @@ def api_delete_task(
 def api_get_active_time_session(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> Optional[TimeSessionRead]:
-    return get_active_time_session(session, current_user)
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    return get_active_time_session(session, current_user, tenant_id)
 
 
 @router.post("/time-tracking/start", response_model=TimeSessionRead, status_code=status.HTTP_201_CREATED)
@@ -550,9 +645,11 @@ def api_start_time_session(
     data: TimeTrackingStart,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
     try:
-        return start_time_session(session, current_user, data.task_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return start_time_session(session, current_user, data.task_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -561,8 +658,10 @@ def api_start_time_session(
 def api_stop_time_session(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
-    session_obj = stop_time_session(session, current_user)
+    tenant_id = _tenant_for_write(current_user, x_tenant_id)
+    session_obj = stop_time_session(session, current_user, tenant_id)
     if not session_obj:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -579,9 +678,12 @@ def api_time_report(
     date_to: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TimeReportRow]:
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
     rows = get_time_report(
         session=session,
+        tenant_id=tenant_id,
         project_id=project_id,
         user_id=user_id,
         date_from=date_from,
@@ -596,10 +698,13 @@ def api_list_time_sessions(
     date_to: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TimeSessionRead]:
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
     return list_time_sessions(
         session=session,
         user=current_user,
+        tenant_id=tenant_id,
         date_from=date_from,
         date_to=date_to,
     )
@@ -610,8 +715,10 @@ def api_create_time_session(
     payload: TimeSessionCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
     try:
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
         return create_manual_time_session(
             session=session,
             user=current_user,
@@ -619,6 +726,7 @@ def api_create_time_session(
             description=payload.description,
             started_at=payload.started_at,
             ended_at=payload.ended_at,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -630,8 +738,10 @@ def api_update_time_session(
     payload: TimeSessionUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
     try:
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
         return update_time_session(
             session=session,
             user=current_user,
@@ -640,6 +750,7 @@ def api_update_time_session(
             description=payload.description,
             started_at=payload.started_at,
             ended_at=payload.ended_at,
+            tenant_id=tenant_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -650,8 +761,12 @@ def api_delete_time_session(
     session_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> None:
     try:
-        delete_time_session(session=session, user=current_user, session_id=session_id)
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        delete_time_session(
+            session=session, user=current_user, session_id=session_id, tenant_id=tenant_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

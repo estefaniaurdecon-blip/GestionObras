@@ -11,6 +11,7 @@ export type SimulationProject = {
   name: string;
   budget: number;
   subsidyPercent: number;
+  thresholdPercent: number;
   expenses: SimulationExpense[];
 };
 
@@ -27,6 +28,7 @@ type ApiSimulationProject = {
   name: string;
   budget: number;
   subsidy_percent: number;
+  threshold_percent: number;
   expenses: ApiSimulationExpense[];
 };
 
@@ -34,6 +36,7 @@ export type SimulationProjectCreate = {
   name: string;
   budget?: number;
   subsidyPercent?: number;
+  thresholdPercent?: number;
 };
 
 export type SimulationProjectUpdate = Partial<SimulationProjectCreate>;
@@ -65,6 +68,7 @@ const mapProject = (project: ApiSimulationProject): SimulationProject => ({
   name: project.name,
   budget: Number(project.budget ?? 0),
   subsidyPercent: Number(project.subsidy_percent ?? 0),
+  thresholdPercent: Number(project.threshold_percent ?? 50),
   expenses: project.expenses?.map(mapExpense) ?? [],
 });
 
@@ -72,6 +76,7 @@ const serializeProjectPatch = (payload: SimulationProjectUpdate) => ({
   name: payload.name,
   budget: payload.budget,
   subsidy_percent: payload.subsidyPercent,
+  threshold_percent: payload.thresholdPercent,
 });
 
 export async function fetchSimulations(tenantId?: number) {
@@ -92,6 +97,7 @@ export async function createSimulationProject(
       name: payload.name,
       budget: payload.budget ?? 0,
       subsidy_percent: payload.subsidyPercent ?? 0,
+      threshold_percent: payload.thresholdPercent ?? 50,
     },
     buildTenantHeaders(tenantId),
   );

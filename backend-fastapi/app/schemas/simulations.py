@@ -33,6 +33,7 @@ class SimulationProjectBase(BaseModel):
     name: str
     budget: Decimal = 0
     subsidy_percent: Decimal = 0
+    threshold_percent: Decimal = 50
 
 
 class SimulationProjectCreate(SimulationProjectBase):
@@ -43,6 +44,7 @@ class SimulationProjectUpdate(BaseModel):
     name: Optional[str] = None
     budget: Optional[Decimal] = None
     subsidy_percent: Optional[Decimal] = None
+    threshold_percent: Optional[Decimal] = None
 
 
 class SimulationProjectRead(SimulationProjectBase):

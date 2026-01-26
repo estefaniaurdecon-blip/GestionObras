@@ -65,7 +65,7 @@ def login_step1(session: Session, email: str, password: str) -> LoginResponse:
     # Resto de usuarios: siempre MFA por email.
     code = f"{secrets.randbelow(1_000_000):06d}"
     code_hash = hash_password(code)
-    expires_at = datetime.utcnow() + timedelta(minutes=5)
+    expires_at = datetime.utcnow() + timedelta(hours=24)
 
     # Guardamos/actualizamos el registro MFA para este usuario.
     mfa_record = session.exec(
@@ -105,7 +105,7 @@ def login_step1(session: Session, email: str, password: str) -> LoginResponse:
 
     return LoginResponse(
         mfa_required=True,
-        message="MFA requerido, revisa tu correo para obtener el código",
+        message="MFA requerido, revisa tu correo para obtener el código (válido 24h)",
     )
 
 

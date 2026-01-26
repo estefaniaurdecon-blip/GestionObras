@@ -49,31 +49,47 @@ from app.services.notification_service import create_notification
 TASK_STATUSES = {"pending", "in_progress", "done"}
 
 
+def _require_tenant(tenant_id: Optional[int]) -> int:
+    if tenant_id is None:
+        raise ValueError("Tenant requerido.")
+    return tenant_id
+
+
+def _get_project_or_404(
+    session: Session,
+    project_id: int,
+    tenant_id: Optional[int],
+) -> Project:
+    project = session.get(Project, project_id)
+    if not project:
+        raise ValueError("Proyecto no encontrado.")
+    if tenant_id is not None and project.tenant_id != tenant_id:
+        raise ValueError("Proyecto no encontrado.")
+    return project
+
+
 def _as_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
 
 
-def list_projects(session: Session) -> list[Project]:
-    return session.exec(
-        select(Project).where(Project.is_active.is_(True)).order_by(Project.created_at.desc()),
-    ).all()
+def list_projects(session: Session, tenant_id: Optional[int]) -> list[Project]:
+    stmt = select(Project).where(Project.is_active.is_(True))
+    if tenant_id is not None:
+        stmt = stmt.where(Project.tenant_id == tenant_id)
+    return session.exec(stmt.order_by(Project.created_at.desc())).all()
 
 
-def get_project(session: Session, project_id: int) -> Project:
-    project = session.get(Project, project_id)
-    if not project:
-        raise ValueError("Proyecto no encontrado.")
-    return project
+def get_project(session: Session, project_id: int, tenant_id: Optional[int]) -> Project:
+    return _get_project_or_404(session, project_id, tenant_id)
 
 
-def list_tasks(session: Session) -> list[Task]:
-    return session.exec(
-        select(Task)
-        .where(Task.status != "deleted")
-        .order_by(Task.created_at.desc())
-    ).all()
+def list_tasks(session: Session, tenant_id: Optional[int]) -> list[Task]:
+    stmt = select(Task).where(Task.status != "deleted")
+    if tenant_id is not None:
+        stmt = stmt.where(Task.tenant_id == tenant_id)
+    return session.exec(stmt.order_by(Task.created_at.desc())).all()
 
 
 def _validate_budget_totals(
@@ -90,17 +106,21 @@ def _validate_budget_totals(
 
 
 def list_project_budget_lines(
-    session: Session, project_id: int
+    session: Session, project_id: int, tenant_id: Optional[int]
 ) -> tuple[list[ProjectBudgetLine], dict[int, list[BudgetLineMilestone]]]:
+    _get_project_or_404(session, project_id, tenant_id)
     lines = session.exec(
         select(ProjectBudgetLine)
         .where(ProjectBudgetLine.project_id == project_id)
         .order_by(ProjectBudgetLine.created_at.asc()),
     ).all()
-    return _attach_line_milestones(session, lines)
+    return _attach_line_milestones(session, lines, tenant_id)
 
 
-def list_project_budget_milestones(session: Session, project_id: int) -> list[ProjectBudgetMilestone]:
+def list_project_budget_milestones(
+    session: Session, project_id: int, tenant_id: Optional[int]
+) -> list[ProjectBudgetMilestone]:
+    _get_project_or_404(session, project_id, tenant_id)
     return session.exec(
         select(ProjectBudgetMilestone)
         .where(ProjectBudgetMilestone.project_id == project_id)
@@ -109,13 +129,12 @@ def list_project_budget_milestones(session: Session, project_id: int) -> list[Pr
 
 
 def create_project_budget_milestone(
-    session: Session, project_id: int, data: ProjectBudgetMilestoneCreate
+    session: Session, project_id: int, data: ProjectBudgetMilestoneCreate, tenant_id: Optional[int]
 ) -> ProjectBudgetMilestone:
-    project = session.get(Project, project_id)
-    if not project:
-        raise ValueError("Proyecto no encontrado.")
+    project = _get_project_or_404(session, project_id, tenant_id)
     milestone = ProjectBudgetMilestone(
         project_id=project_id,
+        tenant_id=project.tenant_id,
         name=data.name.strip() or "Hito",
         order_index=data.order_index or 0,
     )
@@ -126,8 +145,13 @@ def create_project_budget_milestone(
 
 
 def update_project_budget_milestone(
-    session: Session, project_id: int, milestone_id: int, data: ProjectBudgetMilestoneUpdate
+    session: Session,
+    project_id: int,
+    milestone_id: int,
+    data: ProjectBudgetMilestoneUpdate,
+    tenant_id: Optional[int],
 ) -> ProjectBudgetMilestone:
+    _get_project_or_404(session, project_id, tenant_id)
     milestone = session.get(ProjectBudgetMilestone, milestone_id)
     if not milestone or milestone.project_id != project_id:
         raise ValueError("Hito de presupuesto no encontrado.")
@@ -141,7 +165,10 @@ def update_project_budget_milestone(
     return milestone
 
 
-def delete_project_budget_milestone(session: Session, project_id: int, milestone_id: int) -> None:
+def delete_project_budget_milestone(
+    session: Session, project_id: int, milestone_id: int, tenant_id: Optional[int]
+) -> None:
+    _get_project_or_404(session, project_id, tenant_id)
     milestone = session.get(ProjectBudgetMilestone, milestone_id)
     if not milestone or milestone.project_id != project_id:
         raise ValueError("Hito de presupuesto no encontrado.")
@@ -156,7 +183,9 @@ def delete_project_budget_milestone(session: Session, project_id: int, milestone
 
 
 def _attach_line_milestones(
-    session: Session, lines: list[ProjectBudgetLine]
+    session: Session,
+    lines: list[ProjectBudgetLine],
+    tenant_id: Optional[int],
 ) -> tuple[list[ProjectBudgetLine], dict[int, list[BudgetLineMilestone]]]:
     if not lines:
         return lines, {}
@@ -164,7 +193,9 @@ def _attach_line_milestones(
     if not line_ids:
         return lines, {}
     project_id = lines[0].project_id
-    milestones = {m.id: m for m in list_project_budget_milestones(session, project_id)}
+    milestones = {
+        m.id: m for m in list_project_budget_milestones(session, project_id, tenant_id)
+    }
     links = session.exec(
         select(BudgetLineMilestone).where(BudgetLineMilestone.budget_line_id.in_(line_ids))
     ).all()
@@ -186,11 +217,12 @@ def _attach_line_milestones(
 
 
 def create_project_budget_line(
-    session: Session, project_id: int, data: ProjectBudgetLineCreate
+    session: Session,
+    project_id: int,
+    data: ProjectBudgetLineCreate,
+    tenant_id: Optional[int],
 ) -> ProjectBudgetLine:
-    project = session.get(Project, project_id)
-    if not project:
-        raise ValueError("Proyecto no encontrado.")
+    project = _get_project_or_404(session, project_id, tenant_id)
     # Si vienen hitos dinÃ¡micos, recalculamos totales.
     milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
     if milestones_payload:
@@ -207,6 +239,7 @@ def create_project_budget_line(
             percent_spent = (total_justified / approved_budget) * Decimal(100)
         line = ProjectBudgetLine(
             project_id=project_id,
+            tenant_id=project.tenant_id,
             concept=data.concept.strip() or "Concepto",
             hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
             justified_hito1=milestones_payload[0].justified if len(milestones_payload) > 0 else Decimal(0),
@@ -223,6 +256,7 @@ def create_project_budget_line(
             link = BudgetLineMilestone(
                 budget_line_id=line.id,
                 milestone_id=m.milestone_id,
+                tenant_id=project.tenant_id,
                 amount=m.amount,
                 justified=m.justified,
             )
@@ -237,6 +271,7 @@ def create_project_budget_line(
     )
     line = ProjectBudgetLine(
         project_id=project_id,
+        tenant_id=project.tenant_id,
         concept=data.concept.strip() or "Concepto",
         hito1_budget=data.hito1_budget,
         justified_hito1=data.justified_hito1,
@@ -257,7 +292,9 @@ def update_project_budget_line(
     project_id: int,
     budget_id: int,
     data: ProjectBudgetLineUpdate,
+    tenant_id: Optional[int],
 ) -> ProjectBudgetLine:
+    _get_project_or_404(session, project_id, tenant_id)
     line = session.get(ProjectBudgetLine, budget_id)
     if not line or line.project_id != project_id:
         raise ValueError("Presupuesto no encontrado para el proyecto.")
@@ -294,6 +331,7 @@ def update_project_budget_line(
             link = BudgetLineMilestone(
                 budget_line_id=line.id,
                 milestone_id=m.milestone_id,
+                tenant_id=line.tenant_id,
                 amount=m.amount,
                 justified=m.justified,
             )
@@ -338,7 +376,10 @@ def update_project_budget_line(
     return line
 
 
-def delete_project_budget_line(session: Session, project_id: int, budget_id: int) -> None:
+def delete_project_budget_line(
+    session: Session, project_id: int, budget_id: int, tenant_id: Optional[int]
+) -> None:
+    _get_project_or_404(session, project_id, tenant_id)
     line = session.get(ProjectBudgetLine, budget_id)
     if not line or line.project_id != project_id:
         raise ValueError("Presupuesto no encontrado para el proyecto.")
@@ -351,9 +392,11 @@ def delete_project_budget_line(session: Session, project_id: int, budget_id: int
     session.commit()
 
 
-def create_project(session: Session, data: ProjectCreate) -> Project:
+def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[int]) -> Project:
+    tenant_id = _require_tenant(tenant_id)
     _validate_date_range(data.start_date, data.end_date)
     project = Project(
+        tenant_id=tenant_id,
         name=data.name,
         description=data.description,
         start_date=data.start_date,
@@ -366,10 +409,10 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
     return project
 
 
-def update_project(session: Session, project_id: int, data: ProjectUpdate) -> Project:
-    project = session.get(Project, project_id)
-    if not project:
-        raise ValueError("Proyecto no encontrado.")
+def update_project(
+    session: Session, project_id: int, data: ProjectUpdate, tenant_id: Optional[int]
+) -> Project:
+    project = _get_project_or_404(session, project_id, tenant_id)
 
     if data.name is not None:
         project.name = data.name
@@ -390,11 +433,9 @@ def update_project(session: Session, project_id: int, data: ProjectUpdate) -> Pr
     return project
 
 
-def delete_project(session: Session, project_id: int) -> None:
+def delete_project(session: Session, project_id: int, tenant_id: Optional[int]) -> None:
     """Soft-delete de proyecto (is_active = False) para evitar problemas de FK."""
-    project = session.get(Project, project_id)
-    if not project:
-        raise ValueError("Proyecto no encontrado.")
+    project = _get_project_or_404(session, project_id, tenant_id)
     project.is_active = False
     session.add(project)
     session.commit()
@@ -440,11 +481,14 @@ def _resolve_activity(
     session: Session,
     project_id: Optional[int],
     activity_id: Optional[int],
+    tenant_id: Optional[int],
 ) -> Optional[Activity]:
     if activity_id is None:
         return None
     activity = session.get(Activity, activity_id)
     if not activity:
+        raise ValueError("Actividad no encontrada.")
+    if tenant_id is not None and activity.tenant_id != tenant_id:
         raise ValueError("Actividad no encontrada.")
     if project_id and activity.project_id != project_id:
         raise ValueError("La actividad no pertenece al proyecto indicado.")
@@ -455,11 +499,14 @@ def _resolve_subactivity(
     session: Session,
     project_id: Optional[int],
     subactivity_id: Optional[int],
+    tenant_id: Optional[int],
 ) -> Optional[SubActivity]:
     if subactivity_id is None:
         return None
     subactivity = session.get(SubActivity, subactivity_id)
     if not subactivity:
+        raise ValueError("Subactividad no encontrada.")
+    if tenant_id is not None and subactivity.tenant_id != tenant_id:
         raise ValueError("Subactividad no encontrada.")
     activity = session.get(Activity, subactivity.activity_id)
     if not activity:
@@ -472,11 +519,14 @@ def _resolve_subactivity(
 def _resolve_task_template(
     session: Session,
     task_template_id: Optional[int],
+    tenant_id: Optional[int],
 ) -> Optional[TaskTemplate]:
     if task_template_id is None:
         return None
     template = session.get(TaskTemplate, task_template_id)
     if not template:
+        raise ValueError("Plantilla de tarea no encontrada.")
+    if tenant_id is not None and template.tenant_id != tenant_id:
         raise ValueError("Plantilla de tarea no encontrada.")
     if not template.is_active:
         raise ValueError("La plantilla de tarea no esta activa.")
@@ -486,31 +536,43 @@ def _resolve_task_template(
 def _resolve_milestone(
     session: Session,
     milestone_id: int,
+    tenant_id: Optional[int],
 ) -> Milestone:
     milestone = session.get(Milestone, milestone_id)
     if not milestone:
         raise ValueError("Hito no encontrado.")
+    if tenant_id is not None and milestone.tenant_id != tenant_id:
+        raise ValueError("Hito no encontrado.")
     return milestone
 
 
-def create_task(session: Session, current_user: User, data: TaskCreate) -> Task:
+def create_task(
+    session: Session,
+    current_user: User,
+    data: TaskCreate,
+    tenant_id: Optional[int],
+) -> Task:
+    tenant_id = _require_tenant(tenant_id)
     project_id = data.project_id
-    if project_id is not None and not session.get(Project, project_id):
-        raise ValueError("Proyecto no encontrado.")
+    project = None
+    if project_id is not None:
+        project = _get_project_or_404(session, project_id, tenant_id)
 
     # Resolver dependencias jerarquicas si se proporcionan.
-    subactivity = _resolve_subactivity(session, project_id, data.subactivity_id)
+    subactivity = _resolve_subactivity(session, project_id, data.subactivity_id, tenant_id)
     if subactivity:
         activity = session.get(Activity, subactivity.activity_id)
         if activity and not project_id:
             project_id = activity.project_id
-    _resolve_task_template(session, data.task_template_id)
+    _resolve_task_template(session, data.task_template_id, tenant_id)
 
     assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
     _validate_date_range(data.start_date, data.end_date)
 
+    effective_tenant_id = project.tenant_id if project else tenant_id
     status = _normalize_task_status(data.status, data.is_completed)
     task = Task(
+        tenant_id=effective_tenant_id,
         project_id=project_id,
         subactivity_id=data.subactivity_id,
         task_template_id=data.task_template_id,
@@ -545,9 +607,10 @@ def update_task(
     current_user: User,
     task_id: int,
     data: TaskUpdate,
+    tenant_id: Optional[int],
 ) -> Task:
     task = session.get(Task, task_id)
-    if not task:
+    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
         raise ValueError("Tarea no encontrada.")
 
     if data.title is not None:
@@ -555,14 +618,14 @@ def update_task(
     if data.description is not None:
         task.description = data.description
     if data.project_id is not None:
-        if data.project_id is not None and not session.get(Project, data.project_id):
-            raise ValueError("Proyecto no encontrado.")
+        project = _get_project_or_404(session, data.project_id, tenant_id)
         task.project_id = data.project_id
+        task.tenant_id = project.tenant_id
     if data.subactivity_id is not None:
-        _resolve_subactivity(session, task.project_id, data.subactivity_id)
+        _resolve_subactivity(session, task.project_id, data.subactivity_id, tenant_id)
         task.subactivity_id = data.subactivity_id
     if data.task_template_id is not None:
-        _resolve_task_template(session, data.task_template_id)
+        _resolve_task_template(session, data.task_template_id, tenant_id)
         task.task_template_id = data.task_template_id
     if data.status is not None:
         status = _normalize_task_status(data.status, None)
@@ -598,9 +661,9 @@ def update_task(
     return task
 
 
-def delete_task(session: Session, task_id: int) -> None:
+def delete_task(session: Session, task_id: int, tenant_id: Optional[int]) -> None:
     task = session.get(Task, task_id)
-    if not task:
+    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
         raise ValueError("Tarea no encontrada.")
     # Soft delete: marca la tarea como eliminada para que no aparezca en los listados.
     task.status = "deleted"
@@ -610,14 +673,19 @@ def delete_task(session: Session, task_id: int) -> None:
     session.commit()
 
 
-def list_task_templates(session: Session) -> list[TaskTemplate]:
-    return session.exec(
-        select(TaskTemplate).order_by(TaskTemplate.created_at.desc()),
-    ).all()
+def list_task_templates(session: Session, tenant_id: Optional[int]) -> list[TaskTemplate]:
+    stmt = select(TaskTemplate)
+    if tenant_id is not None:
+        stmt = stmt.where(TaskTemplate.tenant_id == tenant_id)
+    return session.exec(stmt.order_by(TaskTemplate.created_at.desc())).all()
 
 
-def create_task_template(session: Session, data: TaskTemplateCreate) -> TaskTemplate:
+def create_task_template(
+    session: Session, data: TaskTemplateCreate, tenant_id: Optional[int]
+) -> TaskTemplate:
+    tenant_id = _require_tenant(tenant_id)
     template = TaskTemplate(
+        tenant_id=tenant_id,
         title=data.title,
         description=data.description,
         is_active=data.is_active,
@@ -628,18 +696,25 @@ def create_task_template(session: Session, data: TaskTemplateCreate) -> TaskTemp
     return template
 
 
-def list_activities(session: Session, project_id: Optional[int] = None) -> list[Activity]:
+def list_activities(
+    session: Session, tenant_id: Optional[int], project_id: Optional[int] = None
+) -> list[Activity]:
     stmt = select(Activity)
+    if tenant_id is not None:
+        stmt = stmt.where(Activity.tenant_id == tenant_id)
     if project_id is not None:
+        _get_project_or_404(session, project_id, tenant_id)
         stmt = stmt.where(Activity.project_id == project_id)
     return session.exec(stmt.order_by(Activity.created_at.desc())).all()
 
 
-def create_activity(session: Session, data: ActivityCreate) -> Activity:
-    if not session.get(Project, data.project_id):
-        raise ValueError("Proyecto no encontrado.")
+def create_activity(
+    session: Session, data: ActivityCreate, tenant_id: Optional[int]
+) -> Activity:
+    project = _get_project_or_404(session, data.project_id, tenant_id)
     _validate_date_range(data.start_date, data.end_date)
     activity = Activity(
+        tenant_id=project.tenant_id,
         project_id=data.project_id,
         name=data.name,
         description=data.description,
@@ -653,9 +728,11 @@ def create_activity(session: Session, data: ActivityCreate) -> Activity:
     return activity
 
 
-def update_activity(session: Session, activity_id: int, data: ActivityUpdate) -> Activity:
+def update_activity(
+    session: Session, activity_id: int, data: ActivityUpdate, tenant_id: Optional[int]
+) -> Activity:
     activity = session.get(Activity, activity_id)
-    if not activity:
+    if not activity or (tenant_id is not None and activity.tenant_id != tenant_id):
         raise ValueError("Actividad no encontrada.")
 
     if data.name is not None:
@@ -679,13 +756,19 @@ def update_activity(session: Session, activity_id: int, data: ActivityUpdate) ->
 
 def list_subactivities(
     session: Session,
+    tenant_id: Optional[int],
     project_id: Optional[int] = None,
     activity_id: Optional[int] = None,
 ) -> list[SubActivity]:
     stmt = select(SubActivity)
+    if tenant_id is not None:
+        stmt = stmt.where(SubActivity.tenant_id == tenant_id)
     if activity_id is not None:
-        stmt = stmt.where(SubActivity.activity_id == activity_id)
+        activity = _resolve_activity(session, project_id, activity_id, tenant_id)
+        if activity:
+            stmt = stmt.where(SubActivity.activity_id == activity_id)
     if project_id is not None:
+        _get_project_or_404(session, project_id, tenant_id)
         stmt = (
             stmt.join(Activity, Activity.id == SubActivity.activity_id)
             .where(Activity.project_id == project_id)
@@ -693,12 +776,15 @@ def list_subactivities(
     return session.exec(stmt.order_by(SubActivity.created_at.desc())).all()
 
 
-def create_subactivity(session: Session, data: SubActivityCreate) -> SubActivity:
-    activity = session.get(Activity, data.activity_id)
+def create_subactivity(
+    session: Session, data: SubActivityCreate, tenant_id: Optional[int]
+) -> SubActivity:
+    activity = _resolve_activity(session, None, data.activity_id, tenant_id)
     if not activity:
         raise ValueError("Actividad no encontrada.")
     _validate_date_range(data.start_date, data.end_date)
     subactivity = SubActivity(
+        tenant_id=activity.tenant_id,
         activity_id=data.activity_id,
         name=data.name,
         description=data.description,
@@ -712,9 +798,11 @@ def create_subactivity(session: Session, data: SubActivityCreate) -> SubActivity
     return subactivity
 
 
-def update_subactivity(session: Session, subactivity_id: int, data: SubActivityUpdate) -> SubActivity:
+def update_subactivity(
+    session: Session, subactivity_id: int, data: SubActivityUpdate, tenant_id: Optional[int]
+) -> SubActivity:
     subactivity = session.get(SubActivity, subactivity_id)
-    if not subactivity:
+    if not subactivity or (tenant_id is not None and subactivity.tenant_id != tenant_id):
         raise ValueError("Subactividad no encontrada.")
 
     if data.name is not None:
@@ -738,22 +826,28 @@ def update_subactivity(session: Session, subactivity_id: int, data: SubActivityU
 
 def list_milestones(
     session: Session,
+    tenant_id: Optional[int],
     project_id: Optional[int] = None,
     activity_id: Optional[int] = None,
 ) -> list[Milestone]:
     stmt = select(Milestone)
+    if tenant_id is not None:
+        stmt = stmt.where(Milestone.tenant_id == tenant_id)
     if project_id is not None:
+        _get_project_or_404(session, project_id, tenant_id)
         stmt = stmt.where(Milestone.project_id == project_id)
     if activity_id is not None:
         stmt = stmt.where(Milestone.activity_id == activity_id)
     return session.exec(stmt.order_by(Milestone.created_at.desc())).all()
 
 
-def create_milestone(session: Session, data: MilestoneCreate) -> Milestone:
-    if not session.get(Project, data.project_id):
-        raise ValueError("Proyecto no encontrado.")
-    _resolve_activity(session, data.project_id, data.activity_id)
+def create_milestone(
+    session: Session, data: MilestoneCreate, tenant_id: Optional[int]
+) -> Milestone:
+    project = _get_project_or_404(session, data.project_id, tenant_id)
+    _resolve_activity(session, data.project_id, data.activity_id, tenant_id)
     milestone = Milestone(
+        tenant_id=project.tenant_id,
         project_id=data.project_id,
         activity_id=data.activity_id,
         title=data.title,
@@ -767,9 +861,11 @@ def create_milestone(session: Session, data: MilestoneCreate) -> Milestone:
     return milestone
 
 
-def update_milestone(session: Session, milestone_id: int, data: MilestoneUpdate) -> Milestone:
+def update_milestone(
+    session: Session, milestone_id: int, data: MilestoneUpdate, tenant_id: Optional[int]
+) -> Milestone:
     milestone = session.get(Milestone, milestone_id)
-    if not milestone:
+    if not milestone or (tenant_id is not None and milestone.tenant_id != tenant_id):
         raise ValueError("Hito no encontrado.")
 
     if data.title is not None:
@@ -789,16 +885,22 @@ def update_milestone(session: Session, milestone_id: int, data: MilestoneUpdate)
 
 def list_deliverables(
     session: Session,
+    tenant_id: Optional[int],
     milestone_id: Optional[int] = None,
 ) -> list[Deliverable]:
     stmt = select(Deliverable)
+    if tenant_id is not None:
+        stmt = stmt.where(Deliverable.tenant_id == tenant_id)
     if milestone_id is not None:
+        _resolve_milestone(session, milestone_id, tenant_id)
         stmt = stmt.where(Deliverable.milestone_id == milestone_id)
     return session.exec(stmt.order_by(Deliverable.created_at.desc())).all()
 
 
-def create_deliverable(session: Session, data: DeliverableCreate) -> Deliverable:
-    milestone = _resolve_milestone(session, data.milestone_id)
+def create_deliverable(
+    session: Session, data: DeliverableCreate, tenant_id: Optional[int]
+) -> Deliverable:
+    milestone = _resolve_milestone(session, data.milestone_id, tenant_id)
     submitted_at = _as_aware(data.submitted_at or datetime.now(timezone.utc))
     is_late = False
     if milestone.due_date and submitted_at > _as_aware(milestone.due_date):
@@ -807,6 +909,7 @@ def create_deliverable(session: Session, data: DeliverableCreate) -> Deliverable
             raise ValueError("Entrega fuera de plazo para este hito.")
 
     deliverable = Deliverable(
+        tenant_id=milestone.tenant_id,
         milestone_id=data.milestone_id,
         title=data.title,
         notes=data.notes,
@@ -821,9 +924,11 @@ def create_deliverable(session: Session, data: DeliverableCreate) -> Deliverable
     return deliverable
 
 
-def update_deliverable(session: Session, deliverable_id: int, data: DeliverableUpdate) -> Deliverable:
+def update_deliverable(
+    session: Session, deliverable_id: int, data: DeliverableUpdate, tenant_id: Optional[int]
+) -> Deliverable:
     deliverable = session.get(Deliverable, deliverable_id)
-    if not deliverable:
+    if not deliverable or (tenant_id is not None and deliverable.tenant_id != tenant_id):
         raise ValueError("Entregable no encontrado.")
 
     if data.title is not None:
@@ -837,7 +942,7 @@ def update_deliverable(session: Session, deliverable_id: int, data: DeliverableU
     if data.submitted_at is not None:
         deliverable.submitted_at = _as_aware(data.submitted_at)
 
-    milestone = _resolve_milestone(session, deliverable.milestone_id)
+    milestone = _resolve_milestone(session, deliverable.milestone_id, tenant_id)
     if deliverable.submitted_at and milestone.due_date:
         deliverable.is_late = _as_aware(deliverable.submitted_at) > _as_aware(
             milestone.due_date,
@@ -853,20 +958,27 @@ def update_deliverable(session: Session, deliverable_id: int, data: DeliverableU
     return deliverable
 
 
-def get_active_time_session(session: Session, user: User) -> Optional[TimeSession]:
-    return session.exec(
-        select(TimeSession)
-        .where(TimeSession.user_id == user.id, TimeSession.is_active.is_(True))
-        .order_by(TimeSession.started_at.desc()),
-    ).one_or_none()
+def get_active_time_session(
+    session: Session, user: User, tenant_id: Optional[int]
+) -> Optional[TimeSession]:
+    stmt = select(TimeSession).where(
+        TimeSession.user_id == user.id,
+        TimeSession.is_active.is_(True),
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(TimeSession.tenant_id == tenant_id)
+    return session.exec(stmt.order_by(TimeSession.started_at.desc())).one_or_none()
 
 
-def start_time_session(session: Session, user: User, task_id: int) -> TimeSession:
+def start_time_session(
+    session: Session, user: User, task_id: int, tenant_id: Optional[int]
+) -> TimeSession:
+    tenant_id = _require_tenant(tenant_id)
     task = session.get(Task, task_id)
-    if not task:
+    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
         raise ValueError("Tarea no encontrada")
 
-    active = get_active_time_session(session, user)
+    active = get_active_time_session(session, user, tenant_id)
     now = datetime.now(timezone.utc)
 
     if active:
@@ -882,6 +994,7 @@ def start_time_session(session: Session, user: User, task_id: int) -> TimeSessio
         hours_decimal = hours_decimal.quantize(Decimal("0.01"))
         session.add(
             TimeEntry(
+                tenant_id=active.tenant_id,
                 task_id=active.task_id,
                 user_id=user.id,
                 time_session_id=active.id,
@@ -892,6 +1005,7 @@ def start_time_session(session: Session, user: User, task_id: int) -> TimeSessio
         )
 
     new_session = TimeSession(
+        tenant_id=tenant_id,
         task_id=task_id,
         user_id=user.id,
         started_at=now,
@@ -906,8 +1020,10 @@ def start_time_session(session: Session, user: User, task_id: int) -> TimeSessio
     return new_session
 
 
-def stop_time_session(session: Session, user: User) -> Optional[TimeSession]:
-    active = get_active_time_session(session, user)
+def stop_time_session(
+    session: Session, user: User, tenant_id: Optional[int]
+) -> Optional[TimeSession]:
+    active = get_active_time_session(session, user, tenant_id)
     if not active:
         return None
 
@@ -924,6 +1040,7 @@ def stop_time_session(session: Session, user: User) -> Optional[TimeSession]:
     hours_decimal = hours_decimal.quantize(Decimal("0.01"))
     session.add(
         TimeEntry(
+            tenant_id=active.tenant_id,
             task_id=active.task_id,
             user_id=user.id,
             time_session_id=active.id,
@@ -940,6 +1057,7 @@ def stop_time_session(session: Session, user: User) -> Optional[TimeSession]:
 
 def get_time_report(
     session: Session,
+    tenant_id: Optional[int],
     project_id: Optional[int] = None,
     user_id: Optional[int] = None,
     date_from: Optional[datetime] = None,
@@ -974,7 +1092,10 @@ def get_time_report(
     )
 
     if project_id is not None:
+        _get_project_or_404(session, project_id, tenant_id)
         stmt = stmt.where(Task.project_id == project_id)
+    if tenant_id is not None:
+        stmt = stmt.where(Task.tenant_id == tenant_id)
     if user_id is not None:
         stmt = stmt.where(TimeEntry.user_id == user_id)
     if date_from is not None:
@@ -1001,10 +1122,13 @@ def get_time_report(
 def list_time_sessions(
     session: Session,
     user: User,
+    tenant_id: Optional[int],
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
 ) -> list[TimeSession]:
     stmt = select(TimeSession).where(TimeSession.user_id == user.id)
+    if tenant_id is not None:
+        stmt = stmt.where(TimeSession.tenant_id == tenant_id)
     if date_from is not None:
         stmt = stmt.where(TimeSession.started_at >= date_from)
     if date_to is not None:
@@ -1019,9 +1143,11 @@ def create_manual_time_session(
     description: Optional[str],
     started_at: datetime,
     ended_at: datetime,
+    tenant_id: Optional[int],
 ) -> TimeSession:
+    tenant_id = _require_tenant(tenant_id)
     task = session.get(Task, task_id)
-    if not task:
+    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
         raise ValueError("Tarea no encontrada")
 
     started = _as_aware(started_at)
@@ -1031,6 +1157,7 @@ def create_manual_time_session(
 
     duration_seconds = max(0, int((ended - started).total_seconds()))
     new_session = TimeSession(
+        tenant_id=tenant_id,
         task_id=task_id,
         user_id=user.id,
         description=description,
@@ -1048,6 +1175,7 @@ def create_manual_time_session(
     hours_decimal = hours_decimal.quantize(Decimal("0.01"))
     session.add(
         TimeEntry(
+            tenant_id=tenant_id,
             task_id=task_id,
             user_id=user.id,
             time_session_id=new_session.id,
@@ -1069,14 +1197,15 @@ def update_time_session(
     description: Optional[str] = None,
     started_at: Optional[datetime] = None,
     ended_at: Optional[datetime] = None,
+    tenant_id: Optional[int] = None,
 ) -> TimeSession:
     ts = session.get(TimeSession, session_id)
-    if not ts or ts.user_id != user.id:
+    if not ts or ts.user_id != user.id or (tenant_id is not None and ts.tenant_id != tenant_id):
         raise ValueError("Sesion no encontrada")
 
     if task_id is not None:
         task = session.get(Task, task_id)
-        if not task:
+        if not task or (tenant_id is not None and task.tenant_id != tenant_id):
             raise ValueError("Tarea no encontrada")
         ts.task_id = task_id
 
@@ -1115,9 +1244,11 @@ def update_time_session(
     return ts
 
 
-def delete_time_session(session: Session, user: User, session_id: int) -> None:
+def delete_time_session(
+    session: Session, user: User, session_id: int, tenant_id: Optional[int]
+) -> None:
     ts = session.get(TimeSession, session_id)
-    if not ts or ts.user_id != user.id:
+    if not ts or ts.user_id != user.id or (tenant_id is not None and ts.tenant_id != tenant_id):
         raise ValueError("Sesion no encontrada")
 
     entries = session.exec(
