@@ -62,6 +62,7 @@ import {
 import { keyframes } from "@emotion/react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import axios from "axios";
@@ -108,12 +109,51 @@ const normalizeConceptKey = (value?: string) =>
 
 const GENERAL_EXPENSES_LABEL = "GASTOS GENERALES";
 const GENERAL_EXPENSES_KEY = normalizeConceptKey(GENERAL_EXPENSES_LABEL);
+const EXTERNAL_COLLAB_LABEL = "COLABORACIONES EXTERNAS";
+const EXTERNAL_COLLAB_KEY = normalizeConceptKey(EXTERNAL_COLLAB_LABEL);
 
 const isGeneralExpensesConcept = (value?: string) =>
   normalizeConceptKey(value).startsWith(GENERAL_EXPENSES_KEY);
 
-const getBudgetConceptKey = (value?: string) =>
+const isExternalCollaborationConcept = (value?: string) =>
+  normalizeConceptKey(value).startsWith(EXTERNAL_COLLAB_KEY);
+
+const getBudgetGroupKey = (value?: string) => {
+  if (isGeneralExpensesConcept(value)) return GENERAL_EXPENSES_KEY;
+  if (isExternalCollaborationConcept(value)) {
+    const details = parseExternalCollaborationDetails(value);
+    if (!details) return EXTERNAL_COLLAB_KEY;
+  }
+  return normalizeConceptKey(value);
+};
+
+const getBudgetMatchKey = (value?: string) =>
   isGeneralExpensesConcept(value) ? GENERAL_EXPENSES_KEY : normalizeConceptKey(value);
+
+const getBudgetParentKey = (value?: string) => {
+  if (isGeneralExpensesConcept(value)) return GENERAL_EXPENSES_KEY;
+  if (isExternalCollaborationConcept(value)) {
+    const details = parseExternalCollaborationDetails(value);
+    return details ? normalizeConceptKey(value) : EXTERNAL_COLLAB_KEY;
+  }
+  return normalizeConceptKey(value);
+};
+
+const getBudgetSortRank = (value?: string) => {
+  const key = isExternalCollaborationConcept(value)
+    ? EXTERNAL_COLLAB_KEY
+    : isGeneralExpensesConcept(value)
+      ? GENERAL_EXPENSES_KEY
+      : normalizeConceptKey(value);
+  const baseIndex = BUDGET_ORDER.indexOf(key);
+  if (isExternalCollaborationConcept(value) && value !== EXTERNAL_COLLAB_LABEL) {
+    const childIndex = BUDGET_ORDER.indexOf(
+      normalizeConceptKey("Centros Tecnologicos"),
+    );
+    return childIndex !== -1 ? childIndex + 0.1 : baseIndex + 0.1;
+  }
+  return baseIndex !== -1 ? baseIndex : Number.POSITIVE_INFINITY;
+};
 
 const parsePercentFromConcept = (value?: string) => {
   const match = value?.match(/(\d+(?:[.,]\d+)?)\s*%/);
@@ -132,6 +172,25 @@ const formatGeneralExpensesConcept = (percent: number) =>
 
 const DEFAULT_GENERAL_EXPENSES_PERCENT = 19;
 const GENERAL_EXPENSES_AMOUNT_LABEL = `${GENERAL_EXPENSES_LABEL} (importe)`;
+
+const formatExternalCollaborationConcept = (type: string, name: string) =>
+  `${EXTERNAL_COLLAB_LABEL} - ${type} - ${name}`;
+
+const parseExternalCollaborationDetails = (value?: string) => {
+  if (!value) return null;
+  const prefix = `${EXTERNAL_COLLAB_LABEL} - `;
+  if (!value.startsWith(prefix)) return null;
+  const rest = value.slice(prefix.length).trim();
+  const parts = rest.split(" - ");
+  if (parts.length === 1) {
+    const name = parts[0].trim();
+    return name ? { type: "", name } : null;
+  }
+  const [type, ...nameParts] = parts;
+  const name = nameParts.join(" - ").trim();
+  if (!type || !name) return null;
+  return { type: type.trim(), name };
+};
 
 // Estilos por categoría para la tabla de presupuestos.
 const CATEGORY_COLOR_MAP: Record<string, string | undefined> = {
@@ -166,14 +225,14 @@ const buildParentChildMap = (rows: ProjectBudgetLine[]) => {
   let currentParent: string | null = null;
   rows.forEach((row) => {
     const concept = row.concept ?? "";
-    const key = getBudgetConceptKey(concept);
+    const key = getBudgetParentKey(concept);
     if (isAllCapsConcept(concept)) {
       currentParent = key;
       if (!map[currentParent]) map[currentParent] = [];
       return;
     }
     if (currentParent) {
-      map[currentParent].push(getBudgetConceptKey(concept));
+      map[currentParent].push(normalizeConceptKey(concept));
     }
   });
   return map;
@@ -246,6 +305,7 @@ import {
 } from "../api/erpTimeTracking";
 
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useExternalCollaborations } from "../hooks/useExternalCollaborations";
 
 import {
   createProjectBudgetLine,
@@ -1390,6 +1450,7 @@ const BudgetModal: React.FC<BudgetModalProps> = ({
 export const ErpProjectsPage: React.FC = () => {
   // Tokens de estilo y animaci+n para la cabecera hero.
 
+  const { t } = useTranslation();
   const cardBg = useColorModeValue("white", "gray.700");
 
   const panelBg = useColorModeValue("gray.50", "gray.800");
@@ -2620,6 +2681,14 @@ export const ErpProjectsPage: React.FC = () => {
   const [seedingTemplate, setSeedingTemplate] = useState(false);
   const [seedingProjectMilestones, setSeedingProjectMilestones] =
     useState(false);
+  const externalCollaborationsQuery = useExternalCollaborations();
+  const [extraBudgetRows, setExtraBudgetRows] = useState<ProjectBudgetLine[]>(
+    [],
+  );
+  const [externalCollabSelections, setExternalCollabSelections] = useState<
+    Record<number, string>
+  >({});
+  const tempBudgetIdRef = useRef(-2000);
 
   const DEFAULT_BUDGET_TEMPLATE: ProjectBudgetLine[] = useMemo(
     () => [
@@ -2730,19 +2799,6 @@ export const ErpProjectsPage: React.FC = () => {
       {
         id: -8,
         project_id: 0,
-        concept: "Centros Tecnologicos",
-        hito1_budget: 0,
-        justified_hito1: 0,
-        hito2_budget: 0,
-        justified_hito2: 0,
-        approved_budget: 0,
-        percent_spent: 0,
-        forecasted_spent: 0,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: -9,
-        project_id: 0,
         concept: "GASTOS GENERALES (19%)",
         hito1_budget: 0,
         justified_hito1: 0,
@@ -2809,7 +2865,10 @@ export const ErpProjectsPage: React.FC = () => {
   );
 
   const mergedBudgetRows = useMemo(() => {
-    return filteredBudgetRows.map((row) => {
+    const allRows = hasRealBudgets
+      ? [...filteredBudgetRows, ...extraBudgetRows]
+      : filteredBudgetRows;
+    return allRows.map((row) => {
       const draft = budgetDrafts[row.id];
       const h1 = draft?.hito1_budget ?? Number(row.hito1_budget ?? 0);
       const h2 = draft?.hito2_budget ?? Number(row.hito2_budget ?? 0);
@@ -2838,7 +2897,7 @@ export const ErpProjectsPage: React.FC = () => {
         milestones: draft?.milestones ?? row.milestones,
       } as ProjectBudgetLine;
     });
-  }, [filteredBudgetRows, budgetDrafts]);
+  }, [filteredBudgetRows, budgetDrafts, extraBudgetRows, hasRealBudgets]);
 
   // Agrupa por concepto para evitar repeticiones y sumar importes de subconceptos.
   const groupedBudgetRows = useMemo(() => {
@@ -2846,14 +2905,23 @@ export const ErpProjectsPage: React.FC = () => {
     const baseRows = [...mergedBudgetRows];
     // Asegura que existan filas minimas para categorias esperadas.
     DEFAULT_BUDGET_TEMPLATE.forEach((tpl) => {
-      const tplKey = getBudgetConceptKey(tpl.concept);
-      if (!baseRows.some((r) => getBudgetConceptKey(r.concept) === tplKey)) {
+      const tplKey = getBudgetGroupKey(tpl.concept);
+      if (!baseRows.some((r) => getBudgetGroupKey(r.concept) === tplKey)) {
         baseRows.push(tpl);
       }
     });
+    const hasGeneralExpenses = baseRows.some((row) =>
+      isGeneralExpensesConcept(row.concept),
+    );
+    if (!hasGeneralExpenses) {
+      const generalRow = DEFAULT_BUDGET_TEMPLATE.find((row) =>
+        isGeneralExpensesConcept(row.concept),
+      );
+      if (generalRow) baseRows.push(generalRow);
+    }
 
     baseRows.forEach((row) => {
-      const key = getBudgetConceptKey(row.concept || `row-${row.id}`);
+      const key = getBudgetGroupKey(row.concept || `row-${row.id}`);
       const current = map.get(key);
       if (!current) {
         map.set(key, { ...row });
@@ -2886,22 +2954,35 @@ export const ErpProjectsPage: React.FC = () => {
     });
     const ordered = Array.from(map.values());
     ordered.sort((a, b) => {
-      const aKey = getBudgetConceptKey(a.concept);
-      const bKey = getBudgetConceptKey(b.concept);
-      const aIdx = BUDGET_ORDER.indexOf(aKey);
-      const bIdx = BUDGET_ORDER.indexOf(bKey);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
+      const aRank = getBudgetSortRank(a.concept);
+      const bRank = getBudgetSortRank(b.concept);
+      if (aRank !== bRank) return aRank - bRank;
+      const aKey = normalizeConceptKey(a.concept);
+      const bKey = normalizeConceptKey(b.concept);
       return aKey.localeCompare(bKey);
     });
     return ordered;
   }, [mergedBudgetRows]);
 
-  const budgetParentMap = useMemo(
-    () => buildParentChildMap(DEFAULT_BUDGET_TEMPLATE),
-    [DEFAULT_BUDGET_TEMPLATE],
-  );
+  const budgetParentMap = useMemo(() => {
+    const base = buildParentChildMap(DEFAULT_BUDGET_TEMPLATE);
+    const parentKey = EXTERNAL_COLLAB_KEY;
+    const externalChildren = base[parentKey] ?? [];
+    const extras = mergedBudgetRows
+      .map((row) => ({
+        concept: row.concept ?? "",
+        details: parseExternalCollaborationDetails(row.concept ?? ""),
+      }))
+      .filter((row) => row.details);
+    extras.forEach((row) => {
+      const childKey = normalizeConceptKey(row.concept);
+      if (!externalChildren.includes(childKey)) {
+        externalChildren.push(childKey);
+      }
+    });
+    base[parentKey] = externalChildren;
+    return base;
+  }, [DEFAULT_BUDGET_TEMPLATE, mergedBudgetRows]);
 
   const budgetParentTotals = useMemo(() => {
     const totals = new Map<string, { j1: number; j2: number }>();
@@ -2909,7 +2990,7 @@ export const ErpProjectsPage: React.FC = () => {
       let j1 = 0;
       let j2 = 0;
       mergedBudgetRows.forEach((row) => {
-        const rowKey = getBudgetConceptKey(row.concept);
+        const rowKey = normalizeConceptKey(row.concept);
         if (!children.includes(rowKey)) return;
         j1 += Number(row.justified_hito1 ?? 0);
         j2 += Number(row.justified_hito2 ?? 0);
@@ -2925,7 +3006,7 @@ export const ErpProjectsPage: React.FC = () => {
     let h1 = 0;
     let h2 = 0;
     mergedBudgetRows.forEach((row) => {
-      const key = getBudgetConceptKey(row.concept);
+      const key = getBudgetGroupKey(row.concept);
       if (!key || key === totalKey || key === diffKey) return;
       if (isGeneralExpensesConcept(row.concept)) return;
       const isParentRow = budgetParentMap[key] !== undefined;
@@ -2991,6 +3072,7 @@ export const ErpProjectsPage: React.FC = () => {
   useEffect(() => {
     if (!budgetsEditMode) {
       setBudgetDrafts({});
+      setExtraBudgetRows([]);
     }
   }, [budgetsEditMode]);
 
@@ -3163,6 +3245,68 @@ export const ErpProjectsPage: React.FC = () => {
     }));
   };
 
+  const handleAddExternalCollaborationRow = (budgetId: number) => {
+    if (!selectedBudgetProjectId) return;
+    const selection = (externalCollabSelections[budgetId] ?? "").trim();
+    if (!selection) return;
+    const [type, name] = selection.split("::");
+    if (!type || !name) return;
+    const tempId = tempBudgetIdRef.current;
+    tempBudgetIdRef.current -= 1;
+    const concept = formatExternalCollaborationConcept(
+      type.trim(),
+      name.trim(),
+    );
+    const newRow: ProjectBudgetLine = {
+      id: tempId,
+      project_id: selectedBudgetProjectId,
+      concept,
+      hito1_budget: 0,
+      justified_hito1: 0,
+      hito2_budget: 0,
+      justified_hito2: 0,
+      approved_budget: 0,
+      percent_spent: 0,
+      forecasted_spent: 0,
+      created_at: new Date().toISOString(),
+    };
+    setExtraBudgetRows((prev) => [newRow, ...prev]);
+    setBudgetDrafts((prev) => ({
+      ...prev,
+      [tempId]: {
+        concept,
+        hito1_budget: 0,
+        justified_hito1: 0,
+        hito2_budget: 0,
+        justified_hito2: 0,
+        approved_budget: 0,
+        forecasted_spent: 0,
+        percent_spent: 0,
+      },
+    }));
+    setExternalCollabSelections((prev) => ({
+      ...prev,
+      [budgetId]: "",
+    }));
+  };
+
+  const handleRemoveExternalCollaborationRow = (row: ProjectBudgetLine) => {
+    if (!selectedBudgetProjectId) return;
+    if (row.id < 0) {
+      setExtraBudgetRows((prev) => prev.filter((item) => item.id !== row.id));
+      setBudgetDrafts((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
+      return;
+    }
+    deleteBudgetMutation.mutate({
+      projectId: selectedBudgetProjectId,
+      budgetId: row.id,
+    });
+  };
+
   const handleBudgetCellSave = (
     budgetId: number,
     field: keyof ProjectBudgetLineUpdatePayload,
@@ -3302,9 +3446,9 @@ export const ErpProjectsPage: React.FC = () => {
         return Number.isFinite(num) ? num : fallback;
       };
       const findBudgetByConcept = (concept: string) => {
-        const key = getBudgetConceptKey(concept);
+        const key = getBudgetMatchKey(concept);
         return latestBudgets.find(
-          (r) => getBudgetConceptKey(r.concept ?? "") === key,
+          (r) => getBudgetMatchKey(r.concept ?? "") === key,
         );
       };
 
@@ -3320,8 +3464,11 @@ export const ErpProjectsPage: React.FC = () => {
         if (!base.concept) {
           throw new Error("Concepto requerido en todas las filas.");
         }
-        const baseKey = getBudgetConceptKey(base.concept);
-        const parentTotals = budgetParentTotals.get(baseKey);
+        const baseKey = getBudgetParentKey(base.concept);
+        const isParentRow = isAllCapsConcept(base.concept);
+        const parentTotals = isParentRow
+          ? budgetParentTotals.get(baseKey)
+          : undefined;
         const h1 = safeNumber(
           draftPayload.hito1_budget ?? base.hito1_budget ?? 0,
         );
@@ -3405,8 +3552,11 @@ export const ErpProjectsPage: React.FC = () => {
             const approved = safeNumber(
               draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
             );
-            const baseKey = getBudgetConceptKey(base.concept ?? "");
-            const parentTotals = budgetParentTotals.get(baseKey);
+            const baseKey = getBudgetParentKey(base.concept ?? "");
+            const isParentRow = isAllCapsConcept(base.concept);
+            const parentTotals = isParentRow
+              ? budgetParentTotals.get(baseKey)
+              : undefined;
             const j1 = parentTotals
               ? parentTotals.j1
               : safeNumber(
@@ -3487,6 +3637,7 @@ export const ErpProjectsPage: React.FC = () => {
         ),
       );
       setBudgetDrafts({});
+      setExtraBudgetRows([]);
       await queryClient.invalidateQueries({
         queryKey: ["project-budgets", selectedBudgetProjectId],
       });
@@ -5797,9 +5948,25 @@ export const ErpProjectsPage: React.FC = () => {
                               "";
                             const isGeneralExpenses =
                               isGeneralExpensesConcept(draftConcept);
+                            const isExternalCollab =
+                              isExternalCollaborationConcept(draftConcept);
                             const generalPercent =
                               parsePercentFromConcept(draftConcept) ??
                               DEFAULT_GENERAL_EXPENSES_PERCENT;
+                            const externalCollabDetails =
+                              parseExternalCollaborationDetails(draftConcept);
+                            const externalCollabName =
+                              externalCollabDetails?.name ?? "";
+                            const externalCollabType =
+                              externalCollabDetails?.type ?? "";
+                            const resolvedExternalType =
+                              externalCollabType ||
+                              (externalCollabName
+                                ? (externalCollaborationsQuery.listQuery.data ??
+                                    []
+                                  ).find((item) => item.name === externalCollabName)
+                                    ?.collaboration_type ?? ""
+                                : "");
                             const generalMode =
                               generalExpensesMode[budget.id] ??
                               (draftConcept
@@ -5808,15 +5975,24 @@ export const ErpProjectsPage: React.FC = () => {
                                 ? "amount"
                                 : "percent");
                             const canEditRow = hasRealBudgets && budgetsEditMode;
-                            const baseKey = getBudgetConceptKey(
+                            const baseKey = getBudgetParentKey(
                               budget.concept || "",
                             );
                             let rowBg =
                               CATEGORY_COLOR_MAP[baseKey] ?? undefined;
                             const isParentRow =
-                              budgetParentMap[baseKey] !== undefined;
-                            const parentTotals =
-                              budgetParentTotals.get(baseKey);
+                              isAllCapsConcept(budget.concept) &&
+                              budgetParentMap[baseKey] !== undefined &&
+                              !(isExternalCollab && externalCollabName);
+                            const parentTotals = isParentRow
+                              ? budgetParentTotals.get(baseKey)
+                              : undefined;
+                            const isExternalParent =
+                              isExternalCollab &&
+                              isParentRow &&
+                              !externalCollabName;
+                            const isExternalChild =
+                              isExternalCollab && !isExternalParent;
                             if (isParentRow && !rowBg) {
                               rowBg = "#e6f7e6";
                             }
@@ -5916,6 +6092,83 @@ export const ErpProjectsPage: React.FC = () => {
                                           formatGeneralExpensesConcept(
                                             generalPercent,
                                           )}
+                                      </Text>
+                                    )
+                                  ) : isExternalCollab ? (
+                                    canEditRow ? (
+                                      isExternalParent ? (
+                                        <HStack spacing={2} align="center">
+                                          <Text fontWeight="semibold">
+                                            {EXTERNAL_COLLAB_LABEL}
+                                          </Text>
+                                          <>
+                                            <Select
+                                              size="sm"
+                                              maxW="240px"
+                                              value={
+                                                externalCollabSelections[
+                                                  budget.id
+                                                ] ?? ""
+                                              }
+                                              onChange={(e) =>
+                                                setExternalCollabSelections(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [budget.id]: e.target.value,
+                                                  }),
+                                                )
+                                              }
+                                              isDisabled={
+                                                externalCollaborationsQuery
+                                                  .listQuery.isLoading
+                                              }
+                                            >
+                                              <option value="">
+                                                {t(
+                                                  "externalCollaborations.form.selectPlaceholder",
+                                                )}
+                                              </option>
+                                              {(externalCollaborationsQuery
+                                                .listQuery.data ?? [])
+                                                .map((item) => (
+                                                  <option
+                                                    key={item.id}
+                                                    value={`${item.collaboration_type}::${item.name}`}
+                                                  >
+                                                    {`${item.collaboration_type} - ${item.name}`}
+                                                  </option>
+                                                ))}
+                                            </Select>
+                                            <Button
+                                              size="xs"
+                                              colorScheme="green"
+                                              onClick={() =>
+                                                handleAddExternalCollaborationRow(
+                                                  budget.id,
+                                                )
+                                              }
+                                              isDisabled={
+                                                !externalCollabSelections[
+                                                  budget.id
+                                                ]
+                                              }
+                                            >
+                                              +
+                                            </Button>
+                                          </>
+                                        </HStack>
+                                      ) : (
+                                        <Text fontWeight="semibold">
+                                          {resolvedExternalType
+                                            ? `${resolvedExternalType} - ${externalCollabName}`
+                                            : externalCollabName || draftConcept}
+                                        </Text>
+                                      )
+                                    ) : (
+                                      <Text fontWeight="semibold">
+                                        {resolvedExternalType
+                                          ? `${resolvedExternalType} - ${externalCollabName}`
+                                          : externalCollabName || draftConcept || EXTERNAL_COLLAB_LABEL}
                                       </Text>
                                     )
                                   ) : (
@@ -6068,6 +6321,21 @@ export const ErpProjectsPage: React.FC = () => {
                                       >
                                         Editar
                                       </Button>
+                                      {isExternalChild && (
+                                        <Button
+                                          size="xs"
+                                          colorScheme="red"
+                                          variant="outline"
+                                          isDisabled={!budgetsEditMode}
+                                          onClick={() =>
+                                            handleRemoveExternalCollaborationRow(
+                                              budget,
+                                            )
+                                          }
+                                        >
+                                          Eliminar
+                                        </Button>
+                                      )}
                                     </Flex>
                                   ) : (
                                     <Text fontSize="xs" color="gray.500">

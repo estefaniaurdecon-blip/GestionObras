@@ -16,7 +16,7 @@ const AuditDetails: React.FC<AuditDetailsProps> = ({ action, details }) => {
       defaultValue: details,
     });
 
-    // Aquí puedes agregar lógica para manejar detalles dinámicos si es necesario
+    // Aquí se agregar lógica para manejar detalles dinámicos si es necesario
     // Por ejemplo, usando expresiones regulares para extraer y reemplazar partes del texto.
 
     return translatedDetails;

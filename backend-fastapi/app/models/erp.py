@@ -168,3 +168,16 @@ class BudgetLineMilestone(SQLModel, table=True):
     amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
     justified: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ExternalCollaboration(SQLModel, table=True):
+    __tablename__ = "erp_external_collaboration"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    collaboration_type: str
+    name: str
+    legal_name: str
+    cif: str
+    contact_email: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -314,3 +314,29 @@ class ProjectBudgetLineRead(ProjectBudgetLineBase):
     id: int
     project_id: int
     created_at: datetime
+
+
+class ExternalCollaborationBase(BaseModel):
+    collaboration_type: str
+    name: str
+    legal_name: str
+    cif: str
+    contact_email: str
+
+
+class ExternalCollaborationCreate(ExternalCollaborationBase):
+    pass
+
+
+class ExternalCollaborationUpdate(BaseModel):
+    collaboration_type: Optional[str] = None
+    name: Optional[str] = None
+    legal_name: Optional[str] = None
+    cif: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class ExternalCollaborationRead(ExternalCollaborationBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime

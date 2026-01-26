@@ -134,6 +134,7 @@
       "timeControl": "Control de tiempo",
       "tasks": "Tareas",
       "projects": "Proyectos",
+      "externalCollaborations": "Colaboraciones externas",
       "users": "Usuarios",
       "hr": "Recursos humanos",
       "support": "Soporte",
@@ -152,6 +153,45 @@
     "user": {
       "fallbackName": "Usuario",
       "fallbackEmail": "usuario@local"
+    }
+  },
+  "externalCollaborations": {
+    "header": {
+      "title": "Colaboraciones externas",
+      "subtitle": "Gestiona universidades, auditorias, consultoras y centros tecnologicos."
+    },
+    "form": {
+      "type": "Tipo",
+      "name": "Nombre",
+      "namePlaceholder": "Nombre de la entidad",
+      "legalName": "Razon social",
+      "legalPlaceholder": "Razon social completa",
+      "cif": "CIF",
+      "cifPlaceholder": "CIF de la entidad",
+      "contactEmail": "Correo de contacto",
+      "contactPlaceholder": "correo@empresa.com",
+      "selectPlaceholder": "Selecciona colaboracion",
+      "add": "Anadir colaboracion",
+      "update": "Actualizar colaboracion",
+      "cancelEdit": "Cancelar edicion"
+    },
+    "table": {
+      "type": "Tipo",
+      "name": "Nombre",
+      "legalName": "Razon social",
+      "cif": "CIF",
+      "contactEmail": "Correo",
+      "actions": "Acciones",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "empty": "Aun no hay colaboraciones externas registradas."
+    },
+    "messages": {
+      "missingTitle": "Datos incompletos",
+      "missingDesc": "Rellena nombre, razon social, CIF y correo.",
+      "createTitle": "Colaboracion creada",
+      "updateTitle": "Colaboracion actualizada",
+      "loadError": "No se pudieron cargar las colaboraciones externas."
     }
   },
   "timeReport": {

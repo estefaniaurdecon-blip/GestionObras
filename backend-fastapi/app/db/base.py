@@ -31,6 +31,7 @@ from app.models.erp import (  # noqa: F401
     ProjectBudgetLine,
     ProjectBudgetMilestone,
     BudgetLineMilestone,
+    ExternalCollaboration,
     SubActivity,
     Task,
     TaskTemplate,

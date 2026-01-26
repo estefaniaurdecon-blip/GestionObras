@@ -5,6 +5,7 @@ from . import (
     auth,
     dashboard,
     erp,
+    external_collaborations,
     health,
     hr,
     invitations,
@@ -31,6 +32,11 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(erp.router, prefix="/erp", tags=["erp"])
+api_router.include_router(
+    external_collaborations.router,
+    prefix="/erp",
+    tags=["erp"],
+)
 api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(hr.router, prefix="/hr", tags=["hr"])
 api_router.include_router(

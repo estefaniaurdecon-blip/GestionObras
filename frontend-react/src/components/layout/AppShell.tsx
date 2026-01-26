@@ -174,6 +174,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       justifyContent="flex-start"
                       size="sm"
                     >{t("layout.nav.projects")}</Button>
+                    <Button
+                      as={Link}
+                      to="/erp/external-collaborations"
+                      variant={
+                        isActive("/erp/external-collaborations")
+                          ? "solid"
+                          : "ghost"
+                      }
+                      justifyContent="flex-start"
+                      size="sm"
+                    >{t("layout.nav.externalCollaborations")}</Button>
                   </VStack>
                 </AccordionPanel>
               </AccordionItem>

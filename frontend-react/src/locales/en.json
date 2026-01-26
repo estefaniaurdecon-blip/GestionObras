@@ -134,6 +134,7 @@
       "timeControl": "Time control",
       "tasks": "Tasks",
       "projects": "Projects",
+      "externalCollaborations": "External collaborations",
       "users": "Users",
       "hr": "Human resources",
       "support": "Support",
@@ -152,6 +153,45 @@
     "user": {
       "fallbackName": "User",
       "fallbackEmail": "user@local"
+    }
+  },
+  "externalCollaborations": {
+    "header": {
+      "title": "External collaborations",
+      "subtitle": "Manage universities, audits, consultancies, and tech centers."
+    },
+    "form": {
+      "type": "Type",
+      "name": "Name",
+      "namePlaceholder": "Entity name",
+      "legalName": "Legal name",
+      "legalPlaceholder": "Full legal name",
+      "cif": "Tax ID",
+      "cifPlaceholder": "Entity tax ID",
+      "contactEmail": "Contact email",
+      "contactPlaceholder": "email@company.com",
+      "selectPlaceholder": "Select collaboration",
+      "add": "Add collaboration",
+      "update": "Update collaboration",
+      "cancelEdit": "Cancel edit"
+    },
+    "table": {
+      "type": "Type",
+      "name": "Name",
+      "legalName": "Legal name",
+      "cif": "Tax ID",
+      "contactEmail": "Email",
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "empty": "No external collaborations registered yet."
+    },
+    "messages": {
+      "missingTitle": "Missing data",
+      "missingDesc": "Fill in name, legal name, tax ID, and email.",
+      "createTitle": "Collaboration created",
+      "updateTitle": "Collaboration updated",
+      "loadError": "Unable to load external collaborations."
     }
   },
   "timeReport": {
