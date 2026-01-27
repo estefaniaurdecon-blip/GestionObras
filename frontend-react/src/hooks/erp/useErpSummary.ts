@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import axios from "axios";
 
@@ -10,6 +10,9 @@ import {
   fetchDepartments,
   fetchEmployeeAllocations,
   fetchEmployees,
+  createEmployeeAllocation,
+  updateEmployeeAllocation,
+  deleteEmployeeAllocation,
   type EmployeeAllocation,
   type EmployeeProfile,
   type Department,
@@ -95,8 +98,10 @@ export const useErpSummary = ({
   const [allocationEdits, setAllocationEdits] = useState<Record<string, string>>(
     {},
   );
+  const allocationDraftsRef = useRef<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const skipAutoSaveRef = useRef(true);
+  const queryClient = useQueryClient();
 
   const { data: storedYearData, isFetching: loadingSummaryYear } = useQuery<
     SummaryYearlyData | undefined
@@ -242,6 +247,14 @@ export const useErpSummary = ({
     [],
   );
 
+  const employeeById = useMemo(() => {
+    const map = new Map<number, EmployeeProfile>();
+    hrEmployees.forEach((emp) => {
+      map.set(emp.id, emp);
+    });
+    return map;
+  }, [hrEmployees]);
+
   const allocationIndex = useMemo(() => {
     const map = new Map<string, EmployeeAllocation>();
     allocations.forEach((alloc) => {
@@ -258,6 +271,67 @@ export const useErpSummary = ({
     });
     return map;
   }, [allocations, allocationKey, summaryYear]);
+
+  const persistAllocation = useCallback(
+    async (key: string, value: string) => {
+      const parts = key.split("-");
+      const [employeeIdStr, projectIdStr, yearStr] = parts;
+      const milestoneLabelRaw = parts.slice(3).join("-");
+      const employeeId = Number(employeeIdStr);
+      const projectId = Number(projectIdStr);
+      const year = Number(yearStr);
+      if (!Number.isFinite(employeeId) || !Number.isFinite(projectId) || !Number.isFinite(year)) {
+        return;
+      }
+      const employee = employeeById.get(employeeId);
+
+      const normalized = value.trim();
+      const numericValue = Number(normalized);
+      const existing = allocationIndex.get(key);
+      const tenantId = hrTenantId ?? employee?.tenant_id;
+      if (tenantId == null) return;
+      const milestone =
+        milestoneLabelRaw && milestoneLabelRaw !== "general"
+          ? milestoneLabelRaw
+          : null;
+
+      if (!normalized || !Number.isFinite(numericValue)) {
+        if (existing) {
+          await deleteEmployeeAllocation(existing.id);
+          await queryClient.invalidateQueries({
+            queryKey: ["hr-allocations", summaryYear, hrTenantId],
+          });
+        }
+        return;
+      }
+
+      const basePayload = {
+        department_id: employee?.primary_department_id ?? null,
+        project_id: projectId,
+        milestone,
+        year,
+        allocated_hours: numericValue,
+        notes: null,
+      };
+
+      if (existing) {
+        await updateEmployeeAllocation(existing.id, basePayload);
+      } else {
+        await createEmployeeAllocation({
+          tenant_id: tenantId,
+          employee_id: employeeId,
+          ...basePayload,
+        });
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["hr-allocations", summaryYear, hrTenantId],
+      });
+    },
+    [allocationIndex, employeeById, hrTenantId, queryClient, summaryYear],
+  );
+
+
 
   const departmentAllocationTotals = useMemo(() => {
     const totals: Record<number, number> = {};
@@ -422,10 +496,16 @@ export const useErpSummary = ({
   }, [hrEmployees, selectedEmployeeIds]);
 
   useEffect(() => {
-    if (summaryEditMode) return;
-    setAllocationDrafts({});
-    setAllocationEdits({});
-  }, [summaryEditMode]);
+    allocationDraftsRef.current = allocationDraftsState;
+  }, [allocationDraftsState]);
+
+  const handleAllocationDraftChange = useCallback((key: string, value: string) => {
+    setAllocationDrafts((prev) => {
+      const next = { ...prev, [key]: value };
+      allocationDraftsRef.current = next;
+      return next;
+    });
+  }, []);
 
   const filteredSummaryEmployees = useMemo(() => {
     const searchLower = summarySearch.toLowerCase();
@@ -474,27 +554,51 @@ export const useErpSummary = ({
   }, []);
 
   const handleAllocationBlur = useCallback(
-    (
+    async (
       employee: EmployeeProfile,
       projectId: number,
       milestoneLabel: string,
       value: string,
     ) => {
       if (!summaryEditMode) return;
-      const key = allocationKey(employee.id, projectId, summaryYear, milestoneLabel);
+      const key = allocationKey(
+        employee.id,
+        projectId,
+        summaryYear,
+        milestoneLabel,
+      );
       setAllocationEdits((prev) => ({
         ...prev,
         [key]: value,
       }));
+      await persistAllocation(key, value);
     },
-    [summaryEditMode, allocationKey, summaryYear],
+    [
+      summaryEditMode,
+      allocationKey,
+      summaryYear,
+      persistAllocation,
+    ],
   );
+
+  useEffect(() => {
+    const flush = async () => {
+      if (summaryEditMode) return;
+      const entries = Object.entries(allocationDraftsRef.current);
+      if (entries.length === 0) return;
+      await Promise.all(entries.map(([key, value]) => persistAllocation(key, value)));
+      setAllocationDrafts({});
+      setAllocationEdits({});
+    };
+    flush();
+  }, [summaryEditMode, persistAllocation]);
 
   return {
     summaryYear,
     setSummaryYear,
     allocationDraftsState,
     setAllocationDrafts,
+    handleAllocationDraftChange,
     summarySearch,
     setSummarySearch,
     summaryEditMode,

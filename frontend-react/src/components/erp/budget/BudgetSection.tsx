@@ -149,8 +149,37 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   budgetsDiffH2,
   subtleText,
   externalCollabSelectPlaceholder,
-}) => (
-  <Stack spacing={6}>
+}) => {
+  const selectedProject =
+    selectedBudgetProjectId != null
+      ? projects.find((project) => project.id === selectedBudgetProjectId) ?? null
+      : null;
+  const fallbackDurationMonths = (() => {
+    if (!selectedProject?.start_date || !selectedProject?.end_date) return null;
+    const start = new Date(selectedProject.start_date);
+    const end = new Date(selectedProject.end_date);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    if (end < start) return null;
+    const totalDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+    return Math.max(1, Math.ceil(totalDays / 30));
+  })();
+  const durationMonths =
+    selectedProject?.duration_months ?? fallbackDurationMonths ?? null;
+  const subsidyPercent = selectedProject?.subsidy_percent ?? 0;
+  const durationLabel =
+    durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
+  const totalApproved = Number(budgetsTabTotals.approved ?? 0);
+  const totalForecasted = Number(budgetsTabTotals.gasto ?? 0);
+  const baseResult = (totalApproved * subsidyPercent) / 100 - totalForecasted;
+  const monthsActivePerYear =
+    durationMonths != null ? Math.min(durationMonths, 12) : 0;
+  const annualizedResult =
+    durationMonths != null && durationMonths > 0
+      ? (baseResult / durationMonths) * monthsActivePerYear
+      : 0;
+
+  return (
+    <Stack spacing={6}>
     <Heading size="md">Presupuestos</Heading>
 
     <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
@@ -169,6 +198,18 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
           ))}
         </Select>
       </FormControl>
+      <Box>
+        <HStack spacing={2}>
+          <Text fontWeight="bold">Resultado</Text>
+          <Text>{formatEuroValue(annualizedResult)} €</Text>
+        </HStack>
+        <HStack spacing={2}>
+          <Text fontSize="sm" color={subtleText}>
+            Duracion del proyecto
+          </Text>
+          <Text fontWeight="semibold">{durationLabel}</Text>
+        </HStack>
+      </Box>
       <HStack spacing={2}>
         <Button
           size="sm"
@@ -701,5 +742,6 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         </Box>
       </Box>
     )}
-  </Stack>
-);
+    </Stack>
+  );
+};

@@ -48,102 +48,157 @@ from app.services.notification_service import create_notification
 
 TASK_STATUSES = {"pending", "in_progress", "done"}
 
-
+# Valida que exista un tenant_id
 def _require_tenant(tenant_id: Optional[int]) -> int:
-    if tenant_id is None:
+    # Aegura que exista si es None lanza error
+    if tenant_id is None: 
         raise ValueError("Tenant requerido.")
     return tenant_id
 
-
+# Obtiene un proyecto si no lanza Error 404 
 def _get_project_or_404(
     session: Session,
     project_id: int,
     tenant_id: Optional[int],
 ) -> Project:
+    # Recupera el proyecto por ID --> Si no existe error, Si existe pero no pertenece al tenant error
     project = session.get(Project, project_id)
+    # Proyecto no encontrado
     if not project:
         raise ValueError("Proyecto no encontrado.")
+    
+    # Aislamiento multi-tenant:
+    # evita acceder a proyectos de otros tenants
     if tenant_id is not None and project.tenant_id != tenant_id:
         raise ValueError("Proyecto no encontrado.")
     return project
 
-
+# Convierte una fecha a timezone-aware (UTC)
 def _as_aware(value: datetime) -> datetime:
+    # Si en native se asume --> UTC , Si ya tiene tzinfo se devuelta tal cual 
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
 
-
+# Lista proyectos activos
 def list_projects(session: Session, tenant_id: Optional[int]) -> list[Project]:
+    #Devuelve todos los proyectos activos
+        # si hay tenant_id --> solo para proyectos de ese tenant
+        # si no hay tenant_id --> todos los proyectos(admin)
+        
+    # Query base: solo para los proyectos activos    
     stmt = select(Project).where(Project.is_active.is_(True))
+    # Filtro multi-tenat (aislamiento de datos)
     if tenant_id is not None:
         stmt = stmt.where(Project.tenant_id == tenant_id)
+    # Ordena por fecha de creación descendente
     return session.exec(stmt.order_by(Project.created_at.desc())).all()
 
-
+# Obtiene un proyecto concreto
 def get_project(session: Session, project_id: int, tenant_id: Optional[int]) -> Project:
+    #Devuelve un proyecto por ID aplicando control de tenant.
     return _get_project_or_404(session, project_id, tenant_id)
 
-
+# Lista tareas no eliminadas
 def list_tasks(session: Session, tenant_id: Optional[int]) -> list[Task]:
+    #Devuelve todas las tareas que no están marcadas como eliminadas.
+        #Excluye estado 'deleted'.
+        #Aplica filtro por tenant si existe.
+        
+    # Query base: tareas activas (no eliminadas)    
     stmt = select(Task).where(Task.status != "deleted")
+     # Aislamiento multi-tenant
     if tenant_id is not None:
         stmt = stmt.where(Task.tenant_id == tenant_id)
+    # Orden por creación descendente
     return session.exec(stmt.order_by(Task.created_at.desc())).all()
 
-
+# Valida presupuestos de hitos
 def _validate_budget_totals(
     *,
     hito1_budget: Decimal,
     hito2_budget: Decimal,
     approved_budget: Decimal,
 ) -> None:
+    #Valida que la suma de los presupuestos de los hitos
+    #No supere el presupuesto aprobado del proyecto.
+    
+    # Suma total de los hitos 
     total = hito1_budget + hito2_budget
+    
+    # Regla de negocio: no se puede exceder el presupuesto aprobado
     if total > approved_budget:
         raise ValueError(
             "La suma de los hitos no puede superar el presupuesto aprobado."
         )
 
-
+# Lista líneas de presupuesto de un proyecto
 def list_project_budget_lines(
     session: Session, project_id: int, tenant_id: Optional[int]
 ) -> tuple[list[ProjectBudgetLine], dict[int, list[BudgetLineMilestone]]]:
+    """
+    Devuelve las líneas de presupuesto de un proyecto
+    junto con sus hitos asociados.
+
+    Retorna:
+    - Lista de líneas de presupuesto.
+    - Diccionario: line_id → lista de hitos asociados.
+    """
+     # Verifica que el proyecto exista y pertenezca al tenant
     _get_project_or_404(session, project_id, tenant_id)
+     # Obtiene las líneas de presupuesto del proyecto
     lines = session.exec(
         select(ProjectBudgetLine)
         .where(ProjectBudgetLine.project_id == project_id)
         .order_by(ProjectBudgetLine.created_at.asc()),
     ).all()
+    # Adjunta los hitos a cada línea de presupuesto
     return _attach_line_milestones(session, lines, tenant_id)
 
-
+# Lista hitos de presupuesto de un proyecto
 def list_project_budget_milestones(
     session: Session, project_id: int, tenant_id: Optional[int]
 ) -> list[ProjectBudgetMilestone]:
+    #Devuelve todos los hitos de presupuesto de un proyecto
+    #ordenados por su posición lógica.
+    
+     # Verifica acceso y pertenencia al proyecto
     _get_project_or_404(session, project_id, tenant_id)
+    # Obtiene los hitos ordenados por orden visual y por ID
     return session.exec(
         select(ProjectBudgetMilestone)
         .where(ProjectBudgetMilestone.project_id == project_id)
         .order_by(ProjectBudgetMilestone.order_index.asc(), ProjectBudgetMilestone.id.asc())
     ).all()
 
-
+# Crea un hito de presupuesto para un proyecto
 def create_project_budget_milestone(
     session: Session, project_id: int, data: ProjectBudgetMilestoneCreate, tenant_id: Optional[int]
 ) -> ProjectBudgetMilestone:
+    """
+    Crea un nuevo hito de presupuesto asociado a un proyecto.
+
+    - Valida acceso al proyecto.
+    - Asigna tenant automáticamente desde el proyecto.
+    - Inicializa nombre y orden del hito.
+    """
+    # Obtiene el proyecto y valida pertenencia al tenant
     project = _get_project_or_404(session, project_id, tenant_id)
+     # Crea la entidad del hito
     milestone = ProjectBudgetMilestone(
         project_id=project_id,
-        tenant_id=project.tenant_id,
-        name=data.name.strip() or "Hito",
-        order_index=data.order_index or 0,
+        tenant_id=project.tenant_id, # Asegura el aislamiento multi-tenant
+        name=data.name.strip() or "Hito",# Nombre por defecto si viene vacio
+        order_index=data.order_index or 0, # Orden visual del hito 
     )
+    #Persiste el hito en la bd
     session.add(milestone)
     session.commit()
+    #Refresca para obtener el ID y campos autogenerados
     session.refresh(milestone)
     return milestone
 
-
+# Actualiza un hito de presupuesto existente 
 def update_project_budget_milestone(
     session: Session,
     project_id: int,
@@ -164,21 +219,36 @@ def update_project_budget_milestone(
     session.refresh(milestone)
     return milestone
 
-
+# Elimina un hito de presupuesto de un proyecto
 def delete_project_budget_milestone(
     session: Session, project_id: int, milestone_id: int, tenant_id: Optional[int]
 ) -> None:
+    """
+    Elimina un hito de presupuesto y todas sus relaciones asociadas.
+    Pasos:
+    1. Verifica que el proyecto exista y pertenezca al tenant.
+    2. Comprueba que el hito exista y sea del proyecto.
+    3. Elimina las relaciones hito ↔ líneas de presupuesto.
+    4. Elimina el hito.
+    5. Confirma la transacción.
+    
+    """
+     # Verificación de acceso al proyecto (multi-tenant)
     _get_project_or_404(session, project_id, tenant_id)
+    # Obtiene el hito por ID
     milestone = session.get(ProjectBudgetMilestone, milestone_id)
+    # Valida existencia y pertenencia al proyecto
     if not milestone or milestone.project_id != project_id:
         raise ValueError("Hito de presupuesto no encontrado.")
-    # Borra las relaciones de lÃ­neas asociadas.
+    # Busca todas las relaciones entre el hito y las líneas de presupuesto
     line_links = session.exec(
-        select(BudgetLineMilestone).where(BudgetLineMilestone.milestone_id == milestone_id)
-    ).all()
+        select(BudgetLineMilestone).where(BudgetLineMilestone.milestone_id == milestone_id)).all()
+    # Elimina cada relación para mantener integridad referencial
     for link in line_links:
         session.delete(link)
+    # Elimina el hito de presupuesto
     session.delete(milestone)
+     # Confirma los cambios en base de datos
     session.commit()
 
 
@@ -424,6 +494,8 @@ def update_project(
         _validate_date_range(start_date, end_date)
         project.start_date = start_date
         project.end_date = end_date
+    if data.subsidy_percent is not None:
+        project.subsidy_percent = Decimal(_clamp_percent(data.subsidy_percent) or 0)
     if data.is_active is not None:
         project.is_active = data.is_active
 
@@ -475,6 +547,16 @@ def _validate_date_range(start_date: Optional[datetime], end_date: Optional[date
     # Evita rangos inconsistentes en proyectos/tareas.
     if start_date and end_date and end_date < start_date:
         raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
+
+def _clamp_percent(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(100.0, num))
+
 
 
 def _resolve_activity(
@@ -552,14 +634,15 @@ def create_task(
     data: TaskCreate,
     tenant_id: Optional[int],
 ) -> Task:
-    tenant_id = _require_tenant(tenant_id)
+    tenant_context = tenant_id
     project_id = data.project_id
     project = None
     if project_id is not None:
-        project = _get_project_or_404(session, project_id, tenant_id)
+        project = _get_project_or_404(session, project_id, tenant_context)
+        tenant_context = tenant_context or project.tenant_id
 
     # Resolver dependencias jerarquicas si se proporcionan.
-    subactivity = _resolve_subactivity(session, project_id, data.subactivity_id, tenant_id)
+    subactivity = _resolve_subactivity(session, project_id, data.subactivity_id, tenant_context)
     if subactivity:
         activity = session.get(Activity, subactivity.activity_id)
         if activity and not project_id:
@@ -569,10 +652,10 @@ def create_task(
     assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
     _validate_date_range(data.start_date, data.end_date)
 
-    effective_tenant_id = project.tenant_id if project else tenant_id
+    effective_tenant_id = project.tenant_id if project else tenant_context
     status = _normalize_task_status(data.status, data.is_completed)
     task = Task(
-        tenant_id=effective_tenant_id,
+        tenant_id=_require_tenant(effective_tenant_id),
         project_id=project_id,
         subactivity_id=data.subactivity_id,
         task_template_id=data.task_template_id,
@@ -971,14 +1054,25 @@ def get_active_time_session(
 
 
 def start_time_session(
-    session: Session, user: User, task_id: int, tenant_id: Optional[int]
+    session: Session,
+    user: User,
+    task_id: int,
+    tenant_id: Optional[int],
+    payload_tenant_id: Optional[int] = None,
 ) -> TimeSession:
-    tenant_id = _require_tenant(tenant_id)
     task = session.get(Task, task_id)
-    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
+    if not task:
+        raise ValueError("Tarea no encontrada")
+    if payload_tenant_id is not None and not user.is_super_admin:
+        raise ValueError("No tienes permisos para iniciar sesiones para otros tenants.")
+
+    resolved_tenant_id = payload_tenant_id or tenant_id or task.tenant_id
+    if resolved_tenant_id is None:
+        raise ValueError("Tenant requerido.")
+    if task.tenant_id is not None and resolved_tenant_id is not None and task.tenant_id != resolved_tenant_id:
         raise ValueError("Tarea no encontrada")
 
-    active = get_active_time_session(session, user, tenant_id)
+    active = get_active_time_session(session, user, resolved_tenant_id)
     now = datetime.now(timezone.utc)
 
     if active:
@@ -1005,7 +1099,7 @@ def start_time_session(
         )
 
     new_session = TimeSession(
-        tenant_id=tenant_id,
+        tenant_id=resolved_tenant_id,
         task_id=task_id,
         user_id=user.id,
         started_at=now,

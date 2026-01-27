@@ -66,8 +66,9 @@ export const DashboardPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const tenantId = currentUser?.tenant_id ?? 1;
+  const tenantId = currentUser?.tenant_id ?? undefined;
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
     queryKey: ["dashboard-summary"],
@@ -84,8 +85,8 @@ export const DashboardPage: React.FC = () => {
   const { data: projects, isLoading: isLoadingProjects } = useQuery<
     ErpProject[]
   >({
-    queryKey: ["dashboard-erp-projects"],
-    queryFn: fetchErpProjects,
+    queryKey: ["dashboard-erp-projects", effectiveTenantId],
+    queryFn: () => fetchErpProjects(effectiveTenantId),
   });
 
   const reportQuery = useQuery<TimeReportRow[]>({
@@ -128,7 +129,8 @@ export const DashboardPage: React.FC = () => {
 
   const { data: tools, isLoading } = useQuery<Tool[]>({
     queryKey: ["tenant-tools", tenantId],
-    queryFn: () => fetchTenantTools(tenantId),
+    queryFn: () => fetchTenantTools(tenantId as number),
+    enabled: Boolean(tenantId),
   });
 
   const handleLaunch = async (tool: Tool) => {

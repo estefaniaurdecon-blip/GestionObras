@@ -1,5 +1,7 @@
+// Importa React y useMemo para memorizar cálculos y evitar renders innecesarios
 import React, { useMemo } from "react";
 
+// Componentes de Chakra UI para layout, inputs y estilos
 import {
   Box,
   Button,
@@ -17,20 +19,28 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 
+// Tipo del proyecto de simulación
 import type { SimulationProject } from "../../../hooks/erp";
+
+// Utilidad para formatear euros
 import { formatEuroValue } from "../../../utils/erp";
 
+/**
+ * Props del panel de simulación
+ * Todas las funciones vienen del componente padre
+ */
 interface SimulationPanelProps {
-  project: SimulationProject;
-  onBudgetChange: (value: string) => void;
-  onPercentChange: (value: string) => void;
-  onThresholdChange: (value: string) => void;
-  onAddExpense: () => void;
-  onExpenseConceptChange: (expenseId: number, value: string) => void;
-  onExpenseAmountChange: (expenseId: number, value: string) => void;
-  onRemoveExpense: (expenseId: number) => void;
+  project: SimulationProject; // Datos del proyecto
+  onBudgetChange: (value: string) => void; // Cambiar presupuesto
+  onPercentChange: (value: string) => void; // Cambiar % subvención
+  onThresholdChange: (value: string) => void; // Cambiar % umbral
+  onAddExpense: () => void; // Añadir gasto
+  onExpenseConceptChange: (expenseId: number, value: string) => void; // Cambiar concepto
+  onExpenseAmountChange: (expenseId: number, value: string) => void; // Cambiar importe
+  onRemoveExpense: (expenseId: number) => void; // Eliminar gasto
 }
 
+// Componente principal
 export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   project,
   onBudgetChange,
@@ -41,6 +51,9 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   onExpenseAmountChange,
   onRemoveExpense,
 }) => {
+  /**
+   * Colores dinámicos según modo claro / oscuro
+   */
   const panelBg = useColorModeValue("white", "gray.700");
   const panelBorder = useColorModeValue("gray.200", "gray.600");
   const inputBg = useColorModeValue("white", "gray.800");
@@ -49,28 +62,53 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   const resultBg = useColorModeValue("gray.900", "gray.900");
   const resultText = useColorModeValue("white", "white");
 
+  /**
+   * Calcula el importe subvencionado
+   * presupuesto * % subvención
+   */
   const subsidyAmount = useMemo(
     () => (project.budget * project.subsidyPercent) / 100,
     [project.budget, project.subsidyPercent],
   );
 
+  /**
+   * Suma todos los gastos del proyecto
+   */
   const totalExpenses = useMemo(
     () => project.expenses.reduce((sum, item) => sum + (item.amount || 0), 0),
     [project.expenses],
   );
 
+  /**
+   * Resultado final:
+   * subvención - gastos
+   */
   const result = subsidyAmount - totalExpenses;
+
+  /**
+   * Umbral mínimo aceptable
+   * subvención * % umbral
+   */
   const threshold = subsidyAmount * (project.thresholdPercent / 100);
+
+  /**
+   * Determina si el resultado es favorable
+   */
   const isFavorable = result >= threshold;
 
+  /**
+   * Porcentaje que falta para llegar al umbral (solo si es desfavorable)
+   */
   const unfavorablePercent = useMemo(() => {
     if (threshold <= 0) return 0;
     if (isFavorable) return 0;
+
     const gap = Math.max(0, threshold - result);
     return Math.min(100, (gap / threshold) * 100);
   }, [isFavorable, result, threshold]);
 
   return (
+    // Contenedor principal del panel
     <Stack
       spacing={5}
       bg={panelBg}
@@ -79,12 +117,17 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
       borderWidth="1px"
       borderColor={panelBorder}
     >
+      {/* CABECERA */}
       <HStack justify="space-between" align="flex-start" flexWrap="wrap">
+        {/* Datos de entrada */}
         <Stack spacing={2}>
           <Text fontSize="lg" fontWeight="bold">
             Simulacion: {project.name}
           </Text>
+
+          {/* Inputs principales */}
           <HStack spacing={4} flexWrap="wrap">
+            {/* Presupuesto */}
             <HStack>
               <Text>Presupuesto:</Text>
               <Input
@@ -98,6 +141,8 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
                 maxW="130px"
               />
             </HStack>
+
+            {/* % subvención */}
             <HStack>
               <Text>% subvencion:</Text>
               <Input
@@ -111,6 +156,8 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
                 maxW="90px"
               />
             </HStack>
+
+            {/* % umbral */}
             <HStack>
               <Text>% umbral:</Text>
               <Input
@@ -125,6 +172,8 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
               />
             </HStack>
           </HStack>
+
+          {/* Valores calculados */}
           <Text color={subtleText}>
             Subvencionado: {formatEuroValue(subsidyAmount)} €
           </Text>
@@ -133,6 +182,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           </Text>
         </Stack>
 
+        {/* RESULTADO /// El resultado es favorable si: (Presupuesto × % subvención − Gastos) ≥ (Presupuesto × % subvención × % umbral) */}
         <Box
           textAlign="right"
           bg={resultBg}
@@ -149,6 +199,8 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           <Text color={isFavorable ? "green.300" : "red.300"}>
             {isFavorable ? "Favorable" : "Desfavorable"}
           </Text>
+
+          {/* Info extra si es desfavorable */}
           {!isFavorable && (
             <Text color="red.200" fontSize="sm">
               {unfavorablePercent.toFixed(1)}% lejos de ser favorable
@@ -159,6 +211,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
 
       <Divider borderColor={panelBorder} />
 
+      {/* GASTOS */}
       <Stack spacing={3}>
         <HStack justify="space-between">
           <Text fontWeight="semibold">Gastos</Text>
@@ -172,6 +225,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           </Button>
         </HStack>
 
+        {/* Tabla de gastos */}
         <Table size="sm" variant="simple">
           <Thead>
             <Tr>
@@ -181,6 +235,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
             </Tr>
           </Thead>
           <Tbody>
+            {/* Sin gastos */}
             {project.expenses.length === 0 ? (
               <Tr>
                 <Td colSpan={3} color={subtleText}>
@@ -188,6 +243,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
                 </Td>
               </Tr>
             ) : (
+              // Lista de gastos
               project.expenses.map((expense) => (
                 <Tr key={expense.id}>
                   <Td>
@@ -230,6 +286,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           </Tbody>
         </Table>
 
+        {/* Total gastos */}
         <Text fontWeight="semibold">
           Total gastos: {formatEuroValue(totalExpenses)} €
         </Text>

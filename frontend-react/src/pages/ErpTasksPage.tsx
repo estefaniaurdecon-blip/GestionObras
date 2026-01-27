@@ -139,7 +139,7 @@ export const ErpTasksPage: React.FC = () => {
 
   // Determina permisos y tenant del usuario actual.
   const { data: currentUser } = useCurrentUser();
-  const tenantId = currentUser?.tenant_id ?? 1;
+  const tenantId = currentUser?.tenant_id;
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const effectiveTenantId = isSuperAdmin
     ? undefined

@@ -1,11 +1,13 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlmodel import Session
 
 from app.api.deps import get_current_active_user, get_current_tenant, require_permissions
 from app.db.session import get_session
 from app.models.user import User
+from app.models.tenant import Tenant
+from sqlalchemy import select
 from app.schemas.tool import ToolLaunchResponse, ToolRead, ToolEnableUpdate
 from app.services.tool_service import (
     get_tool_catalog,
@@ -40,19 +42,42 @@ def list_tool_catalog(
     summary="Herramientas asignadas al tenant actual",
 )
 def list_tools_by_tenant(
+    request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["tools:read"])),
-    tenant=Depends(get_current_tenant),
+    tenant_id: Optional[int] = Query(None),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[ToolRead]:
     """
     Lista las herramientas activas para el tenant actual.
     """
 
+    resolved_tenant = None
+    if current_user.is_super_admin:
+        resolved_id = tenant_id or x_tenant_id
+        if resolved_id is None:
+            statement = select(Tenant).where(Tenant.is_active.is_(True)).limit(1)
+            resolved = session.exec(statement).one_or_none()
+            if not resolved:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No hay tenants activos configurados",
+                )
+            resolved_id = resolved.id
+        resolved_tenant = session.get(Tenant, resolved_id)
+        if not resolved_tenant or not resolved_tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tenant no encontrado o inactivo",
+            )
+    else:
+        resolved_tenant = get_current_tenant(request, x_tenant_id=x_tenant_id)
+
     try:
         return get_tools_by_tenant(
             session=session,
             current_user=current_user,
-            tenant_id=tenant.id,
+            tenant_id=resolved_tenant.id,
         )
     except PermissionError as exc:
         raise HTTPException(

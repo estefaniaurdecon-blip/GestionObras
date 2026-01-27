@@ -218,8 +218,8 @@ export const useBudgetEditor = ({
   const canEditBudgets = groupedBudgetRows.length > 0;
 
   const budgetsTabTotals = useMemo(() => {
-    return calculateBudgetTotals(groupedBudgetRows);
-  }, [groupedBudgetRows]);
+    return calculateBudgetTotals(groupedBudgetRows, budgetParentMap);
+  }, [groupedBudgetRows, budgetParentMap]);
 
   const budgetsDiffH1 =
     Number(budgetsTabTotals.hito1 || 0) -

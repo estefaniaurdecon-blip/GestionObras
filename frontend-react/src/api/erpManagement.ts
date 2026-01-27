@@ -5,6 +5,7 @@ export interface ErpProjectCreate {
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  subsidy_percent?: number | null;
   is_active?: boolean;
 }
 
@@ -14,6 +15,8 @@ export interface ErpProjectResponse {
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  duration_months?: number | null;
+  subsidy_percent?: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -23,6 +26,7 @@ export interface ErpProjectUpdate {
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  subsidy_percent?: number | null;
   is_active?: boolean | null;
 }
 

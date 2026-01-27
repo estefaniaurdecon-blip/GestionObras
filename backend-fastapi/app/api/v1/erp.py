@@ -99,14 +99,22 @@ def _tenant_for_read(current_user: User, x_tenant_id: Optional[int]) -> Optional
     return current_user.tenant_id
 
 
-def _tenant_for_write(current_user: User, x_tenant_id: Optional[int]) -> int:
+def _tenant_for_write(
+    current_user: User,
+    x_tenant_id: Optional[int],
+    require_header: bool = False,
+) -> Optional[int]:
     if current_user.is_super_admin:
-        if x_tenant_id is None:
+        if x_tenant_id is not None:
+            return x_tenant_id
+        if current_user.tenant_id is not None:
+            return current_user.tenant_id
+        if require_header:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="X-Tenant-Id requerido para escribir.",
             )
-        return x_tenant_id
+        return None
     if current_user.tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -649,7 +657,13 @@ def api_start_time_session(
 ) -> TimeSessionRead:
     try:
         tenant_id = _tenant_for_write(current_user, x_tenant_id)
-        return start_time_session(session, current_user, data.task_id, tenant_id)
+        return start_time_session(
+            session,
+            current_user,
+            data.task_id,
+            tenant_id,
+            payload_tenant_id=data.tenant_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

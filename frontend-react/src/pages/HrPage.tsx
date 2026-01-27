@@ -51,9 +51,11 @@ import {
   fetchDepartments,
   updateDepartment,
   fetchEmployees,
+  fetchEmployeeAllocations,
   fetchHeadcount,
   type Department,
   type DepartmentUpdatePayload,
+  type EmployeeAllocation,
   type EmployeeProfile,
   type HeadcountItem,
 } from "../api/hr";
@@ -214,6 +216,28 @@ export const HrPage: React.FC = () => {
     enabled: effectiveTenantId != null || !isSuperAdmin,
   });
 
+  const [selectedYear, setSelectedYear] = useState<number>(
+    new Date().getFullYear(),
+  );
+  const yearOptions = useMemo(() => {
+    const now = new Date().getFullYear();
+    const years = [];
+    for (let y = now - 3; y <= now + 1; y += 1) {
+      years.push(y);
+    }
+    return years;
+  }, []);
+
+  const { data: allocations = [] } = useQuery<EmployeeAllocation[]>({
+    queryKey: ["hr-allocations", effectiveTenantId, selectedYear],
+    queryFn: () =>
+      fetchEmployeeAllocations({
+        tenantId: effectiveTenantId ?? undefined,
+      }),
+    enabled: effectiveTenantId != null || !isSuperAdmin,
+    refetchOnWindowFocus: false,
+  });
+
   const { data: headcount, isLoading: isLoadingHeadcount } = useQuery<
     HeadcountItem[]
   >({
@@ -234,6 +258,17 @@ export const HrPage: React.FC = () => {
       ),
     enabled: effectiveTenantId != null,
   });
+
+  const allocationsByEmployee = useMemo(() => {
+    const map = new Map<number, number>();
+    allocations.forEach((alloc) => {
+      if (!alloc.employee_id) return;
+      if (alloc.year != null && alloc.year !== selectedYear) return;
+      const hours = Number(alloc.allocated_hours ?? 0);
+      map.set(alloc.employee_id, (map.get(alloc.employee_id) ?? 0) + hours);
+    });
+    return map;
+  }, [allocations, selectedYear]);
 
   const createDeptMutation = useMutation({
     mutationFn: createDepartment,
@@ -645,11 +680,22 @@ export const HrPage: React.FC = () => {
   // Empleados filtrados según el departamento seleccionado.
   const filteredEmployees = useMemo(() => {
     if (!employees) return [];
-    if (selectedDepartmentFilter === "all") return employees;
-    return employees.filter(
+    const yearStart = new Date(selectedYear, 0, 1);
+    const yearEnd = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+    const activeByYear = employees.filter((emp) => {
+      const hire = emp.hire_date ? new Date(emp.hire_date) : null;
+      const end = emp.end_date ? new Date(emp.end_date) : null;
+      if (hire && Number.isNaN(hire.getTime())) return true;
+      if (end && Number.isNaN(end.getTime())) return true;
+      const started = !hire || hire <= yearEnd;
+      const notEnded = !end || end >= yearStart;
+      return started && notEnded;
+    });
+    if (selectedDepartmentFilter === "all") return activeByYear;
+    return activeByYear.filter(
       (e) => e.primary_department_id === selectedDepartmentFilter
     );
-  }, [employees, selectedDepartmentFilter]);
+  }, [employees, selectedDepartmentFilter, selectedYear]);
 
   // Render principal de la pagina.
   return (
@@ -996,6 +1042,22 @@ export const HrPage: React.FC = () => {
                     {t("hr.departments.title")}
                   </Heading>
                   <VStack align="stretch" spacing={2}>
+                    <FormControl>
+                      <FormLabel fontSize="xs" mb={1}>
+                        Ano
+                      </FormLabel>
+                      <Select
+                        size="sm"
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      >
+                        {yearOptions.map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormControl>
                     <Button
                       size="sm"
                       variant={selectedDepartmentFilter === "all" ? "solid" : "ghost"}
@@ -1053,6 +1115,19 @@ export const HrPage: React.FC = () => {
                           : null;
                       const availabilityHours =
                         e.available_hours != null ? Number(e.available_hours) : null;
+                      const baseCapacityHours =
+                        availabilityHours != null && availabilityPct != null
+                          ? Math.max(0, availabilityHours * (availabilityPct / 100))
+                          : availabilityHours != null
+                            ? Math.max(0, availabilityHours)
+                            : null;
+                      const usedHours = allocationsByEmployee.get(e.id) ?? 0;
+                      const remainingHours =
+                        baseCapacityHours != null ? baseCapacityHours - usedHours : null;
+                      const remainingPct =
+                        baseCapacityHours && baseCapacityHours > 0
+                          ? Math.max(0, (remainingHours ?? 0) / baseCapacityHours * 100)
+                          : null;
 
                       return (
                         <Box
@@ -1114,26 +1189,40 @@ export const HrPage: React.FC = () => {
                               <StatCell
                                 label={t("hr.employees.table.availableHours", "Horas disponibles")}
                                 value={
-                                  availabilityHours != null ? `${availabilityHours.toFixed(2)}h` : "-"
+                                  remainingHours != null
+                                    ? `${remainingHours.toFixed(2)}h`
+                                    : availabilityHours != null
+                                      ? `${availabilityHours.toFixed(2)}h`
+                                      : "-"
                                 }
                               />
                               <StatCell
                                 label={t("hr.employees.table.availabilityPercentage", "Disponibilidad %")}
                                 value={
-                                  availabilityPct != null ? `${availabilityPct.toFixed(1)}%` : "-"
+                                  remainingPct != null
+                                    ? `${remainingPct.toFixed(1)}%`
+                                    : availabilityPct != null
+                                      ? `${availabilityPct.toFixed(1)}%`
+                                      : "-"
                                 }
                               />
                             <StatCell label={t("hr.employees.table.email", "Correo")} value={e.email || "-"} />
                           </SimpleGrid>
 
-                          {availabilityPct != null && (
+                          {remainingPct != null && (
                             <Box mt={4}>
                               <Progress
-                                value={Math.min(availabilityPct, 140)}
+                                value={Math.min(100, Math.max(0, remainingPct))}
                                 size="sm"
                                 borderRadius="full"
                                 colorScheme={
-                                  availabilityPct > 100 ? "red" : availabilityPct > 85 ? "yellow" : "green"
+                                  remainingPct >= 70
+                                    ? "green"
+                                    : remainingPct >= 40
+                                      ? "yellow"
+                                      : remainingPct >= 15
+                                        ? "orange"
+                                        : "red"
                                 }
                               />
                             </Box>
