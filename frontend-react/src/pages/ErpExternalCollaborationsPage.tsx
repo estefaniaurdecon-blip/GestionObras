@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Box, Heading, Text, useColorModeValue, useToast } from "@chakra-ui/react";
+import { Box, Heading, Stack, Text, useColorModeValue, useToast } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -18,6 +19,10 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   const toast = useToast();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.600", "gray.300");
+  const fadeUp = keyframes`
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  `;
 
   const { data: currentUser } = useCurrentUser();
   const effectiveTenantId = currentUser?.is_super_admin
@@ -141,11 +146,32 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
 
   return (
     <AppShell>
-      <Box mb={6}>
-        <Heading size="lg">{t("externalCollaborations.header.title")}</Heading>
-        <Text color={subtleText} fontSize="sm">
-          {t("externalCollaborations.header.subtitle")}
-        </Text>
+      <Box
+        borderRadius="2xl"
+        p={{ base: 6, md: 8 }}
+        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        color="white"
+        boxShadow="lg"
+        position="relative"
+        overflow="hidden"
+        animation={`${fadeUp} 0.6s ease-out`}
+        mb={8}
+      >
+        <Box
+          position="absolute"
+          inset="0"
+          opacity={0.2}
+          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+        />
+        <Stack position="relative" spacing={3}>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            {t("externalCollaborations.header.eyebrow")}
+          </Text>
+          <Heading size="lg">{t("externalCollaborations.header.title")}</Heading>
+          <Text fontSize="sm" opacity={0.9}>
+            {t("externalCollaborations.header.subtitle")}
+          </Text>
+        </Stack>
       </Box>
 
       <Box

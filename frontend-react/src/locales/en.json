@@ -158,6 +158,7 @@
   },
   "externalCollaborations": {
     "header": {
+      "eyebrow": "Internal ERP",
       "title": "External collaborations",
       "subtitle": "Manage universities, audits, consultancies, and tech centers."
     },
@@ -193,6 +194,13 @@
       "createTitle": "Collaboration created",
       "updateTitle": "Collaboration updated",
       "loadError": "Unable to load external collaborations."
+    }
+  },
+  "simulations": {
+    "header": {
+      "eyebrow": "Internal ERP",
+      "title": "Simulations",
+      "subtitle": "Set budgets and expenses to evaluate feasibility."
     }
   },
   "timeReport": {
