@@ -1,3 +1,4 @@
+from math import ceil
 from typing import Iterator
 
 from sqlalchemy import inspect, text
@@ -99,6 +100,13 @@ def init_db() -> None:
                     text(
                         "ALTER TABLE erp_project "
                         "ADD COLUMN end_date TIMESTAMP NULL"
+                    )
+                )
+            if "duration_months" not in project_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE erp_project "
+                        "ADD COLUMN duration_months INTEGER NULL"
                     )
                 )
 
@@ -237,6 +245,29 @@ def init_db() -> None:
                         "WHERE threshold_percent IS NULL"
                     )
                 )
+
+    if "erp_project" in table_names:
+        from sqlmodel import select
+        from app.models.erp import Project
+
+        with Session(engine) as session:
+            projects = session.exec(select(Project)).all()
+            updated = False
+            for project in projects:
+                if (
+                    project.start_date
+                    and project.end_date
+                    and project.duration_months is None
+                ):
+                    start = project.start_date.date()
+                    end = project.end_date.date()
+                    if end >= start:
+                        total_days = (end - start).days + 1
+                        months = max(1, ceil(total_days / 30))
+                        project.duration_months = months
+                        updated = True
+            if updated:
+                session.commit()
 
     if "department" in table_names:
         dept_columns = {col["name"] for col in inspector.get_columns("department")}

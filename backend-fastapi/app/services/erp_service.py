@@ -1,5 +1,6 @@
 ﻿from datetime import datetime, timezone
 from decimal import Decimal
+from math import ceil
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -401,6 +402,7 @@ def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[in
         description=data.description,
         start_date=data.start_date,
         end_date=data.end_date,
+        duration_months=_calculate_duration_months(data.start_date, data.end_date),
         is_active=data.is_active,
     )
     session.add(project)
@@ -426,6 +428,13 @@ def update_project(
         project.end_date = end_date
     if data.is_active is not None:
         project.is_active = data.is_active
+
+    if project.start_date and project.end_date:
+        project.duration_months = _calculate_duration_months(
+            project.start_date, project.end_date
+        )
+    else:
+        project.duration_months = None
 
     session.add(project)
     session.commit()
@@ -475,6 +484,20 @@ def _validate_date_range(start_date: Optional[datetime], end_date: Optional[date
     # Evita rangos inconsistentes en proyectos/tareas.
     if start_date and end_date and end_date < start_date:
         raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
+
+def _calculate_duration_months(
+    start_date: Optional[datetime],
+    end_date: Optional[datetime],
+) -> Optional[int]:
+    if not start_date or not end_date:
+        return None
+    start = start_date.date()
+    end = end_date.date()
+    if end < start:
+        return None
+    total_days = (end - start).days + 1
+    return max(1, ceil(total_days / 30))
+
 
 
 def _resolve_activity(

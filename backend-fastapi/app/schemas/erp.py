@@ -11,6 +11,7 @@ class ProjectRead(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    duration_months: Optional[int] = None
     is_active: bool
     created_at: datetime
 

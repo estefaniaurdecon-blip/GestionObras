@@ -6,6 +6,7 @@ export interface ErpProject {
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  duration_months?: number | null;
   is_active?: boolean;
   created_at?: string;
   tenant_id?: number | null;

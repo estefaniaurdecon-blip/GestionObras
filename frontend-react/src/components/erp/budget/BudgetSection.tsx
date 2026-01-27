@@ -149,8 +149,17 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   budgetsDiffH2,
   subtleText,
   externalCollabSelectPlaceholder,
-}) => (
-  <Stack spacing={6}>
+}) => {
+  const selectedProject =
+    selectedBudgetProjectId != null
+      ? projects.find((project) => project.id === selectedBudgetProjectId) ?? null
+      : null;
+  const durationMonths = selectedProject?.duration_months ?? null;
+  const durationLabel =
+    durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
+
+  return (
+    <Stack spacing={6}>
     <Heading size="md">Presupuestos</Heading>
 
     <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
@@ -169,6 +178,12 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
           ))}
         </Select>
       </FormControl>
+      <Box>
+        <Text fontSize="sm" color={subtleText}>
+          Duracion del proyecto
+        </Text>
+        <Text fontWeight="semibold">{durationLabel}</Text>
+      </Box>
       <HStack spacing={2}>
         <Button
           size="sm"
@@ -701,5 +716,6 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         </Box>
       </Box>
     )}
-  </Stack>
-);
+    </Stack>
+  );
+};
