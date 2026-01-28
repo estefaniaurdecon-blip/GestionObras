@@ -7,10 +7,7 @@ export interface ErpProject {
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;
-<<<<<<< HEAD
-=======
   subsidy_percent?: number | null;
->>>>>>> dev
   is_active?: boolean;
   created_at?: string;
   tenant_id?: number | null;
