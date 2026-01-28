@@ -25,7 +25,7 @@ jobs:
       - name: Levantar Docker Compose (staging)
         run: |
           cd /home/server/projects/erp/infra
-          docker compose -f docker-compose.staging.yml up -d --build
+          docker compose -f docker-compose.yml up -d --build
 
       - name: Esperar a que PostgreSQL esté listo
         run: |
