@@ -555,7 +555,6 @@ def _validate_date_range(start_date: Optional[datetime], end_date: Optional[date
     if start_date and end_date and end_date < start_date:
         raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
 
-<<<<<<< HEAD
 def _calculate_duration_months(
     start_date: Optional[datetime],
     end_date: Optional[datetime],
@@ -568,7 +567,7 @@ def _calculate_duration_months(
         return None
     total_days = (end - start).days + 1
     return max(1, ceil(total_days / 30))
-=======
+
 def _clamp_percent(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
@@ -577,7 +576,6 @@ def _clamp_percent(value: Optional[float]) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return max(0.0, min(100.0, num))
->>>>>>> dev
 
 
 
