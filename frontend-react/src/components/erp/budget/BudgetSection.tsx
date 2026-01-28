@@ -154,11 +154,6 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     selectedBudgetProjectId != null
       ? projects.find((project) => project.id === selectedBudgetProjectId) ?? null
       : null;
-<<<<<<< HEAD
-  const durationMonths = selectedProject?.duration_months ?? null;
-  const durationLabel =
-    durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
-=======
   const fallbackDurationMonths = (() => {
     if (!selectedProject?.start_date || !selectedProject?.end_date) return null;
     const start = new Date(selectedProject.start_date);
@@ -182,7 +177,6 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     durationMonths != null && durationMonths > 0
       ? (baseResult / durationMonths) * monthsActivePerYear
       : 0;
->>>>>>> dev
 
   return (
     <Stack spacing={6}>
@@ -205,15 +199,9 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         </Select>
       </FormControl>
       <Box>
-<<<<<<< HEAD
-        <Text fontSize="sm" color={subtleText}>
-          Duracion del proyecto
-        </Text>
-        <Text fontWeight="semibold">{durationLabel}</Text>
-=======
         <HStack spacing={2}>
           <Text fontWeight="bold">Resultado</Text>
-          <Text>{formatEuroValue(annualizedResult)} €</Text>
+          <Text>{formatEuroValue(annualizedResult)} ?</Text>
         </HStack>
         <HStack spacing={2}>
           <Text fontSize="sm" color={subtleText}>
@@ -221,7 +209,6 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
           </Text>
           <Text fontWeight="semibold">{durationLabel}</Text>
         </HStack>
->>>>>>> dev
       </Box>
       <HStack spacing={2}>
         <Button
