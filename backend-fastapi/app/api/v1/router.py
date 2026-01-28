@@ -10,6 +10,7 @@ from . import (
     hr,
     invitations,
     internal,
+    invoices,
     notifications,
     tenants,
     tickets,
@@ -49,6 +50,11 @@ api_router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["notifications"],
+)
+api_router.include_router(
+    invoices.router,
+    prefix="/invoices",
+    tags=["invoices"],
 )
 api_router.include_router(
     internal.router,

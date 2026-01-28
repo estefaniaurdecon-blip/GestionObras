@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react-swc";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   const devHost = env.VITE_DEV_HOST || "0.0.0.0";
+  const proxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:8000";
 
   return {
     plugins: [react()],
@@ -14,6 +15,12 @@ export default defineConfig(({ mode }) => {
       // Permitimos acceso desde hosts externos (Cloudflare: dashboard.mavico.shop, etc.).
       // En producci?n real se puede restringir m?s.
       allowedHosts: true,
+      proxy: {
+        "/api": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

@@ -1,12 +1,15 @@
 version: "3.9"
 
-# Fichero de override para despliegue en producción.
+# Fichero de override para despliegue en produccion.
 # Se utiliza junto con docker-compose.yml:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
   db:
-    # En producción no exponemos el puerto de PostgreSQL al host.
+    # En produccion no exponemos el puerto de PostgreSQL al host.
+    ports: []
+
+  redis:
     ports: []
 
   backend-fastapi:
@@ -14,19 +17,45 @@ services:
     env_file:
       - ../backend-fastapi/.env
     environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://192.168.1.171:11434
+      INVOICES_STORAGE_PATH: /data/invoices
       TZ: Europe/Madrid
-    # No exponer el puerto directamente; se accede solo vía Cloudflare Tunnel.
+    # No exponer el puerto directamente; se accede solo via Cloudflare Tunnel.
     ports: []
+    volumes:
+      - ./data/invoices:/data/invoices
 
   frontend-react:
-    # El frontend habla siempre con la API pública HTTPS.
+    # El frontend habla siempre con la API publica HTTPS.
     environment:
       VITE_API_BASE_URL: https://api.mavico.shop
     ports: []
 
   cloudflared:
-    # Montamos la configuración del túnel desde ./cloudflared.
+    # Montamos la configuracion del tunel desde ./cloudflared.
     volumes:
       - ./cloudflared:/etc/cloudflared
     environment:
       - TZ=Europe/Madrid
+
+  celery-worker:
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://192.168.1.171:11434
+      INVOICES_STORAGE_PATH: /data/invoices
+      TZ: Europe/Madrid
+    volumes:
+      - ./data/invoices:/data/invoices
+
+  celery-beat:
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://192.168.1.171:11434
+      INVOICES_STORAGE_PATH: /data/invoices
+      TZ: Europe/Madrid
+    volumes:
+      - ./data/invoices:/data/invoices
