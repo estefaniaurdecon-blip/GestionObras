@@ -1,6 +1,6 @@
 # Plataforma SaaS Multi‑Tenant – Monorepo
 
-Este repositorio contiene la implementación de una plataforma SaaS multi‑tenant profesional bajo el dominio `mavico.shop`, compuesta po
+Este repositorio contiene la implementación de una plataforma SaaS multi‑tenant profesional bajo el dominio `mavico.shop`, compuesta por
 
 - Backend SaaS (FastAPI) – núcleo de negocio y multi‑tenant.
 - Módulo ERP (FastAPI) – gestión operativa interna.
