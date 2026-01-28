@@ -67,6 +67,7 @@ export interface TenantOption {
   id: number; // ID del tenant
   name: string; // Nombre del tenant
   subdomain: string; // Subdominio asignado
+  is_active: boolean; // Estado del tenant
 }
 
 /**

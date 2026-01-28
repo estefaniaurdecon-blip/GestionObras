@@ -1,5 +1,5 @@
 version: "3.9"
-
+# alex no haces nada
 services:
   db:
     image: postgres:16
@@ -23,49 +23,6 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
-
-  # Base de datos dedicada para Moodle (MySQL 5.x).
-  moodle-db:
-    image: mysql:5
-    container_name: saas-moodle-db
-    restart: unless-stopped
-    environment:
-      - MYSQL_DATABASE=moodle
-      - MYSQL_ROOT_PASSWORD=moodle
-      - MYSQL_USER=moodle
-      - MYSQL_PASSWORD=moodle
-      - TZ=Europe/Madrid
-    volumes:
-      - moodle_db_data:/var/lib/mysql
-
-  # Instancia de Moodle accesible desde la plataforma (ej. moodle.mavico.shop).
-  # Usa la imagen jhardison/moodle con una base de datos externa (moodle-db).
-  moodle:
-    image: jhardison/moodle:latest
-    container_name: saas-moodle
-    restart: unless-stopped
-    depends_on:
-      - moodle-db
-    # Alias "DB" para que el contenedor Moodle encuentre la base de datos
-    # tal y como espera la imagen (equivalente a --link DB:DB).
-    links:
-      - moodle-db:DB
-    environment:
-      # URL publica prevista para el sitio Moodle.
-      - MOODLE_URL=${MOODLE_URL}
-      # Estamos detras de Cloudflare (reverse proxy SSL).
-      - SSL_PROXY=false
-      - TZ=Europe/Madrid
-      # Variables que espera el config.php de esta imagen (simulando el antiguo
-      # mecanismo de Docker links) para localizar la base de datos MySQL.
-      - DB_PORT_3306_TCP_ADDR=moodle-db
-      - DB_PORT_3306_TCP_PORT=3306
-      - DB_ENV_MYSQL_DATABASE=moodle
-      - DB_ENV_MYSQL_USER=moodle
-      - DB_ENV_MYSQL_PASSWORD=moodle
-    ports:
-      # Acceso local de desarrollo: http://<host>:8080
-      - "8080:80"
 
   backend-fastapi:
     build:
@@ -108,7 +65,14 @@ services:
     depends_on:
       - db
       - redis
-    command: ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=INFO"]
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app.celery_app",
+        "worker",
+        "--loglevel=INFO",
+      ]
     volumes:
       - ./data/invoices:/data/invoices
 
@@ -130,7 +94,14 @@ services:
     depends_on:
       - db
       - redis
-    command: ["celery", "-A", "app.workers.celery_app.celery_app", "beat", "--loglevel=INFO"]
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app.celery_app",
+        "beat",
+        "--loglevel=INFO",
+      ]
     volumes:
       - ./data/invoices:/data/invoices
 
@@ -149,16 +120,6 @@ services:
       - backend-fastapi
     ports:
       - "5173:5173"
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: saas-cloudflared
-    restart: unless-stopped
-    # Arranca el tunel configurado con el token de Cloudflare.
-    command: tunnel run plataforma-dev-saas
-    environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-      - TZ=Europe/Madrid
 
 volumes:
   db_data:
