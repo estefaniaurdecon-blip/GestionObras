@@ -10,10 +10,12 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Actualizar código del proyecto
+      - name: Actualizar código del proyecto (clean)
         run: |
           cd /home/server/projects/erp
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
+          git clean -fd
 
       - name: Tirar instancia actual de Docker
         run: |
