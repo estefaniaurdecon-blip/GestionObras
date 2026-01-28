@@ -16,6 +16,7 @@ import {
   TimeSession,
 } from "../../api/erpTimeTracking";
 import { updateErpTask } from "../../api/erpManagement";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { useQueryClient } from "@tanstack/react-query";
 
 /**
@@ -32,6 +33,10 @@ export const TimeTrackingWidget: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
+  const effectiveTenantId = currentUser?.is_super_admin
+    ? undefined
+    : (currentUser?.tenant_id ?? undefined);
 
   const bg = useColorModeValue("white", "gray.800");
   const border = useColorModeValue("gray.200", "gray.700");
@@ -51,7 +56,7 @@ export const TimeTrackingWidget: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const session = await getActiveTimeSession();
+        const session = await getActiveTimeSession(effectiveTenantId);
         if (!cancelled) {
           setActiveSession(session);
         }
@@ -60,7 +65,8 @@ export const TimeTrackingWidget: React.FC = () => {
         toast({
           title: "Error al cargar sesión de tiempo",
           description:
-            error?.response?.data?.detail ?? "No se pudo cargar el estado de tracking.",
+            error?.response?.data?.detail ??
+            "No se pudo cargar el estado de tracking.",
           status: "error",
           duration: 4000,
           isClosable: true,
@@ -109,9 +115,9 @@ export const TimeTrackingWidget: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const session = await startTimeSession(taskId);
+      const session = await startTimeSession(taskId, effectiveTenantId);
       // Marcar la tarea como "in_progress" al iniciar el tracking.
-      await updateErpTask(taskId, { status: "in_progress" });
+      await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
       queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
       setActiveSession(session);
       toast({
@@ -135,7 +141,7 @@ export const TimeTrackingWidget: React.FC = () => {
   const handleStop = async () => {
     try {
       setIsLoading(true);
-      const session = await stopTimeSession();
+      const session = await stopTimeSession(effectiveTenantId);
       setActiveSession(session);
       toast({
         title: "Tracking detenido",

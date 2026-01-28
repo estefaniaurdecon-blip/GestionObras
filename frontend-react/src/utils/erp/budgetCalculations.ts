@@ -3,21 +3,35 @@ import { CATEGORY_COLOR_MAP } from "./constants";
 import {
   getBudgetGroupKey,
   getBudgetSortRank,
+  isAllCapsConcept,
+  isGeneralExpensesConcept,
   normalizeConceptKey,
 } from "./budgetNormalization";
 
-export const calculateBudgetTotals = (rows: ProjectBudgetLine[]) => {
+export const calculateBudgetTotals = (
+  rows: ProjectBudgetLine[],
+  parentMap: Record<string, string[]>,
+) => {
   const totalsByMilestone: Record<number, { amount: number; justified: number }> = {
     1: { amount: 0, justified: 0 },
     2: { amount: 0, justified: 0 },
   };
   let approved = 0;
   let forecasted = 0;
+  const parentKeys = new Set(Object.keys(parentMap));
+  const parentTotals = calculateParentTotals(rows, parentMap);
   rows.forEach((row) => {
+    const rowKey = normalizeConceptKey(row.concept);
+    const isParentRow = isAllCapsConcept(row.concept) && parentKeys.has(rowKey);
+    const isGeneralExpenses = isGeneralExpensesConcept(row.concept);
+    if (!isParentRow && !isGeneralExpenses) {
+      return;
+    }
     const h1 = Number(row.hito1_budget ?? 0);
     const h2 = Number(row.hito2_budget ?? 0);
-    const j1 = Number(row.justified_hito1 ?? 0);
-    const j2 = Number(row.justified_hito2 ?? 0);
+    const parentJustified = parentTotals.get(rowKey);
+    const j1 = parentJustified ? parentJustified.j1 : Number(row.justified_hito1 ?? 0);
+    const j2 = parentJustified ? parentJustified.j2 : Number(row.justified_hito2 ?? 0);
     approved += h1 + h2;
     forecasted += Number(row.forecasted_spent ?? 0);
     totalsByMilestone[1].amount += h1;

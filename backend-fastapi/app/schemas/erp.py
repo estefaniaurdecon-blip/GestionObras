@@ -21,6 +21,7 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    subsidy_percent: Optional[float] = None
     is_active: bool = True
 
 
@@ -29,6 +30,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    subsidy_percent: Optional[float] = None
     is_active: Optional[bool] = None
 
 
@@ -217,6 +219,7 @@ class TimeTrackingStart(BaseModel):
     task_id: Optional[int] = None
     activity_id: Optional[int] = None
     subactivity_id: Optional[int] = None
+    tenant_id: Optional[int] = None
 
 
 class TimeSessionCreate(BaseModel):

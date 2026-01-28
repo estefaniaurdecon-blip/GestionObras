@@ -27,6 +27,7 @@ export const useProjectDetails = ({
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editSubsidyPercent, setEditSubsidyPercent] = useState("0");
 
   const [activityEdits, setActivityEdits] = useState<
     Record<number, { name: string; start: string; end: string; description: string }>
@@ -84,6 +85,11 @@ export const useProjectDetails = ({
     setEditStart(toDateInput(selectedProject.start_date));
     setEditEnd(toDateInput(selectedProject.end_date));
     setEditActive(selectedProject.is_active ?? true);
+    setEditSubsidyPercent(
+      selectedProject.subsidy_percent != null
+        ? String(selectedProject.subsidy_percent)
+        : "0",
+    );
   }, [selectedProject]);
 
   useEffect(() => {
@@ -152,6 +158,8 @@ export const useProjectDetails = ({
     setEditEnd,
     editActive,
     setEditActive,
+    editSubsidyPercent,
+    setEditSubsidyPercent,
     activityEdits,
     setActivityEdits,
     subactivityEdits,

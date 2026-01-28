@@ -222,6 +222,8 @@ export const ErpProjectsPage: React.FC = () => {
     setEditStart,
     editEnd,
     setEditEnd,
+    editSubsidyPercent,
+    setEditSubsidyPercent,
     editActive,
     setEditActive,
     activityEdits,
@@ -246,6 +248,7 @@ export const ErpProjectsPage: React.FC = () => {
     setSummaryYear,
     allocationDraftsState,
     setAllocationDrafts,
+    handleAllocationDraftChange,
     summarySearch,
     setSummarySearch,
     summaryEditMode,
@@ -526,6 +529,8 @@ export const ErpProjectsPage: React.FC = () => {
 
         end_date: editEnd || null,
 
+        subsidy_percent: editSubsidyPercent ? Number(editSubsidyPercent) : 0,
+
         is_active: editActive,
       });
     },
@@ -730,12 +735,7 @@ export const ErpProjectsPage: React.FC = () => {
               allocationKey={allocationKey}
               allocationIndex={allocationIndex}
               allocationDraftsState={allocationDraftsState}
-              onAllocationDraftChange={(key, value) =>
-                setAllocationDrafts((prev) => ({
-                  ...prev,
-                  [key]: value,
-                }))
-              }
+              onAllocationDraftChange={handleAllocationDraftChange}
               onAllocationBlur={handleAllocationBlur}
               isAddModalOpen={isAddModalOpen}
               onCloseAddModal={onCloseAddModal}
@@ -907,6 +907,8 @@ export const ErpProjectsPage: React.FC = () => {
         setEditStart={setEditStart}
         editEnd={editEnd}
         setEditEnd={setEditEnd}
+        editSubsidyPercent={editSubsidyPercent}
+        setEditSubsidyPercent={setEditSubsidyPercent}
         activityEdits={activityEdits}
         setActivityEdits={setActivityEdits}
         subactivityEdits={subactivityEdits}

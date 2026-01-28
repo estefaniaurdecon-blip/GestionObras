@@ -3,7 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
-from app.api.deps import require_permissions
+from app.api.deps import require_any_permissions, require_permissions
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.hr import (
@@ -298,7 +298,7 @@ def api_list_allocations(
     employee_id: Optional[int] = Query(default=None, description="Filtrar por empleado"),
     year: Optional[int] = Query(default=None, description="Año de las asignaciones"),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["hr:read"])),
+    current_user: User = Depends(require_any_permissions(["hr:read", "erp:read"])),
 ) -> List[EmployeeAllocationRead]:
     try:
         return list_employee_allocations(
@@ -325,7 +325,7 @@ def api_list_allocations(
 def api_create_allocation(
     data: EmployeeAllocationCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["hr:manage"])),
+    current_user: User = Depends(require_any_permissions(["hr:manage", "erp:manage"])),
 ) -> EmployeeAllocationRead:
     try:
         return create_employee_allocation(
@@ -354,7 +354,7 @@ def api_update_allocation(
     allocation_id: int,
     data: EmployeeAllocationUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["hr:manage"])),
+    current_user: User = Depends(require_any_permissions(["hr:manage", "erp:manage"])),
 ) -> EmployeeAllocationRead:
     try:
         return update_employee_allocation(
@@ -383,7 +383,7 @@ def api_update_allocation(
 def api_delete_allocation(
     allocation_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["hr:manage"])),
+    current_user: User = Depends(require_any_permissions(["hr:manage", "erp:manage"])),
 ) -> None:
     try:
         delete_employee_allocation(

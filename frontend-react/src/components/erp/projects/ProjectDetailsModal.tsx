@@ -49,6 +49,8 @@ interface ProjectDetailsModalProps {
   setEditStart: (value: string) => void;
   editEnd: string;
   setEditEnd: (value: string) => void;
+  editSubsidyPercent: string;
+  setEditSubsidyPercent: (value: string) => void;
   activityEdits: Record<number, { name: string; start: string; end: string; description: string }>;
   setActivityEdits: React.Dispatch<React.SetStateAction<Record<number, { name: string; start: string; end: string; description: string }>>>;
   subactivityEdits: Record<number, { name: string; start: string; end: string; description: string }>;
@@ -86,6 +88,8 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
   setEditStart,
   editEnd,
   setEditEnd,
+  editSubsidyPercent,
+  setEditSubsidyPercent,
   activityEdits,
   setActivityEdits,
   subactivityEdits,
@@ -200,6 +204,16 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
               <FormControl>
                 <FormLabel>Fin</FormLabel>
                 <Input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>% subvencion</FormLabel>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={editSubsidyPercent}
+                  onChange={(e) => setEditSubsidyPercent(e.target.value)}
+                />
               </FormControl>
             </SimpleGrid>
 

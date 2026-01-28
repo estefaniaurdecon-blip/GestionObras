@@ -43,10 +43,13 @@ export async function fetchErpTasks(tenantId?: number): Promise<ErpTask[]> {
   return response.data;
 }
 
-export async function getActiveTimeSession(): Promise<TimeSession | null> {
+export async function getActiveTimeSession(
+  tenantId?: number,
+): Promise<TimeSession | null> {
   try {
     const response = await apiClient.get<TimeSession>(
       "/api/v1/erp/time-tracking/active",
+      buildTenantHeaders(tenantId),
     );
     return response.data;
   } catch (error: any) {
@@ -63,19 +66,30 @@ export async function getActiveTimeSession(): Promise<TimeSession | null> {
   }
 }
 
-export async function startTimeSession(taskId: number): Promise<TimeSession> {
+export async function startTimeSession(
+  taskId: number,
+  tenantId?: number,
+): Promise<TimeSession> {
+  const payload: { task_id: number; tenant_id?: number } = {
+    task_id: taskId,
+  };
+  if (tenantId !== undefined) {
+    payload.tenant_id = tenantId;
+  }
+
   const response = await apiClient.post<TimeSession>(
     "/api/v1/erp/time-tracking/start",
-    {
-      task_id: taskId,
-    },
+    payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
 
-export async function stopTimeSession(): Promise<TimeSession> {
+export async function stopTimeSession(tenantId?: number): Promise<TimeSession> {
   const response = await apiClient.put<TimeSession>(
     "/api/v1/erp/time-tracking/stop",
+    undefined,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }

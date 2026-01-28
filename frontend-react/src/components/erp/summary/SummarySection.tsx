@@ -585,45 +585,34 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
 
                     {projectColumns.map((p) => {
                       const count = (summaryMilestones[p.id] ?? []).length || 1;
-                      const key = allocationKey(emp.id, p.id, summaryYear);
-                      const existing = allocationIndex.get(key);
-                      const value =
-                        allocationDraftsState[key] ??
-                        existing?.allocated_hours?.toString() ??
-                        "";
-                      const numericValue = Number(
-                        value || existing?.allocated_hours || 0,
-                      );
-                      totalEmpAllocated += Number.isFinite(numericValue)
-                        ? numericValue
-                        : 0;
-
-                      if (count === 0) {
-                        return (
-                          <Td key={`${emp.id}-${p.id}-empty`} textAlign="center">
-                            -
-                          </Td>
-                        );
-                      }
-
                       const cells: JSX.Element[] = [];
 
                       for (let mIdx = 0; mIdx < count; mIdx += 1) {
+                        const hasMilestones = (summaryMilestones[p.id] ?? []).length > 0;
                         const milestoneLabel =
                           summaryMilestones[p.id]?.[mIdx]?.label ??
                           `H${mIdx + 1}`;
+                        const milestoneKey = hasMilestones
+                          ? milestoneLabel
+                          : "general";
 
                         const cellKey = allocationKey(
                           emp.id,
                           p.id,
                           summaryYear,
-                          milestoneLabel,
+                          milestoneKey,
                         );
                         const cellExisting = allocationIndex.get(cellKey);
                         const cellValue =
                           allocationDraftsState[cellKey] ??
                           cellExisting?.allocated_hours?.toString() ??
                           "";
+                        const cellNumeric = Number(
+                          cellValue || cellExisting?.allocated_hours || 0,
+                        );
+                        totalEmpAllocated += Number.isFinite(cellNumeric)
+                          ? cellNumeric
+                          : 0;
 
                         cells.push(
                           <Td key={`${emp.id}-${p.id}-${mIdx}`} textAlign="center">
@@ -640,13 +629,13 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                                   )
                                 }
                                 onBlur={(e) =>
-                                  onAllocationBlur(
-                                    emp,
-                                    p.id,
-                                    milestoneLabel,
-                                    e.target.value,
-                                  )
-                                }
+                                onAllocationBlur(
+                                  emp,
+                                  p.id,
+                                  milestoneKey,
+                                  e.target.value,
+                                )
+                              }
                                 textAlign="center"
                               />
                             ) : (
@@ -681,17 +670,49 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     </Td>
                     <Td
                       textAlign="center"
-                      bg={
-                        available - totalEmpAllocated < 0 ? "red.50" : "green.50"
-                      }
-                      color={
-                        available - totalEmpAllocated < 0
-                          ? "red.700"
-                          : "green.700"
-                      }
-                      fontWeight="semibold"
+                      bg="white"
                     >
-                      {available - totalEmpAllocated} h
+                      {(() => {
+                        const remaining = available - totalEmpAllocated;
+                        const safeRemaining = Math.max(0, remaining);
+                        const percentRemaining =
+                          available > 0
+                            ? Math.max(
+                                0,
+                                Math.min(100, (safeRemaining / available) * 100),
+                              )
+                            : 0;
+                        const colorScheme =
+                          available === 0
+                            ? "gray"
+                            : percentRemaining >= 70
+                              ? "green"
+                              : percentRemaining >= 40
+                                ? "yellow"
+                                : percentRemaining >= 15
+                                  ? "orange"
+                                  : "red";
+
+                        return (
+                          <Stack spacing={1} align="center">
+                            <Box w="120px" h="6px" bg="gray.200" borderRadius="full">
+                              <Box
+                                h="6px"
+                                borderRadius="full"
+                                bg={`${colorScheme}.400`}
+                                width={`${percentRemaining}%`}
+                              />
+                            </Box>
+                            <Text
+                              fontSize="xs"
+                              color={remaining < 0 ? "red.600" : "green.700"}
+                              fontWeight="semibold"
+                            >
+                              {remaining} h ({Math.round(percentRemaining)}%)
+                            </Text>
+                          </Stack>
+                        );
+                      })()}
                     </Td>
                   </Tr>
                 );
