@@ -9,15 +9,44 @@ import axios from "axios";
  * - Interceptores para errores globales.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-if (!API_BASE_URL) {
-  throw new Error("VITE_API_BASE_URL is required");
-}
+const resolveApiBaseUrl = () => {
+  if (!rawBaseUrl || rawBaseUrl === "relative" || rawBaseUrl === "/") {
+    // Usa mismo origen (Vite proxy) si se pide modo relativo.
+    return "";
+  }
+
+  // Si estamos accediendo desde otra mÃ¡quina y el base apunta a localhost,
+  // sustituimos por el hostname actual para evitar errores de conexiÃ³n.
+  if (
+    rawBaseUrl.includes("localhost") &&
+    !["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ) {
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    return `${protocol}://${window.location.hostname}:8000`;
+  }
+
+  return rawBaseUrl;
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+});
+
+// Inyecta X-Tenant-Id si existe en localStorage (superadmin).
+apiClient.interceptors.request.use((config) => {
+  const tenantId = localStorage.getItem("x_tenant_id");
+  if (tenantId) {
+    config.headers = {
+      ...config.headers,
+      "X-Tenant-Id": tenantId,
+    };
+  }
+  return config;
 });
 
 // Las credenciales se envian via cookie httpOnly configurada en el backend.

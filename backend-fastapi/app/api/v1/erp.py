@@ -87,39 +87,48 @@ from app.services.erp_service import (
 
 router = APIRouter()
 
-
+# Funcion permisos lectura 
 def _tenant_for_read(current_user: User, x_tenant_id: Optional[int]) -> Optional[int]:
+    # Si el usuario es superadmin : lee cualquier datos de cualquier tenant
     if current_user.is_super_admin:
         return x_tenant_id
+    # si no superadmin y no tiene tenant asigando --> Error de persimos de lectura
     if current_user.tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tenant requerido.",
         )
+        #Usuario normal --> solo lectura de su tenant 
     return current_user.tenant_id
 
-
+ # Funcion permisos escribir por tenant
 def _tenant_for_write(
     current_user: User,
     x_tenant_id: Optional[int],
     require_header: bool = False,
 ) -> Optional[int]:
+    # SuperAdmin --> puede escribir en cualquier tenant
     if current_user.is_super_admin:
+        # Si envia el X-TenantID usa ese tenant para escribir
         if x_tenant_id is not None:
             return x_tenant_id
         if current_user.tenant_id is not None:
             return current_user.tenant_id
+         # Si se exige cabecera y no se ha enviado X-Tenant-Id --> lanza error
         if require_header:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="X-Tenant-Id requerido para escribir.",
             )
+            # Puede devolver None en casos especiales como superadmin
         return None
+    #Usuario normal --> Tiene que tener un tenant asociado para poder escribit
     if current_user.tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tenant requerido.",
         )
+        #solo escribir en su propio tenant
     return current_user.tenant_id
 
 

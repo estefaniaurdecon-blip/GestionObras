@@ -168,3 +168,47 @@ def send_user_invitation_email(
                 server.send_message(msg)
     except Exception as exc:
         logger.exception("Error enviando email de invitación a %s: %s", to_email, exc)
+
+
+def send_invoice_due_reminder_email(to_email: str, invoice: object) -> None:
+    """
+    Envia un recordatorio de vencimiento de factura.
+    """
+    host, port, username, password, from_email, use_tls = _get_smtp_params()
+    if not host or not username or not password or not from_email:
+        return
+
+    subject = "Recordatorio de vencimiento de factura"
+    due_date = getattr(invoice, "due_date", None)
+    invoice_number = getattr(invoice, "invoice_number", None) or "N/A"
+    total_amount = getattr(invoice, "total_amount", None)
+    currency = getattr(invoice, "currency", None) or ""
+    total_display = f"{total_amount} {currency}".strip()
+
+    body = (
+        f"Hola,\n\n"
+        f"Recordatorio de vencimiento de factura.\n\n"
+        f"Factura: {invoice_number}\n"
+        f"Vence: {due_date}\n"
+        f"Total: {total_display}\n\n"
+        f"Un saludo.\n"
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    try:
+        if use_tls:
+            with smtplib.SMTP(host, port) as server:
+                server.starttls()
+                server.login(username, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port) as server:
+                server.login(username, password)
+                server.send_message(msg)
+    except Exception as exc:
+        logger.exception("Error enviando recordatorio de factura a %s: %s", to_email, exc)

@@ -21,6 +21,7 @@ import {
   useColorModeValue,
   IconButton,
   useColorMode,
+  Input,
 } from "@chakra-ui/react";
 import { MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Link, useRouter } from "@tanstack/react-router";
@@ -62,11 +63,23 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const fullName = currentUser?.full_name ?? t("layout.user.fallbackName");
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
+  const [tenantOverride, setTenantOverride] = useState(
+    localStorage.getItem("x_tenant_id") ?? ""
+  );
 
   const handleLogout = () => {
     void apiClient.post("/api/v1/auth/logout").catch(() => undefined);
     localStorage.removeItem("access_token");
     router.history.push("/");
+  };
+
+  const handleTenantOverride = (value: string) => {
+    setTenantOverride(value);
+    if (value) {
+      localStorage.setItem("x_tenant_id", value);
+    } else {
+      localStorage.removeItem("x_tenant_id");
+    }
   };
 
   const goToUserSettings = () => {
@@ -192,6 +205,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       justifyContent="flex-start"
                       size="sm"
                     >{t("layout.nav.simulations")}</Button>
+                    <Button
+                      as={Link}
+                      to="/erp/invoices"
+                      variant={isActive("/erp/invoices") ? "solid" : "ghost"}
+                      justifyContent="flex-start"
+                      size="sm"
+                    >
+                      Facturas
+                    </Button>
                   </VStack>
                 </AccordionPanel>
               </AccordionItem>
@@ -282,6 +304,20 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </Box>
 
             <HStack spacing={4}>
+              {isSuperAdmin && (
+                <HStack spacing={2}>
+                  <Text fontSize="xs" color="gray.500">
+                    Tenant ID
+                  </Text>
+                  <Input
+                    size="sm"
+                    w="120px"
+                    value={tenantOverride}
+                    onChange={(e) => handleTenantOverride(e.target.value)}
+                    placeholder="Ej. 3"
+                  />
+                </HStack>
+              )}
               <IconButton
                 aria-label="Toggle color mode"
                 icon={colorMode === "light" ? <MoonIcon /> : <SunIcon />}

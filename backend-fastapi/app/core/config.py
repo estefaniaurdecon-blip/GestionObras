@@ -47,6 +47,30 @@ class Settings(BaseSettings):
     # URL base del frontend para enlaces en correos
     frontend_base_url: str | None = None
 
+    # Redis / Celery
+    redis_url: str = "redis://redis:6379/0"
+    celery_broker_url: str = "redis://redis:6379/0"
+    celery_timezone: str = "Europe/Madrid"
+    celery_visibility_timeout_seconds: int = 3600
+    celery_soft_time_limit_seconds: int = 600
+    celery_time_limit_seconds: int = 720
+
+    # IA (Ollama remoto)
+    ollama_base_url: str = "http://192.168.1.171:11434"
+    ollama_headers_json: str | None = None
+    ollama_ocr_model: str = "deepseek-ocr:3b"
+    ollama_json_model: str = "qwen3-coder:30b"
+    ollama_ocr_timeout_seconds: int = 90
+    ollama_json_timeout_seconds: int = 45
+    ai_circuit_breaker_ttl_seconds: int = 60
+    ai_health_check_timeout_seconds: int = 5
+
+    # Facturas
+    invoices_storage_path: str = "/data/invoices"
+    invoice_min_text_length: int = 80
+    reminders_daily_enabled: bool = True
+    reminders_daily_threshold: int = 5
+
     # IntegraciÑn con Moodle (Web Services)
     moodle_base_url: str | None = None
     moodle_token: str | None = None
