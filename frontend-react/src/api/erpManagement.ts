@@ -77,15 +77,36 @@ export async function updateErpProject(
   return response.data;
 }
 
-export async function createErpTask(payload: ErpTaskCreate): Promise<void> {
-  await apiClient.post("/api/v1/erp/tasks", payload);
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
+export async function createErpTask(
+  payload: ErpTaskCreate,
+  tenantId?: number,
+): Promise<void> {
+  await apiClient.post(
+    "/api/v1/erp/tasks",
+    payload,
+    buildTenantHeaders(tenantId),
+  );
 }
 
 export async function updateErpTask(
   taskId: number,
   payload: ErpTaskUpdate,
+  tenantId?: number,
 ): Promise<void> {
-  await apiClient.patch(`/api/v1/erp/tasks/${taskId}`, payload);
+  await apiClient.patch(
+    `/api/v1/erp/tasks/${taskId}`,
+    payload,
+    buildTenantHeaders(tenantId),
+  );
 }
 
 export async function deleteErpTask(taskId: number): Promise<void> {

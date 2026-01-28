@@ -90,7 +90,7 @@ const addDays = (date: Date, days: number): Date => {
 // Formatea el encabezado corto de dia usando el locale activo.
 const formatDayLabel = (date: Date, locale: string): string =>
   new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(
-    date
+    date,
   );
 
 // Formatea fecha para inputs datetime-local.
@@ -176,10 +176,10 @@ export const TimeControlPage: React.FC = () => {
 
   // Vista activa del modulo de tiempo.
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "timesheet">(
-    "calendar"
+    "calendar",
   );
   const [weekStart, setWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date())
+    startOfWeek(new Date()),
   );
   const [sessions, setSessions] = useState<TimeSessionBlock[]>([]);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -224,7 +224,7 @@ export const TimeControlPage: React.FC = () => {
   const { data: currentUser } = useCurrentUser();
   const effectiveTenantId = currentUser?.is_super_admin
     ? undefined
-    : currentUser?.tenant_id ?? undefined;
+    : (currentUser?.tenant_id ?? undefined);
 
   // Flags y derivados del estado actual.
   const isRunning = Boolean(activeSession && activeSession.is_active);
@@ -232,7 +232,7 @@ export const TimeControlPage: React.FC = () => {
   // Dias visibles en la semana actual.
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)),
-    [weekStart]
+    [weekStart],
   );
 
   // Convierte coordenadas Y en minutos dentro del calendario.
@@ -291,7 +291,7 @@ export const TimeControlPage: React.FC = () => {
   // Formato legible del tiempo activo.
   const formattedElapsed = useMemo(
     () => formatSeconds(elapsedSeconds),
-    [elapsedSeconds]
+    [elapsedSeconds],
   );
   // Ultimas tareas recientes para acceso rapido.
   const recentTasks = useMemo(() => {
@@ -307,7 +307,7 @@ export const TimeControlPage: React.FC = () => {
     return [...scopedTasks]
       .sort(
         (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )
       .slice(0, 3);
   }, [tasks, currentUserId, recentTaskIds]);
@@ -342,7 +342,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setTasksError(
             error?.response?.data?.detail ??
-              t("timeControl.messages.tasksLoadError")
+              t("timeControl.messages.tasksLoadError"),
           );
         }
       }
@@ -395,7 +395,7 @@ export const TimeControlPage: React.FC = () => {
       try {
         const list = await fetchTimeSessions(
           toLocalIsoString(weekRange.start),
-          toLocalIsoString(weekRange.end)
+          toLocalIsoString(weekRange.end),
         );
         if (!cancelled) {
           setSessions(list);
@@ -405,7 +405,7 @@ export const TimeControlPage: React.FC = () => {
         if (!cancelled) {
           setSessionsError(
             error?.response?.data?.detail ??
-              t("timeControl.messages.sessionsLoadError")
+              t("timeControl.messages.sessionsLoadError"),
           );
         }
       } finally {
@@ -442,7 +442,7 @@ export const TimeControlPage: React.FC = () => {
         const newStart = clamp(
           minutes - (dragState.offsetMinutes ?? 0),
           0,
-          24 * 60 - duration
+          24 * 60 - duration,
         );
         setDragState((prev) =>
           prev
@@ -452,7 +452,7 @@ export const TimeControlPage: React.FC = () => {
                 startMinutes: newStart,
                 endMinutes: newStart + duration,
               }
-            : prev
+            : prev,
         );
         return;
       }
@@ -460,7 +460,7 @@ export const TimeControlPage: React.FC = () => {
       if (dragState.mode === "resize") {
         const newEnd = Math.max(
           minutes,
-          dragState.startMinutes + MIN_SESSION_MINUTES
+          dragState.startMinutes + MIN_SESSION_MINUTES,
         );
         setDragState((prev) =>
           prev
@@ -468,7 +468,7 @@ export const TimeControlPage: React.FC = () => {
                 ...prev,
                 endMinutes: clamp(newEnd, 0, 24 * 60),
               }
-            : prev
+            : prev,
         );
       }
     };
@@ -497,7 +497,7 @@ export const TimeControlPage: React.FC = () => {
         setIsDraggingSession(false);
         const startDate = minutesToDate(
           dragState.dayIndex,
-          dragState.startMinutes
+          dragState.startMinutes,
         );
         const endDate = minutesToDate(dragState.dayIndex, dragState.endMinutes);
         setSessions((prev) =>
@@ -509,11 +509,13 @@ export const TimeControlPage: React.FC = () => {
                   ended_at: toLocalIsoString(endDate),
                   duration_seconds: Math.max(
                     0,
-                    Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
+                    Math.floor(
+                      (endDate.getTime() - startDate.getTime()) / 1000,
+                    ),
                   ),
                 }
-              : session
-          )
+              : session,
+          ),
         );
         try {
           await updateTimeSession(dragState.sessionId, {
@@ -578,14 +580,14 @@ export const TimeControlPage: React.FC = () => {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
       updateRecentTaskIds(taskId);
-      await updateErpTask(taskId, { status: "in_progress" });
+      await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
       setActiveSession(session);
       setTaskIdInput(String(taskId));
       setWeekStart(startOfWeek(new Date()));
       setTasks((prev) =>
         prev.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress" } : task
-        )
+          task.id === taskId ? { ...task, status: "in_progress" } : task,
+        ),
       );
       toast({
         title: t("timeControl.messages.trackingStartedTitle"),
@@ -621,14 +623,14 @@ export const TimeControlPage: React.FC = () => {
       setIsLoading(true);
       const session = await startTimeSession(taskId);
       updateRecentTaskIds(taskId);
-      await updateErpTask(taskId, { status: "in_progress" });
+      await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
       setActiveSession(session);
       setTaskIdInput(String(taskId));
       setWeekStart(startOfWeek(new Date()));
       setTasks((prev) =>
         prev.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress" } : task
-        )
+          task.id === taskId ? { ...task, status: "in_progress" } : task,
+        ),
       );
       toast({
         title: t("timeControl.messages.trackingStartedTitle"),
@@ -718,14 +720,20 @@ export const TimeControlPage: React.FC = () => {
         const updated = await updateTimeSession(editingSessionId, payload);
         setSessions((prev) =>
           prev.map((session) =>
-            session.id === editingSessionId ? updated : session
-          )
+            session.id === editingSessionId ? updated : session,
+          ),
         );
-        toast({ title: t("timeControl.messages.sessionUpdated"), status: "success" });
+        toast({
+          title: t("timeControl.messages.sessionUpdated"),
+          status: "success",
+        });
       } else {
         const created = await createTimeSession(payload);
         setSessions((prev) => [created, ...prev]);
-        toast({ title: t("timeControl.messages.sessionCreated"), status: "success" });
+        toast({
+          title: t("timeControl.messages.sessionCreated"),
+          status: "success",
+        });
       }
 
       handleCloseModal();
@@ -755,9 +763,12 @@ export const TimeControlPage: React.FC = () => {
     try {
       await deleteTimeSession(editingSessionId);
       setSessions((prev) =>
-        prev.filter((session) => session.id !== editingSessionId)
+        prev.filter((session) => session.id !== editingSessionId),
       );
-      toast({ title: t("timeControl.messages.sessionDeleted"), status: "success" });
+      toast({
+        title: t("timeControl.messages.sessionDeleted"),
+        status: "success",
+      });
       handleCloseModal();
     } catch (error: any) {
       toast({
@@ -790,7 +801,10 @@ export const TimeControlPage: React.FC = () => {
     try {
       await deleteTimeSession(sessionId);
       setSessions((prev) => prev.filter((session) => session.id !== sessionId));
-      toast({ title: t("timeControl.messages.sessionDeleted"), status: "success" });
+      toast({
+        title: t("timeControl.messages.sessionDeleted"),
+        status: "success",
+      });
     } catch (error: any) {
       toast({
         title: t("timeControl.messages.sessionDeleteErrorTitle"),
@@ -806,7 +820,7 @@ export const TimeControlPage: React.FC = () => {
   // Arrastre desde accesos rapidos hacia el calendario.
   const handleTaskDragStart = (
     event: React.DragEvent<HTMLDivElement>,
-    taskId: number
+    taskId: number,
   ) => {
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("text/plain", String(taskId));
@@ -834,7 +848,10 @@ export const TimeControlPage: React.FC = () => {
         ended_at: toLocalIsoString(endDate),
       });
       setSessions((prev) => [created, ...prev]);
-      toast({ title: t("timeControl.messages.sessionCreated"), status: "success" });
+      toast({
+        title: t("timeControl.messages.sessionCreated"),
+        status: "success",
+      });
     } catch (error: any) {
       toast({
         title: t("timeControl.messages.sessionCreateErrorTitle"),
@@ -869,7 +886,9 @@ export const TimeControlPage: React.FC = () => {
           bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
         />
         <Stack position="relative" spacing={1}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("timeControl.header.eyebrow")}</Text>
+          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
+            {t("timeControl.header.eyebrow")}
+          </Text>
           <Heading size="lg">{t("timeControl.header.title")}</Heading>
         </Stack>
       </Box>
@@ -881,7 +900,9 @@ export const TimeControlPage: React.FC = () => {
           alignItems="center"
         >
           <Box>
-            <Text fontSize="xs" color={subtleText}>{t("timeControl.stats.totalWeeklyHours")}</Text>
+            <Text fontSize="xs" color={subtleText}>
+              {t("timeControl.stats.totalWeeklyHours")}
+            </Text>
             <Text fontSize="xl" fontWeight="semibold">
               {formatSeconds(totalWeekSeconds)}
             </Text>
@@ -918,8 +939,8 @@ export const TimeControlPage: React.FC = () => {
             <Box textAlign={{ base: "left", lg: "right" }}>
               <Badge colorScheme={isRunning ? "green" : "gray"}>
                 {isRunning
-                ? t("timeControl.status.inProgress")
-                : t("timeControl.status.idle")}
+                  ? t("timeControl.status.inProgress")
+                  : t("timeControl.status.idle")}
               </Badge>
               {isRunning && (
                 <Text fontSize="2xl" fontFamily="mono" mt={1}>
@@ -964,18 +985,26 @@ export const TimeControlPage: React.FC = () => {
         <Button
           variant={viewMode === "calendar" ? "solid" : "outline"}
           onClick={() => setViewMode("calendar")}
-        >{t("timeControl.views.calendar")}</Button>
+        >
+          {t("timeControl.views.calendar")}
+        </Button>
         <Button
           variant={viewMode === "list" ? "solid" : "outline"}
           onClick={() => setViewMode("list")}
-        >{t("timeControl.views.list")}</Button>
+        >
+          {t("timeControl.views.list")}
+        </Button>
         <Button
           variant={viewMode === "timesheet" ? "solid" : "outline"}
           onClick={() => setViewMode("timesheet")}
-        >{t("timeControl.views.timesheet")}</Button>
+        >
+          {t("timeControl.views.timesheet")}
+        </Button>
         <HStack marginLeft="auto" spacing={4} align="center">
           <HStack spacing={2}>
-            <Text fontSize="sm" color={subtleText}>{t("timeControl.controls.adjustment")}</Text>
+            <Text fontSize="sm" color={subtleText}>
+              {t("timeControl.controls.adjustment")}
+            </Text>
             <Select
               size="sm"
               value={minutesStep}
@@ -992,15 +1021,21 @@ export const TimeControlPage: React.FC = () => {
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(addDays(weekStart, -7)))}
-            >{t("timeControl.controls.prevWeek")}</Button>
+            >
+              {t("timeControl.controls.prevWeek")}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(new Date()))}
-            >{t("timeControl.controls.today")}</Button>
+            >
+              {t("timeControl.controls.today")}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => setWeekStart(startOfWeek(addDays(weekStart, 7)))}
-            >{t("timeControl.controls.nextWeek")}</Button>
+            >
+              {t("timeControl.controls.nextWeek")}
+            </Button>
           </HStack>
         </HStack>
       </HStack>
@@ -1056,7 +1091,9 @@ export const TimeControlPage: React.FC = () => {
                       alignSelf="flex-start"
                       onClick={() => handleQuickStart(task.id)}
                       isDisabled={isRunning}
-                    >{t("timeControl.actions.play")}</Button>
+                    >
+                      {t("timeControl.actions.play")}
+                    </Button>
                   </Stack>
                 </Box>
               ))}
@@ -1083,22 +1120,26 @@ export const TimeControlPage: React.FC = () => {
             {weekDays.map((day) => {
               const isToday = day.toDateString() === now.toDateString();
               return (
-              <Box
-                key={day.toISOString()}
-                p={3}
-                borderRightWidth="1px"
-                bg={isToday ? calendarHeaderActiveBg : calendarHeaderIdleBg}
-              >
-                <Text
-                  fontSize="xs"
-                  fontWeight="semibold"
-                  textTransform="uppercase"
-                  letterSpacing="0.08em"
-                  color={isToday ? calendarHeaderActiveText : calendarHeaderIdleText}
+                <Box
+                  key={day.toISOString()}
+                  p={3}
+                  borderRightWidth="1px"
+                  bg={isToday ? calendarHeaderActiveBg : calendarHeaderIdleBg}
                 >
-                  {formatDayLabel(day, i18n.language)}
-                </Text>
-              </Box>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="semibold"
+                    textTransform="uppercase"
+                    letterSpacing="0.08em"
+                    color={
+                      isToday
+                        ? calendarHeaderActiveText
+                        : calendarHeaderIdleText
+                    }
+                  >
+                    {formatDayLabel(day, i18n.language)}
+                  </Text>
+                </Box>
               );
             })}
           </SimpleGrid>
@@ -1136,7 +1177,7 @@ export const TimeControlPage: React.FC = () => {
               </SimpleGrid>
             ))}
             {weekDays.some(
-              (day) => day.toDateString() === now.toDateString()
+              (day) => day.toDateString() === now.toDateString(),
             ) && (
               <Box
                 position="absolute"
@@ -1200,7 +1241,7 @@ export const TimeControlPage: React.FC = () => {
                 height={`${
                   (Math.max(
                     MIN_SESSION_MINUTES,
-                    Math.abs(selection.endMinutes - selection.startMinutes)
+                    Math.abs(selection.endMinutes - selection.startMinutes),
                   ) /
                     60) *
                   HOUR_HEIGHT
@@ -1217,16 +1258,34 @@ export const TimeControlPage: React.FC = () => {
                 ? new Date(session.ended_at)
                 : new Date(start.getTime() + MIN_SESSION_MINUTES * 60000);
               const dayIndex = weekDays.findIndex(
-                (day) => day.toDateString() === start.toDateString()
+                (day) => day.toDateString() === start.toDateString(),
               );
               if (dayIndex < 0) return null;
               const startMinutes = start.getHours() * 60 + start.getMinutes();
               const endMinutes = end.getHours() * 60 + end.getMinutes();
               const top = (startMinutes / 60) * HOUR_HEIGHT;
-              const height = Math.max(
-                HOUR_HEIGHT * (MIN_SESSION_MINUTES / 60),
-                ((end.getTime() - start.getTime()) / 3600000) * HOUR_HEIGHT
-              );
+
+              // Para sesiones activas, la altura crece dinámicamente basada en elapsedSeconds
+              let height: number;
+              if (
+                session.is_active &&
+                activeSession &&
+                activeSession.id === session.id
+              ) {
+                // Mínimo 8px al iniciar, crece con el tiempo transcurrido
+                // 1 minuto = 48px / 60 = 0.8px por segundo (aprox 1px cada 1.25 segundos)
+                // 1 hora = 48px
+                const minHeightForActive = 8; // 8px mínimo para que sea visible
+                const elapsedHeight = (elapsedSeconds / 3600) * HOUR_HEIGHT; // Convierte segundos a horas
+                height = Math.max(minHeightForActive, elapsedHeight);
+              } else {
+                // Para sesiones pasadas, usa la lógica original
+                height = Math.max(
+                  HOUR_HEIGHT * (MIN_SESSION_MINUTES / 60),
+                  ((end.getTime() - start.getTime()) / 3600000) * HOUR_HEIGHT,
+                );
+              }
+
               const task = taskById.get(session.task_id);
               return (
                 <Box
@@ -1236,9 +1295,13 @@ export const TimeControlPage: React.FC = () => {
                   top={top}
                   width="12.5%"
                   height={`${height}px`}
-                  bg="rgba(0,102,43,0.15)"
+                  bg={
+                    session.is_active
+                      ? "rgba(0,102,43,0.25)"
+                      : "rgba(0,102,43,0.15)"
+                  }
                   border="1px solid"
-                  borderColor={accent}
+                  borderColor={session.is_active ? "green.400" : accent}
                   borderRadius="md"
                   p={2}
                   overflow="visible"
@@ -1246,11 +1309,14 @@ export const TimeControlPage: React.FC = () => {
                     session.is_active
                       ? "default"
                       : isDraggingSession
-                      ? "grabbing"
-                      : "grab"
+                        ? "grabbing"
+                        : "grab"
                   }
                   userSelect="none"
-                  transition="box-shadow 0.2s ease, border-color 0.2s ease"
+                  transition="all 0.5s ease-in-out, box-shadow 0.2s ease"
+                  boxShadow={
+                    session.is_active ? "0 0 8px rgba(0,255,0,0.3)" : "none"
+                  }
                   onClick={(event) => {
                     event.stopPropagation();
                     if (isDraggingSession) return;
@@ -1413,7 +1479,7 @@ export const TimeControlPage: React.FC = () => {
                       </Text>
                       <Text fontSize="sm" color={subtleText}>
                         {new Date(session.started_at).toLocaleString(
-                          i18n.language
+                          i18n.language,
                         )}
                       </Text>
                       {session.description && (
@@ -1428,7 +1494,8 @@ export const TimeControlPage: React.FC = () => {
                       </Badge>
                       <HStack>
                         {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
-                        {isRunning && activeSession?.task_id === session.task_id ? (
+                        {isRunning &&
+                        activeSession?.task_id === session.task_id ? (
                           <IconButton
                             aria-label={t("timeControl.actions.stop")}
                             icon={<FaStop />}
@@ -1464,7 +1531,9 @@ export const TimeControlPage: React.FC = () => {
                             event.stopPropagation();
                             openEditSession(session);
                           }}
-                        >{t("timeControl.actions.edit")}</Button>
+                        >
+                          {t("timeControl.actions.edit")}
+                        </Button>
                         <Button
                           size="xs"
                           colorScheme="red"
@@ -1472,7 +1541,9 @@ export const TimeControlPage: React.FC = () => {
                             event.stopPropagation();
                             handleQuickDelete(session.id);
                           }}
-                        >{t("timeControl.actions.delete")}</Button>
+                        >
+                          {t("timeControl.actions.delete")}
+                        </Button>
                       </HStack>
                     </VStack>
                   </HStack>
@@ -1488,11 +1559,11 @@ export const TimeControlPage: React.FC = () => {
             const daySessions = sessions.filter(
               (session) =>
                 new Date(session.started_at).toDateString() ===
-                day.toDateString()
+                day.toDateString(),
             );
             const totalSeconds = daySessions.reduce(
               (acc, session) => acc + session.duration_seconds,
-              0
+              0,
             );
             return (
               <Box
@@ -1544,7 +1615,8 @@ export const TimeControlPage: React.FC = () => {
                             {formatSeconds(session.duration_seconds)}
                           </Text>
                           {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
-                          {isRunning && activeSession?.task_id === session.task_id ? (
+                          {isRunning &&
+                          activeSession?.task_id === session.task_id ? (
                             <IconButton
                               aria-label={t("timeControl.actions.stop")}
                               icon={<FaStop />}
@@ -1580,7 +1652,9 @@ export const TimeControlPage: React.FC = () => {
                               event.stopPropagation();
                               openEditSession(session);
                             }}
-                          >{t("timeControl.actions.edit")}</Button>
+                          >
+                            {t("timeControl.actions.edit")}
+                          </Button>
                           <Button
                             size="xs"
                             colorScheme="red"
@@ -1588,7 +1662,9 @@ export const TimeControlPage: React.FC = () => {
                               event.stopPropagation();
                               handleQuickDelete(session.id);
                             }}
-                          >{t("timeControl.actions.delete")}</Button>
+                          >
+                            {t("timeControl.actions.delete")}
+                          </Button>
                         </HStack>
                       </HStack>
                     );

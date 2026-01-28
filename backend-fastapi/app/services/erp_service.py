@@ -49,10 +49,8 @@ from app.services.notification_service import create_notification
 TASK_STATUSES = {"pending", "in_progress", "done"}
 
 # Valida que exista un tenant_id
-def _require_tenant(tenant_id: Optional[int]) -> int:
-    # Aegura que exista si es None lanza error
-    if tenant_id is None: 
-        raise ValueError("Tenant requerido.")
+def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
+    # Permite que tenant_id sea None para tareas de superadmin
     return tenant_id
 
 # Obtiene un proyecto si no lanza Error 404 
@@ -655,7 +653,7 @@ def create_task(
     effective_tenant_id = project.tenant_id if project else tenant_context
     status = _normalize_task_status(data.status, data.is_completed)
     task = Task(
-        tenant_id=_require_tenant(effective_tenant_id),
+        tenant_id=_optional_tenant(effective_tenant_id),
         project_id=project_id,
         subactivity_id=data.subactivity_id,
         task_template_id=data.task_template_id,
@@ -1066,9 +1064,10 @@ def start_time_session(
     if payload_tenant_id is not None and not user.is_super_admin:
         raise ValueError("No tienes permisos para iniciar sesiones para otros tenants.")
 
-    resolved_tenant_id = payload_tenant_id or tenant_id or task.tenant_id
-    if resolved_tenant_id is None:
-        raise ValueError("Tenant requerido.")
+    # Resuelve el tenant: payload > parámetro header > tenant de la tarea > tenant del usuario
+    resolved_tenant_id = payload_tenant_id or tenant_id or task.tenant_id or user.tenant_id
+    
+    # Valida que la tarea pertenezca al tenant especificado (si ambos existen)
     if task.tenant_id is not None and resolved_tenant_id is not None and task.tenant_id != resolved_tenant_id:
         raise ValueError("Tarea no encontrada")
 
@@ -1239,9 +1238,13 @@ def create_manual_time_session(
     ended_at: datetime,
     tenant_id: Optional[int],
 ) -> TimeSession:
-    tenant_id = _require_tenant(tenant_id)
+    # Resuelve el tenant de la misma forma que start_time_session
     task = session.get(Task, task_id)
-    if not task or (tenant_id is not None and task.tenant_id != tenant_id):
+    if not task:
+        raise ValueError("Tarea no encontrada")
+    
+    resolved_tenant_id = tenant_id or task.tenant_id or user.tenant_id
+    if task.tenant_id is not None and resolved_tenant_id is not None and task.tenant_id != resolved_tenant_id:
         raise ValueError("Tarea no encontrada")
 
     started = _as_aware(started_at)
@@ -1251,7 +1254,7 @@ def create_manual_time_session(
 
     duration_seconds = max(0, int((ended - started).total_seconds()))
     new_session = TimeSession(
-        tenant_id=tenant_id,
+        tenant_id=resolved_tenant_id,
         task_id=task_id,
         user_id=user.id,
         description=description,
