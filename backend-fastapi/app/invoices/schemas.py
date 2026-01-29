@@ -18,6 +18,9 @@ class InvoiceExtractionData(BaseModel):
     total_amount: Optional[Decimal] = None
     currency: Optional[str] = None
     concept: Optional[str] = None
+    subsidizable: Optional[bool] = None
+    expense_type: Optional[str] = None
+    milestone_id: Optional[int] = None
 
     @field_validator("issue_date", "due_date", mode="before")
     @classmethod
@@ -102,6 +105,9 @@ class InvoiceRead(BaseModel):
     total_amount: Optional[Decimal]
     currency: Optional[str]
     concept: Optional[str]
+    subsidizable: Optional[bool]
+    expense_type: Optional[str]
+    milestone_id: Optional[int]
     raw_text: Optional[str]
     extraction_raw_json: Optional[dict]
     extraction_meta: Optional[dict]
@@ -123,6 +129,9 @@ class InvoiceUpdate(BaseModel):
     total_amount: Optional[Decimal] = None
     currency: Optional[str] = None
     concept: Optional[str] = None
+    subsidizable: Optional[bool] = None
+    expense_type: Optional[str] = None
+    milestone_id: Optional[int] = None
     project_id: Optional[int] = None
     department_id: Optional[int] = None
     status: Optional[InvoiceStatus] = None

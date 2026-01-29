@@ -59,6 +59,11 @@ class Invoice(SQLModel, table=True):
     )
     currency: Optional[str] = Field(default=None, max_length=16)
     concept: Optional[str] = Field(default=None, sa_column=Column(Text))
+    subsidizable: Optional[bool] = Field(default=None)
+    expense_type: Optional[str] = Field(default=None, max_length=128)
+    milestone_id: Optional[int] = Field(
+        default=None, foreign_key="erp_milestone.id", index=True
+    )
 
     raw_text: Optional[str] = Field(default=None, sa_column=Column(Text))
     extraction_raw_json: Optional[dict] = Field(

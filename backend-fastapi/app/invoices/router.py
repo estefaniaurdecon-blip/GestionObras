@@ -45,6 +45,9 @@ def _tenant_for_write(current_user: User, x_tenant_id: Optional[int]) -> int:
 def upload_invoice(
     file: UploadFile = File(...),
     project_id: Optional[int] = Form(default=None),
+    subsidizable: Optional[bool] = Form(default=None),
+    expense_type: Optional[str] = Form(default=None),
+    milestone_id: Optional[int] = Form(default=None),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
@@ -61,6 +64,9 @@ def upload_invoice(
         created_by_id=current_user.id,
         upload=file,
         project_id=project_id,
+        subsidizable=subsidizable,
+        expense_type=expense_type,
+        milestone_id=milestone_id,
     )
 
     # Encolamos extraccion asincrona sin bloquear la request.

@@ -211,7 +211,7 @@ export const useErpSummary = ({
   const departmentAllocationPercentMap = useMemo(() => {
     const map: Record<number, number> = {};
     hrDepartments.forEach((dept) => {
-      map[dept.id] = Number(dept.allocation_percentage ?? 100);
+      map[dept.id] = Number(dept.project_allocation_percentage ?? 100);
     });
     return map;
   }, [hrDepartments]);

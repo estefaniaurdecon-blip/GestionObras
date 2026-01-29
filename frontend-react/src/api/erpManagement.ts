@@ -56,12 +56,23 @@ export interface ErpTaskUpdate {
   is_completed?: boolean;
 }
 
+const buildTenantHeaders = (tenantId?: number) =>
+  tenantId
+    ? {
+        headers: {
+          "X-Tenant-Id": tenantId.toString(),
+        },
+      }
+    : undefined;
+
 export async function createErpProject(
   payload: ErpProjectCreate,
+  tenantId?: number,
 ): Promise<ErpProjectResponse> {
   const response = await apiClient.post<ErpProjectResponse>(
     "/api/v1/erp/projects",
     payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -76,15 +87,6 @@ export async function updateErpProject(
   );
   return response.data;
 }
-
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
 
 export async function createErpTask(
   payload: ErpTaskCreate,

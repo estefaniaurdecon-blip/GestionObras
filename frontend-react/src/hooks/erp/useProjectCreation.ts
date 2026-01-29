@@ -9,7 +9,15 @@ import { createErpProject } from "../../api/erpManagement";
 import { createId } from "../../utils/erp";
 import type { ProjectActivityForm, ProjectMilestoneForm } from "../../utils/erp";
 
-export const useProjectCreation = () => {
+export const useProjectCreation = ({
+  isSuperAdmin,
+  tenantId,
+  selectedTenantId,
+}: {
+  isSuperAdmin: boolean;
+  tenantId?: number | null;
+  selectedTenantId: string;
+}) => {
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -65,36 +73,48 @@ export const useProjectCreation = () => {
 
   const createProjectMutation = useMutation({
     mutationFn: async () => {
-      const project = await createErpProject({
-        name: projectName.trim(),
-        description: projectDescription.trim() || null,
-        start_date: projectStart || null,
-        end_date: projectEnd || null,
-      });
+      const effectiveTenantId = isSuperAdmin
+        ? Number(selectedTenantId)
+        : tenantId ?? undefined;
+      const project = await createErpProject(
+        {
+          name: projectName.trim(),
+          description: projectDescription.trim() || null,
+          start_date: projectStart || null,
+          end_date: projectEnd || null,
+        },
+        effectiveTenantId,
+      );
 
       for (const activity of projectActivities) {
         const activityDescription =
           activity.weight > 0 ? `Peso: ${activity.weight}%` : null;
 
-        const createdActivity = await createActivity({
-          project_id: project.id,
-          name: activity.name.trim() || "Actividad",
-          description: activityDescription,
-          start_date: activity.start || null,
-          end_date: activity.end || null,
-        });
+        const createdActivity = await createActivity(
+          {
+            project_id: project.id,
+            name: activity.name.trim() || "Actividad",
+            description: activityDescription,
+            start_date: activity.start || null,
+            end_date: activity.end || null,
+          },
+          effectiveTenantId,
+        );
 
         for (const subactivity of activity.subactivities) {
           const subDescription =
             subactivity.weight > 0 ? `Peso: ${subactivity.weight}%` : null;
 
-          await createSubActivity({
-            activity_id: createdActivity.id,
-            name: subactivity.name.trim() || "Subactividad",
-            description: subDescription,
-            start_date: subactivity.start || null,
-            end_date: subactivity.end || null,
-          });
+          await createSubActivity(
+            {
+              activity_id: createdActivity.id,
+              name: subactivity.name.trim() || "Subactividad",
+              description: subDescription,
+              start_date: subactivity.start || null,
+              end_date: subactivity.end || null,
+            },
+            effectiveTenantId,
+          );
         }
       }
 
@@ -108,12 +128,15 @@ export const useProjectCreation = () => {
                 ? `Fin: ${milestone.end}.`
                 : null;
 
-        await createMilestone({
-          project_id: project.id,
-          title: milestone.name.trim() || "Hito",
-          due_date: milestone.end || milestone.start || null,
-          description: milestoneDescription,
-        });
+        await createMilestone(
+          {
+            project_id: project.id,
+            title: milestone.name.trim() || "Hito",
+            due_date: milestone.end || milestone.start || null,
+            description: milestoneDescription,
+          },
+          effectiveTenantId,
+        );
       }
 
       return project;
@@ -141,6 +164,10 @@ export const useProjectCreation = () => {
   const handleSaveProject = () => {
     if (!projectName.trim()) {
       toast({ title: "Nombre requerido", status: "warning" });
+      return;
+    }
+    if (isSuperAdmin && !selectedTenantId) {
+      toast({ title: "Selecciona un tenant", status: "warning" });
       return;
     }
     createProjectMutation.mutate();

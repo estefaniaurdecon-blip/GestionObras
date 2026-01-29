@@ -9,14 +9,20 @@ import {
   FormLabel,
   Heading,
   Input,
+  Select,
   SimpleGrid,
   Stack,
   Text,
 } from "@chakra-ui/react";
 
 import type { ProjectActivityForm, ProjectMilestoneForm } from "../../../utils/erp";
+import type { TenantOption } from "../../../api/users";
 
 interface CreateProjectSectionProps {
+  isSuperAdmin: boolean;
+  selectedTenantId: string;
+  activeTenants: TenantOption[];
+  onTenantChange: (value: string) => void;
   projectName: string;
   onProjectNameChange: (value: string) => void;
   projectDescription: string;
@@ -39,6 +45,10 @@ interface CreateProjectSectionProps {
 }
 
 export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
+  isSuperAdmin,
+  selectedTenantId,
+  activeTenants,
+  onTenantChange,
   projectName,
   onProjectNameChange,
   projectDescription,
@@ -61,6 +71,23 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
 }) => (
   <Stack spacing={4}>
     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+      {isSuperAdmin && (
+        <FormControl isRequired>
+          <FormLabel>Tenant</FormLabel>
+          <Select
+            placeholder="Selecciona un tenant"
+            value={selectedTenantId}
+            onChange={(e) => onTenantChange(e.target.value)}
+          >
+            {activeTenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name}
+              </option>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
       <FormControl isRequired>
         <FormLabel>Nombre del proyecto</FormLabel>
         <Input value={projectName} onChange={(e) => onProjectNameChange(e.target.value)} />

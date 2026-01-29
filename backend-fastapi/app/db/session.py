@@ -287,6 +287,22 @@ def init_db() -> None:
                     )
                 )
 
+    if "invoice" in table_names:
+        invoice_columns = {col["name"] for col in inspector.get_columns("invoice")}
+        with engine.begin() as conn:
+            if "subsidizable" not in invoice_columns:
+                conn.execute(
+                    text("ALTER TABLE invoice ADD COLUMN subsidizable BOOLEAN NULL")
+                )
+            if "expense_type" not in invoice_columns:
+                conn.execute(
+                    text("ALTER TABLE invoice ADD COLUMN expense_type VARCHAR(128) NULL")
+                )
+            if "milestone_id" not in invoice_columns:
+                conn.execute(
+                    text("ALTER TABLE invoice ADD COLUMN milestone_id INTEGER NULL")
+                )
+
     # Campos de disponibilidad en perfiles de empleado.
     if "employeeprofile" in table_names:
         emp_columns = {col["name"] for col in inspector.get_columns("employeeprofile")}

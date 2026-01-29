@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class ProjectRead(BaseModel):
     id: int
+    tenant_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     start_date: Optional[datetime] = None

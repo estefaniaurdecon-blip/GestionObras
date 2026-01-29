@@ -55,6 +55,7 @@ import {
 } from "../api/erpTimeTracking";
 
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { fetchAllTenants, type TenantOption } from "../api/users";
 import {
   fetchActivities,
   fetchMilestones,
@@ -99,6 +100,15 @@ export const ErpProjectsPage: React.FC = () => {
 
   // Formulario de creacion de proyectos.
 
+  const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
+
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const tenantId = currentUser?.tenant_id ?? null;
+  const effectiveTenantId = isSuperAdmin ? undefined : tenantId ?? undefined;
+  const tenantReady = Boolean(currentUser && (isSuperAdmin || tenantId));
+  const [createTenantId, setCreateTenantId] = useState<string>("");
+
   const {
     projectName,
     setProjectName,
@@ -117,15 +127,11 @@ export const ErpProjectsPage: React.FC = () => {
     handleAddMilestone,
     handleSaveProject,
     createProjectMutation,
-  } = useProjectCreation();
-
-  const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
-
-  const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
-  const tenantId = currentUser?.tenant_id ?? null;
-  const effectiveTenantId = isSuperAdmin ? undefined : tenantId ?? undefined;
-  const tenantReady = Boolean(currentUser && (isSuperAdmin || tenantId));
+  } = useProjectCreation({
+    isSuperAdmin,
+    tenantId: tenantId ?? undefined,
+    selectedTenantId: createTenantId,
+  });
 
   // Fetch basico: proyectos, tareas, actividades, subactividades e hitos.
 
@@ -134,6 +140,17 @@ export const ErpProjectsPage: React.FC = () => {
     queryFn: () => fetchErpProjects(effectiveTenantId),
     enabled: tenantReady,
   });
+
+  const { data: tenants = [] } = useQuery<TenantOption[]>({
+    queryKey: ["tenants-all"],
+    queryFn: () => fetchAllTenants(),
+    enabled: isSuperAdmin,
+  });
+
+  const activeTenants = useMemo(
+    () => tenants.filter((tenant) => tenant.is_active !== false),
+    [tenants],
+  );
 
   const visibleProjects = useMemo(() => {
     if (isSuperAdmin) return projects;
@@ -849,6 +866,10 @@ export const ErpProjectsPage: React.FC = () => {
           {/* Alta de proyecto con actividades, subactividades e hitos locales */}
           <TabPanel px={0}>
             <CreateProjectSection
+              isSuperAdmin={isSuperAdmin}
+              selectedTenantId={createTenantId}
+              activeTenants={activeTenants}
+              onTenantChange={setCreateTenantId}
               projectName={projectName}
               onProjectNameChange={setProjectName}
               projectDescription={projectDescription}

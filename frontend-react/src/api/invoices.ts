@@ -27,6 +27,9 @@ export interface Invoice {
   total_amount?: string | number | null;
   currency?: string | null;
   concept?: string | null;
+  subsidizable?: boolean | null;
+  expense_type?: string | null;
+  milestone_id?: number | null;
   raw_text?: string | null;
   extraction_raw_json?: Record<string, unknown> | null;
   extraction_meta?: Record<string, unknown> | null;
@@ -48,6 +51,9 @@ export interface InvoiceUpdatePayload {
   total_amount?: number | null;
   currency?: string | null;
   concept?: string | null;
+  subsidizable?: boolean | null;
+  expense_type?: string | null;
+  milestone_id?: number | null;
   project_id?: number | null;
   department_id?: number | null;
   status?: InvoiceStatus;
@@ -106,11 +112,23 @@ export async function uploadInvoice(
   file: File,
   tenantId?: number,
   projectId?: number,
+  subsidizable?: boolean | null,
+  expenseType?: string | null,
+  milestoneId?: number | null,
 ): Promise<Invoice> {
   const formData = new FormData();
   formData.append("file", file);
   if (projectId) {
     formData.append("project_id", String(projectId));
+  }
+  if (subsidizable !== null && subsidizable !== undefined) {
+    formData.append("subsidizable", String(subsidizable));
+  }
+  if (expenseType) {
+    formData.append("expense_type", expenseType);
+  }
+  if (milestoneId) {
+    formData.append("milestone_id", String(milestoneId));
   }
   const response = await apiClient.post<Invoice>(
     "/api/v1/invoices",

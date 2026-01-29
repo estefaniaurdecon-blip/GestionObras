@@ -3,3 +3,4 @@ export * from "./budget";
 export * from "./gantt";
 export * from "./summary";
 export * from "./simulations";
+export * from "./invoices";

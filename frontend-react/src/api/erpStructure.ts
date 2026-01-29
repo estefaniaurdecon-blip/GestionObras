@@ -161,10 +161,12 @@ export async function fetchActivities(
 
 export async function createActivity(
   payload: ErpActivityCreate,
+  tenantId?: number,
 ): Promise<ErpActivity> {
   const response = await apiClient.post<ErpActivity>(
     "/api/v1/erp/activities",
     payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -196,10 +198,12 @@ export async function fetchSubActivities(
 
 export async function createSubActivity(
   payload: ErpSubActivityCreate,
+  tenantId?: number,
 ): Promise<ErpSubActivity> {
   const response = await apiClient.post<ErpSubActivity>(
     "/api/v1/erp/subactivities",
     payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -231,10 +235,12 @@ export async function fetchMilestones(
 
 export async function createMilestone(
   payload: ErpMilestoneCreate,
+  tenantId?: number,
 ): Promise<ErpMilestone> {
   const response = await apiClient.post<ErpMilestone>(
     "/api/v1/erp/milestones",
     payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }

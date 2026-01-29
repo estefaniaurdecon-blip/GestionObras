@@ -54,6 +54,12 @@ def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
     # Permite que tenant_id sea None para tareas de superadmin
     return tenant_id
 
+def _require_tenant(tenant_id: Optional[int]) -> int:
+    # Bloquea escrituras sin tenant (superadmin debe elegirlo).
+    if tenant_id is None:
+        raise ValueError("Tenant requerido para esta operacion.")
+    return tenant_id
+
 # Obtiene un proyecto si no lanza Error 404 
 def _get_project_or_404(
     session: Session,

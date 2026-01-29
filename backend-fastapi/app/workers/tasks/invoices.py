@@ -10,7 +10,13 @@ from pdf2image import convert_from_path
 from PIL import Image
 from sqlmodel import Session, select
 
-from app.ai.client import OllamaClient, build_extraction_meta, normalize_invoice_json
+from app.ai.client import (
+    OllamaClient,
+    build_extraction_meta,
+    normalize_invoice_json,
+    _looks_like_customer,
+    _find_supplier_name_in_header,
+)
 from app.ai.errors import AIInvalidResponseError, AIUnavailableError
 from app.core.config import settings
 from app.core.email import send_invoice_due_reminder_email
@@ -64,12 +70,27 @@ def _image_bytes_from_pil(image: Image.Image) -> bytes:
     return buffer.getvalue()
 
 
-def _ocr_pdf(path: str, client: OllamaClient) -> str:
-    pages = convert_from_path(path, dpi=200)
+def _ocr_pdf(path: str, client: OllamaClient, dpi: int = 200) -> str:
+    pages = convert_from_path(path, dpi=dpi)
     ocr_texts = []
     for page in pages:
         ocr_texts.append(client.ocr_image_to_text(_image_bytes_from_pil(page)))
     return "\n".join(ocr_texts).strip()
+
+
+def _ocr_pdf_high(path: str, client: OllamaClient) -> str:
+    return _ocr_pdf(path, client, dpi=300)
+
+
+def _ocr_pdf_header(path: str, client: OllamaClient, dpi: int = 400) -> str:
+    pages = convert_from_path(path, dpi=dpi, first_page=1, last_page=1)
+    if not pages:
+        return ""
+    page = pages[0]
+    width, height = page.size
+    crop_box = (0, 0, width, int(height * 0.35))
+    header_img = page.crop(crop_box)
+    return client.ocr_image_to_text(_image_bytes_from_pil(header_img)).strip()
 
 
 def _ocr_image(path: str, client: OllamaClient) -> str:
@@ -121,7 +142,28 @@ def extract_invoice(self: BaseInvoiceTask, invoice_id: int) -> None:
                     text = _ocr_pdf(invoice.file_path, ai_client)
 
             raw_json = ai_client.invoice_text_to_json(text)
-            normalized_json = normalize_invoice_json(raw_json)
+            normalized_json = normalize_invoice_json(raw_json, fallback_text=text)
+
+            if not is_image and _looks_like_customer(normalized_json.get("supplier_name")):
+                header_text = _ocr_pdf_header(invoice.file_path, ai_client)
+                combined_text = f"{header_text}\n{text}" if header_text else text
+                normalized_json = normalize_invoice_json(raw_json, fallback_text=combined_text)
+                if _looks_like_customer(normalized_json.get("supplier_name")):
+                    ocr_text = _ocr_pdf_high(invoice.file_path, ai_client)
+                    if ocr_text and ocr_text != text:
+                        raw_json_ocr = ai_client.invoice_text_to_json(ocr_text)
+                        combined_ocr = (
+                            f"{header_text}\n{ocr_text}" if header_text else ocr_text
+                        )
+                        normalized_json_ocr = normalize_invoice_json(raw_json_ocr, fallback_text=combined_ocr)
+                        if not _looks_like_customer(normalized_json_ocr.get("supplier_name")):
+                            text = ocr_text
+                            raw_json = raw_json_ocr
+                            normalized_json = normalized_json_ocr
+                if _looks_like_customer(normalized_json.get("supplier_name")) and header_text:
+                    header_guess = _find_supplier_name_in_header(header_text)
+                    if header_guess:
+                        normalized_json["supplier_name"] = header_guess
             extraction = InvoiceExtractionData.model_validate(normalized_json)
             meta = build_extraction_meta()
             meta["started_at"] = start.isoformat()

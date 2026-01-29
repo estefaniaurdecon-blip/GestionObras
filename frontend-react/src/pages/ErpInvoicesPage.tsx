@@ -1,36 +1,31 @@
 import React, { useMemo, useState } from "react";
 import {
-  Badge,
   Box,
-  Button,
-  Collapse,
-  Divider,
-  Flex,
-  FormControl,
-  FormLabel,
-  Heading,
-  HStack,
-  Input,
-  Select,
   SimpleGrid,
   Stack,
-  Table,
-  Tbody,
-  Td,
-  Text,
-  Th,
-  Thead,
-  Tr,
-  useColorModeValue,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   useDisclosure,
   useToast,
 } from "@chakra-ui/react";
-import { ChevronDownIcon } from "@chakra-ui/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import {
+  InvoiceDetailsPanel,
+  InvoicesFiltersCard,
+  InvoicesHero,
+  InvoicesExpenseSummaryCard,
+  InvoicesSummaryPanel,
+  InvoicesTableCard,
+  InvoicesUploadCard,
+} from "../components/erp/invoices";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { fetchErpProjects, type ErpProject } from "../api/erpReports";
+import { fetchMilestones, type ErpMilestone } from "../api/erpStructure";
 import { fetchDepartments, type Department } from "../api/hr";
 import { fetchAllTenants, type TenantOption } from "../api/users";
 import {
@@ -45,64 +40,8 @@ import {
   type InvoiceUpdatePayload,
   type InvoiceFilters,
 } from "../api/invoices";
-import { formatCurrency, formatEuroValue } from "../utils/erp/formatters";
-
-const statusColors: Record<string, string> = {
-  uploaded: "gray",
-  extracting: "purple",
-  extracted: "blue",
-  suggested: "cyan",
-  validated: "green",
-  pending: "orange",
-  paid: "green",
-  failed: "red",
-};
-
-const paidLabel = (status: Invoice["status"]) =>
-  status === "paid" ? "SI" : "NO";
-
-const observationLabel = (invoice: Invoice) => {
-  if (invoice.status === "failed") return "Revisar error";
-  if (invoice.extraction_error) return "Revisar error";
-  if (invoice.status === "pending") return "Revisar pago";
-  if (invoice.status === "paid") return "PAGADA";
-  return "";
-};
-
-const observationColor = (invoice: Invoice) => {
-  if (invoice.status === "failed" || invoice.extraction_error) return "red.500";
-  if (invoice.status === "pending") return "red.500";
-  if (invoice.status === "paid") return "green.500";
-  return "transparent";
-};
-
-const statusBadge = (status: Invoice["status"]) =>
-  statusColors[status] ?? "gray";
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("es-ES");
-};
-
-const formatAmount = (
-  value?: string | number | null,
-  currency?: string | null,
-) => {
-  if (value == null || value === "") return "-";
-  const numberValue = typeof value === "string" ? Number(value) : value;
-  if (Number.isNaN(numberValue)) return String(value);
-  if (currency && currency.toUpperCase() !== "EUR") {
-    return `${formatEuroValue(numberValue)} ${currency.toUpperCase()}`;
-  }
-  return formatCurrency(numberValue);
-};
 
 export const ErpInvoicesPage: React.FC = () => {
-  const cardBg = useColorModeValue("white", "gray.700");
-  const panelBg = useColorModeValue("gray.50", "gray.800");
-  const subtleText = useColorModeValue("gray.600", "gray.300");
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -113,6 +52,9 @@ export const ErpInvoicesPage: React.FC = () => {
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadProjectId, setUploadProjectId] = useState<string>("");
+  const [subsidizable, setSubsidizable] = useState<string>("");
+  const [expenseType, setExpenseType] = useState<string>("");
+  const [milestoneId, setMilestoneId] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
@@ -120,7 +62,7 @@ export const ErpInvoicesPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<string>("all");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const filtersDisclosure = useDisclosure({ defaultIsOpen: false });
+  const filtersDisclosure = useDisclosure({ defaultIsOpen: true });
 
   const effectiveTenantId = isSuperAdmin
     ? selectedTenantId
@@ -142,11 +84,18 @@ export const ErpInvoicesPage: React.FC = () => {
   const dateRangeValues = useMemo(() => {
     if (dateRange === "all") return { from: undefined, to: undefined };
     const today = new Date();
-    const endToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
 
     switch (dateRange) {
       case "today":
-        return { from: formatDateInput(endToday), to: formatDateInput(endToday) };
+        return {
+          from: formatDateInput(endToday),
+          to: formatDateInput(endToday),
+        };
       case "last7": {
         const from = new Date(endToday);
         from.setDate(from.getDate() - 7);
@@ -163,7 +112,11 @@ export const ErpInvoicesPage: React.FC = () => {
         return { from: formatDateInput(from), to: formatDateInput(to) };
       }
       case "lastMonth": {
-        const from = new Date(endToday.getFullYear(), endToday.getMonth() - 1, 1);
+        const from = new Date(
+          endToday.getFullYear(),
+          endToday.getMonth() - 1,
+          1,
+        );
         const to = new Date(endToday.getFullYear(), endToday.getMonth(), 0);
         return { from: formatDateInput(from), to: formatDateInput(to) };
       }
@@ -188,10 +141,14 @@ export const ErpInvoicesPage: React.FC = () => {
     enabled: tenantReady,
   });
 
+  const projectTenantKey = isSuperAdmin
+    ? "all"
+    : (effectiveTenantId ?? "all");
+
   const { data: projects = [] } = useQuery<ErpProject[]>({
-    queryKey: ["erp-projects", effectiveTenantId ?? "all"],
-    queryFn: () => fetchErpProjects(effectiveTenantId),
-    enabled: tenantReady,
+    queryKey: ["erp-projects", projectTenantKey],
+    queryFn: () => fetchErpProjects(isSuperAdmin ? undefined : effectiveTenantId),
+    enabled: isSuperAdmin ? Boolean(currentUser) : tenantReady,
   });
 
   const { data: tenants = [] } = useQuery<TenantOption[]>({
@@ -200,10 +157,12 @@ export const ErpInvoicesPage: React.FC = () => {
     enabled: isSuperAdmin,
   });
 
-  const activeProjects = useMemo(
-    () => projects.filter((project) => project.is_active !== false),
-    [projects],
-  );
+  const activeProjects = useMemo(() => {
+    const filtered = projects.filter((project) => project.is_active !== false);
+    if (!isSuperAdmin || !selectedTenantId) return filtered;
+    const tenantIdNum = Number(selectedTenantId);
+    return filtered.filter((project) => project.tenant_id === tenantIdNum);
+  }, [isSuperAdmin, projects, selectedTenantId]);
 
   const activeTenants = useMemo(
     () => tenants.filter((tenant) => tenant.is_active !== false),
@@ -215,6 +174,18 @@ export const ErpInvoicesPage: React.FC = () => {
     queryFn: () => fetchDepartments(effectiveTenantId),
     enabled: tenantReady,
   });
+
+  const { data: milestones = [] } = useQuery<ErpMilestone[]>({
+    queryKey: ["erp-milestones", effectiveTenantId ?? "all"],
+    queryFn: () => fetchMilestones({}, effectiveTenantId),
+    enabled: tenantReady,
+  });
+
+  const milestonesForUpload = useMemo(() => {
+    if (!uploadProjectId) return [];
+    const projectIdNum = Number(uploadProjectId);
+    return milestones.filter((milestone) => milestone.project_id === projectIdNum);
+  }, [milestones, uploadProjectId]);
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
@@ -228,6 +199,27 @@ export const ErpInvoicesPage: React.FC = () => {
     });
   }, [invoices, searchTerm]);
 
+  const totalAmount = filteredInvoices.reduce(
+    (acc, invoice) => acc + Number(invoice.total_amount || 0),
+    0,
+  );
+  const pendingAmount = filteredInvoices.reduce(
+    (acc, invoice) =>
+      acc + (invoice.status === "paid" ? 0 : Number(invoice.total_amount || 0)),
+    0,
+  );
+  const paidAmount = filteredInvoices.reduce(
+    (acc, invoice) =>
+      acc + (invoice.status === "paid" ? Number(invoice.total_amount || 0) : 0),
+    0,
+  );
+  const pendingCount = filteredInvoices.filter(
+    (invoice) => invoice.status !== "paid",
+  ).length;
+  const paidCount = filteredInvoices.filter(
+    (invoice) => invoice.status === "paid",
+  ).length;
+
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Selecciona un archivo.");
@@ -238,11 +230,17 @@ export const ErpInvoicesPage: React.FC = () => {
         file,
         effectiveTenantId,
         Number(uploadProjectId),
+        subsidizable === "subsidizable",
+        expenseType || null,
+        milestoneId ? Number(milestoneId) : null,
       );
     },
     onSuccess: async () => {
       setFile(null);
       setUploadProjectId("");
+      setSubsidizable("");
+      setExpenseType("");
+      setMilestoneId("");
       await queryClient.invalidateQueries({
         queryKey: ["erp-invoices", effectiveTenantId ?? "all"],
       });
@@ -377,508 +375,227 @@ export const ErpInvoicesPage: React.FC = () => {
           : null,
       currency: selectedInvoice.currency ?? null,
       concept: selectedInvoice.concept ?? null,
+      subsidizable:
+        selectedInvoice.subsidizable !== undefined
+          ? selectedInvoice.subsidizable
+          : null,
+      expense_type: selectedInvoice.expense_type ?? null,
+      milestone_id: selectedInvoice.milestone_id ?? null,
       project_id: selectedInvoice.project_id ?? null,
       department_id: selectedInvoice.department_id ?? null,
       status: selectedInvoice.status,
     });
   };
 
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setProjectFilter("all");
+    setDepartmentFilter("all");
+    setDateRange("all");
+  };
+
+  const handleTenantChange = (value: string) => {
+    setSelectedTenantId(value);
+    setUploadProjectId("");
+    setMilestoneId("");
+    setSubsidizable("");
+    setExpenseType("");
+    setProjectFilter("all");
+  };
+
+  const handleUploadProjectChange = (value: string) => {
+    setUploadProjectId(value);
+    setMilestoneId("");
+    setExpenseType("");
+    if (!isSuperAdmin || selectedTenantId || !value) return;
+    const selectedProject = activeProjects.find(
+      (project) => project.id === Number(value),
+    );
+    if (selectedProject?.tenant_id != null) {
+      setSelectedTenantId(String(selectedProject.tenant_id));
+    }
+  };
+
+  const subsidizableDestinations = [
+    "Materiales",
+    "Colaboraciones externas",
+    "Otros gastos subvencionables",
+  ];
+  const nonSubsidizableDestinations = ["Otros gastos (no subvencionables)"];
+
+  const handleSubsidizableChange = (value: string) => {
+    setSubsidizable(value);
+    setExpenseType("");
+  };
+
   return (
     <AppShell>
       <Stack spacing={6}>
-        <Box>
-          <Heading size="lg">Facturas</Heading>
-          <Text color={subtleText}>
-            Sube facturas, revisa extracciones y gestiona el estado de pago.
-          </Text>
-        </Box>
+        <InvoicesHero
+          totalCount={filteredInvoices.length}
+          totalAmount={totalAmount}
+          pendingCount={pendingCount}
+          paidCount={paidCount}
+        />
 
-        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-          <Box bg={cardBg} borderRadius="xl" p={5} borderWidth="1px">
-            <Stack spacing={4}>
-              <Heading size="sm">Subir factura</Heading>
-              {isSuperAdmin && (
-                <FormControl>
-                  <FormLabel>Tenant</FormLabel>
-                  <Select
-                    value={selectedTenantId}
-                    onChange={(e) => {
-                      setSelectedTenantId(e.target.value);
-                      setUploadProjectId("");
-                      setProjectFilter("all");
-                    }}
-                    placeholder="Selecciona un tenant"
-                  >
-                    {activeTenants.map((tenant) => (
-                      <option key={tenant.id} value={tenant.id}>
-                        {tenant.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-              <FormControl>
-                <FormLabel>Archivo PDF / Imagen</FormLabel>
-                <Input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Proyecto</FormLabel>
-                <Select
-                  value={uploadProjectId}
-                  onChange={(e) => setUploadProjectId(e.target.value)}
-                  placeholder={
-                    activeProjects.length > 0
-                      ? "Selecciona proyecto activo"
-                      : "No hay proyectos activos"
-                  }
-                  isDisabled={activeProjects.length === 0 || !tenantReady}
-                >
-                  {activeProjects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <Button
-                colorScheme="green"
-                onClick={() => uploadMutation.mutate()}
-                isLoading={uploadMutation.isPending}
-                isDisabled={!file || !tenantReady || !uploadProjectId}
+        <Tabs variant="unstyled">
+          <TabList
+            gap={3}
+            flexWrap="wrap"
+            borderBottomWidth="1px"
+            borderColor="gray.200"
+            pb={3}
+          >
+            <Tab
+              px={5}
+              py={2}
+              borderRadius="lg"
+              fontWeight="semibold"
+              bg="white"
+              borderWidth="1px"
+              borderColor="gray.200"
+              _selected={{
+                bg: "green.600",
+                color: "white",
+                borderColor: "green.600",
+              }}
+            >
+              Subir factura
+            </Tab>
+            <Tab
+              px={5}
+              py={2}
+              borderRadius="lg"
+              fontWeight="semibold"
+              bg="white"
+              borderWidth="1px"
+              borderColor="gray.200"
+              _selected={{
+                bg: "green.600",
+                color: "white",
+                borderColor: "green.600",
+              }}
+            >
+              Listado de facturas
+            </Tab>
+            <Tab
+              px={5}
+              py={2}
+              borderRadius="lg"
+              fontWeight="semibold"
+              bg="white"
+              borderWidth="1px"
+              borderColor="gray.200"
+              _selected={{
+                bg: "green.600",
+                color: "white",
+                borderColor: "green.600",
+              }}
+            >
+              Resumen de gastos
+            </Tab>
+          </TabList>
+
+          <TabPanels pt={6}>
+            <TabPanel px={0}>
+              <SimpleGrid
+                columns={{ base: 1, lg: 2 }}
+                spacing={6}
+                alignItems="start"
               >
-                Subir y procesar
-              </Button>
-            </Stack>
-          </Box>
-
-          <Box bg={panelBg} borderRadius="xl" p={5} borderWidth="1px">
-            <Flex align="center" justify="space-between" mb={2}>
-              <Heading size="sm">Filtros</Heading>
-              <Button
-                size="sm"
-                variant="ghost"
-                rightIcon={<ChevronDownIcon />}
-                onClick={filtersDisclosure.onToggle}
-              >
-                {filtersDisclosure.isOpen ? "Ocultar" : "Mostrar"}
-              </Button>
-            </Flex>
-            <Collapse in={filtersDisclosure.isOpen} animateOpacity>
-              <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-              <FormControl>
-                <FormLabel>Buscar</FormLabel>
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="ID, proveedor o numero"
+                <InvoicesUploadCard
+                  isSuperAdmin={isSuperAdmin}
+                  tenantReady={tenantReady}
+                  selectedTenantId={selectedTenantId}
+                  activeTenants={activeTenants}
+                  onTenantChange={handleTenantChange}
+                  file={file}
+                  onFileChange={setFile}
+                  uploadProjectId={uploadProjectId}
+                  onUploadProjectChange={handleUploadProjectChange}
+                  activeProjects={activeProjects}
+                  subsidizable={subsidizable}
+                  onSubsidizableChange={handleSubsidizableChange}
+                  expenseType={expenseType}
+                  onExpenseTypeChange={setExpenseType}
+                  subsidizableDestinations={subsidizableDestinations}
+                  nonSubsidizableDestinations={nonSubsidizableDestinations}
+                  milestoneId={milestoneId}
+                  onMilestoneChange={setMilestoneId}
+                  milestones={milestonesForUpload}
+                  onUpload={() => uploadMutation.mutate()}
+                  isUploading={uploadMutation.isPending}
                 />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Estado</FormLabel>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="all">Todos</option>
-                  <option value="uploaded">Subida</option>
-                  <option value="extracting">Extrayendo</option>
-                  <option value="extracted">Extraida</option>
-                  <option value="validated">Validada</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="paid">Pagada</option>
-                  <option value="failed">Fallida</option>
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Proyecto</FormLabel>
-                <Select
-                  value={projectFilter}
-                  onChange={(e) => setProjectFilter(e.target.value)}
-                >
-                  <option value="all">Todos</option>
-                  {activeProjects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Departamento</FormLabel>
-                <Select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                >
-                  <option value="all">Todos</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Fecha</FormLabel>
-                <Select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                >
-                  <option value="all">Todas</option>
-                  <option value="today">Hoy</option>
-                  <option value="last7">Ultimos 7 dias</option>
-                  <option value="last30">Ultimos 30 dias</option>
-                  <option value="thisMonth">Este mes</option>
-                  <option value="lastMonth">Mes anterior</option>
-                </Select>
-              </FormControl>
-            </SimpleGrid>
-            </Collapse>
-          </Box>
-        </SimpleGrid>
+                <InvoicesExpenseSummaryCard
+                  invoices={filteredInvoices}
+                  projects={activeProjects}
+                  milestones={milestones}
+                />
+              </SimpleGrid>
+            </TabPanel>
 
-        <Box bg={cardBg} borderRadius="xl" p={5} borderWidth="1px">
-          <Flex align="center" justify="space-between" mb={4}>
-            <Heading size="sm">Listado</Heading>
-            <Text color={subtleText}>
-              {isLoading
-                ? "Cargando..."
-                : `${filteredInvoices.length} facturas`}
-            </Text>
-          </Flex>
-          <Box overflowX="auto">
-            <Table size="sm" variant="simple" minW="1200px">
-              <Thead>
-                <Tr>
-                  <Th>Nº Factura</Th>
-                  <Th>Importe</Th>
-                  <Th>Emision</Th>
-                  <Th>Pago</Th>
-                  <Th>Vencimiento</Th>
-                  <Th>Cliente</Th>
-                  <Th>Hito</Th>
-                  <Th>Pagada</Th>
-                  <Th>Observaciones</Th>
-                  <Th>Archivo</Th>
-                  <Th>Acciones</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {filteredInvoices.map((invoice) => (
-                  <Tr key={invoice.id}>
-                    <Td>
-                      <Text fontWeight="semibold">
-                        {invoice.invoice_number || "-"}
-                      </Text>
-                    </Td>
-                    <Td>
-                      {formatAmount(invoice.total_amount, invoice.currency)}
-                    </Td>
-                    <Td>{formatDate(invoice.issue_date)}</Td>
-                    <Td>{formatDate(invoice.paid_at)}</Td>
-                    <Td>{formatDate(invoice.due_date)}</Td>
-                    <Td>{invoice.supplier_name || "-"}</Td>
-                    <Td>{invoice.project_id ?? "-"}</Td>
-                    <Td>
-                      <Badge colorScheme={statusBadge(invoice.status)}>
-                        {paidLabel(invoice.status)}
-                      </Badge>
-                    </Td>
-                    <Td
-                      bg={observationColor(invoice)}
-                      color="white"
-                      fontWeight="semibold"
-                    >
-                      {observationLabel(invoice) || "-"}
-                    </Td>
-                    <Td>
-                      <Text fontSize="xs" noOfLines={1}>
-                        {invoice.original_filename || invoice.file_path || "-"}
-                      </Text>
-                    </Td>
-                    <Td>
-                      <HStack spacing={2}>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => handleOpenDetails(invoice)}
-                        >
-                          Ver
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => handleDownload(invoice)}
-                        >
-                          Descargar
-                        </Button>
-                        <Button
-                          size="xs"
-                          colorScheme="green"
-                          variant="solid"
-                          onClick={() => markPaidMutation.mutate(invoice.id)}
-                          isDisabled={invoice.status === "paid"}
-                          isLoading={markPaidMutation.isPending}
-                        >
-                          Pagar
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => reprocessMutation.mutate(invoice.id)}
-                          isLoading={reprocessMutation.isPending}
-                        >
-                          Reprocesar
-                        </Button>
-                        <Button
-                          size="xs"
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "¿Seguro que quieres eliminar esta factura?",
-                              )
-                            ) {
-                              deleteMutation.mutate(invoice.id);
-                            }
-                          }}
-                          isLoading={deleteMutation.isPending}
-                        >
-                          Eliminar
-                        </Button>
-                        <Button
-                          size="xs"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "?Rechazar esta factura? Se eliminar? definitivamente.",
-                              )
-                            ) {
-                              deleteMutation.mutate(invoice.id);
-                            }
-                          }}
-                          isLoading={deleteMutation.isPending}
-                        >
-                          Rechazar
-                        </Button>
-                      </HStack>
-                    </Td>
-                  </Tr>
-                ))}
-                {filteredInvoices.length === 0 && !isLoading && (
-                  <Tr>
-                    <Td
-                      colSpan={11}
-                      textAlign="center"
-                      py={8}
-                      color={subtleText}
-                    >
-                      No hay facturas para mostrar.
-                    </Td>
-                  </Tr>
-                )}
-              </Tbody>
-            </Table>
-          </Box>
-        </Box>
+            <TabPanel px={0}>
+              <Stack spacing={6}>
+                <InvoicesFiltersCard
+                  isOpen={filtersDisclosure.isOpen}
+                  onToggle={filtersDisclosure.onToggle}
+                  searchTerm={searchTerm}
+                  onSearchTermChange={setSearchTerm}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
+                  projectFilter={projectFilter}
+                  onProjectFilterChange={setProjectFilter}
+                  departmentFilter={departmentFilter}
+                  onDepartmentFilterChange={setDepartmentFilter}
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  activeProjects={activeProjects}
+                  departments={departments}
+                  onClearFilters={handleClearFilters}
+                />
+
+                <InvoicesTableCard
+                  invoices={filteredInvoices}
+                  isLoading={isLoading}
+                  onOpenDetails={handleOpenDetails}
+                  onDownload={handleDownload}
+                  onMarkPaid={(invoiceId) => markPaidMutation.mutate(invoiceId)}
+                  onReprocess={(invoiceId) => reprocessMutation.mutate(invoiceId)}
+                  onDelete={(invoiceId) => deleteMutation.mutate(invoiceId)}
+                  isMarkingPaid={markPaidMutation.isPending}
+                  isReprocessing={reprocessMutation.isPending}
+                  isDeleting={deleteMutation.isPending}
+                  totalAmount={totalAmount}
+                  pendingAmount={pendingAmount}
+                  paidAmount={paidAmount}
+                />
+              </Stack>
+            </TabPanel>
+
+            <TabPanel px={0}>
+              <Box>
+                <InvoicesSummaryPanel
+                  invoices={filteredInvoices}
+                  projects={activeProjects}
+                  milestones={milestones}
+                />
+              </Box>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
 
         {selectedInvoice && isOpen && (
-          <Box bg={cardBg} borderRadius="xl" p={5} borderWidth="1px">
-            <Flex align="center" justify="space-between" mb={4}>
-              <Heading size="sm">
-                Detalle de factura #{selectedInvoice.id}
-              </Heading>
-              <Button size="sm" variant="ghost" onClick={onClose}>
-                Cerrar
-              </Button>
-            </Flex>
-            <Divider mb={4} />
-            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-              <FormControl>
-                <FormLabel>Proveedor</FormLabel>
-                <Input
-                  value={selectedInvoice.supplier_name ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      supplier_name: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>NIF/CIF</FormLabel>
-                <Input
-                  value={selectedInvoice.supplier_tax_id ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      supplier_tax_id: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>NÃºmero</FormLabel>
-                <Input
-                  value={selectedInvoice.invoice_number ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      invoice_number: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Fecha emision</FormLabel>
-                <Input
-                  type="date"
-                  value={selectedInvoice.issue_date ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      issue_date: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Fecha vencimiento</FormLabel>
-                <Input
-                  type="date"
-                  value={selectedInvoice.due_date ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      due_date: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Total</FormLabel>
-                <Input
-                  type="number"
-                  value={selectedInvoice.total_amount ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      total_amount: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Moneda</FormLabel>
-                <Input
-                  value={selectedInvoice.currency ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      currency: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Concepto</FormLabel>
-                <Input
-                  value={selectedInvoice.concept ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      concept: e.target.value,
-                    })
-                  }
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Proyecto</FormLabel>
-                <Select
-                  value={selectedInvoice.project_id ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      project_id: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                >
-                  <option value="">Sin proyecto</option>
-                  {activeProjects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Departamento</FormLabel>
-                <Select
-                  value={selectedInvoice.department_id ?? ""}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      department_id: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                >
-                  <option value="">Sin departamento</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Estado</FormLabel>
-                <Select
-                  value={selectedInvoice.status}
-                  onChange={(e) =>
-                    setSelectedInvoice({
-                      ...selectedInvoice,
-                      status: e.target.value as Invoice["status"],
-                    })
-                  }
-                >
-                  <option value="uploaded">Subida</option>
-                  <option value="extracting">Extrayendo</option>
-                  <option value="extracted">Extraida</option>
-                  <option value="suggested">Sugerida</option>
-                  <option value="validated">Validada</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="paid">Pagada</option>
-                  <option value="failed">Fallida</option>
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Error extraccion</FormLabel>
-                <Input
-                  value={selectedInvoice.extraction_error ?? ""}
-                  isReadOnly
-                />
-              </FormControl>
-            </SimpleGrid>
-            <HStack mt={6}>
-              <Button
-                colorScheme="green"
-                onClick={handleSaveDetails}
-                isLoading={updateMutation.isPending}
-              >
-                Guardar cambios
-              </Button>
-              <Button variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-            </HStack>
-          </Box>
+          <InvoiceDetailsPanel
+            invoice={selectedInvoice}
+            activeProjects={activeProjects}
+            milestones={milestones}
+            departments={departments}
+            onInvoiceChange={(invoice) => setSelectedInvoice(invoice)}
+            onSave={handleSaveDetails}
+            onClose={onClose}
+            isSaving={updateMutation.isPending}
+          />
         )}
       </Stack>
     </AppShell>
