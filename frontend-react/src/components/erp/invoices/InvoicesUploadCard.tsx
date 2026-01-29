@@ -17,8 +17,7 @@ import {
   GridItem,
 } from "@chakra-ui/react";
 
-import type { ErpProject } from "../../../api/erpReports";
-import type { ErpMilestone } from "../../../api/erpStructure";
+import type { ErpProject, ProjectBudgetMilestone } from "../../../api/erpReports";
 import type { TenantOption } from "../../../api/users";
 interface InvoicesUploadCardProps {
   isSuperAdmin: boolean;
@@ -37,9 +36,9 @@ interface InvoicesUploadCardProps {
   onExpenseTypeChange: (value: string) => void;
   subsidizableDestinations: string[];
   nonSubsidizableDestinations: string[];
-  milestoneId: string;
-  onMilestoneChange: (value: string) => void;
-  milestones: ErpMilestone[];
+  budgetMilestoneId: string;
+  onBudgetMilestoneChange: (value: string) => void;
+  budgetMilestones: ProjectBudgetMilestone[];
   onUpload: () => void;
   isUploading: boolean;
 }
@@ -61,9 +60,9 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
   onExpenseTypeChange,
   subsidizableDestinations,
   nonSubsidizableDestinations,
-  milestoneId,
-  onMilestoneChange,
-  milestones,
+  budgetMilestoneId,
+  onBudgetMilestoneChange,
+  budgetMilestones,
   onUpload,
   isUploading,
 }) => {
@@ -115,7 +114,7 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
       </HStack>
 
       <Grid
-        templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }}
+        templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }}
         gap={4}
         mb={4}
       >
@@ -150,7 +149,7 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
           </GridItem>
         )}
 
-        <GridItem>
+        <GridItem colSpan={{ base: 1, md: isSuperAdmin ? 1 : 2 }}>
           <FormControl>
             <FormLabel fontSize="sm" fontWeight="semibold" mb={2}>
               Proyecto
@@ -185,8 +184,8 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
           </FormControl>
         </GridItem>
 
-        <GridItem colSpan={{ base: 1, md: isSuperAdmin ? 1 : 2 }}>
-          <FormControl h="full">
+        <GridItem colSpan={{ base: 1, md: 2 }}>
+          <FormControl>
             <FormLabel fontSize="sm" fontWeight="semibold" mb={2}>
               Archivo PDF / Imagen
             </FormLabel>
@@ -201,7 +200,7 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
               textAlign="center"
               cursor="pointer"
               transition="all 0.3s"
-              h="calc(100% - 32px)"
+              minH="150px"
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -376,8 +375,8 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
               bg="white"
               borderColor={borderColor}
               borderRadius="lg"
-              value={milestoneId}
-              onChange={(e) => onMilestoneChange(e.target.value)}
+              value={budgetMilestoneId}
+              onChange={(e) => onBudgetMilestoneChange(e.target.value)}
               placeholder="Sin hito asociado"
               isDisabled={!uploadProjectId}
               _focus={{
@@ -385,9 +384,9 @@ export const InvoicesUploadCard: React.FC<InvoicesUploadCardProps> = ({
                 boxShadow: "0 0 0 1px var(--chakra-colors-green-500)",
               }}
             >
-              {milestones.map((milestone) => (
+              {budgetMilestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>
-                  {milestone.title}
+                  {milestone.name}
                 </option>
               ))}
             </Select>

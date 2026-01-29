@@ -19,6 +19,35 @@ def _get_smtp_params() -> tuple[str | None, int, str | None, str | None, str | N
     return host, port, username, password, from_email, use_tls
 
 
+def _send_email(to_emails: list[str], subject: str, body: str) -> None:
+    host, port, username, password, from_email, use_tls = _get_smtp_params()
+    if not host or not username or not password or not from_email:
+        return
+
+    recipients = [email.strip() for email in to_emails if email and email.strip()]
+    if not recipients:
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = ", ".join(sorted(set(recipients)))
+    msg.set_content(body)
+
+    try:
+        if use_tls:
+            with smtplib.SMTP(host, port) as server:
+                server.starttls()
+                server.login(username, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port) as server:
+                server.login(username, password)
+                server.send_message(msg)
+    except Exception as exc:
+        logger.exception("Error enviando email a %s: %s", msg["To"], exc)
+
+
 def send_tenant_admin_welcome_email(
     to_email: str,
     tenant_name: str,
@@ -170,45 +199,58 @@ def send_user_invitation_email(
         logger.exception("Error enviando email de invitación a %s: %s", to_email, exc)
 
 
-def send_invoice_due_reminder_email(to_email: str, invoice: object) -> None:
+def send_invoice_created_email(to_emails: list[str], invoice: object) -> None:
+    """
+    Envia un correo cuando se registra una nueva factura.
+    """
+    invoice_id = getattr(invoice, "id", None)
+    invoice_number = getattr(invoice, "invoice_number", None) or "N/A"
+    total_amount = getattr(invoice, "total_amount", None)
+    currency = getattr(invoice, "currency", None) or ""
+    total_display = f"{total_amount} {currency}".strip()
+    filename = getattr(invoice, "original_filename", None) or "N/A"
+    tenant_id = getattr(invoice, "tenant_id", None)
+    project_id = getattr(invoice, "project_id", None)
+    issue_date = getattr(invoice, "issue_date", None)
+    due_date = getattr(invoice, "due_date", None)
+
+    subject = "Factura registrada"
+    body = (
+        f"Hola,\n\n"
+        f"Se ha registrado una nueva factura.\n\n"
+        f"Numero Factura: {invoice_number}\n"
+        f"Fecha emision: {issue_date}\n"
+        f"Fecha vencimiento: {due_date}\n"
+        
+        f"Un saludo. MAQUINA\n"
+    )
+    _send_email(to_emails, subject, body)
+
+
+def send_invoice_due_reminder_email(
+    to_emails: list[str],
+    invoice: object,
+    days_until: Optional[int] = None,
+) -> None:
     """
     Envia un recordatorio de vencimiento de factura.
     """
-    host, port, username, password, from_email, use_tls = _get_smtp_params()
-    if not host or not username or not password or not from_email:
-        return
-
-    subject = "Recordatorio de vencimiento de factura"
     due_date = getattr(invoice, "due_date", None)
     invoice_number = getattr(invoice, "invoice_number", None) or "N/A"
     total_amount = getattr(invoice, "total_amount", None)
     currency = getattr(invoice, "currency", None) or ""
     total_display = f"{total_amount} {currency}".strip()
+    days_line = f"Días hasta vencimiento: {days_until}\n" if days_until is not None else ""
 
+    subject = "Recordatorio de vencimiento de factura"
     body = (
         f"Hola,\n\n"
-        f"Recordatorio de vencimiento de factura.\n\n"
+        f"Recordatorio de vencimiento de factura PAGA MOROSO.\n\n"
         f"Factura: {invoice_number}\n"
         f"Vence: {due_date}\n"
-        f"Total: {total_display}\n\n"
+        f"{days_line}"
+        
         f"Un saludo.\n"
     )
+    _send_email(to_emails, subject, body)
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = from_email
-    msg["To"] = to_email
-    msg.set_content(body)
-
-    try:
-        if use_tls:
-            with smtplib.SMTP(host, port) as server:
-                server.starttls()
-                server.login(username, password)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port) as server:
-                server.login(username, password)
-                server.send_message(msg)
-    except Exception as exc:
-        logger.exception("Error enviando recordatorio de factura a %s: %s", to_email, exc)

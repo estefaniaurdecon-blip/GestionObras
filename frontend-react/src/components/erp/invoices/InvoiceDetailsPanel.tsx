@@ -18,13 +18,13 @@ import {
 
 import type { Department } from "../../../api/hr";
 import type { ErpProject } from "../../../api/erpReports";
-import type { ErpMilestone } from "../../../api/erpStructure";
+import type { ProjectBudgetMilestone } from "../../../api/erpReports";
 import type { Invoice } from "../../../api/invoices";
 
 interface InvoiceDetailsPanelProps {
   invoice: Invoice;
   activeProjects: ErpProject[];
-  milestones: ErpMilestone[];
+  budgetMilestones: ProjectBudgetMilestone[];
   departments: Department[];
   onInvoiceChange: (invoice: Invoice) => void;
   onSave: () => void;
@@ -35,7 +35,7 @@ interface InvoiceDetailsPanelProps {
 export const InvoiceDetailsPanel: React.FC<InvoiceDetailsPanelProps> = ({
   invoice,
   activeProjects,
-  milestones,
+  budgetMilestones,
   departments,
   onInvoiceChange,
   onSave,
@@ -59,10 +59,10 @@ export const InvoiceDetailsPanel: React.FC<InvoiceDetailsPanelProps> = ({
 
   const milestonesForInvoice = useMemo(() => {
     if (!invoice.project_id) return [];
-    return milestones.filter(
+    return budgetMilestones.filter(
       (milestone) => milestone.project_id === invoice.project_id,
     );
-  }, [invoice.project_id, milestones]);
+  }, [invoice.project_id, budgetMilestones]);
 
   return (
     <Box
@@ -340,11 +340,11 @@ export const InvoiceDetailsPanel: React.FC<InvoiceDetailsPanelProps> = ({
             Hito asociado
           </FormLabel>
           <Select
-            value={invoice.milestone_id ?? ""}
+            value={invoice.budget_milestone_id ?? ""}
             onChange={(e) =>
               onInvoiceChange({
                 ...invoice,
-                milestone_id: e.target.value ? Number(e.target.value) : null,
+                budget_milestone_id: e.target.value ? Number(e.target.value) : null,
               })
             }
             borderRadius="xl"
@@ -358,7 +358,7 @@ export const InvoiceDetailsPanel: React.FC<InvoiceDetailsPanelProps> = ({
             <option value="">Sin hito asociado</option>
             {milestonesForInvoice.map((milestone) => (
               <option key={milestone.id} value={milestone.id}>
-                {milestone.title}
+                {milestone.name}
               </option>
             ))}
           </Select>

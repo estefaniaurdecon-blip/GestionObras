@@ -211,6 +211,15 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_project_budget_milestone ADD COLUMN tenant_id INTEGER NULL")
                 )
+            # Backfill tenant_id from project if missing.
+            conn.execute(
+                text(
+                    "UPDATE erp_project_budget_milestone m "
+                    "SET tenant_id = p.tenant_id "
+                    "FROM erp_project p "
+                    "WHERE m.project_id = p.id AND m.tenant_id IS NULL"
+                )
+            )
 
     if "erp_budget_line_milestone" in table_names:
         budget_link_columns = {col["name"] for col in inspector.get_columns("erp_budget_line_milestone")}
@@ -219,6 +228,16 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_budget_line_milestone ADD COLUMN tenant_id INTEGER NULL")
                 )
+            # Backfill tenant_id from project through budget line if missing.
+            conn.execute(
+                text(
+                    "UPDATE erp_budget_line_milestone blm "
+                    "SET tenant_id = p.tenant_id "
+                    "FROM erp_project_budget_line bl "
+                    "JOIN erp_project p ON p.id = bl.project_id "
+                    "WHERE blm.budget_line_id = bl.id AND blm.tenant_id IS NULL"
+                )
+            )
 
     if "erp_external_collaboration" in table_names:
         collab_columns = {col["name"] for col in inspector.get_columns("erp_external_collaboration")}
@@ -302,6 +321,34 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE invoice ADD COLUMN milestone_id INTEGER NULL")
                 )
+            if "budget_milestone_id" not in invoice_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE invoice "
+                        "ADD COLUMN budget_milestone_id INTEGER NULL"
+                    )
+                )
+
+    if "notification_log" in table_names:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'CREATED'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_20'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_10'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_5'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_1'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_DAILY'")
+            )
 
     # Campos de disponibilidad en perfiles de empleado.
     if "employeeprofile" in table_names:

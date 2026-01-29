@@ -48,6 +48,7 @@ def upload_invoice(
     subsidizable: Optional[bool] = Form(default=None),
     expense_type: Optional[str] = Form(default=None),
     milestone_id: Optional[int] = Form(default=None),
+    budget_milestone_id: Optional[int] = Form(default=None),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
@@ -67,6 +68,7 @@ def upload_invoice(
         subsidizable=subsidizable,
         expense_type=expense_type,
         milestone_id=milestone_id,
+        budget_milestone_id=budget_milestone_id,
     )
 
     # Encolamos extraccion asincrona sin bloquear la request.

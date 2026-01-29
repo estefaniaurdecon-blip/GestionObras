@@ -64,6 +64,9 @@ class Invoice(SQLModel, table=True):
     milestone_id: Optional[int] = Field(
         default=None, foreign_key="erp_milestone.id", index=True
     )
+    budget_milestone_id: Optional[int] = Field(
+        default=None, foreign_key="erp_project_budget_milestone.id", index=True
+    )
 
     raw_text: Optional[str] = Field(default=None, sa_column=Column(Text))
     extraction_raw_json: Optional[dict] = Field(
@@ -106,11 +109,12 @@ class InvoiceEvent(SQLModel, table=True):
 class NotificationType(str, Enum):
     """Tipos de recordatorio de pago."""
 
-    DUE_20 = "due_20"
-    DUE_10 = "due_10"
-    DUE_5 = "due_5"
-    DUE_1 = "due_1"
-    DUE_DAILY = "due_daily"
+    CREATED = "CREATED"
+    DUE_20 = "DUE_20"
+    DUE_10 = "DUE_10"
+    DUE_5 = "DUE_5"
+    DUE_1 = "DUE_1"
+    DUE_DAILY = "DUE_DAILY"
 
 
 class NotificationLog(SQLModel, table=True):

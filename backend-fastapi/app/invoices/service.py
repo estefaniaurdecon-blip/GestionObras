@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile, status
@@ -14,7 +14,7 @@ from app.invoices.models import (
     NotificationLog,
 )
 from app.invoices.schemas import InvoiceExtractionData, InvoiceUpdate
-from app.models.erp import Milestone, Project
+from app.models.erp import Milestone, Project, ProjectBudgetMilestone
 from app.storage.local import delete_invoice_file, save_upload_to_disk
 
 
@@ -73,6 +73,25 @@ def _ensure_project_milestone(
         )
 
 
+def _ensure_project_budget_milestone(
+    session: Session,
+    tenant_id: int,
+    project_id: int,
+    budget_milestone_id: int,
+) -> None:
+    statement = select(ProjectBudgetMilestone).where(
+        ProjectBudgetMilestone.id == budget_milestone_id,
+        ProjectBudgetMilestone.project_id == project_id,
+        ProjectBudgetMilestone.tenant_id == tenant_id,
+    )
+    milestone = session.exec(statement).one_or_none()
+    if not milestone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El hito de presupuesto debe pertenecer al proyecto seleccionado.",
+        )
+
+
 def list_invoices(
     session: Session,
     tenant_id: int,
@@ -111,6 +130,7 @@ def create_invoice_with_upload(
     subsidizable: Optional[bool] = None,
     expense_type: Optional[str] = None,
     milestone_id: Optional[int] = None,
+    budget_milestone_id: Optional[int] = None,
 ) -> Invoice:
     """
     Crea el registro de factura y guarda el archivo en disco.
@@ -125,6 +145,15 @@ def create_invoice_with_upload(
         )
     if project_id is not None and milestone_id is not None:
         _ensure_project_milestone(session, tenant_id, project_id, milestone_id)
+    if budget_milestone_id is not None and project_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El hito de presupuesto requiere un proyecto asociado.",
+        )
+    if project_id is not None and budget_milestone_id is not None:
+        _ensure_project_budget_milestone(
+            session, tenant_id, project_id, budget_milestone_id
+        )
 
     invoice = Invoice(
         tenant_id=tenant_id,
@@ -136,6 +165,7 @@ def create_invoice_with_upload(
         subsidizable=subsidizable,
         expense_type=expense_type,
         milestone_id=milestone_id,
+        budget_milestone_id=budget_milestone_id,
     )
     session.add(invoice)
     session.commit()
@@ -180,6 +210,16 @@ def update_invoice(
             _ensure_project_milestone(
                 session, tenant_id, data["project_id"], invoice.milestone_id
             )
+        if (
+            "budget_milestone_id" not in data
+            and invoice.budget_milestone_id is not None
+        ):
+            _ensure_project_budget_milestone(
+                session,
+                tenant_id,
+                data["project_id"],
+                invoice.budget_milestone_id,
+            )
     if "milestone_id" in data and data["milestone_id"] is not None:
         project_id = data.get("project_id") or invoice.project_id
         if project_id is None:
@@ -190,9 +230,27 @@ def update_invoice(
         _ensure_project_milestone(
             session, tenant_id, project_id, data["milestone_id"]
         )
+    if "budget_milestone_id" in data and data["budget_milestone_id"] is not None:
+        project_id = data.get("project_id") or invoice.project_id
+        if project_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El hito de presupuesto requiere un proyecto asociado.",
+            )
+        _ensure_project_budget_milestone(
+            session, tenant_id, project_id, data["budget_milestone_id"]
+        )
 
     for field, value in data.items():
         setattr(invoice, field, value)
+
+    issue_date_for_due = (
+        payload.issue_date
+        if payload.issue_date is not None
+        else invoice.issue_date
+    )
+    if issue_date_for_due:
+        invoice.due_date = issue_date_for_due + timedelta(days=60)
 
     invoice.updated_at = datetime.utcnow()
     if payload.status == InvoiceStatus.VALIDATED:
@@ -298,7 +356,11 @@ def apply_extraction(
     invoice.supplier_tax_id = extraction.supplier_tax_id
     invoice.invoice_number = extraction.invoice_number
     invoice.issue_date = extraction.issue_date
-    invoice.due_date = extraction.due_date
+    invoice.due_date = (
+        extraction.issue_date + timedelta(days=60)
+        if extraction.issue_date
+        else None
+    )
     invoice.total_amount = extraction.total_amount
     invoice.currency = extraction.currency
     invoice.concept = extraction.concept

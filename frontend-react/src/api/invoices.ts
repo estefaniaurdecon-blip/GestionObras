@@ -30,6 +30,7 @@ export interface Invoice {
   subsidizable?: boolean | null;
   expense_type?: string | null;
   milestone_id?: number | null;
+  budget_milestone_id?: number | null;
   raw_text?: string | null;
   extraction_raw_json?: Record<string, unknown> | null;
   extraction_meta?: Record<string, unknown> | null;
@@ -54,6 +55,7 @@ export interface InvoiceUpdatePayload {
   subsidizable?: boolean | null;
   expense_type?: string | null;
   milestone_id?: number | null;
+  budget_milestone_id?: number | null;
   project_id?: number | null;
   department_id?: number | null;
   status?: InvoiceStatus;
@@ -115,6 +117,7 @@ export async function uploadInvoice(
   subsidizable?: boolean | null,
   expenseType?: string | null,
   milestoneId?: number | null,
+  budgetMilestoneId?: number | null,
 ): Promise<Invoice> {
   const formData = new FormData();
   formData.append("file", file);
@@ -129,6 +132,9 @@ export async function uploadInvoice(
   }
   if (milestoneId) {
     formData.append("milestone_id", String(milestoneId));
+  }
+  if (budgetMilestoneId) {
+    formData.append("budget_milestone_id", String(budgetMilestoneId));
   }
   const response = await apiClient.post<Invoice>(
     "/api/v1/invoices",

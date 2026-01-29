@@ -19,7 +19,7 @@ from app.ai.client import (
 )
 from app.ai.errors import AIInvalidResponseError, AIUnavailableError
 from app.core.config import settings
-from app.core.email import send_invoice_due_reminder_email
+from app.core.email import send_invoice_created_email, send_invoice_due_reminder_email
 from app.db.session import engine
 from app.invoices.models import (
     Invoice,
@@ -35,6 +35,45 @@ from app.workers.celery_app import celery_app
 
 
 logger = logging.getLogger("app.invoices")
+
+
+def _merge_recipients(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen = set()
+    for group in groups:
+        for email in group:
+            if not email:
+                continue
+            clean = email.strip().lower()
+            if not clean or clean in seen:
+                continue
+            seen.add(clean)
+            merged.append(clean)
+    return merged
+
+
+def _get_base_recipients(recipient_email: Optional[str]) -> list[str]:
+    base = []
+    if recipient_email:
+        base.append(recipient_email)
+    return _merge_recipients(base, settings.invoice_due_base_recipients)
+
+
+def _get_due_recipients(
+    recipient_email: Optional[str],
+    reminder_type: NotificationType,
+) -> list[str]:
+    base = _get_base_recipients(recipient_email)
+    if reminder_type == NotificationType.DUE_10:
+        return _merge_recipients(base, settings.invoice_due_extra_recipients_10)
+    if reminder_type == NotificationType.DUE_5:
+        return _merge_recipients(base, settings.invoice_due_extra_recipients_5)
+    return base
+
+
+def _get_created_recipients(recipient_email: Optional[str]) -> list[str]:
+    base = [recipient_email] if recipient_email else []
+    return _merge_recipients(base, settings.invoice_created_extra_recipients)
 
 
 def _redis_client() -> redis.Redis:
@@ -177,6 +216,8 @@ def extract_invoice(self: BaseInvoiceTask, invoice_id: int) -> None:
                 raw_json=raw_json,
                 meta=meta,
             )
+            # Enviar correo de "factura registrada" cuando ya tenemos datos extraÃ­dos.
+            send_invoice_created_notification(invoice.id)
         except AIUnavailableError:
             _set_ai_down(client)
             raise
@@ -212,10 +253,16 @@ def send_due_reminders() -> None:
 
             reminder_type = thresholds.get(days_until)
             if reminder_type:
-                _send_reminder_if_needed(session, invoice, reminder_type, today)
+                _send_reminder_if_needed(session, invoice, reminder_type, today, days_until)
 
             if settings.reminders_daily_enabled and days_until <= settings.reminders_daily_threshold:
-                _send_reminder_if_needed(session, invoice, NotificationType.DUE_DAILY, today)
+                _send_reminder_if_needed(
+                    session,
+                    invoice,
+                    NotificationType.DUE_DAILY,
+                    today,
+                    days_until,
+                )
 
 
 def _send_reminder_if_needed(
@@ -223,6 +270,7 @@ def _send_reminder_if_needed(
     invoice: Invoice,
     reminder_type: NotificationType,
     scheduled_for: date,
+    days_until: int,
 ) -> None:
     exists = session.exec(
         select(NotificationLog).where(
@@ -236,11 +284,13 @@ def _send_reminder_if_needed(
         return
 
     recipient = session.get(User, invoice.created_by_id)
-    if not recipient or not recipient.email:
+    recipient_email = recipient.email if recipient else None
+    recipients = _get_due_recipients(recipient_email, reminder_type)
+    if not recipients:
         return
 
     try:
-        send_invoice_due_reminder_email(recipient.email, invoice)
+        send_invoice_due_reminder_email(recipients, invoice, days_until=days_until)
     except Exception as exc:
         logger.exception("Error enviando recordatorio de factura: %s", exc)
         return
@@ -249,7 +299,7 @@ def _send_reminder_if_needed(
         tenant_id=invoice.tenant_id,
         invoice_id=invoice.id,
         notification_type=reminder_type,
-        recipient_email=recipient.email,
+        recipient_email=recipients[0] if recipients else None,
         scheduled_for=scheduled_for,
     )
     session.add(log_entry)
@@ -263,3 +313,54 @@ def _send_reminder_if_needed(
         event_type=InvoiceEventType.REMINDER_SENT,
         payload={"type": reminder_type, "date": scheduled_for.isoformat()},
     )
+
+
+@celery_app.task(name="app.workers.tasks.invoices.send_invoice_created_notification")
+def send_invoice_created_notification(invoice_id: int) -> None:
+    with Session(engine) as session:
+        invoice = session.get(Invoice, invoice_id)
+        if not invoice:
+            return
+
+        scheduled_for = invoice.created_at.date() if invoice.created_at else date.today()
+        exists = session.exec(
+            select(NotificationLog).where(
+                NotificationLog.tenant_id == invoice.tenant_id,
+                NotificationLog.invoice_id == invoice.id,
+                NotificationLog.notification_type == NotificationType.CREATED,
+                NotificationLog.scheduled_for == scheduled_for,
+            )
+        ).one_or_none()
+        if exists:
+            return
+
+        recipient = session.get(User, invoice.created_by_id)
+        recipient_email = recipient.email if recipient else None
+        recipients = _get_created_recipients(recipient_email)
+        if not recipients:
+            return
+
+        try:
+            send_invoice_created_email(recipients, invoice)
+        except Exception as exc:
+            logger.exception("Error enviando correo de factura registrada: %s", exc)
+            return
+
+        log_entry = NotificationLog(
+            tenant_id=invoice.tenant_id,
+            invoice_id=invoice.id,
+            notification_type=NotificationType.CREATED,
+            recipient_email=recipients[0] if recipients else None,
+            scheduled_for=scheduled_for,
+        )
+        session.add(log_entry)
+        session.commit()
+
+        log_invoice_event(
+            session=session,
+            tenant_id=invoice.tenant_id,
+            invoice_id=invoice.id,
+            user_id=None,
+            event_type=InvoiceEventType.REMINDER_SENT,
+            payload={"type": NotificationType.CREATED, "date": scheduled_for.isoformat()},
+        )

@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     invoice_min_text_length: int = 80
     reminders_daily_enabled: bool = True
     reminders_daily_threshold: int = 5
+    invoice_created_extra_recipients: List[str] = []
+    invoice_due_base_recipients: List[str] = []
+    invoice_due_extra_recipients_10: List[str] = []
+    invoice_due_extra_recipients_5: List[str] = []
 
     # IntegraciÑn con Moodle (Web Services)
     moodle_base_url: str | None = None

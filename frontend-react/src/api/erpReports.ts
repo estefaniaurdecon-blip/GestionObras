@@ -31,6 +31,15 @@ export interface TimeReportFilters {
   userIds?: number[] | null;
 }
 
+export interface ProjectBudgetMilestone {
+  id: number;
+  tenant_id?: number | null;
+  project_id: number;
+  name: string;
+  order_index: number;
+  created_at?: string;
+}
+
 const buildTenantHeaders = (tenantId?: number) =>
   tenantId
     ? {
@@ -54,6 +63,17 @@ export async function fetchErpProject(
 ): Promise<ErpProject> {
   const response = await apiClient.get<ErpProject>(
     `/api/v1/erp/projects/${projectId}`,
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function fetchProjectBudgetMilestones(
+  projectId: number,
+  tenantId?: number,
+): Promise<ProjectBudgetMilestone[]> {
+  const response = await apiClient.get<ProjectBudgetMilestone[]>(
+    `/api/v1/erp/projects/${projectId}/budget-milestones`,
     buildTenantHeaders(tenantId),
   );
   return response.data;

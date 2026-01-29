@@ -24,7 +24,12 @@ import {
   InvoicesUploadCard,
 } from "../components/erp/invoices";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { fetchErpProjects, type ErpProject } from "../api/erpReports";
+import {
+  fetchErpProjects,
+  fetchProjectBudgetMilestones,
+  type ErpProject,
+  type ProjectBudgetMilestone,
+} from "../api/erpReports";
 import { fetchMilestones, type ErpMilestone } from "../api/erpStructure";
 import { fetchDepartments, type Department } from "../api/hr";
 import { fetchAllTenants, type TenantOption } from "../api/users";
@@ -54,7 +59,7 @@ export const ErpInvoicesPage: React.FC = () => {
   const [uploadProjectId, setUploadProjectId] = useState<string>("");
   const [subsidizable, setSubsidizable] = useState<string>("");
   const [expenseType, setExpenseType] = useState<string>("");
-  const [milestoneId, setMilestoneId] = useState<string>("");
+  const [budgetMilestoneId, setBudgetMilestoneId] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
@@ -181,11 +186,38 @@ export const ErpInvoicesPage: React.FC = () => {
     enabled: tenantReady,
   });
 
-  const milestonesForUpload = useMemo(() => {
-    if (!uploadProjectId) return [];
-    const projectIdNum = Number(uploadProjectId);
-    return milestones.filter((milestone) => milestone.project_id === projectIdNum);
-  }, [milestones, uploadProjectId]);
+  const { data: budgetMilestonesForUpload = [] } = useQuery<
+    ProjectBudgetMilestone[]
+  >({
+    queryKey: [
+      "erp-budget-milestones",
+      uploadProjectId || "none",
+      effectiveTenantId ?? "all",
+    ],
+    queryFn: () =>
+      fetchProjectBudgetMilestones(
+        Number(uploadProjectId),
+        effectiveTenantId,
+      ),
+    enabled: tenantReady && Boolean(uploadProjectId),
+  });
+
+  const selectedInvoiceProjectId = selectedInvoice?.project_id ?? null;
+  const { data: budgetMilestonesForSelectedInvoice = [] } = useQuery<
+    ProjectBudgetMilestone[]
+  >({
+    queryKey: [
+      "erp-budget-milestones",
+      selectedInvoiceProjectId ?? "none",
+      effectiveTenantId ?? "all",
+    ],
+    queryFn: () =>
+      fetchProjectBudgetMilestones(
+        Number(selectedInvoiceProjectId),
+        effectiveTenantId,
+      ),
+    enabled: tenantReady && Boolean(selectedInvoiceProjectId),
+  });
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
@@ -232,7 +264,8 @@ export const ErpInvoicesPage: React.FC = () => {
         Number(uploadProjectId),
         subsidizable === "subsidizable",
         expenseType || null,
-        milestoneId ? Number(milestoneId) : null,
+        null,
+        budgetMilestoneId ? Number(budgetMilestoneId) : null,
       );
     },
     onSuccess: async () => {
@@ -240,7 +273,7 @@ export const ErpInvoicesPage: React.FC = () => {
       setUploadProjectId("");
       setSubsidizable("");
       setExpenseType("");
-      setMilestoneId("");
+      setBudgetMilestoneId("");
       await queryClient.invalidateQueries({
         queryKey: ["erp-invoices", effectiveTenantId ?? "all"],
       });
@@ -381,6 +414,7 @@ export const ErpInvoicesPage: React.FC = () => {
           : null,
       expense_type: selectedInvoice.expense_type ?? null,
       milestone_id: selectedInvoice.milestone_id ?? null,
+      budget_milestone_id: selectedInvoice.budget_milestone_id ?? null,
       project_id: selectedInvoice.project_id ?? null,
       department_id: selectedInvoice.department_id ?? null,
       status: selectedInvoice.status,
@@ -398,7 +432,7 @@ export const ErpInvoicesPage: React.FC = () => {
   const handleTenantChange = (value: string) => {
     setSelectedTenantId(value);
     setUploadProjectId("");
-    setMilestoneId("");
+      setBudgetMilestoneId("");
     setSubsidizable("");
     setExpenseType("");
     setProjectFilter("all");
@@ -406,7 +440,7 @@ export const ErpInvoicesPage: React.FC = () => {
 
   const handleUploadProjectChange = (value: string) => {
     setUploadProjectId(value);
-    setMilestoneId("");
+    setBudgetMilestoneId("");
     setExpenseType("");
     if (!isSuperAdmin || selectedTenantId || !value) return;
     const selectedProject = activeProjects.find(
@@ -521,9 +555,9 @@ export const ErpInvoicesPage: React.FC = () => {
                   onExpenseTypeChange={setExpenseType}
                   subsidizableDestinations={subsidizableDestinations}
                   nonSubsidizableDestinations={nonSubsidizableDestinations}
-                  milestoneId={milestoneId}
-                  onMilestoneChange={setMilestoneId}
-                  milestones={milestonesForUpload}
+                  budgetMilestoneId={budgetMilestoneId}
+                  onBudgetMilestoneChange={setBudgetMilestoneId}
+                  budgetMilestones={budgetMilestonesForUpload}
                   onUpload={() => uploadMutation.mutate()}
                   isUploading={uploadMutation.isPending}
                 />
@@ -589,7 +623,7 @@ export const ErpInvoicesPage: React.FC = () => {
           <InvoiceDetailsPanel
             invoice={selectedInvoice}
             activeProjects={activeProjects}
-            milestones={milestones}
+            budgetMilestones={budgetMilestonesForSelectedInvoice}
             departments={departments}
             onInvoiceChange={(invoice) => setSelectedInvoice(invoice)}
             onSave={handleSaveDetails}
