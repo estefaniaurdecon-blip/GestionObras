@@ -71,7 +71,11 @@ def list_tools_by_tenant(
                 detail="Tenant no encontrado o inactivo",
             )
     else:
-        resolved_tenant = get_current_tenant(request, x_tenant_id=x_tenant_id)
+        resolved_tenant = get_current_tenant(
+            request,
+            x_tenant_id=x_tenant_id,
+            session=session,
+        )
 
     try:
         return get_tools_by_tenant(

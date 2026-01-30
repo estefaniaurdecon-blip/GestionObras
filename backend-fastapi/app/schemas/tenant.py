@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -23,3 +24,12 @@ class TenantRead(TenantBase):
     id: int
     created_at: datetime
 
+
+class TenantUpdate(BaseModel):
+    """
+    Esquema de actualizaciÃ³n de tenant (parcial).
+    """
+
+    name: Optional[str] = None
+    subdomain: Optional[str] = None
+    is_active: Optional[bool] = None

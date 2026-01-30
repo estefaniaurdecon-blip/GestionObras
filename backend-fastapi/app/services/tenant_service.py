@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.tenant_tool import TenantTool
 from app.models.audit_log import AuditLog
 from app.models.tool import Tool
-from app.schemas.tenant import TenantCreate, TenantRead
+from app.schemas.tenant import TenantCreate, TenantRead, TenantUpdate
 
 
 def list_tenants(session: Session, current_user: User) -> List[TenantRead]:
@@ -161,3 +161,64 @@ def delete_tenant(
         details=f"Tenant eliminado con subdominio '{tenant.subdomain}'",
     )
 
+
+def update_tenant(
+    session: Session,
+    current_user: User,
+    tenant_id: int,
+    tenant_in: TenantUpdate,
+) -> TenantRead:
+    """
+    Actualiza un tenant (solo Super Admin).
+    """
+
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise LookupError("Tenant no encontrado")
+
+    if not current_user.is_super_admin:
+        raise PermissionError("Solo un Super Admin puede editar tenants")
+
+    changes: list[str] = []
+
+    if tenant_in.subdomain and tenant_in.subdomain != tenant.subdomain:
+        existing = session.exec(
+            select(Tenant).where(Tenant.subdomain == tenant_in.subdomain),
+        ).one_or_none()
+        if existing and existing.id != tenant.id:
+            raise ValueError("Ya existe un tenant con ese subdominio")
+        changes.append("subdomain")
+        tenant.subdomain = tenant_in.subdomain
+
+    if tenant_in.name is not None and tenant_in.name != tenant.name:
+        changes.append("name")
+        tenant.name = tenant_in.name
+
+    if tenant_in.is_active is not None and tenant_in.is_active != tenant.is_active:
+        changes.append("is_active")
+        tenant.is_active = tenant_in.is_active
+
+    if changes:
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+    log_action(
+        session,
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        action="tenant.update",
+        details=(
+            "Tenant actualizado"
+            if not changes
+            else f"Tenant actualizado (campos: {', '.join(changes)})"
+        ),
+    )
+
+    return TenantRead(
+        id=tenant.id,
+        name=tenant.name,
+        subdomain=tenant.subdomain,
+        is_active=tenant.is_active,
+        created_at=tenant.created_at,
+    )

@@ -61,6 +61,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   const email = currentUser?.email ?? t("layout.user.fallbackEmail");
   const fullName = currentUser?.full_name ?? t("layout.user.fallbackName");
+  const rawAvatarUrl = currentUser?.avatar_url ?? undefined;
+  const resolvedAvatarUrl = rawAvatarUrl
+    ? rawAvatarUrl.startsWith("http")
+      ? rawAvatarUrl
+      : `${apiClient.defaults.baseURL || window.location.origin}${rawAvatarUrl}`
+    : undefined;
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
   const [tenantOverride, setTenantOverride] = useState(
@@ -339,7 +345,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                         {email}
                       </Text>
                     </VStack>
-                    <Avatar name={fullName} size="sm" />
+                    <Avatar name={fullName} src={resolvedAvatarUrl} size="sm" />
                   </HStack>
                 </MenuButton>
                 <MenuList>

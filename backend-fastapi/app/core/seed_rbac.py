@@ -34,6 +34,7 @@ from app.models.user import User
 BASE_PERMISSIONS: Dict[str, str] = {
     "tenants:read": "Ver listado de tenants",
     "tenants:create": "Crear nuevos tenants",
+    "tenants:update": "Editar tenants",
     "tenants:delete": "Eliminar tenants",
     "users:read": "Ver usuarios",
     "users:create": "Crear usuarios",

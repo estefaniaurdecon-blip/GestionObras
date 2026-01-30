@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlmodel import Session
 
 from app.api.deps import (
@@ -17,6 +17,7 @@ from app.services.user_service import (
     delete_user as svc_delete_user,
     update_user_status as svc_update_user_status,
     update_user_me as svc_update_user_me,
+    update_user_avatar as svc_update_user_avatar,
 )
 
 
@@ -55,6 +56,33 @@ def update_me(
         current_user=current_user,
         data=payload,
     )
+
+
+@router.post(
+    "/me/avatar",
+    response_model=UserRead,
+    summary="Subir foto de perfil",
+)
+def upload_my_avatar(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+) -> UserRead:
+    """
+    Permite al usuario autenticado subir su foto de perfil.
+    """
+
+    try:
+        return svc_update_user_avatar(
+            session=session,
+            current_user=current_user,
+            upload=file,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(

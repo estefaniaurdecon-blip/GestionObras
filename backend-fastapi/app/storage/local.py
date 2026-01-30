@@ -47,3 +47,28 @@ def delete_invoice_file(file_path: str) -> None:
     path = Path(file_path)
     if path.exists():
         path.unlink()
+
+
+def build_avatar_path(user_id: int, extension: str) -> Path:
+    """
+    Construye la ruta final del avatar en el disco.
+    """
+    base = Path(settings.avatars_storage_path)
+    return base / f"user_{user_id}.{extension}"
+
+
+def save_avatar_to_disk(upload: UploadFile, user_id: int, extension: str) -> Path:
+    """
+    Guarda el avatar subido en el disco local.
+    """
+    target_path = build_avatar_path(user_id, extension)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with target_path.open("wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    return target_path

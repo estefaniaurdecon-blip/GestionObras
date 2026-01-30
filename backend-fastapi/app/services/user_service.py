@@ -1,11 +1,13 @@
 from typing import List
 
+from fastapi import UploadFile
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.audit import log_action
 from app.core.security import hash_password
 from app.core.email import send_tenant_admin_welcome_email
+from app.storage.local import save_avatar_to_disk
 from app.models.hr import EmployeeProfile
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -33,6 +35,7 @@ def get_user_me(current_user: User) -> UserRead:
         tenant_id=current_user.tenant_id,
         role_id=current_user.role_id,
         language=current_user.language,
+        avatar_url=current_user.avatar_url,
         created_at=current_user.created_at,
     )
 
@@ -88,6 +91,7 @@ def list_users_by_tenant(
                 tenant_id=u.tenant_id,
                 role_id=u.role_id,
                 language=u.language,
+                avatar_url=u.avatar_url,
                 created_at=u.created_at,
             ),
         )
@@ -107,6 +111,8 @@ def update_user_me(
     current_user.full_name = data.full_name
     if data.language is not None:
         current_user.language = data.language
+    if data.avatar_url is not None:
+        current_user.avatar_url = data.avatar_url.strip() or None
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -128,6 +134,66 @@ def update_user_me(
         tenant_id=current_user.tenant_id,
         role_id=current_user.role_id,
         language=current_user.language,
+        avatar_url=current_user.avatar_url,
+        created_at=current_user.created_at,
+    )
+
+
+def update_user_avatar(
+    session: Session,
+    current_user: User,
+    upload: UploadFile,
+) -> UserRead:
+    """
+    Actualiza la foto de perfil del usuario autenticado.
+    """
+
+    content_type = getattr(upload, "content_type", None) or ""
+    ext_map = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    extension = ext_map.get(content_type)
+    if not extension:
+        raise ValueError("Formato de imagen no soportado (jpeg, png, webp)")
+
+    max_bytes = 5 * 1024 * 1024  # 5MB
+    total = 0
+    target_path = save_avatar_to_disk(upload, current_user.id, extension)
+    with target_path.open("rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                target_path.unlink(missing_ok=True)
+                raise ValueError("La imagen supera el tamaÃ±o mÃ¡ximo de 5MB")
+
+    current_user.avatar_url = f"/static/avatars/{target_path.name}"
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+
+    log_action(
+        session,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        action="user.update_avatar",
+        details="ActualizaciÃ³n de foto de perfil",
+    )
+
+    return UserRead(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=current_user.is_active,
+        is_super_admin=current_user.is_super_admin,
+        tenant_id=current_user.tenant_id,
+        role_id=current_user.role_id,
+        language=current_user.language,
+        avatar_url=current_user.avatar_url,
         created_at=current_user.created_at,
     )
 
@@ -223,6 +289,7 @@ def create_user(
         tenant_id=user.tenant_id,
         role_id=user.role_id,
         language=user.language,
+        avatar_url=user.avatar_url,
         created_at=user.created_at,
     )
 
@@ -329,5 +396,6 @@ def update_user_status(
         tenant_id=user.tenant_id,
         role_id=user.role_id,
         language=user.language,
+        avatar_url=user.avatar_url,
         created_at=user.created_at,
     )

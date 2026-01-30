@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     invoice_due_extra_recipients_10: List[str] = []
     invoice_due_extra_recipients_5: List[str] = []
 
+    # Avatares de usuario
+    avatars_storage_path: str = "/data/avatars"
+
     # IntegraciÑn con Moodle (Web Services)
     moodle_base_url: str | None = None
     moodle_token: str | None = None

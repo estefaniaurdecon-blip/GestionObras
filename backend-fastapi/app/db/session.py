@@ -350,6 +350,22 @@ def init_db() -> None:
                 text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_DAILY'")
             )
 
+    if "user" in table_names:
+        user_columns = {col["name"] for col in inspector.get_columns("user")}
+        with engine.begin() as conn:
+            if "avatar_url" not in user_columns:
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN avatar_url VARCHAR(512) NULL')
+                )
+
+    if "users" in table_names:
+        user_columns = {col["name"] for col in inspector.get_columns("users")}
+        with engine.begin() as conn:
+            if "avatar_url" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NULL")
+                )
+
     # Campos de disponibilidad en perfiles de empleado.
     if "employeeprofile" in table_names:
         emp_columns = {col["name"] for col in inspector.get_columns("employeeprofile")}

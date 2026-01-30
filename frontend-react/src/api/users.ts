@@ -13,6 +13,7 @@ export interface CurrentUser {
   tenant_id: number | null; // Tenant al que pertenece
   role_id: number | null; // Rol asignado
   language?: string | null; // Idioma preferido
+  avatar_url?: string | null; // Foto de perfil
   created_at: string; // Fecha de creación
 }
 

@@ -5,6 +5,7 @@ import {
   FormControl,
   FormLabel,
   Heading,
+  HStack,
   Input,
   Stack,
   Switch,
@@ -54,6 +55,13 @@ interface NewTenantFormState {
   admin_password: string;
 }
 
+interface EditTenantFormState {
+  id: number | null;
+  name: string;
+  subdomain: string;
+  is_active: boolean;
+}
+
 /**
  * Página de ajustes y gestión de tenants (empresas).
  *
@@ -76,6 +84,7 @@ export const TenantSettingsPage: React.FC = () => {
   const { data: currentUser } = useCurrentUser();
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Estado del formulario de alta de tenant.
   const [form, setForm] = useState<NewTenantFormState>({
@@ -84,6 +93,12 @@ export const TenantSettingsPage: React.FC = () => {
     is_active: true,
     admin_email: "",
     admin_password: "",
+  });
+  const [editForm, setEditForm] = useState<EditTenantFormState>({
+    id: null,
+    name: "",
+    subdomain: "",
+    is_active: true,
   });
 
   // Carga de tenants existentes.
@@ -150,6 +165,43 @@ export const TenantSettingsPage: React.FC = () => {
     },
   });
 
+  const updateTenantMutation = useMutation({
+    mutationFn: async (payload: EditTenantFormState) => {
+      if (!payload.id) {
+        throw new Error(t("tenantSettings.messages.updateErrorFallback"));
+      }
+      const response = await apiClient.put<Tenant>(
+        `/api/v1/tenants/${payload.id}`,
+        {
+          name: payload.name,
+          subdomain: payload.subdomain,
+          is_active: payload.is_active,
+        },
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      toast({
+        title: t("tenantSettings.messages.updateSuccessTitle"),
+        description: t("tenantSettings.messages.updateSuccessDesc"),
+        status: "success",
+      });
+      setEditModalOpen(false);
+    },
+    onError: (error: any) => {
+      const detail =
+        error?.response?.data?.detail ??
+        error?.message ??
+        t("tenantSettings.messages.updateErrorFallback");
+      toast({
+        title: t("tenantSettings.messages.updateErrorTitle"),
+        description: detail,
+        status: "error",
+      });
+    },
+  });
+
   // Actualiza el formulario segun inputs.
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -157,6 +209,24 @@ export const TenantSettingsPage: React.FC = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const openEditModal = (tenant: Tenant) => {
+    setEditForm({
+      id: tenant.id,
+      name: tenant.name,
+      subdomain: tenant.subdomain,
+      is_active: tenant.is_active,
+    });
+    setEditModalOpen(true);
   };
 
   // Envia el formulario para crear tenant.
@@ -187,6 +257,11 @@ export const TenantSettingsPage: React.FC = () => {
           status: "error",
         });
       });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateTenantMutation.mutate(editForm);
   };
 
   // Render principal de la pagina.
@@ -266,12 +341,24 @@ export const TenantSettingsPage: React.FC = () => {
                           : t("tenantSettings.list.no")}</Td>
                         <Td>{new Date(tenant.created_at).toLocaleString()}</Td>
                         <Td>
-                          <Button
-                            size="xs"
-                            colorScheme="red"
-                            variant="outline"
-                            onClick={() => handleDeleteTenant(tenant.id)}
-                          >{t("tenantSettings.actions.delete")}</Button>
+                          <HStack spacing={2} justify="flex-end">
+                            <Button
+                              size="xs"
+                              colorScheme="blue"
+                              variant="outline"
+                              onClick={() => openEditModal(tenant)}
+                            >
+                              {t("tenantSettings.actions.edit")}
+                            </Button>
+                            <Button
+                              size="xs"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => handleDeleteTenant(tenant.id)}
+                            >
+                              {t("tenantSettings.actions.delete")}
+                            </Button>
+                          </HStack>
                         </Td>
                       </Tr>
                     ))}
@@ -345,6 +432,56 @@ export const TenantSettingsPage: React.FC = () => {
                   isLoading={createTenantMutation.isPending}
                 >
                   {t("tenantSettings.actions.create")}
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
+
+          <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} size="lg">
+            <ModalOverlay />
+            <ModalContent as="form" onSubmit={handleEditSubmit}>
+              <ModalHeader>{t("tenantSettings.actions.edit")}</ModalHeader>
+              <ModalCloseButton />
+              <ModalBody>
+                <Stack spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.name")}</FormLabel>
+                    <Input
+                      name="name"
+                      value={editForm.name}
+                      onChange={handleEditChange}
+                      placeholder={t("tenantSettings.placeholders.name")}
+                    />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>{t("tenantSettings.fields.subdomain")}</FormLabel>
+                    <Input
+                      name="subdomain"
+                      value={editForm.subdomain}
+                      onChange={handleEditChange}
+                      placeholder={t("tenantSettings.placeholders.subdomain")}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>{t("tenantSettings.fields.active")}</FormLabel>
+                    <Switch
+                      name="is_active"
+                      isChecked={editForm.is_active}
+                      onChange={handleEditChange}
+                    />
+                  </FormControl>
+                </Stack>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="ghost" mr={3} onClick={() => setEditModalOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  colorScheme="blue"
+                  type="submit"
+                  isLoading={updateTenantMutation.isPending}
+                >
+                  {t("tenantSettings.actions.save")}
                 </Button>
               </ModalFooter>
             </ModalContent>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Avatar,
   Box,
   Button,
   FormControl,
@@ -15,6 +16,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
 import { apiClient } from "../api/client";
@@ -27,18 +29,26 @@ interface MeResponse extends CurrentUser {
 export const UserSettingsPage: React.FC = () => {
   const toast = useToast();
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const { colorMode, setColorMode } = useColorMode();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [language, setLanguage] = useState("en");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
 
   const cardBg = useColorModeValue("white", "gray.700");
   const labelColor = useColorModeValue("gray.700", "gray.100");
+  const resolvedAvatarUrl = avatarUrl
+    ? avatarUrl.startsWith("http")
+      ? avatarUrl
+      : `${apiClient.defaults.baseURL || window.location.origin}${avatarUrl}`
+    : undefined;
 
   useEffect(() => {
     const loadMe = async () => {
@@ -46,6 +56,7 @@ export const UserSettingsPage: React.FC = () => {
         const response = await apiClient.get<MeResponse>("/api/v1/users/me");
         setEmail(response.data.email);
         setFullName(response.data.full_name ?? "");
+        setAvatarUrl(response.data.avatar_url ?? "");
         const preferredLanguage =
           response.data.language ?? i18n.language ?? "en";
         setLanguage(preferredLanguage);
@@ -75,6 +86,10 @@ export const UserSettingsPage: React.FC = () => {
         full_name: fullName,
         language,
       });
+      setFullName(response.data.full_name ?? "");
+      setEmail(response.data.email);
+      setLanguage(response.data.language ?? language);
+      queryClient.invalidateQueries({ queryKey: ["current-user"] });
 
 
       toast({
@@ -93,6 +108,39 @@ export const UserSettingsPage: React.FC = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await apiClient.post<MeResponse>(
+        "/api/v1/users/me/avatar",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+      setAvatarUrl(response.data.avatar_url ?? "");
+      queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      toast({
+        title: t("settings.messages.profilePhotoUpdatedTitle"),
+        description: t("settings.messages.profilePhotoUpdatedDesc"),
+        status: "success",
+      });
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ??
+        t("settings.messages.profilePhotoUpdateErrorFallback");
+      toast({
+        title: t("settings.messages.profilePhotoUpdateErrorTitle"),
+        description: detail,
+        status: "error",
+      });
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -173,6 +221,26 @@ export const UserSettingsPage: React.FC = () => {
                 onChange={(e) => setFullName(e.target.value)}
                 isDisabled={loading}
               />
+            </FormControl>
+            <FormControl>
+              <FormLabel color={labelColor}>{t("settings.profilePhoto")}</FormLabel>
+              <Stack direction={{ base: "column", sm: "row" }} spacing={3} align="center">
+                <Avatar name={fullName} src={resolvedAvatarUrl} size="md" />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleAvatarUpload(file);
+                    }
+                  }}
+                  isDisabled={loading || avatarUploading}
+                />
+              </Stack>
+              <Text fontSize="xs" color={labelColor} mt={1}>
+                {t("settings.profilePhotoHint")}
+              </Text>
             </FormControl>
             {/* Preferencia de idioma sincronizada con i18n y backend. */}
             <FormControl>

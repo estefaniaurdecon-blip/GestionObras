@@ -43,6 +43,8 @@ class User(SQLModel, table=True):
 
     # Idioma preferido del usuario.
     language: str = Field(default="en")
+    # URL de la foto de perfil del usuario (opcional).
+    avatar_url: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -61,3 +63,4 @@ class UserRead(SQLModel):
     tenant_id: Optional[int]
     role_id: Optional[int]
     language: str
+    avatar_url: Optional[str]

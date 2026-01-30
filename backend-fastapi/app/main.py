@@ -1,5 +1,8 @@
-﻿from fastapi import FastAPI
+﻿from pathlib import Path
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.db.session import init_db
@@ -54,6 +57,10 @@ def create_app() -> FastAPI:
 
     # Montamos rutas versionadas bajo `/api/v1`.
     app.include_router(api_v1_router, prefix="/api/v1")
+
+    avatars_path = Path(settings.avatars_storage_path)
+    avatars_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/avatars", StaticFiles(directory=str(avatars_path)), name="avatars")
 
     return app
 
