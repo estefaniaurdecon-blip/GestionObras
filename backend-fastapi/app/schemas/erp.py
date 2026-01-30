@@ -345,3 +345,15 @@ class ExternalCollaborationRead(ExternalCollaborationBase):
     id: int
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectDocumentRead(BaseModel):
+    id: int
+    tenant_id: Optional[int] = None
+    project_id: int
+    doc_type: str
+    original_name: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime
+    url: str

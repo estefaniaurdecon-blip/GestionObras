@@ -46,6 +46,9 @@ services:
       - "8000:8000"
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/logos:/app/data/logos
+      - ./data/avatars:/app/data/avatars
+      - ./data/project-docs:/app/data/project-docs
 
   celery-worker:
     build:

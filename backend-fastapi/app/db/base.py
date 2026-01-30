@@ -39,6 +39,7 @@ from app.models.erp import (  # noqa: F401
     TaskTemplate,
     TimeEntry,
     TimeSession,
+    ProjectDocument,
 )
 from app.models.summary import SummaryYear  # noqa: F401
 from app.invoices.models import Invoice, InvoiceEvent, NotificationLog  # noqa: F401

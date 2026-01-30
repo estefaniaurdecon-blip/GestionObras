@@ -20,12 +20,9 @@ import {
 import { keyframes } from "@emotion/react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
 import {
-  BudgetModal,
-  BudgetSection,
   CreateProjectSection,
   GanttSection,
   ProjectDetailsModal,
@@ -35,7 +32,6 @@ import {
 } from "../components/erp";
 import { YEAR_FILTER_OPTIONS } from "../utils/erp";
 import {
-  useBudgetEditor,
   useErpSummary,
   useGanttData,
   useProjectCreation,
@@ -56,6 +52,7 @@ import {
 
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { fetchAllTenants, type TenantOption } from "../api/users";
+import { useRouter } from "@tanstack/react-router";
 import {
   fetchActivities,
   fetchMilestones,
@@ -73,7 +70,6 @@ import {
 export const ErpProjectsPage: React.FC = () => {
   // Tokens de estilo y animaci+n para la cabecera hero.
 
-  const { t } = useTranslation();
   const cardBg = useColorModeValue("white", "gray.700");
 
   const subtleText = useColorModeValue("gray.600", "gray.300");
@@ -96,11 +92,11 @@ export const ErpProjectsPage: React.FC = () => {
 
   const queryClient = useQueryClient();
 
+  const router = useRouter();
+
   const { isOpen: isAddModalOpen, onClose: onCloseAddModal } = useDisclosure();
 
   // Formulario de creacion de proyectos.
-
-  const [budgetProjectFilter, setBudgetProjectFilter] = useState<string>("");
 
   const { data: currentUser } = useCurrentUser();
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
@@ -157,12 +153,6 @@ export const ErpProjectsPage: React.FC = () => {
     if (!tenantId) return [];
     return projects.filter((project) => project.tenant_id === tenantId);
   }, [projects, isSuperAdmin, tenantId]);
-
-  useEffect(() => {
-    if (!budgetProjectFilter && visibleProjects.length > 0) {
-      setBudgetProjectFilter(String(visibleProjects[0].id));
-    }
-  }, [budgetProjectFilter, visibleProjects]);
 
   const { data: rawTasks = [] } = useQuery<ErpTaskApi[]>({
     queryKey: ["erp-tasks", effectiveTenantId ?? "all"],
@@ -328,55 +318,6 @@ export const ErpProjectsPage: React.FC = () => {
       })),
     [visibleProjects],
   );
-
-  const selectedBudgetProjectId = budgetProjectFilter
-    ? Number(budgetProjectFilter)
-    : null;
-
-  const {
-    budgetsEditMode,
-    setBudgetsEditMode,
-    budgetDrafts,
-    generalExpensesMode,
-    setGeneralExpensesMode,
-    savingBudgets,
-    seedingTemplate,
-    externalCollaborations,
-    isExternalCollaborationsLoading,
-    externalCollabSelections,
-    setExternalCollabSelections,
-    displayBudgetRows,
-    groupedBudgetRows,
-    budgetParentMap,
-    budgetParentTotals,
-    budgetsTabTotals,
-    budgetsDiffH1,
-    budgetsDiffH2,
-    canEditBudgets,
-    hasRealBudgets,
-    hasBudgetDrafts,
-    budgetMilestonesCount,
-    budgetsQueryState,
-    seedTemplateBudgetLines,
-    addBudgetMilestone,
-    handleGeneralExpensesPercent,
-    handleGeneralExpensesAmount,
-    handleAddExternalCollaborationRow,
-    handleRemoveExternalCollaborationRow,
-    handleBudgetCellSave,
-    handleBudgetSaveAll,
-    handleBudgetSave,
-    openBudgetModal,
-    budgetModalOpen,
-    closeBudgetModal,
-    budgetModalInitial,
-    budgetModalMode,
-    isBudgetModalSaving,
-  } = useBudgetEditor({
-    projectId: selectedBudgetProjectId,
-    projectMilestones: visibleMilestones,
-    tenantId: effectiveTenantId,
-  });
 
   // Mutaciones de edicion en cascada para actividad, subactividad e hito.
 
@@ -693,18 +634,46 @@ export const ErpProjectsPage: React.FC = () => {
         onChange={setActiveTab}
       >
         <TabList borderBottomWidth="1px">
-          <Tab>Resumen</Tab>
-
           <Tab>Proyectos</Tab>
 
           <Tab>Diagrama de Gantt</Tab>
 
-          <Tab>Presupuestos</Tab>
+          <Tab>Justificacion</Tab>
 
           <Tab>Crear</Tab>
         </TabList>
 
         <TabPanels mt={4}>
+          {/* Listado detallado por proyecto con boton de edicion */}
+          <TabPanel px={0}>
+            <ProjectsListSection
+              projects={visibleProjects}
+              activities={visibleActivities}
+              milestones={visibleMilestones}
+              rawTasks={visibleTasks}
+              onEditProject={openProjectDetails}
+              onViewProjectDetails={(project) =>
+                router.history.push(`/erp/projects/${project.id}/budget`)
+              }
+              onViewProjectDocs={(project) =>
+                router.history.push(`/erp/projects/${project.id}/documents`)
+              }
+              cardBg={cardBg}
+              subtleText={subtleText}
+            />
+          </TabPanel>
+
+          {/* Diagrama Gantt filtrable y con selector de vista */}
+          <TabPanel px={0}>
+            <GanttSection
+              ganttProjects={ganttProjects}
+              selectedProjectId={selectedProjectId}
+              onSelectedProjectChange={setSelectedProjectId}
+              ganttTasks={ganttTasks}
+              subtleText={subtleText}
+            />
+          </TabPanel>
+
           {/* Resumen editable tipo Excel: horas por empleado y proyecto */}
           <TabPanel px={0} minW="0" overflowX="hidden">
             <SummarySection
@@ -782,87 +751,6 @@ export const ErpProjectsPage: React.FC = () => {
             />
           </TabPanel>
 
-          {/* Listado detallado por proyecto con boton de edicion */}
-          <TabPanel px={0}>
-            <ProjectsListSection
-              projects={visibleProjects}
-              activities={visibleActivities}
-              milestones={visibleMilestones}
-              rawTasks={visibleTasks}
-              onOpenProjectDetails={openProjectDetails}
-              cardBg={cardBg}
-              subtleText={subtleText}
-            />
-          </TabPanel>
-
-          {/* Diagrama Gantt filtrable y con selector de vista */}
-          <TabPanel px={0}>
-            <GanttSection
-              ganttProjects={ganttProjects}
-              selectedProjectId={selectedProjectId}
-              onSelectedProjectChange={setSelectedProjectId}
-              ganttTasks={ganttTasks}
-              subtleText={subtleText}
-            />
-          </TabPanel>
-
-          <TabPanel px={0}>
-            <BudgetSection
-              projects={visibleProjects}
-              budgetProjectFilter={budgetProjectFilter}
-              onBudgetProjectChange={setBudgetProjectFilter}
-              selectedBudgetProjectId={selectedBudgetProjectId}
-              budgetMilestonesCount={budgetMilestonesCount}
-              onAddBudgetMilestone={addBudgetMilestone}
-              budgetsEditMode={budgetsEditMode}
-              onToggleEditMode={() => setBudgetsEditMode((prev) => !prev)}
-              canEditBudgets={canEditBudgets}
-              onSaveTable={handleBudgetSaveAll}
-              hasBudgetDrafts={hasBudgetDrafts}
-              savingBudgets={savingBudgets}
-              hasRealBudgets={hasRealBudgets}
-              onSeedTemplate={seedTemplateBudgetLines}
-              seedingTemplate={seedingTemplate}
-              budgetsQueryState={budgetsQueryState}
-              displayBudgetRows={displayBudgetRows}
-              groupedBudgetRows={groupedBudgetRows}
-              budgetDrafts={budgetDrafts}
-              generalExpensesMode={generalExpensesMode}
-              onGeneralExpensesModeChange={(budgetId, mode) =>
-                setGeneralExpensesMode((prev) => ({
-                  ...prev,
-                  [budgetId]: mode,
-                }))
-              }
-              onGeneralExpensesPercent={handleGeneralExpensesPercent}
-              onGeneralExpensesAmount={handleGeneralExpensesAmount}
-              externalCollaborations={externalCollaborations}
-              isExternalCollaborationsLoading={isExternalCollaborationsLoading}
-              externalCollabSelections={externalCollabSelections}
-              onExternalCollabSelectionChange={(budgetId, value) =>
-                setExternalCollabSelections((prev) => ({
-                  ...prev,
-                  [budgetId]: value,
-                }))
-              }
-              onAddExternalCollaborationRow={handleAddExternalCollaborationRow}
-              onBudgetCellSave={handleBudgetCellSave}
-              onOpenBudgetModal={openBudgetModal}
-              onRemoveExternalCollaborationRow={
-                handleRemoveExternalCollaborationRow
-              }
-              budgetParentMap={budgetParentMap}
-              budgetParentTotals={budgetParentTotals}
-              budgetsTabTotals={budgetsTabTotals}
-              budgetsDiffH1={budgetsDiffH1}
-              budgetsDiffH2={budgetsDiffH2}
-              subtleText={subtleText}
-              externalCollabSelectPlaceholder={t(
-                "externalCollaborations.form.selectPlaceholder",
-              )}
-            />
-          </TabPanel>
-
           {/* Alta de proyecto con actividades, subactividades e hitos locales */}
           <TabPanel px={0}>
             <CreateProjectSection
@@ -892,20 +780,6 @@ export const ErpProjectsPage: React.FC = () => {
             />
           </TabPanel>
         </TabPanels></Tabs>
-
-      <BudgetModal
-        isOpen={budgetModalOpen}
-        onClose={closeBudgetModal}
-        onSave={handleBudgetSave}
-        initialValues={budgetModalInitial}
-        title={
-          budgetModalMode === "edit"
-            ? "Editar presupuesto"
-            : "Agregar presupuesto"
-        }
-        submitLabel={budgetModalMode === "edit" ? "Actualizar" : "Guardar"}
-        isSaving={isBudgetModalSaving}
-      />
 
       {/* Popup centrado de detalle/edicion del proyecto seleccionado */}
 

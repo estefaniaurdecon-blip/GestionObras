@@ -227,3 +227,17 @@ class SimulationExpense(SQLModel, table=True):
     amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False), default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ProjectDocument(SQLModel, table=True):
+    __tablename__ = "erp_project_document"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    project_id: int = Field(foreign_key="erp_project.id")
+    doc_type: str = Field(default="otros", max_length=40)
+    file_name: str
+    original_name: str
+    content_type: str
+    size_bytes: int
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)

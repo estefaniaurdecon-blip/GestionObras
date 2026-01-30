@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from sqlmodel import Session
 
 from app.api.deps import require_any_permissions, require_permissions
@@ -26,6 +26,7 @@ from app.schemas.erp import (
     ProjectBudgetMilestoneRead,
     ProjectBudgetMilestoneUpdate,
     ProjectCreate,
+    ProjectDocumentRead,
     ProjectRead,
     ProjectUpdate,
     SubActivityCreate,
@@ -82,6 +83,10 @@ from app.services.erp_service import (
     update_subactivity,
     update_time_session,
     update_project_budget_line,
+)
+from app.services.project_document_service import (
+    create_project_document,
+    list_project_documents,
 )
 
 
@@ -194,6 +199,63 @@ def api_delete_project(
         delete_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/documents", response_model=list[ProjectDocumentRead])
+def api_list_project_documents(
+    project_id: int,
+    doc_type: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[ProjectDocumentRead]:
+    tenant_id = _tenant_for_read(current_user, x_tenant_id)
+    documents = list_project_documents(session, project_id, tenant_id, doc_type)
+    return [
+        ProjectDocumentRead(
+            id=doc.id,
+            tenant_id=doc.tenant_id,
+            project_id=doc.project_id,
+            doc_type=doc.doc_type,
+            original_name=doc.original_name,
+            content_type=doc.content_type,
+            size_bytes=doc.size_bytes,
+            uploaded_at=doc.uploaded_at,
+            url=f"/static/project-docs/{doc.file_name}",
+        )
+        for doc in documents
+    ]
+
+
+@router.post(
+    "/projects/{project_id}/documents",
+    response_model=ProjectDocumentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def api_upload_project_document(
+    project_id: int,
+    doc_type: str = Form(...),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> ProjectDocumentRead:
+    try:
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        doc = create_project_document(session, project_id, file, tenant_id, doc_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ProjectDocumentRead(
+        id=doc.id,
+        tenant_id=doc.tenant_id,
+        project_id=doc.project_id,
+        doc_type=doc.doc_type,
+        original_name=doc.original_name,
+        content_type=doc.content_type,
+        size_bytes=doc.size_bytes,
+        uploaded_at=doc.uploaded_at,
+        url=f"/static/project-docs/{doc.file_name}",
+    )
 
 
 @router.get("/projects/{project_id}/budgets", response_model=list[ProjectBudgetLineRead])

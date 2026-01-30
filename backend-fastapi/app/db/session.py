@@ -110,6 +110,17 @@ def init_db() -> None:
                     )
                 )
 
+    if "erp_project_document" in table_names:
+        doc_columns = {col["name"] for col in inspector.get_columns("erp_project_document")}
+        with engine.begin() as conn:
+            if "doc_type" not in doc_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE erp_project_document "
+                        "ADD COLUMN doc_type VARCHAR(40) NOT NULL DEFAULT 'otros'"
+                    )
+                )
+
     # Columns auxiliares para asignaciones y tracking en actividades/subactividades.
     if "erp_activity" in table_names:
         activity_columns = {col["name"] for col in inspector.get_columns("erp_activity")}

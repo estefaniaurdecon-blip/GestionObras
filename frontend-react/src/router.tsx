@@ -22,6 +22,8 @@ import { HrPage } from "./pages/HrPage";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { ErpProjectsPage } from "./pages/ErpProjectsPage";
 import { ErpProjectDetailPage } from "./pages/ErpProjectDetailPage";
+import { ErpProjectBudgetPage } from "./pages/ErpProjectBudgetPage";
+import { ErpProjectDocumentsPage } from "./pages/ErpProjectDocumentsPage";
 import { ErpTasksPage } from "./pages/ErpTasksPage";
 import { ErpExternalCollaborationsPage } from "./pages/ErpExternalCollaborationsPage";
 import { ErpSimulationsPage } from "./pages/ErpSimulationsPage";
@@ -88,6 +90,18 @@ const erpProjectDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/erp/projects/$projectId",
   component: ErpProjectDetailPage,
+});
+
+const erpProjectBudgetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/projects/$projectId/budget",
+  component: ErpProjectBudgetPage,
+});
+
+const erpProjectDocumentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/projects/$projectId/documents",
+  component: ErpProjectDocumentsPage,
 });
 
 const erpTasksRoute = createRoute({
@@ -175,6 +189,8 @@ const routeTree = rootRoute.addChildren([
   timeControlRoute,
   erpProjectsRoute,
   erpProjectDetailRoute,
+  erpProjectBudgetRoute,
+  erpProjectDocumentsRoute,
   erpTasksRoute,
   erpExternalCollaborationsRoute,
   erpSimulationsRoute,

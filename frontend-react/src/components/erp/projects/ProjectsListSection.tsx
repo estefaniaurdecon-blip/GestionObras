@@ -4,6 +4,7 @@ import React from "react";
 import {
   Badge,
   Box,
+  Button,
   Flex,
   Heading,
   HStack,
@@ -21,7 +22,9 @@ interface ProjectsListSectionProps {
   activities: ErpActivity[];
   milestones: ErpMilestone[];
   rawTasks: ErpTaskApi[];
-  onOpenProjectDetails: (project: ErpProjectApi) => void;
+  onEditProject: (project: ErpProjectApi) => void;
+  onViewProjectDetails: (project: ErpProjectApi) => void;
+  onViewProjectDocs: (project: ErpProjectApi) => void;
   cardBg: string;
   subtleText: string;
 }
@@ -31,7 +34,9 @@ export const ProjectsListSection: React.FC<ProjectsListSectionProps> = ({
   activities,
   milestones,
   rawTasks,
-  onOpenProjectDetails,
+  onEditProject,
+  onViewProjectDetails,
+  onViewProjectDocs,
   cardBg,
   subtleText,
 }) => (
@@ -43,16 +48,6 @@ export const ProjectsListSection: React.FC<ProjectsListSectionProps> = ({
         borderRadius="lg"
         p={4}
         bg={cardBg}
-        role="button"
-        tabIndex={0}
-        cursor="pointer"
-        onClick={() => onOpenProjectDetails(project)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onOpenProjectDetails(project);
-          }
-        }}
         _hover={{ boxShadow: "md" }}
       >
         <Flex justify="space-between" align="flex-start" mb={2}>
@@ -96,6 +91,27 @@ export const ProjectsListSection: React.FC<ProjectsListSectionProps> = ({
             </Text>
           </HStack>
         </Stack>
+
+        <HStack spacing={2} justify="flex-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onEditProject(project)}
+          >
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="green"
+            variant="solid"
+            onClick={() => onViewProjectDetails(project)}
+          >
+            Detalles
+          </Button>
+          <Button size="sm" onClick={() => onViewProjectDocs(project)}>
+            Documentacion
+          </Button>
+        </HStack>
       </Box>
     ))}
   </SimpleGrid>

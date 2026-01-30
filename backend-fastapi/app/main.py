@@ -62,6 +62,14 @@ def create_app() -> FastAPI:
     avatars_path.mkdir(parents=True, exist_ok=True)
     app.mount("/static/avatars", StaticFiles(directory=str(avatars_path)), name="avatars")
 
+    logos_path = Path(settings.logos_storage_path)
+    logos_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/logos", StaticFiles(directory=str(logos_path)), name="logos")
+
+    docs_path = Path(settings.project_docs_storage_path)
+    docs_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/project-docs", StaticFiles(directory=str(docs_path)), name="project_docs")
+
     return app
 
 
