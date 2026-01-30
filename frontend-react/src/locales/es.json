@@ -147,6 +147,7 @@
       "tools": "Herramientas",
       "audit": "Logs",
       "tenantSettings": "Ajustes de tenants",
+      "branding": "Ajustes",
       "simulations": "Simulaciones"
     },
     "header": {
@@ -167,6 +168,9 @@
       "eyebrow": "ERP interno",
       "title": "Colaboraciones externas",
       "subtitle": "Gestiona universidades, auditorias, consultoras y centros tecnologicos."
+    },
+    "actions": {
+      "addNew": "Añadir colaborador +"
     },
     "form": {
       "type": "Tipo",
@@ -516,6 +520,37 @@
       "deleteSuccessDesc": "El tenant se ha eliminado correctamente.",
       "deleteErrorTitle": "Error al eliminar tenant",
       "deleteErrorFallback": "No se ha podido eliminar el tenant (revisa permisos y datos)."
+    }
+  },
+  "branding": {
+    "header": {
+      "eyebrow": "Administracion",
+      "title": "Ajustes de marca",
+      "subtitle": "Configura el logo y el color de acento del tenant."
+    },
+    "fields": {
+      "tenant": "Tenant",
+      "selectTenant": "Selecciona un tenant",
+      "loadingTenants": "Cargando tenants...",
+      "logo": "Logo",
+      "noLogo": "Sin logo cargado",
+      "companyName": "Nombre de la empresa",
+      "companySubtitle": "Subtitulo",
+      "accentColor": "Color de acento",
+      "palette": "Paleta generada"
+    },
+    "actions": {
+      "save": "Guardar cambios"
+    },
+    "messages": {
+      "loading": "Cargando branding...",
+      "loadError": "No se ha podido cargar el branding.",
+      "selectTenant": "Selecciona un tenant para gestionar su branding.",
+      "loadTenantsError": "No se pudieron cargar los tenants.",
+      "updateSuccessTitle": "Branding actualizado",
+      "updateSuccessDesc": "Los ajustes de marca se han guardado correctamente.",
+      "updateErrorTitle": "Error al guardar branding",
+      "updateErrorFallback": "No se ha podido actualizar el branding."
     }
   },
   "support": {

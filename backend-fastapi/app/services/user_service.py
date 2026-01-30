@@ -1,13 +1,15 @@
+from pathlib import Path
 from typing import List
 
+import base64
 from fastapi import UploadFile
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.audit import log_action
+from app.core.config import settings
 from app.core.security import hash_password
 from app.core.email import send_tenant_admin_welcome_email
-from app.storage.local import save_avatar_to_disk
 from app.models.hr import EmployeeProfile
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -21,23 +23,40 @@ from app.schemas.user import (
 )
 
 
+def _resolve_avatar_url(avatar_url: str | None) -> str | None:
+    if not avatar_url:
+        return None
+    if "/static/avatars/" not in avatar_url:
+        return avatar_url
+    filename = avatar_url.rsplit("/", 1)[-1]
+    file_path = Path(settings.avatars_storage_path) / filename
+    if not file_path.exists():
+        return None
+    return avatar_url
+
+
+def _user_to_read(user: User) -> UserRead:
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_super_admin=user.is_super_admin,
+        tenant_id=user.tenant_id,
+        role_id=user.role_id,
+        language=user.language,
+        avatar_url=_resolve_avatar_url(user.avatar_url),
+        avatar_data=user.avatar_data,
+        created_at=user.created_at,
+    )
+
+
 def get_user_me(current_user: User) -> UserRead:
     """
     Devuelve la representación de lectura del usuario actual.
     """
 
-    return UserRead(
-        id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        is_active=current_user.is_active,
-        is_super_admin=current_user.is_super_admin,
-        tenant_id=current_user.tenant_id,
-        role_id=current_user.role_id,
-        language=current_user.language,
-        avatar_url=current_user.avatar_url,
-        created_at=current_user.created_at,
-    )
+    return _user_to_read(current_user)
 
 
 def list_users_by_tenant(
@@ -81,20 +100,7 @@ def list_users_by_tenant(
 
     result: List[UserRead] = []
     for u in users:
-        result.append(
-            UserRead(
-                id=u.id,
-                email=u.email,
-                full_name=u.full_name,
-                is_active=u.is_active,
-                is_super_admin=u.is_super_admin,
-                tenant_id=u.tenant_id,
-                role_id=u.role_id,
-                language=u.language,
-                avatar_url=u.avatar_url,
-                created_at=u.created_at,
-            ),
-        )
+        result.append(_user_to_read(u))
 
     return result
 
@@ -113,6 +119,7 @@ def update_user_me(
         current_user.language = data.language
     if data.avatar_url is not None:
         current_user.avatar_url = data.avatar_url.strip() or None
+        current_user.avatar_data = None
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -125,18 +132,7 @@ def update_user_me(
         details="Actualización de perfil del propio usuario",
     )
 
-    return UserRead(
-        id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        is_active=current_user.is_active,
-        is_super_admin=current_user.is_super_admin,
-        tenant_id=current_user.tenant_id,
-        role_id=current_user.role_id,
-        language=current_user.language,
-        avatar_url=current_user.avatar_url,
-        created_at=current_user.created_at,
-    )
+    return _user_to_read(current_user)
 
 
 def update_user_avatar(
@@ -159,19 +155,13 @@ def update_user_avatar(
         raise ValueError("Formato de imagen no soportado (jpeg, png, webp)")
 
     max_bytes = 5 * 1024 * 1024  # 5MB
-    total = 0
-    target_path = save_avatar_to_disk(upload, current_user.id, extension)
-    with target_path.open("rb") as f:
-        while True:
-            chunk = f.read(1024 * 1024)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > max_bytes:
-                target_path.unlink(missing_ok=True)
-                raise ValueError("La imagen supera el tamaÃ±o mÃ¡ximo de 5MB")
+    content = upload.file.read()
+    if len(content) > max_bytes:
+        raise ValueError("La imagen supera el tama??o m??ximo de 5MB")
 
-    current_user.avatar_url = f"/static/avatars/{target_path.name}"
+    encoded = base64.b64encode(content).decode("ascii")
+    current_user.avatar_data = f"data:{content_type};base64,{encoded}"
+    current_user.avatar_url = None
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -184,18 +174,7 @@ def update_user_avatar(
         details="ActualizaciÃ³n de foto de perfil",
     )
 
-    return UserRead(
-        id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        is_active=current_user.is_active,
-        is_super_admin=current_user.is_super_admin,
-        tenant_id=current_user.tenant_id,
-        role_id=current_user.role_id,
-        language=current_user.language,
-        avatar_url=current_user.avatar_url,
-        created_at=current_user.created_at,
-    )
+    return _user_to_read(current_user)
 
 
 def create_user(
@@ -280,18 +259,7 @@ def create_user(
         details=f"Usuario creado con email '{user.email}'",
     )
 
-    return UserRead(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        is_super_admin=user.is_super_admin,
-        tenant_id=user.tenant_id,
-        role_id=user.role_id,
-        language=user.language,
-        avatar_url=user.avatar_url,
-        created_at=user.created_at,
-    )
+    return _user_to_read(user)
 
 
 def delete_user(
@@ -387,15 +355,4 @@ def update_user_status(
         ),
     )
 
-    return UserRead(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        is_super_admin=user.is_super_admin,
-        tenant_id=user.tenant_id,
-        role_id=user.role_id,
-        language=user.language,
-        avatar_url=user.avatar_url,
-        created_at=user.created_at,
-    )
+    return _user_to_read(user)

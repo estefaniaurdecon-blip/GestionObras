@@ -69,7 +69,6 @@ def create_app() -> FastAPI:
     docs_path = Path(settings.project_docs_storage_path)
     docs_path.mkdir(parents=True, exist_ok=True)
     app.mount("/static/project-docs", StaticFiles(directory=str(docs_path)), name="project_docs")
-
     return app
 
 

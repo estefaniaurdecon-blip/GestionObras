@@ -29,6 +29,7 @@ interface ExternalCollaborationsFormProps {
   onFieldChange: (field: keyof ExternalCollaborationFormValues, value: string) => void;
   onSubmit: () => void;
   onCancel?: () => void;
+  showActions?: boolean;
 }
 
 export const ExternalCollaborationsForm: React.FC<
@@ -41,6 +42,7 @@ export const ExternalCollaborationsForm: React.FC<
   onFieldChange,
   onSubmit,
   onCancel,
+  showActions = true,
 }) => {
   const { t } = useTranslation();
 
@@ -96,15 +98,19 @@ export const ExternalCollaborationsForm: React.FC<
           />
         </FormControl>
       </SimpleGrid>
-      <Button colorScheme="green" onClick={onSubmit} isLoading={isSubmitting}>
-        {mode === "edit"
-          ? t("externalCollaborations.form.update")
-          : t("externalCollaborations.form.add")}
-      </Button>
-      {mode === "edit" && onCancel && (
-        <Button ml={3} variant="ghost" onClick={onCancel}>
-          <Text>{t("externalCollaborations.form.cancelEdit")}</Text>
-        </Button>
+      {showActions && (
+        <>
+          <Button colorScheme="green" onClick={onSubmit} isLoading={isSubmitting}>
+            {mode === "edit"
+              ? t("externalCollaborations.form.update")
+              : t("externalCollaborations.form.add")}
+          </Button>
+          {mode === "edit" && onCancel && (
+            <Button ml={3} variant="ghost" onClick={onCancel}>
+              <Text>{t("externalCollaborations.form.cancelEdit")}</Text>
+            </Button>
+          )}
+        </>
       )}
     </Box>
   );

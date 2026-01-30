@@ -10,6 +10,7 @@ import {
 } from "@chakra-ui/react";
 import { useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { verifyMFA } from "../api/auth";
 
@@ -25,6 +26,7 @@ export const MFAVerifyPage: React.FC = () => {
   const toast = useToast();
   const router = useRouter();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   const username = sessionStorage.getItem("mfa_username") ?? "";
 
@@ -34,6 +36,7 @@ export const MFAVerifyPage: React.FC = () => {
     try {
       await verifyMFA(username, code);
       sessionStorage.removeItem("mfa_username");
+      queryClient.clear();
       router.history.push("/dashboard");
     } catch (error) {
       toast({

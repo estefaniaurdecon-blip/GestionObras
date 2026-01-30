@@ -5,19 +5,17 @@ const config: ThemeConfig = {
   useSystemColorMode: false,
 };
 
-const colors = {
-  brand: {
-    50: "#e3f6ec",
-    100: "#b8e4cc",
-    200: "#8dd3ad",
-    300: "#62c18e",
-    400: "#37b06f",
-    500: "#00662b", // color principal urdecon
-    600: "#005024",
-    700: "#003a1b",
-    800: "#002413",
-    900: "#000e08",
-  },
+const defaultBrand = {
+  50: "#e3f6ec",
+  100: "#b8e4cc",
+  200: "#8dd3ad",
+  300: "#62c18e",
+  400: "#37b06f",
+  500: "#00662b", // color principal urdecon
+  600: "#005024",
+  700: "#003a1b",
+  800: "#002413",
+  900: "#000e08",
 };
 
 const components = {
@@ -66,12 +64,28 @@ const components = {
   },
 };
 
-export const theme = extendTheme({
-  config,
-  colors,
-  components,
-  fonts: {
-    heading: "'Space Grotesk', 'IBM Plex Sans', sans-serif",
-    body: "'IBM Plex Sans', 'Space Grotesk', sans-serif",
-  },
-});
+export const buildTheme = (brandPalette?: Record<string, string>) =>
+  extendTheme({
+    config,
+    colors: {
+      brand: {
+        ...defaultBrand,
+        ...(brandPalette ?? {}),
+      },
+      green: {
+        ...defaultBrand,
+        ...(brandPalette ?? {}),
+      },
+      blue: {
+        ...defaultBrand,
+        ...(brandPalette ?? {}),
+      },
+    },
+    components,
+    fonts: {
+      heading: "'Space Grotesk', 'IBM Plex Sans', sans-serif",
+      body: "'IBM Plex Sans', 'Space Grotesk', sans-serif",
+    },
+  });
+
+export const theme = buildTheme();

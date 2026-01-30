@@ -115,8 +115,8 @@ services:
     container_name: saas-frontend-react
     restart: unless-stopped
     environment:
-      # En desarrollo usamos proxy de Vite para evitar problemas de CORS/localhost.
-      VITE_API_BASE_URL: relative
+      # En Docker usamos URL directa al backend en el host para evitar fallos del proxy.
+      VITE_API_BASE_URL: http://localhost:8000
       VITE_API_PROXY_TARGET: http://backend-fastapi:8000
       TZ: Europe/Madrid
     depends_on:

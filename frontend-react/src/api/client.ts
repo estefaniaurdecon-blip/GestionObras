@@ -27,6 +27,14 @@ const resolveApiBaseUrl = () => {
     return `${protocol}://${window.location.hostname}:8000`;
   }
 
+  if (
+    rawBaseUrl.includes("backend-fastapi") &&
+    window.location.hostname !== "backend-fastapi"
+  ) {
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    return `${protocol}://${window.location.hostname}:8000`;
+  }
+
   return rawBaseUrl;
 };
 
@@ -39,6 +47,10 @@ export const apiClient = axios.create({
 
 // Inyecta X-Tenant-Id si existe en localStorage (superadmin).
 apiClient.interceptors.request.use((config) => {
+  if (config.baseURL && config.baseURL.includes("backend-fastapi")) {
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    config.baseURL = `${protocol}://${window.location.hostname}:8000`;
+  }
   const tenantId = localStorage.getItem("x_tenant_id");
   if (tenantId) {
     config.headers = {

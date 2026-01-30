@@ -200,7 +200,7 @@ export const TimeReportPage: React.FC = () => {
       <Box
         borderRadius="2xl"
         p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
         color="white"
         boxShadow="lg"
         position="relative"

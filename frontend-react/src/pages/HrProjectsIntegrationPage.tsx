@@ -271,7 +271,7 @@ export const HrProjectsIntegrationPage: React.FC = () => {
         <Box
           borderRadius="2xl"
           p={{ base: 6, md: 8 }}
-          bgGradient="linear(120deg, #0f172a 0%, #0b3b5e 50%, #0f766e 100%)"
+          bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
           color="white"
           boxShadow="lg"
           mb={8}

@@ -368,6 +368,10 @@ def init_db() -> None:
                 conn.execute(
                     text('ALTER TABLE "user" ADD COLUMN avatar_url VARCHAR(512) NULL')
                 )
+            if "avatar_data" not in user_columns:
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN avatar_data TEXT NULL')
+                )
 
     if "users" in table_names:
         user_columns = {col["name"] for col in inspector.get_columns("users")}
@@ -375,6 +379,28 @@ def init_db() -> None:
             if "avatar_url" not in user_columns:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NULL")
+                )
+            if "avatar_data" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN avatar_data TEXT NULL")
+                )
+
+    if "tenant_branding" in table_names:
+        branding_columns = {
+            col["name"] for col in inspector.get_columns("tenant_branding")
+        }
+        with engine.begin() as conn:
+            if "company_name" not in branding_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tenant_branding ADD COLUMN company_name VARCHAR(128) NULL"
+                    )
+                )
+            if "company_subtitle" not in branding_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tenant_branding ADD COLUMN company_subtitle VARCHAR(256) NULL"
+                    )
                 )
 
     # Campos de disponibilidad en perfiles de empleado.

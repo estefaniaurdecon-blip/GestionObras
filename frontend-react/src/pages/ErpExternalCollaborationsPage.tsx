@@ -1,5 +1,20 @@
 import React, { useMemo, useState } from "react";
-import { Box, Heading, Stack, Text, useColorModeValue, useToast } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Heading,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  Stack,
+  Text,
+  useColorModeValue,
+  useToast,
+} from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
 
@@ -18,14 +33,14 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   const { t } = useTranslation();
   const toast = useToast();
   const cardBg = useColorModeValue("white", "gray.700");
-  const subtleText = useColorModeValue("gray.600", "gray.300");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const effectiveTenantId = currentUser?.is_super_admin
+  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const effectiveTenantId = isSuperAdmin
     ? undefined
     : currentUser?.tenant_id ?? undefined;
   const { listQuery, createMutation, updateMutation, deleteMutation } =
@@ -43,6 +58,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [formValues, setFormValues] = useState<ExternalCollaborationCreate>({
     collaboration_type: typeOptions[0],
     name: "",
@@ -60,6 +76,16 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
       contact_email: "",
     });
     setEditingId(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    resetForm();
   };
 
   const handleFieldChange = (
@@ -109,7 +135,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
               title: t("externalCollaborations.messages.updateTitle"),
               status: "success",
             });
-            resetForm();
+            closeModal();
           },
         },
       );
@@ -121,7 +147,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
           title: t("externalCollaborations.messages.createTitle"),
           status: "success",
         });
-        resetForm();
+        closeModal();
       },
     });
   };
@@ -135,6 +161,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
       cif: entry.cif,
       contact_email: entry.contact_email,
     });
+    setIsModalOpen(true);
   };
 
   const handleDelete = (entryId: number) => {
@@ -149,7 +176,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
       <Box
         borderRadius="2xl"
         p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, #0f3d2e 0%, #0c6b3f 55%, #caa85b 110%)"
+        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
         color="white"
         boxShadow="lg"
         position="relative"
@@ -174,22 +201,10 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
         </Stack>
       </Box>
 
-      <Box
-        bg={cardBg}
-        borderWidth="1px"
-        borderRadius="xl"
-        p={{ base: 4, md: 6 }}
-        mb={6}
-      >
-        <ExternalCollaborationsForm
-          values={formValues}
-          typeOptions={typeOptions}
-          mode={editingId ? "edit" : "create"}
-          isSubmitting={createMutation.isPending || updateMutation.isPending}
-          onFieldChange={handleFieldChange}
-          onSubmit={handleSubmit}
-          onCancel={resetForm}
-        />
+      <Box mb={6} display="flex" justifyContent="flex-end">
+        <Button colorScheme="green" onClick={openCreateModal}>
+          {t("externalCollaborations.actions.addNew")}
+        </Button>
       </Box>
 
       {listQuery.isError ? (
@@ -204,6 +219,43 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
           deletingId={deletingId}
         />
       )}
+
+      <Modal isOpen={isModalOpen} onClose={closeModal} size="2xl">
+        <ModalOverlay />
+        <ModalContent maxW="960px">
+          <ModalHeader>
+            {editingId
+              ? t("externalCollaborations.form.update")
+              : t("externalCollaborations.form.add")}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <ExternalCollaborationsForm
+              values={formValues}
+              typeOptions={typeOptions}
+              mode={editingId ? "edit" : "create"}
+              isSubmitting={createMutation.isPending || updateMutation.isPending}
+              onFieldChange={handleFieldChange}
+              onSubmit={handleSubmit}
+              showActions={false}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={closeModal}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={handleSubmit}
+              isLoading={createMutation.isPending || updateMutation.isPending}
+            >
+              {editingId
+                ? t("externalCollaborations.form.update")
+                : t("externalCollaborations.form.add")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </AppShell>
   );
 };

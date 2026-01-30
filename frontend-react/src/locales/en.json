@@ -147,6 +147,7 @@
       "tools": "Tools",
       "audit": "Audit",
       "tenantSettings": "Tenant settings",
+      "branding": "Branding",
       "simulations": "Simulations"
     },
     "header": {
@@ -167,6 +168,9 @@
       "eyebrow": "Internal ERP",
       "title": "External collaborations",
       "subtitle": "Manage universities, audits, consultancies, and tech centers."
+    },
+    "actions": {
+      "addNew": "Add collaborator +"
     },
     "form": {
       "type": "Type",
@@ -516,6 +520,37 @@
       "deleteSuccessDesc": "The tenant was deleted successfully.",
       "deleteErrorTitle": "Tenant delete error",
       "deleteErrorFallback": "Unable to delete the tenant (check permissions and data)."
+    }
+  },
+  "branding": {
+    "header": {
+      "eyebrow": "Administration",
+      "title": "Brand settings",
+      "subtitle": "Configure the tenant logo and accent color."
+    },
+    "fields": {
+      "tenant": "Tenant",
+      "selectTenant": "Select a tenant",
+      "loadingTenants": "Loading tenants...",
+      "logo": "Logo",
+      "noLogo": "No logo uploaded",
+      "companyName": "Company name",
+      "companySubtitle": "Subtitle",
+      "accentColor": "Accent color",
+      "palette": "Generated palette"
+    },
+    "actions": {
+      "save": "Save changes"
+    },
+    "messages": {
+      "loading": "Loading branding...",
+      "loadError": "Unable to load branding.",
+      "selectTenant": "Select a tenant to manage branding.",
+      "loadTenantsError": "Unable to load tenants.",
+      "updateSuccessTitle": "Branding updated",
+      "updateSuccessDesc": "Brand settings saved successfully.",
+      "updateErrorTitle": "Branding update error",
+      "updateErrorFallback": "Unable to update branding."
     }
   },
   "support": {
