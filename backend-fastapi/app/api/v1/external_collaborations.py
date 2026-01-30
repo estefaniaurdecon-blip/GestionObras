@@ -35,11 +35,6 @@ def _tenant_for_read(current_user: User, x_tenant_id: Optional[int]) -> Optional
 
 def _tenant_for_write(current_user: User, x_tenant_id: Optional[int]) -> int:
     if current_user.is_super_admin:
-        if x_tenant_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="X-Tenant-Id requerido para escribir.",
-            )
         return x_tenant_id
     if current_user.tenant_id is None:
         raise HTTPException(

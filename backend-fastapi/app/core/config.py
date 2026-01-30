@@ -1,7 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -75,8 +79,10 @@ class Settings(BaseSettings):
     invoice_due_extra_recipients_10: List[str] = []
     invoice_due_extra_recipients_5: List[str] = []
 
-    # Avatares de usuario
-    avatars_storage_path: str = "/data/avatars"
+    # Avatares y branding
+    avatars_storage_path: str = str(BASE_DIR / "data" / "avatars")
+    logos_storage_path: str = str(BASE_DIR / "data" / "logos")
+    default_brand_accent_color: str = "#00662b"
 
     # IntegraciÑn con Moodle (Web Services)
     moodle_base_url: str | None = None

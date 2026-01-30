@@ -14,6 +14,7 @@ export interface CurrentUser {
   role_id: number | null; // Rol asignado
   language?: string | null; // Idioma preferido
   avatar_url?: string | null; // Foto de perfil
+  avatar_data?: string | null; // Foto de perfil (base64)
   created_at: string; // Fecha de creación
 }
 

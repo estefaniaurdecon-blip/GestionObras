@@ -19,8 +19,6 @@ def list_external_collaborations(
 def create_external_collaboration(
     session: Session, data: ExternalCollaborationCreate, tenant_id: Optional[int]
 ) -> ExternalCollaboration:
-    if tenant_id is None:
-        raise ValueError("Tenant requerido.")
     name = data.name.strip()
     legal_name = data.legal_name.strip()
     cif = data.cif.strip()

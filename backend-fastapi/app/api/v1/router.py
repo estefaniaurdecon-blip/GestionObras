@@ -6,6 +6,7 @@ from . import (
     dashboard,
     erp,
     external_collaborations,
+    branding,
     health,
     hr,
     invitations,
@@ -26,6 +27,7 @@ api_router = APIRouter()
 # Rutas públicas / semi públicas
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(branding.router, prefix="/branding", tags=["branding"])
 
 # Rutas protegidas
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])

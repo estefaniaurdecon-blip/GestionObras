@@ -14,6 +14,7 @@ import {
 } from "@chakra-ui/react";
 import { useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { login } from "../api/auth";
 
@@ -33,6 +34,7 @@ export const LoginPage: React.FC = () => {
   const toast = useToast();
   const router = useRouter();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   const pageBg = useColorModeValue("gray.50", "gray.900");
   const cardBg = useColorModeValue("white", "gray.800");
@@ -48,11 +50,13 @@ export const LoginPage: React.FC = () => {
       if (result.mfa_required) {
         // Guardamos el username temporalmente para MFA.
         sessionStorage.setItem("mfa_username", email);
+        queryClient.clear();
         router.history.push("/mfa");
         return;
       }
 
       if (result.access_token) {
+        queryClient.clear();
         router.history.push("/dashboard");
         return;
       }

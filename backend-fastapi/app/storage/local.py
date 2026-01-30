@@ -72,3 +72,29 @@ def save_avatar_to_disk(upload: UploadFile, user_id: int, extension: str) -> Pat
             f.write(chunk)
 
     return target_path
+
+
+def build_logo_path(tenant_id: int, extension: str) -> Path:
+    """
+    Construye la ruta final del logo en el disco.
+    """
+    base = Path(settings.logos_storage_path)
+    return base / f"tenant_{tenant_id}.{extension}"
+
+
+def save_logo_to_disk(upload: UploadFile, tenant_id: int, extension: str) -> Path:
+    """
+    Guarda el logo subido en el disco local.
+    """
+    target_path = build_logo_path(tenant_id, extension)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    upload.file.seek(0)
+
+    with target_path.open("wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    return target_path

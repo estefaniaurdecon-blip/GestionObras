@@ -45,6 +45,8 @@ class User(SQLModel, table=True):
     language: str = Field(default="en")
     # URL de la foto de perfil del usuario (opcional).
     avatar_url: Optional[str] = Field(default=None)
+    # Avatar almacenado en base64 (data URL).
+    avatar_data: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -64,3 +66,4 @@ class UserRead(SQLModel):
     role_id: Optional[int]
     language: str
     avatar_url: Optional[str]
+    avatar_data: Optional[str]

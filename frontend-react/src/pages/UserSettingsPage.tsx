@@ -45,7 +45,7 @@ export const UserSettingsPage: React.FC = () => {
   const cardBg = useColorModeValue("white", "gray.700");
   const labelColor = useColorModeValue("gray.700", "gray.100");
   const resolvedAvatarUrl = avatarUrl
-    ? avatarUrl.startsWith("http")
+    ? avatarUrl.startsWith("http") || avatarUrl.startsWith("data:")
       ? avatarUrl
       : `${apiClient.defaults.baseURL || window.location.origin}${avatarUrl}`
     : undefined;
@@ -56,7 +56,7 @@ export const UserSettingsPage: React.FC = () => {
         const response = await apiClient.get<MeResponse>("/api/v1/users/me");
         setEmail(response.data.email);
         setFullName(response.data.full_name ?? "");
-        setAvatarUrl(response.data.avatar_url ?? "");
+        setAvatarUrl(response.data.avatar_data ?? response.data.avatar_url ?? "");
         const preferredLanguage =
           response.data.language ?? i18n.language ?? "en";
         setLanguage(preferredLanguage);
@@ -123,7 +123,7 @@ export const UserSettingsPage: React.FC = () => {
           headers: { "Content-Type": "multipart/form-data" },
         },
       );
-      setAvatarUrl(response.data.avatar_url ?? "");
+      setAvatarUrl(response.data.avatar_data ?? response.data.avatar_url ?? "");
       queryClient.invalidateQueries({ queryKey: ["current-user"] });
       toast({
         title: t("settings.messages.profilePhotoUpdatedTitle"),

@@ -34,6 +34,7 @@ class UserRead(UserBase):
     role_id: int | None
     language: str | None = None
     avatar_url: str | None = None
+    avatar_data: str | None = None
     created_at: datetime
 
 

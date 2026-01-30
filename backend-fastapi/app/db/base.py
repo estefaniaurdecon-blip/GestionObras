@@ -11,6 +11,7 @@ from app.models.permission import Permission  # noqa: F401
 from app.models.role_permission import RolePermission  # noqa: F401
 from app.models.tool import Tool  # noqa: F401
 from app.models.tenant_tool import TenantTool  # noqa: F401
+from app.models.tenant_branding import TenantBranding  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401

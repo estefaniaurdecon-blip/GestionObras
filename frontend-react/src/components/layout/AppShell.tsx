@@ -21,7 +21,8 @@ import {
   useColorModeValue,
   IconButton,
   useColorMode,
-  Input,
+  Center,
+  Spinner,
 } from "@chakra-ui/react";
 import { MoonIcon, SunIcon } from "@chakra-ui/icons";
 import { Link, useRouter } from "@tanstack/react-router";
@@ -29,6 +30,9 @@ import { useTranslation } from "react-i18next";
 
 import { NotificationsBell } from "../NotificationsBell";
 import { apiClient } from "../../api/client";
+import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchBranding } from "../../api/branding";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 
 interface AppShellProps {
@@ -42,6 +46,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const headerBg = useColorModeValue("white", "gray.900");
   const pageBg = useColorModeValue("gray.50", "gray.800");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = router.state.location.pathname;
   const isErpRoute = useMemo(() => pathname.startsWith("/erp/"), [pathname]);
   const [erpAccordionIndex, setErpAccordionIndex] = useState(
@@ -57,40 +62,69 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     }
   }, [isErpRoute]);
 
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
 
   const email = currentUser?.email ?? t("layout.user.fallbackEmail");
   const fullName = currentUser?.full_name ?? t("layout.user.fallbackName");
-  const rawAvatarUrl = currentUser?.avatar_url ?? undefined;
+  const rawAvatarUrl =
+    currentUser?.avatar_data ?? currentUser?.avatar_url ?? undefined;
   const resolvedAvatarUrl = rawAvatarUrl
-    ? rawAvatarUrl.startsWith("http")
+    ? rawAvatarUrl.startsWith("http") || rawAvatarUrl.startsWith("data:")
       ? rawAvatarUrl
       : `${apiClient.defaults.baseURL || window.location.origin}${rawAvatarUrl}`
     : undefined;
   const isSuperAdmin = Boolean(currentUser?.is_super_admin);
   const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
-  const [tenantOverride, setTenantOverride] = useState(
-    localStorage.getItem("x_tenant_id") ?? ""
-  );
+  const tenantId = currentUser?.tenant_id ?? null;
+
+  const brandingQuery = useQuery({
+    queryKey: ["tenant-branding-shell", tenantId],
+    queryFn: () => fetchBranding(tenantId as number),
+    enabled: Boolean(tenantId) && !isSuperAdmin,
+  });
+
+  const needsBranding = !isSuperAdmin && Boolean(tenantId);
+  const isBrandingLoading =
+    needsBranding && (brandingQuery.isLoading || (!brandingQuery.data && brandingQuery.isFetching));
+
+  const brandingLogo =
+    !isSuperAdmin ? brandingQuery.data?.logo ?? null : null;
+  const brandingName =
+    !isSuperAdmin
+      ? brandingQuery.data?.company_name ??
+        t("layout.brand.title")
+      : t("layout.brand.title");
+  const brandingSubtitle =
+    !isSuperAdmin
+      ? brandingQuery.data?.company_subtitle ??
+        t("layout.brand.subtitle")
+      : t("layout.brand.subtitle");
+  const brandingLogoUrl = brandingLogo
+    ? brandingLogo.startsWith("http")
+      ? brandingLogo
+      : `${apiClient.defaults.baseURL || window.location.origin}${brandingLogo}?v=${
+          brandingQuery.data?.updated_at ?? ""
+        }`
+    : "/logo-urdecon.svg";
 
   const handleLogout = () => {
     void apiClient.post("/api/v1/auth/logout").catch(() => undefined);
     localStorage.removeItem("access_token");
+    queryClient.clear();
     router.history.push("/");
-  };
-
-  const handleTenantOverride = (value: string) => {
-    setTenantOverride(value);
-    if (value) {
-      localStorage.setItem("x_tenant_id", value);
-    } else {
-      localStorage.removeItem("x_tenant_id");
-    }
   };
 
   const goToUserSettings = () => {
     router.history.push("/user-settings");
   };
+
+  if (isUserLoading || isBrandingLoading) {
+    return (
+      <Center minH="100vh" bg={pageBg}>
+        <Spinner size="lg" />
+      </Center>
+    );
+  }
 
   return (
     <Flex minH="100vh" bg={pageBg}>
@@ -114,17 +148,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             _hover={{ textDecoration: "none", opacity: 0.9 }}
           >
             <Image
-              src="/logo-urdecon.svg"
+              src={brandingLogoUrl}
               alt={t("layout.brand.logoAlt")}
               boxSize="56px"
               objectFit="contain"
             />
             <Box>
               <Text fontSize="lg" fontWeight="bold">
-                {t("layout.brand.title")}
+                {brandingName}
               </Text>
               <Text fontSize="xs" color="gray.500">
-                {t("layout.brand.subtitle")}
+                {brandingSubtitle}
               </Text>
             </Box>
           </HStack>
@@ -255,7 +289,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
           <Divider />
 
-          {isSuperAdmin && (
+          {(isSuperAdmin || isTenantAdmin) && (
             <VStack align="stretch" spacing={2}>
               <Text
                 fontSize="xs"
@@ -265,29 +299,48 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               >
                 {t("layout.sections.administration")}
               </Text>
+              {isSuperAdmin && (
+                <Button
+                  as={Link}
+                  to="/tenant-settings"
+                  variant={isActivePrefix("/tenant-settings") ? "solid" : "ghost"}
+                  justifyContent="flex-start"
+                  size="sm"
+                >
+                  {t("layout.nav.tenantSettings")}
+                </Button>
+              )}
               <Button
                 as={Link}
-                to="/tenant-settings"
-                variant={isActivePrefix("/tenant-settings") ? "solid" : "ghost"}
-                justifyContent="flex-start"
-                size="sm"
-              >{t("layout.nav.tenantSettings")}</Button>
-              <Button
-                as={Link}
-                to="/audit"
-                variant={isActivePrefix("/audit") ? "solid" : "ghost"}
+                to="/tenant-branding"
+                variant={isActivePrefix("/tenant-branding") ? "solid" : "ghost"}
                 justifyContent="flex-start"
                 size="sm"
               >
-                Logs
+                {t("layout.nav.branding")}
               </Button>
-              <Button
-                as={Link}
-                to="/support"
-                variant={isActivePrefix("/support") ? "solid" : "ghost"}
-                justifyContent="flex-start"
-                size="sm"
-              >{t("layout.nav.support")}</Button>
+              {isSuperAdmin && (
+                <Button
+                  as={Link}
+                  to="/audit"
+                  variant={isActivePrefix("/audit") ? "solid" : "ghost"}
+                  justifyContent="flex-start"
+                  size="sm"
+                >
+                  Logs
+                </Button>
+              )}
+              {isSuperAdmin && (
+                <Button
+                  as={Link}
+                  to="/support"
+                  variant={isActivePrefix("/support") ? "solid" : "ghost"}
+                  justifyContent="flex-start"
+                  size="sm"
+                >
+                  {t("layout.nav.support")}
+                </Button>
+              )}
             </VStack>
           )}
         </VStack>
@@ -310,20 +363,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </Box>
 
             <HStack spacing={4}>
-              {isSuperAdmin && (
-                <HStack spacing={2}>
-                  <Text fontSize="xs" color="gray.500">
-                    Tenant ID
-                  </Text>
-                  <Input
-                    size="sm"
-                    w="120px"
-                    value={tenantOverride}
-                    onChange={(e) => handleTenantOverride(e.target.value)}
-                    placeholder="Ej. 3"
-                  />
-                </HStack>
-              )}
               <IconButton
                 aria-label="Toggle color mode"
                 icon={colorMode === "light" ? <MoonIcon /> : <SunIcon />}
