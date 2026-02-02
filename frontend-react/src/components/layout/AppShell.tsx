@@ -282,12 +282,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </Accordion>
 
             <Button
-              as={Link}
-              to="/erp/work-management"
+              onClick={() => router.history.push("/erp/work-management")}
               variant={isActivePrefix("/erp/work-management") ? "solid" : "ghost"}
               justifyContent="flex-start"
               size="sm"
-            >{t("layout.nav.workManagement")}</Button>
+            >
+              {t("layout.nav.workManagement")}
+            </Button>
 
             {(isSuperAdmin || isTenantAdmin) && (
               <>
@@ -447,7 +448,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   Logs
                 </Button>
               )}
-              {isSuperAdmin && (
+              {(isSuperAdmin || isTenantAdmin) && (
                 <Button
                   as={Link}
                   to="/support"
