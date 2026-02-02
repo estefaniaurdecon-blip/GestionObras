@@ -135,14 +135,18 @@
     },
     "nav": {
       "dashboard": "Dashboard",
-      "erp": "Gestión de Proyectos",
+      "erp": "Gesti\u00f3n de proyectos",
       "timeReport": "Informe de horas",
       "timeControl": "Control de tiempo",
       "tasks": "Tareas",
       "projects": "Proyectos",
+      "workManagement": "Gesti\u00f3n de obra",
       "externalCollaborations": "Colaboraciones externas",
       "users": "Usuarios",
       "hr": "Recursos humanos",
+      "hrDepartments": "Departamentos",
+      "hrEmployees": "Empleados",
+      "hrTalent": "Talento",
       "support": "Soporte",
       "tools": "Herramientas",
       "audit": "Logs",
@@ -171,6 +175,14 @@
     },
     "actions": {
       "addNew": "Añadir colaborador +"
+    },
+    "filters": {
+      "search": "Buscar",
+      "searchPlaceholder": "Nombre, CIF o correo...",
+      "type": "Tipo",
+      "all": "Todos",
+      "clear": "Restablecer",
+      "reset": "Limpiar filtros"
     },
     "form": {
       "type": "Tipo",
@@ -201,6 +213,8 @@
     "messages": {
       "missingTitle": "Datos incompletos",
       "missingDesc": "Rellena nombre, razon social, CIF y correo.",
+      "invalidEmailTitle": "Correo no valido",
+      "invalidEmailDesc": "Introduce un correo electronico valido.",
       "createTitle": "Colaboracion creada",
       "updateTitle": "Colaboracion actualizada",
       "loadError": "No se pudieron cargar las colaboraciones externas."
@@ -315,10 +329,12 @@
       "edit": "Editar",
       "delete": "Borrar",
       "update": "Actualizar",
-      "move": "Mover"
+      "move": "Mover",
+      "timeReport": "Informe de horas"
     },
     "labels": {
-      "taskId": "Tarea #{{id}}"
+      "taskId": "Tarea #{{id}}",
+      "noTask": "Sin tarea"
     },
     "messages": {
       "tasksLoadError": "No se han podido cargar las tareas del ERP.",
@@ -358,12 +374,17 @@
     },
     "fields": {
       "fullName": "Nombre completo",
-      "password": "Contrasena"
+      "password": "Contrasena",
+      "passwordConfirm": "Confirmar contrasena"
     },
     "actions": {
       "createAccount": "Crear cuenta"
     },
     "messages": {
+      "passwordMissingTitle": "Datos incompletos",
+      "passwordMissingDesc": "Rellena todos los campos de contrasena.",
+      "passwordMismatchTitle": "Contrasena no coincide",
+      "passwordMismatchDesc": "La contrasena y su confirmacion deben ser iguales.",
       "successTitle": "Cuenta creada",
       "successDesc": "Ya puedes iniciar sesion con tus credenciales.",
       "errorTitle": "Error al aceptar invitacion",
@@ -389,11 +410,27 @@
       "subtitle": "Registro de acciones y eventos clave del sistema."
     },
     "description": "Registro de acciones relevantes en la plataforma para este tenant.",
+    "filters": {
+      "tenant": "Tenant",
+      "source": "Fuente",
+      "user": "Usuario",
+      "userPlaceholder": "email@empresa.com",
+      "from": "Desde",
+      "to": "Hasta",
+      "apply": "Aplicar filtros",
+      "clear": "Limpiar",
+      "all": "Todas"
+    },
+    "sources": {
+      "web": "Web",
+      "app": "App"
+    },
     "loading": "Cargando registros de auditoria...",
     "error": "No se han podido cargar los registros de auditoria (comprueba permisos y conexion).",
     "table": {
       "date": "Fecha",
       "user": "Usuario",
+      "source": "Fuente",
       "action": "Accion",
       "details": "Detalles",
       "empty": "Todavia no hay registros de auditoria para mostrar."
@@ -472,18 +509,17 @@
     "header": {
       "eyebrow": "Administracion",
       "title": "Ajustes de tenants",
-      "subtitle": "Configura empresas y credenciales de administracion."
+      "subtitle": "Configura empresas y administradores."
     },
     "permissions": {
       "onlySuperAdmin": "Solo el Super Admin global puede ver y gestionar la lista completa de tenants."
     },
-    "description": "Configuracion general de empresas/tenants dentro de la plataforma. Al crear un tenant, tambien se crea su administrador principal.",
+    "description": "Configuracion general de empresas/tenants dentro de la plataforma. Al crear un tenant, se envia una invitacion al administrador principal.",
     "fields": {
       "name": "Nombre del tenant",
       "subdomain": "Subdominio",
       "active": "Activo",
-      "adminEmail": "Email del admin del tenant",
-      "adminPassword": "Contrasena del admin del tenant"
+      "adminEmail": "Email del admin del tenant"
     },
     "placeholders": {
       "name": "Nombre comercial",
@@ -491,7 +527,7 @@
       "adminEmail": "admin@empresa.com"
     },
     "actions": {
-      "create": "Crear tenant y admin",
+      "create": "Crear tenant e invitar admin",
       "edit": "Editar",
       "save": "Guardar cambios",
       "delete": "Eliminar"
@@ -509,9 +545,9 @@
     },
     "messages": {
       "createSuccessTitle": "Tenant creado",
-      "createSuccessDesc": "El tenant y su administrador se han creado correctamente.",
+      "createSuccessDesc": "El tenant se ha creado y se ha enviado la invitacion al administrador.",
       "createErrorTitle": "Error al crear tenant",
-      "createErrorFallback": "No se ha podido crear el tenant o su administrador (revisa permisos y datos).",
+      "createErrorFallback": "No se ha podido crear el tenant o enviar la invitacion (revisa permisos y datos).",
       "updateSuccessTitle": "Tenant actualizado",
       "updateSuccessDesc": "El tenant se ha actualizado correctamente.",
       "updateErrorTitle": "Error al actualizar tenant",
@@ -726,6 +762,9 @@
       "title": "Gestiona equipos y estructura interna",
       "subtitle": "Controla departamentos, perfiles y costes desde un solo panel."
     },
+    "talent": {
+      "title": "Talento"
+    },
     "tenant": {
       "label": "Tenant",
       "loading": "Cargando tenants...",
@@ -862,6 +901,7 @@
       "tabs": {
         "summary": "Resumen",
         "projects": "Proyectos",
+      "workManagement": "Gesti?n de obra",
         "create": "Crear",
         "gantt": "Gantt"
       },

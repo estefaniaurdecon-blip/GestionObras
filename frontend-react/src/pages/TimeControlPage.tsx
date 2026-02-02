@@ -29,6 +29,7 @@ import {
 import { keyframes } from "@emotion/react";
 import { FaPlay, FaStop } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+import { Link } from "@tanstack/react-router";
 
 import {
   ErpTask,
@@ -48,6 +49,7 @@ import {
 } from "../api/erpSessions";
 import { updateErpTask } from "../api/erpManagement";
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
 // Horas visibles en el calendario (0-23).
@@ -153,6 +155,7 @@ export const TimeControlPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const calendarRef = useRef<HTMLDivElement | null>(null);
+  const pendingDragOriginalRef = useRef<TimeSessionBlock | null>(null);
 
   // Estado de tracking actual y tareas disponibles.
   const [activeSession, setActiveSession] = useState<TimeSession | null>(null);
@@ -192,6 +195,8 @@ export const TimeControlPage: React.FC = () => {
   const [draftEnd, setDraftEnd] = useState<string>("");
   const [draftDescription, setDraftDescription] = useState<string>("");
   const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
+  const [pendingEditOriginal, setPendingEditOriginal] =
+    useState<TimeSessionBlock | null>(null);
   const [selection, setSelection] = useState<{
     dayIndex: number;
     startMinutes: number;
@@ -222,9 +227,12 @@ export const TimeControlPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const effectiveTenantId = currentUser?.is_super_admin
+  const effectiveTenantId = currentUser?.is_super_admin === true
     ? undefined
     : (currentUser?.tenant_id ?? undefined);
+  const canCreateTimeReports =
+    currentUser?.is_super_admin === true ||
+    (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
 
   // Flags y derivados del estado actual.
   const isRunning = Boolean(activeSession && activeSession.is_active);
@@ -384,6 +392,8 @@ export const TimeControlPage: React.FC = () => {
   useEffect(() => {
     if (activeSession?.task_id) {
       setTaskIdInput(String(activeSession.task_id));
+    } else {
+      setTaskIdInput("");
     }
   }, [activeSession]);
 
@@ -500,37 +510,23 @@ export const TimeControlPage: React.FC = () => {
           dragState.startMinutes,
         );
         const endDate = minutesToDate(dragState.dayIndex, dragState.endMinutes);
+        const updatedSession: TimeSessionBlock = {
+          ...(pendingDragOriginalRef.current as TimeSessionBlock),
+          started_at: toLocalIsoString(startDate),
+          ended_at: toLocalIsoString(endDate),
+          duration_seconds: Math.max(
+            0,
+            Math.floor((endDate.getTime() - startDate.getTime()) / 1000),
+          ),
+        };
         setSessions((prev) =>
           prev.map((session) =>
-            session.id === dragState.sessionId
-              ? {
-                  ...session,
-                  started_at: toLocalIsoString(startDate),
-                  ended_at: toLocalIsoString(endDate),
-                  duration_seconds: Math.max(
-                    0,
-                    Math.floor(
-                      (endDate.getTime() - startDate.getTime()) / 1000,
-                    ),
-                  ),
-                }
-              : session,
+            session.id === dragState.sessionId ? updatedSession : session,
           ),
         );
-        try {
-          await updateTimeSession(dragState.sessionId, {
-            started_at: toLocalIsoString(startDate),
-            ended_at: toLocalIsoString(endDate),
-          });
-        } catch (error: any) {
-          toast({
-            title: t("timeControl.messages.sessionUpdateErrorTitle"),
-            description:
-              error?.response?.data?.detail ??
-              t("timeControl.messages.genericErrorFallback"),
-            status: "error",
-          });
-        }
+        setPendingEditOriginal(pendingDragOriginalRef.current);
+        pendingDragOriginalRef.current = null;
+        openEditSession(updatedSession);
       }
 
       setIsDraggingSession(false);
@@ -566,8 +562,8 @@ export const TimeControlPage: React.FC = () => {
 
   // Inicia tracking manual desde el selector de tarea.
   const handleStart = async () => {
-    const taskId = Number(taskIdInput);
-    if (!taskId || Number.isNaN(taskId)) {
+    const taskId = taskIdInput ? Number(taskIdInput) : null;
+    if (taskIdInput && (!taskId || Number.isNaN(taskId))) {
       toast({
         title: t("timeControl.messages.invalidTaskTitle"),
         description: t("timeControl.messages.invalidTaskDesc"),
@@ -578,21 +574,29 @@ export const TimeControlPage: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const session = await startTimeSession(taskId);
-      updateRecentTaskIds(taskId);
-      await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
+      const session = await startTimeSession(taskId, effectiveTenantId);
+      if (taskId) {
+        updateRecentTaskIds(taskId);
+        await updateErpTask(
+          taskId,
+          { status: "in_progress" },
+          effectiveTenantId,
+        );
+      }
       setActiveSession(session);
-      setTaskIdInput(String(taskId));
+      setTaskIdInput(taskId ? String(taskId) : "");
       setWeekStart(startOfWeek(new Date()));
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress" } : task,
-        ),
-      );
+      if (taskId) {
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === taskId ? { ...task, status: "in_progress" } : task,
+          ),
+        );
+      }
       toast({
         title: t("timeControl.messages.trackingStartedTitle"),
         description: t("timeControl.messages.trackingStartedDesc", {
-          taskId,
+          taskId: taskId ?? "-",
         }),
         status: "success",
       });
@@ -621,7 +625,7 @@ export const TimeControlPage: React.FC = () => {
     }
     try {
       setIsLoading(true);
-      const session = await startTimeSession(taskId);
+      const session = await startTimeSession(taskId, effectiveTenantId);
       updateRecentTaskIds(taskId);
       await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
       setActiveSession(session);
@@ -696,8 +700,8 @@ export const TimeControlPage: React.FC = () => {
 
   // Guarda una sesion nueva o edita una existente.
   const handleSaveSession = async () => {
-    const taskId = Number(draftTaskId);
-    if (!taskId || Number.isNaN(taskId)) {
+    const taskId = draftTaskId ? Number(draftTaskId) : null;
+    if (!editingSessionId && (!taskId || Number.isNaN(taskId))) {
       toast({ title: t("timeControl.messages.selectTask"), status: "warning" });
       return;
     }
@@ -709,12 +713,19 @@ export const TimeControlPage: React.FC = () => {
       return;
     }
     try {
-      const payload = {
-        task_id: taskId,
+      const payload: {
+        task_id?: number;
+        description: string | null;
+        started_at: string;
+        ended_at: string;
+      } = {
         description: draftDescription || null,
         started_at: toLocalIsoString(parseDateInput(draftStart)),
         ended_at: toLocalIsoString(parseDateInput(draftEnd)),
       };
+      if (taskId) {
+        payload.task_id = taskId;
+      }
 
       if (editingSessionId) {
         const updated = await updateTimeSession(editingSessionId, payload);
@@ -723,6 +734,7 @@ export const TimeControlPage: React.FC = () => {
             session.id === editingSessionId ? updated : session,
           ),
         );
+        setPendingEditOriginal(null);
         toast({
           title: t("timeControl.messages.sessionUpdated"),
           status: "success",
@@ -752,6 +764,14 @@ export const TimeControlPage: React.FC = () => {
 
   // Limpia estado del modal de sesion.
   const handleCloseModal = () => {
+    if (pendingEditOriginal && editingSessionId) {
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === editingSessionId ? pendingEditOriginal : session,
+        ),
+      );
+      setPendingEditOriginal(null);
+    }
     setEditingSessionId(null);
     setDraftDescription("");
     onClose();
@@ -788,7 +808,7 @@ export const TimeControlPage: React.FC = () => {
       ? new Date(session.ended_at)
       : new Date(start.getTime() + MIN_SESSION_MINUTES * 60000);
     setEditingSessionId(session.id);
-    setDraftTaskId(String(session.task_id));
+    setDraftTaskId(session.task_id ? String(session.task_id) : "");
     setDraftStart(formatDateInput(start));
     setDraftEnd(formatDateInput(end));
     setDraftDescription(session.description ?? "");
@@ -868,29 +888,11 @@ export const TimeControlPage: React.FC = () => {
   // Render principal de la pagina.
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("timeControl.header.eyebrow")}
+          title={t("timeControl.header.title")}
         />
-        <Stack position="relative" spacing={1}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            {t("timeControl.header.eyebrow")}
-          </Text>
-          <Heading size="lg">{t("timeControl.header.title")}</Heading>
-        </Stack>
       </Box>
 
       <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
@@ -916,6 +918,7 @@ export const TimeControlPage: React.FC = () => {
               placeholder={t("timeControl.controls.selectTask")}
               isDisabled={isLoading}
             >
+              <option value="">{t("timeControl.labels.noTask")}</option>
               {tasks.map((task) => (
                 <option key={task.id} value={String(task.id)}>
                   #{task.id} - {task.title}
@@ -1000,6 +1003,11 @@ export const TimeControlPage: React.FC = () => {
         >
           {t("timeControl.views.timesheet")}
         </Button>
+        {canCreateTimeReports && (
+          <Button as={Link} to="/erp/time-report" variant="outline">
+            {t("timeControl.actions.timeReport")}
+          </Button>
+        )}
         <HStack marginLeft="auto" spacing={4} align="center">
           <HStack spacing={2}>
             <Text fontSize="sm" color={subtleText}>
@@ -1286,7 +1294,9 @@ export const TimeControlPage: React.FC = () => {
                 );
               }
 
-              const task = taskById.get(session.task_id);
+              const task = session.task_id
+                ? taskById.get(session.task_id)
+                : undefined;
               return (
                 <Box
                   key={session.id}
@@ -1326,6 +1336,7 @@ export const TimeControlPage: React.FC = () => {
                     if (session.is_active) return;
                     event.preventDefault();
                     event.stopPropagation();
+                    pendingDragOriginalRef.current = session;
                     const minutes = getMinutesFromClientY(event.clientY);
                     const offset = minutes - startMinutes;
                     setIsDraggingSession(true);
@@ -1368,6 +1379,7 @@ export const TimeControlPage: React.FC = () => {
                       onMouseDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        pendingDragOriginalRef.current = session;
                         const minutes = getMinutesFromClientY(event.clientY);
                         const offset = minutes - startMinutes;
                         setIsDraggingSession(true);
@@ -1398,9 +1410,11 @@ export const TimeControlPage: React.FC = () => {
                     >
                       {task
                         ? task.title
-                        : t("timeControl.labels.taskId", {
-                            id: session.task_id,
-                          })}
+                        : session.task_id
+                          ? t("timeControl.labels.taskId", {
+                              id: session.task_id,
+                            })
+                          : t("timeControl.labels.noTask")}
                     </Text>
                   </HStack>
                   <Text fontSize="xs" color={subtleText}>
@@ -1432,6 +1446,7 @@ export const TimeControlPage: React.FC = () => {
                       onMouseDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        pendingDragOriginalRef.current = session;
                         setIsDraggingSession(true);
                         setDragState({
                           mode: "resize",
@@ -1457,7 +1472,9 @@ export const TimeControlPage: React.FC = () => {
           )}
           {!isLoadingSessions &&
             sessions.map((session) => {
-              const task = taskById.get(session.task_id);
+              const task = session.task_id
+                ? taskById.get(session.task_id)
+                : undefined;
               return (
                 <Box
                   key={session.id}
@@ -1473,9 +1490,11 @@ export const TimeControlPage: React.FC = () => {
                       <Text fontWeight="semibold">
                         {task
                           ? task.title
-                          : t("timeControl.labels.taskId", {
-                              id: session.task_id,
-                            })}
+                          : session.task_id
+                            ? t("timeControl.labels.taskId", {
+                                id: session.task_id,
+                              })
+                            : t("timeControl.labels.noTask")}
                       </Text>
                       <Text fontSize="sm" color={subtleText}>
                         {new Date(session.started_at).toLocaleString(
@@ -1494,8 +1513,7 @@ export const TimeControlPage: React.FC = () => {
                       </Badge>
                       <HStack>
                         {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
-                        {isRunning &&
-                        activeSession?.task_id === session.task_id ? (
+                        {isRunning && activeSession?.id === session.id ? (
                           <IconButton
                             aria-label={t("timeControl.actions.stop")}
                             icon={<FaStop />}
@@ -1519,9 +1537,10 @@ export const TimeControlPage: React.FC = () => {
                             isRound
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (!session.task_id) return;
                               handleQuickStart(session.task_id);
                             }}
-                            isDisabled={isRunning}
+                            isDisabled={isRunning || !session.task_id}
                           />
                         )}
                         <Button
@@ -1587,7 +1606,9 @@ export const TimeControlPage: React.FC = () => {
                     </Text>
                   )}
                   {daySessions.map((session) => {
-                    const task = taskById.get(session.task_id);
+                    const task = session.task_id
+                      ? taskById.get(session.task_id)
+                      : undefined;
                     return (
                       <HStack
                         key={session.id}
@@ -1600,9 +1621,11 @@ export const TimeControlPage: React.FC = () => {
                           <Text fontSize="sm">
                             {task
                               ? task.title
-                              : t("timeControl.labels.taskId", {
-                                  id: session.task_id,
-                                })}
+                              : session.task_id
+                                ? t("timeControl.labels.taskId", {
+                                    id: session.task_id,
+                                  })
+                                : t("timeControl.labels.noTask")}
                           </Text>
                           {session.description && (
                             <Text fontSize="xs" color={mutedText}>
@@ -1615,8 +1638,7 @@ export const TimeControlPage: React.FC = () => {
                             {formatSeconds(session.duration_seconds)}
                           </Text>
                           {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
-                          {isRunning &&
-                          activeSession?.task_id === session.task_id ? (
+                          {isRunning && activeSession?.id === session.id ? (
                             <IconButton
                               aria-label={t("timeControl.actions.stop")}
                               icon={<FaStop />}
@@ -1640,9 +1662,10 @@ export const TimeControlPage: React.FC = () => {
                               isRound
                               onClick={(event) => {
                                 event.stopPropagation();
+                                if (!session.task_id) return;
                                 handleQuickStart(session.task_id);
                               }}
-                              isDisabled={isRunning}
+                              isDisabled={isRunning || !session.task_id}
                             />
                           )}
                           <Button
@@ -1694,6 +1717,7 @@ export const TimeControlPage: React.FC = () => {
                   onChange={(e) => setDraftTaskId(e.target.value)}
                   placeholder={t("timeControl.controls.selectTask")}
                 >
+                  <option value="">{t("timeControl.labels.noTask")}</option>
                   {tasks.map((task) => (
                     <option key={task.id} value={String(task.id)}>
                       #{task.id} - {task.title}

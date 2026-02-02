@@ -14,6 +14,8 @@ export function useDebouncedSave<T>(
 
   // Callback opcional para informar del estado del guardado
   onStatus?: (status: SaveStatus) => void,
+  // Callback opcional para exponer el error de guardado
+  onError?: (error: unknown) => void,
 ) {
   // Referencia al timeout actual (no provoca re-render)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,6 +60,7 @@ export function useDebouncedSave<T>(
       } catch (err) {
         // Si falla el guardado
         console.error(err);
+        onError?.(err);
         onStatus?.("error");
       }
     }, delay);

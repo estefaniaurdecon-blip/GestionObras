@@ -29,12 +29,15 @@ router = APIRouter()
     response_model=UserRead,
     summary="Información del usuario autenticado",
 )
-def get_me(current_user: User = Depends(get_current_active_user)) -> UserRead:
+def get_me(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+) -> UserRead:
     """
     Devuelve la información básica del usuario autenticado.
     """
 
-    return svc_get_user_me(current_user)
+    return svc_get_user_me(session=session, current_user=current_user)
 
 
 @router.patch(

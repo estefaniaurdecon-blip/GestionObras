@@ -202,6 +202,7 @@ def create_employee_profile(
         available_hours=data.available_hours,
         availability_percentage=data.availability_percentage,
         position=data.position,
+        titulacion=data.titulacion,
         employment_type=data.employment_type,
         hire_date=data.hire_date,
         end_date=data.end_date,
@@ -250,6 +251,7 @@ def create_employee_profile(
         available_hours=profile.available_hours,
         availability_percentage=profile.availability_percentage,
         position=profile.position,
+        titulacion=profile.titulacion,
         employment_type=profile.employment_type,
         hire_date=profile.hire_date,
         end_date=profile.end_date,
@@ -304,6 +306,7 @@ def list_employee_profiles(
                 available_hours=p.available_hours,
                 availability_percentage=p.availability_percentage,
                 position=p.position,
+                titulacion=p.titulacion,
                 employment_type=p.employment_type,
                 hire_date=p.hire_date,
                 end_date=p.end_date,
@@ -490,6 +493,8 @@ def update_employee_profile(
 
     if data.position is not None:
         profile.position = data.position
+    if data.titulacion is not None:
+        profile.titulacion = data.titulacion
     if data.full_name is not None:
         profile.full_name = data.full_name
     if data.hourly_rate is not None:
@@ -576,6 +581,7 @@ def update_employee_profile(
         available_hours=profile.available_hours,
         availability_percentage=profile.availability_percentage,
         position=profile.position,
+        titulacion=profile.titulacion,
         employment_type=profile.employment_type,
         hire_date=profile.hire_date,
         end_date=profile.end_date,

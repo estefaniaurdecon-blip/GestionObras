@@ -43,6 +43,7 @@ import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import {
   createDepartment,
   createEmployee,
@@ -93,6 +94,7 @@ interface EmployeeFormState {
   email: string;
   hourlyRate: string;
   position: string;
+  titulacion: string;
   availableHours: string;
   availabilityPercentage: string;
   primaryDepartmentId: number | "";
@@ -103,6 +105,7 @@ interface EmployeeEditFormState {
   email: string;
   hourlyRate: string;
   position: string;
+  titulacion: string;
   availableHours: string;
   availabilityPercentage: string;
   primaryDepartmentId: number | "";
@@ -110,12 +113,26 @@ interface EmployeeEditFormState {
 }
 
 // Pantalla de recursos humanos: departamentos y empleados.
-export const HrPage: React.FC = () => {
+interface HrPageProps {
+  section?: "all" | "departments" | "employees" | "talent";
+}
+
+export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
   // Utilidades y estilos base.
   const toast = useToast();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const {
+    isOpen: isCreateOpen,
+    onOpen: onCreateOpen,
+    onClose: onCreateClose,
+  } = useDisclosure();
+  const {
+    isOpen: isDeptOpen,
+    onOpen: onDeptOpen,
+    onClose: onDeptClose,
+  } = useDisclosure();
   const {
     isOpen: isDeleteOpen,
     onOpen: onDeleteOpen,
@@ -133,7 +150,7 @@ export const HrPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const currentTenantId = currentUser?.tenant_id ?? null;
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
@@ -157,6 +174,7 @@ export const HrPage: React.FC = () => {
     email: "",
     hourlyRate: "",
     position: "",
+    titulacion: "",
     availableHours: "",
     availabilityPercentage: "",
     primaryDepartmentId: "",
@@ -169,11 +187,18 @@ export const HrPage: React.FC = () => {
       email: "",
       hourlyRate: "",
       position: "",
+      titulacion: "",
       availableHours: "",
       availabilityPercentage: "",
       primaryDepartmentId: "",
       isActive: true,
     });
+
+  const handleCloseDeptModal = () => {
+    setEditingDepartment(null);
+    setDeptForm({ name: "", description: "" });
+    onDeptClose();
+  };
 
   const {
     data: tenants,
@@ -274,8 +299,7 @@ export const HrPage: React.FC = () => {
     mutationFn: createDepartment,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hr-departments"] });
-      setDeptForm({ name: "", description: "" });
-      setEditingDepartment(null);
+      handleCloseDeptModal();
       toast({
         title: t("hr.messages.departmentCreated"),
         status: "success",
@@ -298,8 +322,7 @@ export const HrPage: React.FC = () => {
     mutationFn: (payload: DepartmentUpdatePayload) => updateDepartment(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hr-departments"] });
-      setDeptForm({ name: "", description: "" });
-      setEditingDepartment(null);
+      handleCloseDeptModal();
       toast({
         title: t("hr.messages.departmentUpdated") || "Departamento actualizado",
         status: "success",
@@ -340,10 +363,13 @@ export const HrPage: React.FC = () => {
         email: "",
         hourlyRate: "",
         position: "",
+        titulacion: "",
         availableHours: "",
         availabilityPercentage: "",
         primaryDepartmentId: "",
+        isActive: true,
       });
+      handleCloseCreate();
       toast({
         title: t("hr.messages.employeeCreated"),
         status: "success",
@@ -488,6 +514,7 @@ export const HrPage: React.FC = () => {
       hourlyRate:
         employee.hourly_rate != null ? String(employee.hourly_rate) : "",
       position: employee.position ?? "",
+      titulacion: employee.titulacion ?? "",
       availableHours:
         employee.available_hours != null ? String(employee.available_hours) : "",
       availabilityPercentage:
@@ -503,6 +530,22 @@ export const HrPage: React.FC = () => {
   const handleCloseEdit = () => {
     setEditingEmployee(null);
     onClose();
+  };
+
+  const handleCloseCreate = () => {
+    setEmployeeForm({
+      userId: "",
+      fullName: "",
+      email: "",
+      hourlyRate: "",
+      position: "",
+      titulacion: "",
+      availableHours: "",
+      availabilityPercentage: "",
+      primaryDepartmentId: "",
+      isActive: true,
+    });
+    onCreateClose();
   };
 
   const handleUpdateEmployee = () => {
@@ -525,6 +568,7 @@ export const HrPage: React.FC = () => {
           ? Number(employeeEditForm.hourlyRate)
           : undefined,
         position: employeeEditForm.position || undefined,
+        titulacion: employeeEditForm.titulacion || undefined,
         available_hours:
           employeeEditForm.availableHours.trim() === ""
             ? null
@@ -597,6 +641,7 @@ export const HrPage: React.FC = () => {
       name: dept.name ?? "",
       description: dept.description ?? "",
     });
+    onDeptOpen();
   };
 
   const handleDeleteDepartment = (dept: Department) => {
@@ -645,6 +690,7 @@ export const HrPage: React.FC = () => {
           ? Number(employeeForm.hourlyRate)
           : undefined,
         position: employeeForm.position || undefined,
+        titulacion: employeeForm.titulacion || undefined,
         employment_type: "permanent",
         available_hours:
           employeeForm.availableHours.trim() === ""
@@ -698,34 +744,19 @@ export const HrPage: React.FC = () => {
   }, [employees, selectedDepartmentFilter, selectedYear]);
 
   // Render principal de la pagina.
+  const showDepartments = section === "all" || section === "departments";
+  const showEmployees = section === "all" || section === "employees" || section === "talent";
+  const employeesHeading =
+    section === "talent" ? t("hr.talent.title") : t("hr.employees.title");
+
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("hr.header.eyebrow")}
+          title={t("hr.header.title")}
+          subtitle={t("hr.header.subtitle")}
         />
-        <VStack position="relative" align="flex-start" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            {t("hr.header.eyebrow")}
-          </Text>
-          <Heading size="lg">{t("hr.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("hr.header.subtitle")}
-          </Text>
-        </VStack>
       </Box>
 
       {isSuperAdmin && (
@@ -766,64 +797,31 @@ export const HrPage: React.FC = () => {
       {effectiveTenantId && (
         <>
           <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={6} mb={8}>
-            <Box
-              gridColumn={{ base: "1 / -1", xl: "1 / span 1" }}
-              borderWidth="1px"
-              borderRadius="xl"
-              p={6}
-              bg={panelBg}
-            >
-              <Heading as="h2" size="md" mb={4}>
-                {t("hr.departments.title")}
-              </Heading>
-
-              <VStack
-                as="form"
-                align="stretch"
-                spacing={3}
-                mb={4}
-                onSubmit={handleSubmitDepartment}
+            {showDepartments && (
+              <Box
+                id="departments"
+                gridColumn={{ base: "1 / -1", xl: "1 / span 1" }}
+                borderWidth="1px"
+                borderRadius="xl"
+                p={6}
+                bg={panelBg}
               >
-                <FormControl isRequired>
-                  <FormLabel>{t("hr.departments.form.name")}</FormLabel>
-                  <Input
-                    name="name"
-                    value={deptForm.name}
-                    onChange={handleDeptChange}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>{t("hr.departments.form.description")}</FormLabel>
-                  <Input
-                    name="description"
-                    value={deptForm.description}
-                    onChange={handleDeptChange}
-                  />
-                </FormControl>
-                <Button
-                  type="submit"
-                  colorScheme="green"
-                  alignSelf="flex-start"
-                  isLoading={createDeptMutation.isPending || updateDeptMutation.isPending}
-                >
-                  {editingDepartment
-                    ? t("hr.departments.form.update") || "Actualizar"
-                    : t("hr.departments.form.create")}
-                </Button>
-                {editingDepartment && (
+                <Flex justify="space-between" align="center" mb={4} gap={3}>
+                  <Heading as="h2" size="md">
+                    {t("hr.departments.title")}
+                  </Heading>
                   <Button
-                    type="button"
-                    variant="ghost"
-                    alignSelf="flex-start"
+                    size="sm"
+                    colorScheme="green"
                     onClick={() => {
                       setEditingDepartment(null);
                       setDeptForm({ name: "", description: "" });
+                      onDeptOpen();
                     }}
                   >
-                    {t("common.cancel")}
+                    {t("hr.departments.form.create")}
                   </Button>
-                )}
-              </VStack>
+                </Flex>
 
               {isLoadingDepartments && <Text>{t("hr.departments.loading")}</Text>}
               {isErrorDepartments && (
@@ -895,126 +893,33 @@ export const HrPage: React.FC = () => {
                   </Table>
                 </Box>
               )}
-            </Box>
+              </Box>
+            )}
 
-            <Box
-              gridColumn={{ base: "1 / -1", xl: "2 / span 2" }}
-              borderWidth="1px"
-              borderRadius="xl"
-              p={6}
-              bg={panelBg}
-            >
-              <Heading as="h2" size="md" mb={4}>
-                {t("hr.employees.title")}
-              </Heading>
-
-              <VStack
-                as="form"
-                align="stretch"
-                spacing={3}
-                mb={6}
-                onSubmit={handleCreateEmployee}
+            {showEmployees && (
+              <Box
+                id={section === "talent" ? "talent" : "employees"}
+                gridColumn={{ base: "1 / -1", xl: showDepartments ? "2 / span 2" : "1 / -1" }}
+                borderWidth="1px"
+                borderRadius="xl"
+                p={4}
+                bg={panelBg}
               >
-                <FormControl>
-                  <FormLabel>{t("hr.employees.form.userOptional")}</FormLabel>
-                  {isLoadingTenantUsers && <Text>{t("hr.employees.form.loadingUsers")}</Text>}
-                  {tenantUsers && (
-                    <Select
-                      name="userId"
-                      value={
-                        employeeForm.userId === "" ? "" : employeeForm.userId
-                      }
-                      onChange={handleEmployeeChange}
-                      placeholder={t("hr.employees.form.userPlaceholder")}
-                    >
-                      {availableTenantUsers.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.email || t("hr.employees.form.noEmail")}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </FormControl>
-                <FormControl isRequired={!employeeForm.userId}>
-                  <FormLabel>{t("hr.employees.form.fullName")}</FormLabel>
-                  <Input
-                    name="fullName"
-                    value={employeeForm.fullName}
-                    onChange={handleEmployeeChange}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>{t("hr.employees.form.position")}</FormLabel>
-                  <Input
-                    name="position"
-                    value={employeeForm.position}
-                    onChange={handleEmployeeChange}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>{t("hr.employees.form.hourlyRate")}</FormLabel>
-                  <Input
-                    name="hourlyRate"
-                    type="number"
-                    value={employeeForm.hourlyRate}
-                    onChange={handleEmployeeChange}
-                    placeholder={t("hr.employees.form.hourlyRatePlaceholder")}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>{t("hr.employees.form.availableHours", "Horas disponibles")}</FormLabel>
-                  <Input
-                    name="availableHours"
-                    type="number"
-                    value={employeeForm.availableHours}
-                    onChange={handleEmployeeChange}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>{t("hr.employees.form.availabilityPercentage", "Disponibilidad %")}</FormLabel>
-                  <Input
-                    name="availabilityPercentage"
-                    type="number"
-                    value={employeeForm.availabilityPercentage}
-                    onChange={handleEmployeeChange}
-                  />
-                </FormControl>
-                <FormControl isRequired>
-                  <FormLabel>{t("hr.employees.form.primaryDepartment")}</FormLabel>
-                  <Select
-                    name="primaryDepartmentId"
-                    value={
-                      employeeForm.primaryDepartmentId === ""
-                        ? ""
-                        : employeeForm.primaryDepartmentId
-                    }
-                    onChange={handleEmployeeChange}
-                    placeholder={t("hr.employees.form.departmentPlaceholder")}
-                  >
-                    {(departments ?? []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
+              <HStack justify="space-between" mb={2} flexWrap="wrap">
+                <Heading as="h2" size="sm">
+                  {employeesHeading}
+                </Heading>
                 <Button
-                  type="submit"
                   colorScheme="green"
-                  alignSelf="flex-start"
-                  isLoading={createEmployeeMutation.isPending}
-                  isDisabled={
-                    !departments ||
-                    departments.length === 0 ||
-                    (isSuperAdmin && !effectiveTenantId)
-                  }
+                  size="xs"
+                  onClick={onCreateOpen}
                 >
                   {t("hr.employees.form.create")}
                 </Button>
-              </VStack>
+              </HStack>
 
-              <Divider my={2} />
-              <Heading as="h3" size="sm" mb={3}>
+              <Divider my={1} />
+              <Heading as="h3" size="xs" mb={2}>
                 {t("hr.employees.table.employee")}
               </Heading>
 
@@ -1024,7 +929,8 @@ export const HrPage: React.FC = () => {
                   {t("hr.employees.error")}
                 </Text>
               )}
-            </Box>
+              </Box>
+            )}
           </SimpleGrid>
 
           {/* Listado de empleados con filtro de departamentos */}
@@ -1099,7 +1005,7 @@ export const HrPage: React.FC = () => {
                         {t("hr.employees.table.empty")}
                       </Text>
                     </Box>
-                  ) : (
+      ) : (
                     filteredEmployees.map((e) => {
                       const fullName =
                         e.full_name ||
@@ -1240,6 +1146,59 @@ export const HrPage: React.FC = () => {
         </>
       )}
 
+      <Modal isOpen={isDeptOpen} onClose={handleCloseDeptModal} isCentered size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {editingDepartment
+              ? t("hr.departments.form.update") || "Actualizar"
+              : t("hr.departments.form.create")}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack
+              as="form"
+              id="department-form"
+              align="stretch"
+              spacing={3}
+              onSubmit={handleSubmitDepartment}
+            >
+              <FormControl isRequired>
+                <FormLabel>{t("hr.departments.form.name")}</FormLabel>
+                <Input
+                  name="name"
+                  value={deptForm.name}
+                  onChange={handleDeptChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.departments.form.description")}</FormLabel>
+                <Input
+                  name="description"
+                  value={deptForm.description}
+                  onChange={handleDeptChange}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={handleCloseDeptModal}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="department-form"
+              colorScheme="green"
+              isLoading={createDeptMutation.isPending || updateDeptMutation.isPending}
+            >
+              {editingDepartment
+                ? t("hr.departments.form.update") || "Actualizar"
+                : t("hr.departments.form.create")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       <Modal isOpen={isOpen} onClose={handleCloseEdit} isCentered size="md">
         <ModalOverlay />
         <ModalContent>
@@ -1353,6 +1312,131 @@ export const HrPage: React.FC = () => {
               isLoading={updateEmployeeMutation.isPending}
             >
               {t("hr.modal.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isCreateOpen} onClose={handleCloseCreate} isCentered size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{t("hr.employees.form.create")}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack
+              as="form"
+              align="stretch"
+              spacing={3}
+              onSubmit={handleCreateEmployee}
+            >
+              <FormControl>
+                <FormLabel>{t("hr.employees.form.userOptional")}</FormLabel>
+                {isLoadingTenantUsers && (
+                  <Text>{t("hr.employees.form.loadingUsers")}</Text>
+                )}
+                {tenantUsers && (
+                  <Select
+                    name="userId"
+                    value={employeeForm.userId === "" ? "" : employeeForm.userId}
+                    onChange={handleEmployeeChange}
+                    placeholder={t("hr.employees.form.userPlaceholder")}
+                  >
+                    {availableTenantUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.email || t("hr.employees.form.noEmail")}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </FormControl>
+              <FormControl isRequired={!employeeForm.userId}>
+                <FormLabel>{t("hr.employees.form.fullName")}</FormLabel>
+                <Input
+                  name="fullName"
+                  value={employeeForm.fullName}
+                  onChange={handleEmployeeChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.employees.form.position")}</FormLabel>
+                <Input
+                  name="position"
+                  value={employeeForm.position}
+                  onChange={handleEmployeeChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.employees.form.hourlyRate")}</FormLabel>
+                <Input
+                  name="hourlyRate"
+                  type="number"
+                  value={employeeForm.hourlyRate}
+                  onChange={handleEmployeeChange}
+                  placeholder={t("hr.employees.form.hourlyRatePlaceholder")}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>
+                  {t("hr.employees.form.availableHours", "Horas disponibles")}
+                </FormLabel>
+                <Input
+                  name="availableHours"
+                  type="number"
+                  value={employeeForm.availableHours}
+                  onChange={handleEmployeeChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>
+                  {t(
+                    "hr.employees.form.availabilityPercentage",
+                    "Disponibilidad %",
+                  )}
+                </FormLabel>
+                <Input
+                  name="availabilityPercentage"
+                  type="number"
+                  value={employeeForm.availabilityPercentage}
+                  onChange={handleEmployeeChange}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t("hr.employees.form.primaryDepartment")}</FormLabel>
+                <Select
+                  name="primaryDepartmentId"
+                  value={
+                    employeeForm.primaryDepartmentId === ""
+                      ? ""
+                      : employeeForm.primaryDepartmentId
+                  }
+                  onChange={handleEmployeeChange}
+                  placeholder={t("hr.employees.form.departmentPlaceholder")}
+                >
+                  {(departments ?? []).map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                type="submit"
+                colorScheme="green"
+                alignSelf="flex-start"
+                isLoading={createEmployeeMutation.isPending}
+                isDisabled={
+                  !departments ||
+                  departments.length === 0 ||
+                  (isSuperAdmin && !effectiveTenantId)
+                }
+              >
+                {t("hr.employees.form.create")}
+              </Button>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={handleCloseCreate}>
+              {t("common.cancel")}
             </Button>
           </ModalFooter>
         </ModalContent>

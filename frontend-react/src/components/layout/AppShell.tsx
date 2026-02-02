@@ -49,18 +49,30 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const queryClient = useQueryClient();
   const pathname = router.state.location.pathname;
   const isErpRoute = useMemo(() => pathname.startsWith("/erp/"), [pathname]);
+  const isHrRoute = useMemo(() => pathname.startsWith("/hr"), [pathname]);
   const [erpAccordionIndex, setErpAccordionIndex] = useState(
     isErpRoute ? 0 : -1
+  );
+  const [hrAccordionIndex, setHrAccordionIndex] = useState(
+    isHrRoute ? 0 : -1
   );
   const isActive = (path: string) => pathname === path;
   const isActivePrefix = (path: string) =>
     pathname === path || pathname.startsWith(`${path}/`);
+  const isActiveHrRoute = (path: string) =>
+    isActivePrefix(path) || pathname === "/hr";
 
   useEffect(() => {
     if (isErpRoute) {
       setErpAccordionIndex(0);
     }
   }, [isErpRoute]);
+
+  useEffect(() => {
+    if (isHrRoute) {
+      setHrAccordionIndex(0);
+    }
+  }, [isHrRoute]);
 
   const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
 
@@ -73,8 +85,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       ? rawAvatarUrl
       : `${apiClient.defaults.baseURL || window.location.origin}${rawAvatarUrl}`
     : undefined;
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
-  const isTenantAdmin = !isSuperAdmin && Boolean(currentUser?.role_id);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
+  const isTenantAdmin =
+    !isSuperAdmin && currentUser?.role_name === "tenant_admin";
   const tenantId = currentUser?.tenant_id ?? null;
 
   const brandingQuery = useQuery({
@@ -199,13 +212,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   <VStack align="stretch" spacing={1}>
                     <Button
                       as={Link}
-                      to="/erp/time-report"
-                      variant={isActive("/erp/time-report") ? "solid" : "ghost"}
-                      justifyContent="flex-start"
-                      size="sm"
-                    >{t("layout.nav.timeReport")}</Button>
-                    <Button
-                      as={Link}
                       to="/erp/time-control"
                       variant={isActive("/erp/time-control") ? "solid" : "ghost"}
                       justifyContent="flex-start"
@@ -259,32 +265,67 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               </AccordionItem>
             </Accordion>
 
+            <Button
+              as={Link}
+              to="/erp/work-management"
+              variant={isActivePrefix("/erp/work-management") ? "solid" : "ghost"}
+              justifyContent="flex-start"
+              size="sm"
+            >{t("layout.nav.workManagement")}</Button>
+
             {(isSuperAdmin || isTenantAdmin) && (
               <>
-                <Button
-                  as={Link}
-                  to="/users"
-                  variant={isActivePrefix("/users") ? "solid" : "ghost"}
-                  justifyContent="flex-start"
-                  size="sm"
-                >{t("layout.nav.users")}</Button>
-                <Button
-                  as={Link}
-                  to="/hr"
-                  variant={isActivePrefix("/hr") ? "solid" : "ghost"}
-                  justifyContent="flex-start"
-                  size="sm"
-                >{t("layout.nav.hr")}</Button>
+                <Accordion
+                  allowToggle
+                  index={hrAccordionIndex}
+                  onChange={(nextIndex) => {
+                    setHrAccordionIndex(
+                      typeof nextIndex === "number" ? nextIndex : nextIndex[0] ?? -1
+                    );
+                  }}
+                  borderWidth="1px"
+                  borderRadius="md"
+                >
+                  <AccordionItem border="none">
+                    <AccordionButton px={3} py={2}>
+                      <Box
+                        flex="1"
+                        textAlign="left"
+                        fontSize="sm"
+                        fontWeight="semibold"
+                      >{t("layout.nav.hr")}</Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel px={2} pb={3}>
+                      <VStack align="stretch" spacing={1}>
+                        <Button
+                          as={Link}
+                          to="/hr/departments"
+                          variant={isActiveHrRoute("/hr/departments") ? "solid" : "ghost"}
+                          justifyContent="flex-start"
+                          size="sm"
+                        >{t("layout.nav.hrDepartments")}</Button>
+                        <Button
+                          as={Link}
+                          to="/hr/employees"
+                          variant={isActiveHrRoute("/hr/employees") ? "solid" : "ghost"}
+                          justifyContent="flex-start"
+                          size="sm"
+                        >{t("layout.nav.hrEmployees")}</Button>
+                        <Button
+                          as={Link}
+                          to="/hr/talent"
+                          variant={isActiveHrRoute("/hr/talent") ? "solid" : "ghost"}
+                          justifyContent="flex-start"
+                          size="sm"
+                        >{t("layout.nav.hrTalent")}</Button>
+                      </VStack>
+                    </AccordionPanel>
+                  </AccordionItem>
+                </Accordion>
               </>
             )}
 
-            <Button
-              as={Link}
-              to="/tools"
-              variant={isActivePrefix("/tools") ? "solid" : "ghost"}
-              justifyContent="flex-start"
-              size="sm"
-            >{t("layout.nav.tools")}</Button>
           </VStack>
 
           <Divider />
@@ -299,6 +340,20 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               >
                 {t("layout.sections.administration")}
               </Text>
+              <Button
+                as={Link}
+                to="/users"
+                variant={isActivePrefix("/users") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >{t("layout.nav.users")}</Button>
+              <Button
+                as={Link}
+                to="/tools"
+                variant={isActivePrefix("/tools") ? "solid" : "ghost"}
+                justifyContent="flex-start"
+                size="sm"
+              >{t("layout.nav.tools")}</Button>
               {isSuperAdmin && (
                 <Button
                   as={Link}

@@ -2,7 +2,7 @@ import { apiClient } from "./client";
 
 export interface TimeSession {
   id: number;
-  task_id: number;
+  task_id: number | null;
   user_id: number;
   started_at: string;
   ended_at: string | null;
@@ -67,12 +67,13 @@ export async function getActiveTimeSession(
 }
 
 export async function startTimeSession(
-  taskId: number,
+  taskId?: number | null,
   tenantId?: number,
 ): Promise<TimeSession> {
-  const payload: { task_id: number; tenant_id?: number } = {
-    task_id: taskId,
-  };
+  const payload: { task_id?: number; tenant_id?: number } = {};
+  if (taskId !== undefined && taskId !== null) {
+    payload.task_id = taskId;
+  }
   if (tenantId !== undefined) {
     payload.tenant_id = tenantId;
   }

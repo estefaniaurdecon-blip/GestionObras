@@ -1,5 +1,6 @@
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   Badge,
@@ -106,8 +107,23 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
   deleteProjectPending,
   onUpdateProject,
   updateProjectPending,
-}) => (
-  <Modal
+}) => {
+  const { i18n } = useTranslation();
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString(i18n.language, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <Modal
     isOpen={isOpen}
     onClose={onClose}
     size="6xl"
@@ -519,8 +535,8 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
                     </Flex>
 
                     <Text fontSize="xs" color={subtleText}>
-                      {task.start_date || "Sin inicio"} OCo{" "}
-                      {task.end_date || "Sin fin"}
+                      {formatDateTime(task.start_date) || "Sin inicio"} OCo{" "}
+                      {formatDateTime(task.end_date) || "Sin fin"}
                     </Text>
 
                     {task.description && (
@@ -567,4 +583,5 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
       </ModalFooter>
     </ModalContent>
   </Modal>
-);
+  );
+};

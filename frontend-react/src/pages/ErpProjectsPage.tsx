@@ -99,7 +99,7 @@ export const ErpProjectsPage: React.FC = () => {
   // Formulario de creacion de proyectos.
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const tenantId = currentUser?.tenant_id ?? null;
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId ?? undefined;
   const tenantReady = Boolean(currentUser && (isSuperAdmin || tenantId));
@@ -274,6 +274,7 @@ export const ErpProjectsPage: React.FC = () => {
     addDrawerSearch,
     setAddDrawerSearch,
     saveStatusLabel,
+    saveErrorMessage,
     loadingSummaryYear,
     departmentColorMap,
     departmentMap,
@@ -681,6 +682,7 @@ export const ErpProjectsPage: React.FC = () => {
               subtleText={subtleText}
               loadingSummaryYear={loadingSummaryYear}
               saveStatusLabel={saveStatusLabel}
+              saveErrorMessage={saveErrorMessage}
               summarySearch={summarySearch}
               onSummarySearchChange={setSummarySearch}
               departmentFilter={departmentFilter}

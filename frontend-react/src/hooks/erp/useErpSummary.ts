@@ -100,7 +100,8 @@ export const useErpSummary = ({
   );
   const allocationDraftsRef = useRef<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const skipAutoSaveRef = useRef(true);
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | undefined>();
+  const hydratingRef = useRef(false);
   const queryClient = useQueryClient();
 
   const { data: storedYearData, isFetching: loadingSummaryYear } = useQuery<
@@ -161,7 +162,23 @@ export const useErpSummary = ({
   const saveSummaryDebounced = useDebouncedSave<{
     year: number;
     payload: SummaryYearlyData;
-  }>((value) => saveSummaryMutation.mutateAsync(value), 700, setSaveStatus);
+  }>(
+    (value) => saveSummaryMutation.mutateAsync(value),
+    700,
+    (status) => {
+      setSaveStatus(status);
+      if (status !== "error") {
+        setSaveErrorMessage(undefined);
+      }
+    },
+    (err) => {
+      const message =
+        axios.isAxiosError(err) && err.response?.data?.detail
+          ? String(err.response.data.detail)
+          : "No se pudo guardar. Revisa permisos o conexión.";
+      setSaveErrorMessage(message);
+    },
+  );
 
   const saveStatusLabel = {
     idle: "",
@@ -171,7 +188,7 @@ export const useErpSummary = ({
   }[saveStatus];
 
   useEffect(() => {
-    skipAutoSaveRef.current = true;
+    hydratingRef.current = true;
     if (storedYearData) {
       setProjectJustify(storedYearData.projectJustify ?? {});
       setProjectJustified(storedYearData.projectJustified ?? {});
@@ -181,13 +198,14 @@ export const useErpSummary = ({
       setProjectJustified({});
       setSummaryMilestones({});
     }
+    const timer = setTimeout(() => {
+      hydratingRef.current = false;
+    }, 0);
+    return () => clearTimeout(timer);
   }, [storedYearData]);
 
   useEffect(() => {
-    if (skipAutoSaveRef.current) {
-      skipAutoSaveRef.current = false;
-      return;
-    }
+    if (hydratingRef.current) return;
 
     saveSummaryDebounced({
       year: summaryYear,
@@ -620,6 +638,7 @@ export const useErpSummary = ({
     allocationEdits,
     setAllocationEdits,
     saveStatusLabel,
+    saveErrorMessage,
     loadingSummaryYear,
     milestoneTotals,
     departmentAllocationPercentMap,

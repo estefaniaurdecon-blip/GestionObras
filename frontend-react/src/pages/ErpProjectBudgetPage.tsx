@@ -14,6 +14,7 @@ import { AppShell } from "../components/layout/AppShell";
 import { BudgetModal, BudgetSection } from "../components/erp";
 import { fetchErpProject, type ErpProject } from "../api/erpReports";
 import { fetchMilestones, type ErpMilestone } from "../api/erpStructure";
+import type { ProjectBudgetMilestone } from "../api/erpBudgets";
 import { useBudgetEditor } from "../hooks/erp";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
@@ -26,7 +27,7 @@ export const ErpProjectBudgetPage: React.FC = () => {
   const isValidProject = Number.isFinite(numericProjectId);
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const tenantId = currentUser?.tenant_id ?? null;
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId ?? undefined;
 
@@ -46,13 +47,32 @@ export const ErpProjectBudgetPage: React.FC = () => {
     enabled: isValidProject,
   });
 
-  const projectMilestones = milestonesQuery.data ?? [];
-
   const budgetEditor = useBudgetEditor({
     projectId: isValidProject ? numericProjectId : null,
     projectMilestones,
     tenantId: effectiveTenantId,
   });
+  const projectMilestones = milestonesQuery.data ?? [];
+  const budgetMilestonesForView: ProjectBudgetMilestone[] = useMemo(() => {
+    if (budgetEditor.budgetMilestones.length > 0) {
+      return budgetEditor.budgetMilestones;
+    }
+    if (!isValidProject || projectMilestones.length === 0) {
+      return [];
+    }
+    return projectMilestones.map((milestone, idx) => ({
+      id: -(idx + 1),
+      project_id: numericProjectId,
+      name: milestone.title || `Hito ${idx + 1}`,
+      order_index: idx + 1,
+      created_at: new Date().toISOString(),
+    }));
+  }, [
+    budgetEditor.budgetMilestones,
+    isValidProject,
+    numericProjectId,
+    projectMilestones,
+  ]);
 
   const selectedProject: ErpProject | null = useMemo(() => {
     if (!projectQuery.data) return null;
@@ -83,8 +103,10 @@ export const ErpProjectBudgetPage: React.FC = () => {
           budgetProjectFilter={String(numericProjectId)}
           onBudgetProjectChange={() => undefined}
           selectedBudgetProjectId={numericProjectId}
-          budgetMilestonesCount={budgetEditor.budgetMilestonesCount}
+          budgetMilestonesCount={budgetMilestonesForView.length}
+          budgetMilestones={budgetMilestonesForView}
           onAddBudgetMilestone={budgetEditor.addBudgetMilestone}
+          onRemoveBudgetMilestone={budgetEditor.removeBudgetMilestone}
           budgetsEditMode={budgetEditor.budgetsEditMode}
           onToggleEditMode={() =>
             budgetEditor.setBudgetsEditMode((prev) => !prev)
@@ -124,6 +146,7 @@ export const ErpProjectBudgetPage: React.FC = () => {
             budgetEditor.handleAddExternalCollaborationRow
           }
           onBudgetCellSave={budgetEditor.handleBudgetCellSave}
+          onBudgetMilestoneChange={budgetEditor.handleBudgetMilestoneChange}
           onOpenBudgetModal={budgetEditor.openBudgetModal}
           onRemoveExternalCollaborationRow={
             budgetEditor.handleRemoveExternalCollaborationRow
@@ -131,8 +154,6 @@ export const ErpProjectBudgetPage: React.FC = () => {
           budgetParentMap={budgetEditor.budgetParentMap}
           budgetParentTotals={budgetEditor.budgetParentTotals}
           budgetsTabTotals={budgetEditor.budgetsTabTotals}
-          budgetsDiffH1={budgetEditor.budgetsDiffH1}
-          budgetsDiffH2={budgetEditor.budgetsDiffH2}
           subtleText={subtleText}
           externalCollabSelectPlaceholder="Selecciona colaborador"
         />

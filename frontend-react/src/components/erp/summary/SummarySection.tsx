@@ -50,6 +50,7 @@ interface SummarySectionProps {
   subtleText: string;
   loadingSummaryYear: boolean;
   saveStatusLabel?: string;
+  saveErrorMessage?: string;
   summarySearch: string;
   onSummarySearchChange: (value: string) => void;
   departmentFilter: "all" | number;
@@ -112,6 +113,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
   subtleText,
   loadingSummaryYear,
   saveStatusLabel,
+  saveErrorMessage,
   summarySearch,
   onSummarySearchChange,
   departmentFilter,
@@ -184,6 +186,11 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
         {saveStatusLabel && !loadingSummaryYear && (
           <Text fontSize="xs" color="gray.500" mt={1}>
             {saveStatusLabel}
+          </Text>
+        )}
+        {saveErrorMessage && !loadingSummaryYear && (
+          <Text fontSize="xs" color="red.500" mt={1}>
+            {saveErrorMessage}
           </Text>
         )}
       </Box>
@@ -297,6 +304,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
               <Th minW="60px">No</Th>
               <Th minW="170px">Nombre</Th>
               <Th minW="190px">Apellidos</Th>
+              <Th minW="150px">Titulacion</Th>
               <Th minW="130px">Departamento</Th>
               {projectColumns.map((p) => {
                 const count = (summaryMilestones[p.id] ?? []).length || 1;
@@ -348,7 +356,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="gray.50" borderBottomWidth="1px">
-              <Th bg="gray.50" colSpan={4} textAlign="left">
+              <Th bg="gray.50" colSpan={5} textAlign="left">
                 Horas a justificar
               </Th>
               {projectColumns.map((p) => {
@@ -388,7 +396,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="green.50" borderBottomWidth="1px">
-              <Th bg="gray.50" colSpan={4} textAlign="left">
+              <Th bg="gray.50" colSpan={5} textAlign="left">
                 Justificadas
               </Th>
               {projectColumns.map((p) => {
@@ -420,7 +428,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="orange.50" borderBottomWidth="1px">
-              <Th bg="orange.50" colSpan={4} textAlign="left">
+              <Th bg="orange.50" colSpan={5} textAlign="left">
                 Faltan
               </Th>
               {projectColumns.map((p) => {
@@ -443,7 +451,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="blue.100" borderBottomWidth="2px" borderColor="blue.200">
-              <Th bg="blue.100" colSpan={4} textAlign="left" color="blue.700">
+              <Th bg="blue.100" colSpan={5} textAlign="left" color="blue.700">
                 % Ejecutado en {summaryYear}
               </Th>
               {projectColumns.map((p) => {
@@ -466,7 +474,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="green.50" borderBottomWidth="2px" borderColor="green.200">
-              <Th bg="green.50" colSpan={4} textAlign="left" color="green.700">
+              <Th bg="green.50" colSpan={5} textAlign="left" color="green.700">
                 Hitos (H1/H2/H3/H4)
               </Th>
               {projectColumns.map((p) => {
@@ -514,7 +522,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             {filteredSummaryEmployees.length === 0 ? (
               <Tr>
                 <Td
-                  colSpan={projectColumns.length + 9}
+                  colSpan={projectColumns.length + 10}
                   textAlign="center"
                   color={subtleText}
                   py={6}
@@ -546,6 +554,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     <Td bg={bgColor}>
                       {emp.full_name?.split(" ").slice(1).join(" ") || "-"}
                     </Td>
+                    <Td bg={bgColor}>{emp.position || "-"}</Td>
                     <Td bg={bgColor} minW="180px" px={2}>
                       <Flex align="center" gap={2}>
                         <Box

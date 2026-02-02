@@ -21,6 +21,7 @@ export interface EmployeeProfile {
   available_hours?: number | null;
   availability_percentage?: number | null;
   position?: string | null;
+  titulacion?: string | null;
   employment_type: string;
   hire_date?: string | null;
   end_date?: string | null;
@@ -67,6 +68,7 @@ export interface EmployeeCreateInput {
   available_hours?: number | null;
   availability_percentage?: number | null;
   position?: string;
+  titulacion?: string;
   employment_type?: string;
   primary_department_id?: number | null;
   is_active?: boolean;
@@ -84,6 +86,7 @@ export interface EmployeeUpdateInput {
   available_hours?: number | null;
   availability_percentage?: number | null;
   position?: string;
+  titulacion?: string;
   employment_type?: string;
   primary_department_id?: number | null;
   is_active?: boolean;

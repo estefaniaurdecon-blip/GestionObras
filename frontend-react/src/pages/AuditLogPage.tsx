@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
+  Button,
+  FormControl,
+  FormLabel,
   Heading,
+  HStack,
+  Input,
+  Select,
   Spinner,
+  Stack,
   Table,
   Tbody,
   Td,
@@ -14,14 +21,25 @@ import {
 } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { apiClient } from "../api/client";
+import { fetchAllTenants } from "../api/users";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+
+interface TenantOption {
+  id: number;
+  name: string;
+  subdomain: string;
+}
 
 interface AuditLogItem {
   id: number;
   created_at: string;
   user_email: string | null;
+  source: string | null;
   action: string;
   details: string | null;
 }
@@ -43,11 +61,43 @@ export const AuditLogPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
 
+  const { data: currentUser } = useCurrentUser();
+  const isSuperAdmin = currentUser?.is_super_admin === true;
+  const currentTenantId = currentUser?.tenant_id ?? null;
+
+  const [filters, setFilters] = useState({
+    tenantId: null as number | null,
+    source: "all" as "all" | "web" | "app",
+    userEmail: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+
+  const { data: tenants, isLoading: isLoadingTenants } = useQuery<TenantOption[]>({
+    queryKey: ["audit-tenants"],
+    queryFn: fetchAllTenants,
+    enabled: isSuperAdmin,
+  });
+
   const [items, setItems] = useState<AuditLogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
 
+  useEffect(() => {
+    if (isSuperAdmin) {
+      if (tenants && tenants.length > 0 && !filters.tenantId) {
+        setFilters((prev) => ({ ...prev, tenantId: tenants[0].id }));
+      }
+      return;
+    }
+    if (currentTenantId && filters.tenantId !== currentTenantId) {
+      setFilters((prev) => ({ ...prev, tenantId: currentTenantId }));
+    }
+  }, [currentTenantId, filters.tenantId, isSuperAdmin, tenants]);
+
   // Carga el log de auditoria al montar la pagina.
+
   useEffect(() => {
     let cancelled = false;
 
@@ -55,8 +105,24 @@ export const AuditLogPage: React.FC = () => {
       try {
         setIsLoading(true);
         setIsError(false);
+        const params: Record<string, string | number> = { limit: 200 };
+        if (isSuperAdmin && appliedFilters.tenantId) {
+          params.tenant_id = appliedFilters.tenantId;
+        }
+        if (appliedFilters.source !== "all") {
+          params.source = appliedFilters.source;
+        }
+        if (appliedFilters.userEmail.trim()) {
+          params.user_email = appliedFilters.userEmail.trim();
+        }
+        if (appliedFilters.dateFrom) {
+          params.start_date = `${appliedFilters.dateFrom}T00:00:00`;
+        }
+        if (appliedFilters.dateTo) {
+          params.end_date = `${appliedFilters.dateTo}T23:59:59`;
+        }
         const response = await apiClient.get<AuditLogItem[]>("/api/v1/audit/", {
-          params: { limit: 100 },
+          params,
         });
         if (!cancelled) {
           setItems(response.data);
@@ -77,39 +143,120 @@ export const AuditLogPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [appliedFilters, isSuperAdmin]);
 
   // Render principal de la pagina.
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("audit.header.eyebrow")}
+          title={t("audit.header.title")}
+          subtitle={t("audit.header.subtitle")}
         />
-        <Box position="relative">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("audit.header.eyebrow")}</Text>
-          <Heading size="lg">{t("audit.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("audit.header.subtitle")}
-          </Text>
-        </Box>
       </Box>
       <Text mb={6}>
         {t("audit.description")}
       </Text>
+      <Box borderWidth="1px" borderRadius="xl" p={4} bg={cardBg} mb={6}>
+        <Stack spacing={4}>
+          <HStack spacing={4} align="flex-end" flexWrap="wrap">
+            {isSuperAdmin && (
+              <FormControl maxW="260px">
+                <FormLabel>{t("audit.filters.tenant")}</FormLabel>
+                <Select
+                  value={filters.tenantId ?? ""}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      tenantId: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  isDisabled={isLoadingTenants}
+                >
+                  {(tenants ?? []).map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name} ({tenant.subdomain})
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            <FormControl maxW="200px">
+              <FormLabel>{t("audit.filters.source")}</FormLabel>
+              <Select
+                value={filters.source}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    source: e.target.value as typeof prev.source,
+                  }))
+                }
+              >
+                <option value="all">{t("audit.filters.all")}</option>
+                <option value="web">{t("audit.sources.web")}</option>
+                <option value="app">{t("audit.sources.app")}</option>
+              </Select>
+            </FormControl>
+            <FormControl maxW="260px">
+              <FormLabel>{t("audit.filters.user")}</FormLabel>
+              <Input
+                value={filters.userEmail}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, userEmail: e.target.value }))
+                }
+                placeholder={t("audit.filters.userPlaceholder")}
+              />
+            </FormControl>
+            <FormControl maxW="200px">
+              <FormLabel>{t("audit.filters.from")}</FormLabel>
+              <Input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))
+                }
+              />
+            </FormControl>
+            <FormControl maxW="200px">
+              <FormLabel>{t("audit.filters.to")}</FormLabel>
+              <Input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateTo: e.target.value }))
+                }
+              />
+            </FormControl>
+          </HStack>
+          <HStack spacing={3}>
+            <Button
+              colorScheme="green"
+              size="sm"
+              onClick={() => setAppliedFilters(filters)}
+            >
+              {t("audit.filters.apply")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const reset = {
+                  tenantId: isSuperAdmin ? (tenants?.[0]?.id ?? null) : currentTenantId,
+                  source: "all" as const,
+                  userEmail: "",
+                  dateFrom: "",
+                  dateTo: "",
+                };
+                setFilters(reset);
+                setAppliedFilters(reset);
+              }}
+            >
+              {t("audit.filters.clear")}
+            </Button>
+          </HStack>
+        </Stack>
+      </Box>
 
       {isLoading && (
         <Box mb={4}>
@@ -123,7 +270,6 @@ export const AuditLogPage: React.FC = () => {
       {isError && (
         <Text mb={4} fontSize="sm" color="red.500">
           {t("audit.error")}
-          conexión).
         </Text>
       )}
 
@@ -133,6 +279,7 @@ export const AuditLogPage: React.FC = () => {
             <Tr>
               <Th>{t("audit.table.date")}</Th>
               <Th>{t("audit.table.user")}</Th>
+              <Th>{t("audit.table.source")}</Th>
               <Th>{t("audit.table.action")}</Th>
               <Th>{t("audit.table.details")}</Th>
             </Tr>
@@ -151,6 +298,7 @@ export const AuditLogPage: React.FC = () => {
                 <Tr key={item.id}>
                   <Td>{new Date(item.created_at).toLocaleString()}</Td>
                   <Td>{item.user_email ?? "-"}</Td>
+                  <Td>{item.source ? t(`audit.sources.${item.source}`, { defaultValue: item.source }) : "-"}</Td>
                   <Td>{t(`audit_actions.${item.action}`, { defaultValue: item.action })}</Td>
                   <Td>{t(`audit_details.${item.action}`, { defaultValue: item.details ?? "-" })}</Td>
                 </Tr>

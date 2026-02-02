@@ -52,6 +52,10 @@ export const ExternalCollaborationsForm: React.FC<
         <FormControl>
           <FormLabel>{t("externalCollaborations.form.type")}</FormLabel>
           <Select
+            size="sm"
+            h="9"
+            bg="white"
+            borderRadius="lg"
             value={values.collaboration_type}
             onChange={(e) =>
               onFieldChange("collaboration_type", e.target.value)
@@ -67,6 +71,10 @@ export const ExternalCollaborationsForm: React.FC<
         <FormControl>
           <FormLabel>{t("externalCollaborations.form.name")}</FormLabel>
           <Input
+            size="sm"
+            h="9"
+            bg="white"
+            borderRadius="lg"
             value={values.name}
             onChange={(e) => onFieldChange("name", e.target.value)}
             placeholder={t("externalCollaborations.form.namePlaceholder")}
@@ -75,6 +83,10 @@ export const ExternalCollaborationsForm: React.FC<
         <FormControl>
           <FormLabel>{t("externalCollaborations.form.legalName")}</FormLabel>
           <Input
+            size="sm"
+            h="9"
+            bg="white"
+            borderRadius="lg"
             value={values.legal_name}
             onChange={(e) => onFieldChange("legal_name", e.target.value)}
             placeholder={t("externalCollaborations.form.legalPlaceholder")}
@@ -83,6 +95,10 @@ export const ExternalCollaborationsForm: React.FC<
         <FormControl>
           <FormLabel>{t("externalCollaborations.form.cif")}</FormLabel>
           <Input
+            size="sm"
+            h="9"
+            bg="white"
+            borderRadius="lg"
             value={values.cif}
             onChange={(e) => onFieldChange("cif", e.target.value)}
             placeholder={t("externalCollaborations.form.cifPlaceholder")}
@@ -92,6 +108,10 @@ export const ExternalCollaborationsForm: React.FC<
           <FormLabel>{t("externalCollaborations.form.contactEmail")}</FormLabel>
           <Input
             type="email"
+            size="sm"
+            h="9"
+            bg="white"
+            borderRadius="lg"
             value={values.contact_email}
             onChange={(e) => onFieldChange("contact_email", e.target.value)}
             placeholder={t("externalCollaborations.form.contactPlaceholder")}

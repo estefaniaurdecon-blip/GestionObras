@@ -34,7 +34,7 @@ export const TimeTrackingWidget: React.FC = () => {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentUser();
-  const effectiveTenantId = currentUser?.is_super_admin
+  const effectiveTenantId = currentUser?.is_super_admin === true
     ? undefined
     : (currentUser?.tenant_id ?? undefined);
 

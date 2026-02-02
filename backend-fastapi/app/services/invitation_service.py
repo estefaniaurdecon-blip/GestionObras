@@ -131,6 +131,7 @@ def validate_invitation(
     Devuelve información reducida sobre una invitación.
     """
 
+
     invitation = session.exec(
         select(UserInvitation).where(UserInvitation.token == token),
     ).one_or_none()
@@ -172,6 +173,7 @@ def accept_invitation(
     Acepta una invitación creando el usuario asociado.
     """
 
+
     invitation = session.exec(
         select(UserInvitation).where(UserInvitation.token == data.token),
     ).one_or_none()
@@ -183,6 +185,9 @@ def accept_invitation(
         raise ValueError("La invitación ya ha sido utilizada.")
     if invitation.expires_at < now:
         raise ValueError("La invitación ha caducado.")
+
+    if data.password != data.password_confirm:
+        raise ValueError("La contrasena y su confirmacion deben ser iguales.")
 
     tenant = session.get(Tenant, invitation.tenant_id)
     if not tenant:

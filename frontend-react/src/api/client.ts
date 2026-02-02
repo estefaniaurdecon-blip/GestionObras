@@ -56,6 +56,12 @@ apiClient.interceptors.request.use((config) => {
     config.headers = {
       ...config.headers,
       "X-Tenant-Id": tenantId,
+      "X-Source": "web",
+    };
+  } else {
+    config.headers = {
+      ...config.headers,
+      "X-Source": "web",
     };
   }
   return config;

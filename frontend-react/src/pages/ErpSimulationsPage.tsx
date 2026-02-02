@@ -31,7 +31,7 @@ export const ErpSimulationsPage: React.FC = () => {
     to { opacity: 1; transform: translateY(0); }
   `;
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const tenantId = currentUser?.tenant_id ?? null;
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
 

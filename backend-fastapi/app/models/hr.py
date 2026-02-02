@@ -51,6 +51,7 @@ class EmployeeProfile(SQLModel, table=True):
     )
 
     position: Optional[str] = None
+    titulacion: Optional[str] = None
     employment_type: str = Field(
         default="permanent",
         description="Tipo de contrato: permanent, temporary, contractor, etc.",

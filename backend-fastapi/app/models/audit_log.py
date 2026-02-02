@@ -19,6 +19,9 @@ class AuditLog(SQLModel, table=True):
     # Tenant en el que se ha producido la acción (si aplica)
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
 
+    # Fuente del evento (web o app)
+    source: Optional[str] = Field(default="app")
+
     action: str = Field(description="Descripción corta de la acción")
     details: str | None = Field(
         default=None,

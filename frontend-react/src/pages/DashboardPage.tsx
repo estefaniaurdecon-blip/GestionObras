@@ -38,6 +38,7 @@ import {
   type TimeReportRow,
 } from "../api/erpReports";
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { ToolGrid } from "../components/tools/ToolGrid";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
@@ -67,7 +68,10 @@ export const DashboardPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
   const tenantId = currentUser?.tenant_id ?? undefined;
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
+  const canCreateTimeReports =
+    isSuperAdmin ||
+    (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
@@ -165,32 +169,12 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("dashboard.header.eyebrow")}
+          title={t("dashboard.header.title")}
+          subtitle={t("dashboard.header.subtitle")}
         />
-        <Stack position="relative" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            {t("dashboard.header.eyebrow")}
-          </Text>
-          <Heading size="lg">{t("dashboard.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("dashboard.header.subtitle")}
-          </Text>
-        </Stack>
       </Box>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={5} mb={8}>
@@ -312,15 +296,17 @@ export const DashboardPage: React.FC = () => {
             >
               {t("dashboard.actions.manageUsers")}
             </Button>
-            <Button
-              as={Link}
-              to="/time-report"
-              size="sm"
-              colorScheme="green"
-              variant="outline"
-            >
-              {t("dashboard.actions.viewTimeReport")}
-            </Button>
+            {canCreateTimeReports && (
+              <Button
+                as={Link}
+                to="/time-report"
+                size="sm"
+                colorScheme="green"
+                variant="outline"
+              >
+                {t("dashboard.actions.viewTimeReport")}
+              </Button>
+            )}
             <Button
               as={Link}
               to="/support"

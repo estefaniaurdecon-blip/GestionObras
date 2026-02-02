@@ -1,10 +1,12 @@
 ﻿from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
+from app.core.audit import set_audit_source, reset_audit_source
 from app.db.session import init_db
 from app.api.v1.router import api_router as api_v1_router
 
@@ -41,6 +43,18 @@ def create_app() -> FastAPI:
     allow_origins = cors_origins or list(localhost_defaults)
     allow_origin_regex = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
 
+    class AuditSourceMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            source = request.headers.get("X-Source") or "web"
+            token = set_audit_source(source)
+            try:
+                response = await call_next(request)
+            finally:
+                reset_audit_source(token)
+            return response
+
+    # Primero el middleware de auditoria, luego CORS como capa exterior.
+    app.add_middleware(AuditSourceMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,

@@ -31,7 +31,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { apiClient } from "../api/client";
+import { createUserInvitation } from "../api/users";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
 interface Tenant {
@@ -52,7 +54,6 @@ interface NewTenantFormState {
   subdomain: string;
   is_active: boolean;
   admin_email: string;
-  admin_password: string;
 }
 
 interface EditTenantFormState {
@@ -82,7 +83,7 @@ export const TenantSettingsPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
 
@@ -92,7 +93,6 @@ export const TenantSettingsPage: React.FC = () => {
     subdomain: "",
     is_active: true,
     admin_email: "",
-    admin_password: "",
   });
   const [editForm, setEditForm] = useState<EditTenantFormState>({
     id: null,
@@ -118,22 +118,12 @@ export const TenantSettingsPage: React.FC = () => {
       });
       const tenant = tenantResponse.data;
 
-      await apiClient.post(
-        "/api/v1/users/",
-        {
-          email: payload.admin_email,
-          full_name: `Admin ${tenant.name}`,
-          password: payload.admin_password,
-          tenant_id: tenant.id,
-          is_super_admin: false,
-          role_name: "tenant_admin",
-        },
-        {
-          headers: {
-            "X-Tenant-Id": tenant.id.toString(),
-          },
-        },
-      );
+      await createUserInvitation({
+        email: payload.admin_email,
+        full_name: `Admin ${tenant.name}`,
+        tenant_id: tenant.id,
+        role_name: "tenant_admin",
+      });
 
       return tenant;
     },
@@ -149,7 +139,6 @@ export const TenantSettingsPage: React.FC = () => {
         subdomain: "",
         is_active: true,
         admin_email: "",
-        admin_password: "",
       });
     },
     onError: (error: any) => {
@@ -267,30 +256,12 @@ export const TenantSettingsPage: React.FC = () => {
   // Render principal de la pagina.
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("tenantSettings.header.eyebrow")}
+          title={t("tenantSettings.header.title")}
+          subtitle={t("tenantSettings.header.subtitle")}
         />
-        <Stack position="relative" spacing={2} maxW="640px">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("tenantSettings.header.eyebrow")}</Text>
-          <Heading size="lg">{t("tenantSettings.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("tenantSettings.header.subtitle")}
-          </Text>
-        </Stack>
       </Box>
       {!isSuperAdmin && (
         <Text mb={6}>
@@ -409,15 +380,6 @@ export const TenantSettingsPage: React.FC = () => {
                       value={form.admin_email}
                       onChange={handleChange}
                       placeholder={t("tenantSettings.placeholders.adminEmail")}
-                    />
-                  </FormControl>
-                  <FormControl isRequired>
-                    <FormLabel>{t("tenantSettings.fields.adminPassword")}</FormLabel>
-                    <Input
-                      name="admin_password"
-                      type="password"
-                      value={form.admin_password}
-                      onChange={handleChange}
                     />
                   </FormControl>
                 </Stack>

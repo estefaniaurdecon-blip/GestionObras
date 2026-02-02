@@ -35,7 +35,7 @@ export const ErpProjectDocumentsPage: React.FC = () => {
   const isValidProject = Number.isFinite(numericProjectId);
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const tenantId = currentUser?.tenant_id ?? null;
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId ?? undefined;
 

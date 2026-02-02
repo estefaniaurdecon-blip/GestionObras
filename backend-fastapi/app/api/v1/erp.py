@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from sqlmodel import Session
 
-from app.api.deps import require_any_permissions, require_permissions
+from app.api.deps import get_current_active_user, require_any_permissions, require_permissions
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.erp import (
@@ -712,7 +712,7 @@ def api_delete_task(
 @router.get("/time-tracking/active", response_model=Optional[TimeSessionRead])
 def api_get_active_time_session(
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:track"])),
+    current_user: User = Depends(get_current_active_user),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> Optional[TimeSessionRead]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)
@@ -723,7 +723,7 @@ def api_get_active_time_session(
 def api_start_time_session(
     data: TimeTrackingStart,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:track"])),
+    current_user: User = Depends(get_current_active_user),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
     try:
@@ -742,7 +742,7 @@ def api_start_time_session(
 @router.put("/time-tracking/stop", response_model=TimeSessionRead)
 def api_stop_time_session(
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:track"])),
+    current_user: User = Depends(get_current_active_user),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> TimeSessionRead:
     tenant_id = _tenant_for_write(current_user, x_tenant_id)
@@ -762,7 +762,9 @@ def api_time_report(
     date_from: Optional[datetime] = Query(default=None),
     date_to: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permissions(["erp:read"])),
+    current_user: User = Depends(
+        require_permissions(["erp:read", "can_create_time_reports"])
+    ),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TimeReportRow]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)

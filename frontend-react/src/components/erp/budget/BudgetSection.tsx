@@ -28,6 +28,7 @@ import {
 
 import type { ErpProject as ErpProjectApi } from "../../../api/erpReports";
 import type {
+  ProjectBudgetMilestone,
   ProjectBudgetLine,
   ProjectBudgetLineUpdatePayload,
 } from "../../../api/erpBudgets";
@@ -43,6 +44,7 @@ import {
   formatPercent,
   formatPercentLabelValue,
   getBudgetParentKey,
+  normalizeConceptKey,
   isAllCapsConcept,
   isExternalCollaborationConcept,
   isGeneralExpensesConcept,
@@ -65,7 +67,9 @@ interface BudgetSectionProps {
   onBudgetProjectChange: (value: string) => void;
   selectedBudgetProjectId: number | null;
   budgetMilestonesCount: number;
-  onAddBudgetMilestone: (nextIndex: number) => void;
+  budgetMilestones: ProjectBudgetMilestone[];
+  onAddBudgetMilestone: () => void;
+  onRemoveBudgetMilestone: (milestoneId: number) => void;
   budgetsEditMode: boolean;
   onToggleEditMode: () => void;
   canEditBudgets: boolean;
@@ -99,13 +103,17 @@ interface BudgetSectionProps {
     field: keyof ProjectBudgetLineUpdatePayload,
     value: string,
   ) => void;
+  onBudgetMilestoneChange: (
+    budget: ProjectBudgetLine,
+    milestoneId: number,
+    field: "amount" | "justified",
+    value: string,
+  ) => void;
   onOpenBudgetModal: (mode: BudgetModalMode, budget?: ProjectBudgetLine) => void;
   onRemoveExternalCollaborationRow: (budget: ProjectBudgetLine) => void;
   budgetParentMap: Record<string, string[]>;
   budgetParentTotals: Map<string, { j1: number; j2: number }>;
   budgetsTabTotals: BudgetTotals;
-  budgetsDiffH1: number;
-  budgetsDiffH2: number;
   subtleText: string;
   externalCollabSelectPlaceholder: string;
 }
@@ -116,7 +124,9 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   onBudgetProjectChange,
   selectedBudgetProjectId,
   budgetMilestonesCount,
+  budgetMilestones,
   onAddBudgetMilestone,
+  onRemoveBudgetMilestone,
   budgetsEditMode,
   onToggleEditMode,
   canEditBudgets,
@@ -140,13 +150,12 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   onExternalCollabSelectionChange,
   onAddExternalCollaborationRow,
   onBudgetCellSave,
+  onBudgetMilestoneChange,
   onOpenBudgetModal,
   onRemoveExternalCollaborationRow,
   budgetParentMap,
   budgetParentTotals,
   budgetsTabTotals,
-  budgetsDiffH1,
-  budgetsDiffH2,
   subtleText,
   externalCollabSelectPlaceholder,
 }) => {
@@ -168,15 +177,161 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   const subsidyPercent = selectedProject?.subsidy_percent ?? 0;
   const durationLabel =
     durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
-  const totalApproved = Number(budgetsTabTotals.approved ?? 0);
-  const totalForecasted = Number(budgetsTabTotals.gasto ?? 0);
-  const baseResult = (totalApproved * subsidyPercent) / 100 - totalForecasted;
+  const baseTotalsApproved = Number(budgetsTabTotals.approved ?? 0);
+  const baseTotalsForecasted = Number(budgetsTabTotals.gasto ?? 0);
+
+  const milestonesToRender =
+    budgetMilestones.length > 0
+      ? [...budgetMilestones].sort((a, b) => a.order_index - b.order_index)
+      : [
+          { id: -1, name: "HITO 1", order_index: 1 } as ProjectBudgetMilestone,
+          { id: -2, name: "HITO 2", order_index: 2 } as ProjectBudgetMilestone,
+        ];
+  const milestoneColumnsCount = milestonesToRender.length;
+  const hasDynamicMilestones = budgetMilestones.length > 0;
+  const resolveMilestoneValue = (
+    budget: ProjectBudgetLine,
+    milestoneId: number,
+    index: number,
+    field: "amount" | "justified",
+    fallback: { h1: number; h2: number; j1: number; j2: number },
+  ) => {
+    const draft = budgetDrafts[budget.id]?.milestones?.find(
+      (m) => m.milestone_id === milestoneId,
+    );
+    if (draft) {
+      return field === "amount"
+        ? Number(draft.amount ?? 0)
+        : Number(draft.justified ?? 0);
+    }
+    const stored = budget.milestones?.find(
+      (m) => m.milestone_id === milestoneId,
+    );
+    if (stored) {
+      return field === "amount"
+        ? Number(stored.amount ?? 0)
+        : Number(stored.justified ?? 0);
+    }
+    if (index === 0) {
+      return field === "amount" ? fallback.h1 : fallback.j1;
+    }
+    if (index === 1) {
+      return field === "amount" ? fallback.h2 : fallback.j2;
+    }
+    return 0;
+  };
+  const childToParentKey = Object.entries(budgetParentMap).reduce(
+    (acc, [parentKey, children]) => {
+      children.forEach((child) => {
+        acc[child] = parentKey;
+      });
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+  const parentMilestoneTotals: Record<
+    string,
+    { amount: number[]; justified: number[] }
+  > = {};
+  groupedBudgetRows.forEach((row) => {
+    const rowKey = normalizeConceptKey(row.concept);
+    const parentKey = childToParentKey[rowKey];
+    if (!parentKey) return;
+    if (!parentMilestoneTotals[parentKey]) {
+      parentMilestoneTotals[parentKey] = {
+        amount: Array(milestoneColumnsCount).fill(0),
+        justified: Array(milestoneColumnsCount).fill(0),
+      };
+    }
+    const h1 = Number(row.hito1_budget ?? 0);
+    const h2 = Number(row.hito2_budget ?? 0);
+    const j1 = Number(row.justified_hito1 ?? 0);
+    const j2 = Number(row.justified_hito2 ?? 0);
+    const fallback = { h1, h2, j1, j2 };
+    milestonesToRender.forEach((milestone, idx) => {
+      const amountValue = resolveMilestoneValue(
+        row,
+        milestone.id,
+        idx,
+        "amount",
+        fallback,
+      );
+      const justifiedValue = resolveMilestoneValue(
+        row,
+        milestone.id,
+        idx,
+        "justified",
+        fallback,
+      );
+      parentMilestoneTotals[parentKey].amount[idx] += Number(amountValue || 0);
+      parentMilestoneTotals[parentKey].justified[idx] += Number(
+        justifiedValue || 0,
+      );
+    });
+  });
+  const parentKeys = new Set(Object.keys(budgetParentMap));
+  const totalsByMilestone = Array.from({ length: milestoneColumnsCount }, () => ({
+    amount: 0,
+    justified: 0,
+  }));
+  let totalApproved = 0;
+  let totalForecasted = 0;
+  groupedBudgetRows.forEach((row) => {
+    const rowKey = normalizeConceptKey(row.concept);
+    const isParentRow = isAllCapsConcept(row.concept) && parentKeys.has(rowKey);
+    const isGeneralExpenses = isGeneralExpensesConcept(row.concept);
+    if (!isParentRow && !isGeneralExpenses) return;
+    const h1 = Number(row.hito1_budget ?? 0);
+    const h2 = Number(row.hito2_budget ?? 0);
+    const j1 = Number(row.justified_hito1 ?? 0);
+    const j2 = Number(row.justified_hito2 ?? 0);
+    const fallback = { h1, h2, j1, j2 };
+    let rowApproved = 0;
+    milestonesToRender.forEach((milestone, idx) => {
+      const amountValue =
+        isParentRow && hasDynamicMilestones
+          ? parentMilestoneTotals[rowKey]?.amount[idx] ?? 0
+          : resolveMilestoneValue(row, milestone.id, idx, "amount", fallback);
+      const justifiedValue =
+        isParentRow && hasDynamicMilestones
+          ? parentMilestoneTotals[rowKey]?.justified[idx] ?? 0
+          : resolveMilestoneValue(row, milestone.id, idx, "justified", fallback);
+      totalsByMilestone[idx].amount += Number(amountValue || 0);
+      totalsByMilestone[idx].justified += Number(justifiedValue || 0);
+      rowApproved += Number(amountValue || 0);
+    });
+    totalApproved += rowApproved;
+    totalForecasted += Number(row.forecasted_spent ?? 0);
+  });
+  const totalJustified = totalsByMilestone.reduce(
+    (sum, item) => sum + item.justified,
+    0,
+  );
+  const effectiveTotalApproved = hasDynamicMilestones
+    ? totalApproved
+    : baseTotalsApproved;
+  const effectiveTotalForecasted = hasDynamicMilestones
+    ? totalForecasted
+    : baseTotalsForecasted;
+  const baseResult =
+    (effectiveTotalApproved * subsidyPercent) / 100 - effectiveTotalForecasted;
   const monthsActivePerYear =
     durationMonths != null ? Math.min(durationMonths, 12) : 0;
   const annualizedResult =
     durationMonths != null && durationMonths > 0
       ? (baseResult / durationMonths) * monthsActivePerYear
       : 0;
+
+  const [milestoneToRemove, setMilestoneToRemove] = React.useState("");
+  const sortedBudgetMilestones = React.useMemo(
+    () =>
+      [...budgetMilestones].sort(
+        (a, b) => a.order_index - b.order_index || a.id - b.id,
+      ),
+    [budgetMilestones],
+  );
+  const hasRealBudgetMilestones = budgetMilestones.some((m) => m.id > 0);
+  const removableMilestones = sortedBudgetMilestones.filter((m) => m.id > 0);
 
   return (
     <Stack spacing={6}>
@@ -214,10 +369,48 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         <Button
           size="sm"
           colorScheme="green"
-          onClick={() => onAddBudgetMilestone(budgetMilestonesCount + 1)}
+          onClick={onAddBudgetMilestone}
           isDisabled={!selectedBudgetProjectId}
         >
           + Hito
+        </Button>
+        <Select
+          size="sm"
+          minW="160px"
+          maxW="220px"
+          value={milestoneToRemove}
+          onChange={(e) => setMilestoneToRemove(e.target.value)}
+          isDisabled={
+            !selectedBudgetProjectId ||
+            budgetMilestonesCount === 0 ||
+            !hasRealBudgetMilestones
+          }
+        >
+          <option value="">Selecciona hito</option>
+          {removableMilestones.map((milestone) => (
+            <option key={milestone.id} value={String(milestone.id)}>
+              {milestone.name?.trim() || `Hito ${milestone.order_index}`}
+            </option>
+          ))}
+        </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          colorScheme="red"
+          onClick={() => {
+            const id = Number(milestoneToRemove);
+            if (!Number.isFinite(id) || id <= 0) return;
+            onRemoveBudgetMilestone(id);
+            setMilestoneToRemove("");
+          }}
+          isDisabled={
+            !selectedBudgetProjectId ||
+            budgetMilestonesCount === 0 ||
+            !milestoneToRemove ||
+            !hasRealBudgetMilestones
+          }
+        >
+          Eliminar hito
         </Button>
         <Button
           size="sm"
@@ -278,24 +471,18 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                 >
                   CONCEPTO
                 </Th>
-                <Th
-                  colSpan={2}
-                  className="text-sm"
-                  textAlign="center"
-                  color="white"
-                  fontWeight="bold"
-                >
-                  HITO 1
-                </Th>
-                <Th
-                  colSpan={2}
-                  className="text-sm"
-                  textAlign="center"
-                  color="white"
-                  fontWeight="bold"
-                >
-                  HITO 2
-                </Th>
+                {milestonesToRender.map((milestone, idx) => (
+                  <Th
+                    key={`milestone-${milestone.id}`}
+                    colSpan={2}
+                    className="text-sm"
+                    textAlign="center"
+                    color="white"
+                    fontWeight="bold"
+                  >
+                    {milestone.name?.trim() || `HITO ${idx + 1}`}
+                  </Th>
+                ))}
                 <Th
                   rowSpan={2}
                   className="text-sm"
@@ -330,25 +517,23 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                 </Th>
               </Tr>
               <Tr bg="#0f5d3f">
-                <Th className="text-sm" color="white" fontWeight="semibold">
-                  APROBADO
-                </Th>
-                <Th className="text-sm" color="white" fontWeight="semibold">
-                  JUSTIFICADO
-                </Th>
-                <Th className="text-sm" color="white" fontWeight="semibold">
-                  APROBADO
-                </Th>
-                <Th className="text-sm" color="white" fontWeight="semibold">
-                  JUSTIFICADO
-                </Th>
+                {milestonesToRender.map((milestone) => (
+                  <React.Fragment key={`milestone-head-${milestone.id}`}>
+                    <Th className="text-sm" color="white" fontWeight="semibold">
+                      APROBADO
+                    </Th>
+                    <Th className="text-sm" color="white" fontWeight="semibold">
+                      JUSTIFICADO
+                    </Th>
+                  </React.Fragment>
+                ))}
               </Tr>
             </Thead>
             <Tbody>
               {displayBudgetRows.length === 0 ? (
                 <Tr>
                   <Td
-                    colSpan={budgetMilestonesCount * 2 + 4 || 9}
+                    colSpan={milestoneColumnsCount * 2 + 5}
                     textAlign="center"
                     py={10}
                     color="gray.500"
@@ -360,10 +545,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                 groupedBudgetRows.map((budget) => {
                   const h1 = Number(budget.hito1_budget ?? 0);
                   const h2 = Number(budget.hito2_budget ?? 0);
-                  const approved = h1 + h2;
-                  const forecast = Number(budget.forecasted_spent ?? 0);
-                  const percentSpent =
-                    approved > 0 ? (forecast / approved) * 100 : 0;
+                  const j1 = Number(budget.justified_hito1 ?? 0);
+                  const j2 = Number(budget.justified_hito2 ?? 0);
                   const draftConcept =
                     (budgetDrafts[budget.id]?.concept as string) ??
                     budget.concept ??
@@ -398,9 +581,55 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                     isAllCapsConcept(budget.concept) &&
                     budgetParentMap[baseKey] !== undefined &&
                     !(isExternalCollab && externalCollabName);
-                  const parentTotals = isParentRow
+                  const parentTotalsForRow = isParentRow
                     ? budgetParentTotals.get(baseKey)
                     : undefined;
+                  const fallbackValues = {
+                    h1,
+                    h2,
+                    j1: parentTotalsForRow?.j1 ?? j1,
+                    j2: parentTotalsForRow?.j2 ?? j2,
+                  };
+                  const milestoneAmounts = milestonesToRender.map(
+                    (milestone, idx) => {
+                      if (isParentRow && hasDynamicMilestones) {
+                        return (
+                          parentMilestoneTotals[baseKey]?.amount[idx] ?? 0
+                        );
+                      }
+                      return resolveMilestoneValue(
+                        budget,
+                        milestone.id,
+                        idx,
+                        "amount",
+                        fallbackValues,
+                      );
+                    },
+                  );
+                  const milestoneJustified = milestonesToRender.map(
+                    (milestone, idx) => {
+                      if (isParentRow && hasDynamicMilestones) {
+                        return (
+                          parentMilestoneTotals[baseKey]?.justified[idx] ?? 0
+                        );
+                      }
+                      return resolveMilestoneValue(
+                        budget,
+                        milestone.id,
+                        idx,
+                        "justified",
+                        fallbackValues,
+                      );
+                    },
+                  );
+                  const approvedFromMilestones = milestoneAmounts.reduce(
+                    (sum, value) => sum + Number(value || 0),
+                    0,
+                  );
+                  const approved = approvedFromMilestones || h1 + h2;
+                  const forecast = Number(budget.forecasted_spent ?? 0);
+                  const percentSpent =
+                    approved > 0 ? (forecast / approved) * 100 : 0;
                   const isExternalParent =
                     isExternalCollab && isParentRow && !externalCollabName;
                   const isExternalChild = isExternalCollab && !isExternalParent;
@@ -573,71 +802,67 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                           </Editable>
                         )}
                       </Td>
+                      {milestonesToRender.map((milestone, idx) => {
+                        const amountValue = milestoneAmounts[idx] ?? 0;
+                        const justifiedValue = milestoneJustified[idx] ?? 0;
+                        const canEditMilestone =
+                          canEditRow && !(isParentRow && milestone.id > 0);
+                        return (
+                          <React.Fragment key={`milestone-cell-${budget.id}-${milestone.id}`}>
+                            <Td textAlign="right">
+                              <BudgetNumberCell
+                                value={amountValue}
+                                isEditing={canEditMilestone}
+                                onSubmit={(value) => {
+                                  if (milestone.id > 0) {
+                                    onBudgetMilestoneChange(
+                                      budget,
+                                      milestone.id,
+                                      "amount",
+                                      value,
+                                    );
+                                    return;
+                                  }
+                                  const field = idx === 0 ? "hito1_budget" : "hito2_budget";
+                                  onBudgetCellSave(budget.id, field, value);
+                                }}
+                              />
+                            </Td>
+                            <Td textAlign="right">
+                              <BudgetNumberCell
+                                value={justifiedValue}
+                                isEditing={canEditMilestone && !isParentRow}
+                                onSubmit={(value) => {
+                                  if (milestone.id > 0) {
+                                    onBudgetMilestoneChange(
+                                      budget,
+                                      milestone.id,
+                                      "justified",
+                                      value,
+                                    );
+                                    return;
+                                  }
+                                  const field =
+                                    idx === 0 ? "justified_hito1" : "justified_hito2";
+                                  onBudgetCellSave(budget.id, field, value);
+                                }}
+                              />
+                            </Td>
+                          </React.Fragment>
+                        );
+                      })}
                       <Td textAlign="right">
                         <BudgetNumberCell
                           value={
-                            budgetDrafts[budget.id]?.hito1_budget ??
-                            budget.hito1_budget ??
-                            0
+                            hasDynamicMilestones
+                              ? approved
+                              : budgetDrafts[budget.id]?.approved_budget ?? approved
                           }
-                          isEditing={canEditRow}
-                          onSubmit={(value) =>
-                            onBudgetCellSave(budget.id, "hito1_budget", value)
-                          }
-                        />
-                      </Td>
-                      <Td textAlign="right">
-                        <BudgetNumberCell
-                          value={
-                            isParentRow
-                              ? (parentTotals?.j1 ?? 0)
-                              : (budgetDrafts[budget.id]?.justified_hito1 ??
-                                budget.justified_hito1 ??
-                                0)
-                          }
-                          isEditing={canEditRow && !isParentRow}
-                          onSubmit={(value) =>
-                            onBudgetCellSave(budget.id, "justified_hito1", value)
-                          }
-                        />
-                      </Td>
-                      <Td textAlign="right">
-                        <BudgetNumberCell
-                          value={
-                            budgetDrafts[budget.id]?.hito2_budget ??
-                            budget.hito2_budget ??
-                            0
-                          }
-                          isEditing={canEditRow}
-                          onSubmit={(value) =>
-                            onBudgetCellSave(budget.id, "hito2_budget", value)
-                          }
-                        />
-                      </Td>
-                      <Td textAlign="right">
-                        <BudgetNumberCell
-                          value={
-                            isParentRow
-                              ? (parentTotals?.j2 ?? 0)
-                              : (budgetDrafts[budget.id]?.justified_hito2 ??
-                                budget.justified_hito2 ??
-                                0)
-                          }
-                          isEditing={canEditRow && !isParentRow}
-                          onSubmit={(value) =>
-                            onBudgetCellSave(budget.id, "justified_hito2", value)
-                          }
-                        />
-                      </Td>
-                      <Td textAlign="right">
-                        <BudgetNumberCell
-                          value={
-                            budgetDrafts[budget.id]?.approved_budget ?? approved
-                          }
-                          isEditing={canEditRow}
-                          onSubmit={(value) =>
-                            onBudgetCellSave(budget.id, "approved_budget", value)
-                          }
+                          isEditing={canEditRow && !hasDynamicMilestones}
+                          onSubmit={(value) => {
+                            if (hasDynamicMilestones) return;
+                            onBudgetCellSave(budget.id, "approved_budget", value);
+                          }}
                         />
                       </Td>
                       <Td textAlign="right">
@@ -697,43 +922,41 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
             <Tfoot>
               <Tr bg="rgba(196,116,255,0.15)" fontWeight="semibold">
                 <Td>Total</Td>
+                {totalsByMilestone.map((item, idx) => (
+                  <React.Fragment key={`total-ms-${idx}`}>
+                    <Td textAlign="right">
+                      <EuroCell value={item.amount} />
+                    </Td>
+                    <Td textAlign="right">
+                      <EuroCell value={item.justified} />
+                    </Td>
+                  </React.Fragment>
+                ))}
                 <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.hito1} />
-                </Td>
-                <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.justificados?.[0] ?? 0} />
-                </Td>
-                <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.hito2} />
-                </Td>
-                <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.justificados?.[1] ?? 0} />
-                </Td>
-                <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.approved} />
+                  <EuroCell value={totalApproved} />
                 </Td>
                 <Td />
                 <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.gasto} />
+                  <EuroCell value={totalForecasted} />
                 </Td>
                 <Td />
               </Tr>
               <Tr bg="rgba(196,116,255,0.2)" fontWeight="semibold">
                 <Td>Diferencia (por justificar)</Td>
+                {totalsByMilestone.map((item, idx) => (
+                  <React.Fragment key={`diff-ms-${idx}`}>
+                    <Td textAlign="right">
+                      <EuroCell value={item.amount - item.justified} />
+                    </Td>
+                    <Td />
+                  </React.Fragment>
+                ))}
                 <Td textAlign="right">
-                  <EuroCell value={budgetsDiffH1} />
+                  <EuroCell value={totalApproved - totalJustified} />
                 </Td>
                 <Td />
                 <Td textAlign="right">
-                  <EuroCell value={budgetsDiffH2} />
-                </Td>
-                <Td />
-                <Td textAlign="right">
-                  <EuroCell value={budgetsDiffH1 + budgetsDiffH2} />
-                </Td>
-                <Td />
-                <Td textAlign="right">
-                  <EuroCell value={budgetsTabTotals.gasto} />
+                  <EuroCell value={totalForecasted} />
                 </Td>
                 <Td />
               </Tr>

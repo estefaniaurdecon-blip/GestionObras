@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import {
   fetchToolCatalog,
   fetchTenantTools,
@@ -59,7 +60,7 @@ export const ToolsAdminPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
 
@@ -155,30 +156,12 @@ export const ToolsAdminPage: React.FC = () => {
   // Render principal de la pagina.
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("toolsAdmin.header.eyebrow")}
+          title={t("toolsAdmin.header.title")}
+          subtitle={t("toolsAdmin.header.subtitle")}
         />
-        <Box position="relative">
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("toolsAdmin.header.eyebrow")}</Text>
-          <Heading size="lg">{t("toolsAdmin.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("toolsAdmin.header.subtitle")}
-          </Text>
-        </Box>
       </Box>
 
       {isSuperAdmin && (

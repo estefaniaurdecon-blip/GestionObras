@@ -33,6 +33,7 @@ import { keyframes } from "@emotion/react";
 import { useTranslation } from "react-i18next";
 
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { apiClient } from "../api/client";
 import { createUserInvitation } from "../api/users";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -51,6 +52,7 @@ interface User {
   is_super_admin: boolean;
   tenant_id?: number | null;
   role_id?: number | null;
+  role_name?: string | null;
 }
 
 async function fetchTenants(): Promise<TenantOption[]> {
@@ -101,7 +103,7 @@ export const UsersPage: React.FC = () => {
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const currentTenantId = currentUser?.tenant_id ?? null;
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
@@ -210,7 +212,7 @@ export const UsersPage: React.FC = () => {
 
   const getRoleLabel = (user: User): string => {
     if (user.is_super_admin) return t("users.roles.superAdmin");
-    if (user.role_id) return t("users.roles.tenantAdmin");
+    if (user.role_name === "tenant_admin") return t("users.roles.tenantAdmin");
     return t("users.roles.standard");
   };
 
@@ -278,8 +280,12 @@ export const UsersPage: React.FC = () => {
       const matchesRole =
         roleFilter === "all" ||
         (roleFilter === "super_admin" && user.is_super_admin) ||
-        (roleFilter === "tenant_admin" && !!user.role_id && !user.is_super_admin) ||
-        (roleFilter === "user" && !user.role_id && !user.is_super_admin);
+        (roleFilter === "tenant_admin" &&
+          user.role_name === "tenant_admin" &&
+          !user.is_super_admin) ||
+        (roleFilter === "user" &&
+          !user.is_super_admin &&
+          user.role_name !== "tenant_admin");
 
       const matchesStatus =
         statusFilter === "all" ||
@@ -293,32 +299,12 @@ export const UsersPage: React.FC = () => {
   // Render principal de la pagina.
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("users.header.eyebrow")}
+          title={t("users.header.title")}
+          subtitle={t("users.header.subtitle")}
         />
-        <VStack position="relative" align="flex-start" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            {t("users.header.eyebrow")}
-          </Text>
-          <Heading size="lg">{t("users.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("users.header.subtitle")}
-          </Text>
-        </VStack>
       </Box>
 
       {isSuperAdmin ? (

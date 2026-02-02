@@ -21,15 +21,17 @@ const defaultBrand = {
 const components = {
   Button: {
     baseStyle: {
-      borderRadius: "md",
+      borderRadius: "lg",
       fontWeight: "semibold",
     },
     sizes: {
       sm: {
         fontSize: "sm",
+        h: "9",
       },
       md: {
         fontSize: "sm",
+        h: "10",
       },
     },
     variants: {
@@ -48,11 +50,58 @@ const components = {
       },
       outline: {
         borderColor: "brand.500",
+        borderWidth: "2px",
         color: "brand.500",
         _hover: {
           bg: "brand.50",
         },
       },
+    },
+  },
+  Input: {
+    sizes: {
+      sm: {
+        field: {
+          h: "9",
+          borderRadius: "lg",
+        },
+      },
+      md: {
+        field: {
+          h: "10",
+          borderRadius: "lg",
+        },
+      },
+    },
+    defaultProps: {
+      size: "sm",
+    },
+  },
+  Select: {
+    sizes: {
+      sm: {
+        field: {
+          h: "9",
+          borderRadius: "lg",
+        },
+      },
+      md: {
+        field: {
+          h: "10",
+          borderRadius: "lg",
+        },
+      },
+    },
+    defaultProps: {
+      size: "sm",
+    },
+  },
+  Textarea: {
+    baseStyle: {
+      borderRadius: "lg",
+    },
+    defaultProps: {
+      size: "sm",
     },
   },
   Card: {

@@ -39,6 +39,7 @@ class EmployeeProfileBase(BaseModel):
     available_hours: Optional[Decimal] = None
     availability_percentage: Optional[Decimal] = None
     position: Optional[str] = None
+    titulacion: Optional[str] = None
     employment_type: str = "permanent"
     hire_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
@@ -56,6 +57,7 @@ class EmployeeProfileUpdate(BaseModel):
     available_hours: Optional[Decimal] = None
     availability_percentage: Optional[Decimal] = None
     position: Optional[str] = None
+    titulacion: Optional[str] = None
     employment_type: Optional[str] = None
     hire_date: Optional[datetime] = None
     end_date: Optional[datetime] = None

@@ -12,6 +12,8 @@ export interface CurrentUser {
   is_super_admin: boolean; // Indica si es super admin
   tenant_id: number | null; // Tenant al que pertenece
   role_id: number | null; // Rol asignado
+  role_name?: string | null; // Nombre del rol (tenant_admin, user, etc.)
+  permissions?: string[]; // Permisos asociados al rol
   language?: string | null; // Idioma preferido
   avatar_url?: string | null; // Foto de perfil
   avatar_data?: string | null; // Foto de perfil (base64)
@@ -134,6 +136,7 @@ export interface InvitationAcceptPayload {
   token: string; // Token de invitación
   full_name: string; // Nombre del nuevo usuario
   password: string; // Contraseña inicial
+  password_confirm: string; // Confirmación de contraseña
 }
 
 /**

@@ -69,6 +69,7 @@ def test_create_and_accept_invitation_flow(
         "token": token,
         "full_name": "Invitado Demo",
         "password": "invite-pass",
+        "password_confirm": "invite-pass",
     }
     resp_accept = client.post("/api/v1/invitations/accept", json=accept_payload)
     assert resp_accept.status_code == status.HTTP_204_NO_CONTENT
@@ -125,6 +126,7 @@ def test_invitation_cannot_be_reused(
         "token": token,
         "full_name": "Invitado Reuse",
         "password": "invite-pass",
+        "password_confirm": "invite-pass",
     }
     resp_accept_1 = client.post("/api/v1/invitations/accept", json=accept_payload)
     assert resp_accept_1.status_code == status.HTTP_204_NO_CONTENT
@@ -170,6 +172,7 @@ def test_expired_invitation_is_not_valid(
         "token": "expired-token",
         "full_name": "Invitado Expirado",
         "password": "invite-pass",
+        "password_confirm": "invite-pass",
     }
     resp_accept = client.post("/api/v1/invitations/accept", json=accept_payload)
     assert resp_accept.status_code == status.HTTP_400_BAD_REQUEST

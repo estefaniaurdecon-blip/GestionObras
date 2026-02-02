@@ -2,7 +2,12 @@ import React, { useMemo, useState } from "react";
 import {
   Box,
   Button,
+  FormControl,
+  FormLabel,
+  HStack,
+  Icon,
   Heading,
+  Input,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -10,6 +15,8 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Select,
+  SimpleGrid,
   Stack,
   Text,
   useColorModeValue,
@@ -33,13 +40,14 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   const { t } = useTranslation();
   const toast = useToast();
   const cardBg = useColorModeValue("white", "gray.700");
+  const borderColor = useColorModeValue("gray.200", "gray.600");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   `;
 
   const { data: currentUser } = useCurrentUser();
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const effectiveTenantId = isSuperAdmin
     ? undefined
     : currentUser?.tenant_id ?? undefined;
@@ -59,6 +67,8 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [filterText, setFilterText] = useState("");
+  const [filterType, setFilterType] = useState("all");
   const [formValues, setFormValues] = useState<ExternalCollaborationCreate>({
     collaboration_type: typeOptions[0],
     name: "",
@@ -120,8 +130,38 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
       });
       return null;
     }
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(payload.contact_email)) {
+      toast({
+        title: t("externalCollaborations.messages.invalidEmailTitle"),
+        description: t("externalCollaborations.messages.invalidEmailDesc"),
+        status: "warning",
+      });
+      return null;
+    }
     return payload;
   };
+
+  const filteredItems = useMemo(() => {
+    const text = filterText.trim().toLowerCase();
+    return (listQuery.data ?? []).filter((entry) => {
+      if (filterType !== "all" && entry.collaboration_type !== filterType) {
+        return false;
+      }
+      if (!text) return true;
+      const haystack = [
+        entry.collaboration_type,
+        entry.name,
+        entry.legal_name,
+        entry.cif,
+        entry.contact_email,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(text);
+    });
+  }, [filterText, filterType, listQuery.data]);
 
   const handleSubmit = () => {
     const payload = validate();
@@ -174,11 +214,11 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
   return (
     <AppShell>
       <Box
-        borderRadius="2xl"
+        borderRadius="3xl"
         p={{ base: 6, md: 8 }}
         bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
         color="white"
-        boxShadow="lg"
+        boxShadow="2xl"
         position="relative"
         overflow="hidden"
         animation={`${fadeUp} 0.6s ease-out`}
@@ -187,24 +227,136 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
         <Box
           position="absolute"
           inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+          opacity={0.1}
+          bgImage="radial-gradient(circle at 20% 50%, white 1px, transparent 1px)"
+          bgSize="30px 30px"
         />
-        <Stack position="relative" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">
-            {t("externalCollaborations.header.eyebrow")}
-          </Text>
-          <Heading size="lg">{t("externalCollaborations.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
+        <Stack position="relative" spacing={4}>
+          <HStack spacing={3}>
+            <Box
+              w="12"
+              h="12"
+              bgGradient="linear(to-br, whiteAlpha.300, whiteAlpha.100)"
+              borderRadius="xl"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              backdropFilter="blur(10px)"
+              border="1px solid"
+              borderColor="whiteAlpha.300"
+            >
+              <Icon viewBox="0 0 24 24" boxSize={6}>
+                <path
+                  fill="currentColor"
+                  d="M3,4H21V6H3V4M4,8H20V20H4V8M6,10V18H18V10H6Z"
+                />
+              </Icon>
+            </Box>
+            <Stack spacing={1}>
+              <Text
+                textTransform="uppercase"
+                fontSize="xs"
+                letterSpacing="wider"
+                opacity={0.9}
+                fontWeight="semibold"
+              >
+                {t("externalCollaborations.header.eyebrow")}
+              </Text>
+              <Heading size="lg" fontWeight="bold">
+                {t("externalCollaborations.header.title")}
+              </Heading>
+            </Stack>
+          </HStack>
+          <Text fontSize="sm" opacity={0.95}>
             {t("externalCollaborations.header.subtitle")}
           </Text>
         </Stack>
       </Box>
 
       <Box mb={6} display="flex" justifyContent="flex-end">
-        <Button colorScheme="green" onClick={openCreateModal}>
+        <Button
+          bgGradient="linear(to-r, green.500, green.600)"
+          color="white"
+          borderRadius="lg"
+          h="10"
+          px={6}
+          _hover={{ bgGradient: "linear(to-r, green.600, green.700)" }}
+          onClick={openCreateModal}
+        >
           {t("externalCollaborations.actions.addNew")}
         </Button>
+      </Box>
+
+      <Box mb={6}>
+        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+          <FormControl>
+            <FormLabel>{t("externalCollaborations.filters.search")}</FormLabel>
+            <Input
+              size="sm"
+              h="9"
+              bg="white"
+              borderRadius="lg"
+              borderColor={borderColor}
+              _focus={{
+                borderColor: "green.500",
+                boxShadow: "0 0 0 1px var(--chakra-colors-green-500)",
+              }}
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder={t("externalCollaborations.filters.searchPlaceholder")}
+            />
+          </FormControl>
+          <FormControl>
+            <FormLabel>{t("externalCollaborations.filters.type")}</FormLabel>
+            <Select
+              size="sm"
+              h="9"
+              bg="white"
+              borderRadius="lg"
+              borderColor={borderColor}
+              _focus={{
+                borderColor: "green.500",
+                boxShadow: "0 0 0 1px var(--chakra-colors-green-500)",
+              }}
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+            >
+              <option value="all">
+                {t("externalCollaborations.filters.all")}
+              </option>
+              {typeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl>
+            <FormLabel>{t("externalCollaborations.filters.clear")}</FormLabel>
+            <Button
+              variant="outline"
+              w="fit-content"
+              size="sm"
+              h="9"
+              borderRadius="lg"
+              borderWidth="2px"
+              borderColor="green.500"
+              color="green.600"
+              fontWeight="semibold"
+              _hover={{
+                bg: "green.50",
+                borderColor: "green.600",
+              }}
+              mt={2}
+              onClick={() => {
+                setFilterText("");
+                setFilterType("all");
+              }}
+            >
+              {t("externalCollaborations.filters.reset")}
+            </Button>
+          </FormControl>
+        </SimpleGrid>
       </Box>
 
       {listQuery.isError ? (
@@ -213,7 +365,7 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
         </Text>
       ) : (
         <ExternalCollaborationsTable
-          items={listQuery.data ?? []}
+          items={filteredItems}
           onEdit={handleEdit}
           onDelete={(entry) => handleDelete(entry.id)}
           deletingId={deletingId}
@@ -245,7 +397,12 @@ export const ErpExternalCollaborationsPage: React.FC = () => {
               {t("common.cancel")}
             </Button>
             <Button
-              colorScheme="green"
+              bgGradient="linear(to-r, green.500, green.600)"
+              color="white"
+              borderRadius="lg"
+              h="10"
+              px={6}
+              _hover={{ bgGradient: "linear(to-r, green.600, green.700)" }}
               onClick={handleSubmit}
               isLoading={createMutation.isPending || updateMutation.isPending}
             >

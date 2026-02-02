@@ -29,6 +29,7 @@ export const AcceptInvitationPage: React.FC = () => {
   const [validation, setValidation] = useState<InvitationValidation | null>(null);
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,6 +60,22 @@ export const AcceptInvitationPage: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!token) return;
+    if (!fullName.trim() || !password || !passwordConfirm) {
+      toast({
+        title: t("invitation.messages.passwordMissingTitle"),
+        description: t("invitation.messages.passwordMissingDesc"),
+        status: "warning",
+      });
+      return;
+    }
+    if (password !== passwordConfirm) {
+      toast({
+        title: t("invitation.messages.passwordMismatchTitle"),
+        description: t("invitation.messages.passwordMismatchDesc"),
+        status: "warning",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -66,6 +83,7 @@ export const AcceptInvitationPage: React.FC = () => {
         token,
         full_name: fullName,
         password,
+        password_confirm: passwordConfirm,
       });
       toast({
         title: t("invitation.messages.successTitle"),
@@ -157,6 +175,14 @@ export const AcceptInvitationPage: React.FC = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t("invitation.fields.passwordConfirm")}</FormLabel>
+                <Input
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
                 />
               </FormControl>
               <Button

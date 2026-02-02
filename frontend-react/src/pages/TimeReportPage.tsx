@@ -41,6 +41,7 @@ import {
 } from "../api/erpReports";
 import { fetchEmployees, type EmployeeProfile } from "../api/hr";
 import { AppShell } from "../components/layout/AppShell";
+import { PageHero } from "../components/layout/PageHero";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
 export const TimeReportPage: React.FC = () => {
@@ -71,7 +72,7 @@ export const TimeReportPage: React.FC = () => {
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const { data: currentUser } = useCurrentUser();
-  const tenantId = currentUser?.is_super_admin
+  const tenantId = currentUser?.is_super_admin === true
     ? undefined
     : currentUser?.tenant_id ?? undefined;
 
@@ -197,30 +198,12 @@ export const TimeReportPage: React.FC = () => {
 
   return (
     <AppShell>
-      <Box
-        borderRadius="2xl"
-        p={{ base: 6, md: 8 }}
-        bgGradient="linear(120deg, var(--chakra-colors-brand-700) 0%, var(--chakra-colors-brand-500) 55%, var(--chakra-colors-brand-300) 110%)"
-        color="white"
-        boxShadow="lg"
-        position="relative"
-        overflow="hidden"
-        animation={`${fadeUp} 0.6s ease-out`}
-        mb={8}
-      >
-        <Box
-          position="absolute"
-          inset="0"
-          opacity={0.2}
-          bgImage="radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4), transparent 55%)"
+      <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
+        <PageHero
+          eyebrow={t("timeReport.header.eyebrow")}
+          title={t("timeReport.header.title")}
+          subtitle={t("timeReport.header.subtitle")}
         />
-        <Stack position="relative" spacing={3}>
-          <Text textTransform="uppercase" fontSize="xs" letterSpacing="0.2em">{t("timeReport.header.eyebrow")}</Text>
-          <Heading size="lg">{t("timeReport.header.title")}</Heading>
-          <Text fontSize="sm" opacity={0.9}>
-            {t("timeReport.header.subtitle")}
-          </Text>
-        </Stack>
       </Box>
 
       <Box

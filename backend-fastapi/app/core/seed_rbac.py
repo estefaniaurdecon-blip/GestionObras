@@ -510,6 +510,7 @@ def _ensure_erp_permissions(session: Session) -> None:
         "erp:read": "Ver proyectos, tareas e informes del ERP",
         "erp:track": "Iniciar/detener control de tiempo",
         "erp:manage": "Gestionar proyectos y tareas del ERP",
+        "can_create_time_reports": "Crear informes de horas",
     }
 
     existing_permissions = session.exec(select(Permission)).all()
@@ -529,7 +530,7 @@ def _ensure_erp_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": erp_permissions.keys(),
         "tenant_admin": erp_permissions.keys(),
-        "manager": ("erp:read", "erp:track"),
+        "manager": ("erp:read", "erp:track", "can_create_time_reports"),
         "user": ("erp:read", "erp:track"),
     }
 

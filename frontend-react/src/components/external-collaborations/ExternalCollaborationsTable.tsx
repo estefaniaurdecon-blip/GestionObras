@@ -36,10 +36,10 @@ export const ExternalCollaborationsTable: React.FC<
         <Thead bg={tableHeadBg}>
           <Tr>
             <Th borderColor={tableBorder}>
-              {t("externalCollaborations.table.type")}
+              {t("externalCollaborations.table.name")}
             </Th>
             <Th borderColor={tableBorder}>
-              {t("externalCollaborations.table.name")}
+              {t("externalCollaborations.table.type")}
             </Th>
             <Th borderColor={tableBorder}>
               {t("externalCollaborations.table.legalName")}
@@ -65,22 +65,26 @@ export const ExternalCollaborationsTable: React.FC<
           ) : (
             items.map((entry) => (
               <Tr key={entry.id}>
-                <Td borderColor={tableBorder}>{entry.collaboration_type}</Td>
                 <Td borderColor={tableBorder}>{entry.name}</Td>
+                <Td borderColor={tableBorder}>{entry.collaboration_type}</Td>
                 <Td borderColor={tableBorder}>{entry.legal_name}</Td>
                 <Td borderColor={tableBorder}>{entry.cif}</Td>
                 <Td borderColor={tableBorder}>{entry.contact_email}</Td>
                 <Td borderColor={tableBorder}>
                   <HStack>
                     <Button
-                      size="xs"
+                      size="sm"
+                      h="9"
+                      borderRadius="lg"
                       variant="outline"
                       onClick={() => onEdit(entry)}
                     >
                       {t("externalCollaborations.table.edit")}
                     </Button>
                     <Button
-                      size="xs"
+                      size="sm"
+                      h="9"
+                      borderRadius="lg"
                       colorScheme="red"
                       variant="outline"
                       isLoading={deletingId === entry.id}

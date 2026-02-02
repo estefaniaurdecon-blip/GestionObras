@@ -140,9 +140,13 @@
       "timeControl": "Time control",
       "tasks": "Tasks",
       "projects": "Projects",
+      "workManagement": "Work management",
       "externalCollaborations": "External collaborations",
       "users": "Users",
       "hr": "Human resources",
+      "hrDepartments": "Departments",
+      "hrEmployees": "Employees",
+      "hrTalent": "Talent",
       "support": "Support",
       "tools": "Tools",
       "audit": "Audit",
@@ -171,6 +175,14 @@
     },
     "actions": {
       "addNew": "Add collaborator +"
+    },
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "Name, tax ID, or email...",
+      "type": "Type",
+      "all": "All",
+      "clear": "Reset",
+      "reset": "Clear filters"
     },
     "form": {
       "type": "Type",
@@ -201,6 +213,8 @@
     "messages": {
       "missingTitle": "Missing data",
       "missingDesc": "Fill in name, legal name, tax ID, and email.",
+      "invalidEmailTitle": "Invalid email",
+      "invalidEmailDesc": "Enter a valid email address.",
       "createTitle": "Collaboration created",
       "updateTitle": "Collaboration updated",
       "loadError": "Unable to load external collaborations."
@@ -315,10 +329,12 @@
       "edit": "Edit",
       "delete": "Delete",
       "update": "Update",
-      "move": "Move"
+      "move": "Move",
+      "timeReport": "Time report"
     },
     "labels": {
-      "taskId": "Task #{{id}}"
+      "taskId": "Task #{{id}}",
+      "noTask": "No task"
     },
     "messages": {
       "tasksLoadError": "Unable to load ERP tasks.",
@@ -358,12 +374,17 @@
     },
     "fields": {
       "fullName": "Full name",
-      "password": "Password"
+      "password": "Password",
+      "passwordConfirm": "Confirm password"
     },
     "actions": {
       "createAccount": "Create account"
     },
     "messages": {
+      "passwordMissingTitle": "Missing data",
+      "passwordMissingDesc": "Fill in all password fields.",
+      "passwordMismatchTitle": "Password mismatch",
+      "passwordMismatchDesc": "The password and confirmation must match.",
       "successTitle": "Account created",
       "successDesc": "You can now sign in with your credentials.",
       "errorTitle": "Invitation error",
@@ -389,11 +410,27 @@
       "subtitle": "Log of key actions and system events."
     },
     "description": "Audit trail of relevant actions for this tenant.",
+    "filters": {
+      "tenant": "Tenant",
+      "source": "Source",
+      "user": "User",
+      "userPlaceholder": "email@company.com",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply filters",
+      "clear": "Clear",
+      "all": "All"
+    },
+    "sources": {
+      "web": "Web",
+      "app": "App"
+    },
     "loading": "Loading audit records...",
     "error": "Unable to load audit records (check permissions and connection).",
     "table": {
       "date": "Date",
       "user": "User",
+      "source": "Source",
       "action": "Action",
       "details": "Details",
       "empty": "No audit records to show yet."
@@ -472,18 +509,17 @@
     "header": {
       "eyebrow": "Administration",
       "title": "Tenant settings",
-      "subtitle": "Configure companies and admin credentials."
+      "subtitle": "Configure companies and administrators."
     },
     "permissions": {
       "onlySuperAdmin": "Only the global Super Admin can view and manage the full tenant list."
     },
-    "description": "General configuration of companies/tenants within the platform. Creating a tenant also creates its primary admin.",
+    "description": "General configuration of companies/tenants within the platform. Creating a tenant sends an invitation to the primary admin.",
     "fields": {
       "name": "Tenant name",
       "subdomain": "Subdomain",
       "active": "Active",
-      "adminEmail": "Tenant admin email",
-      "adminPassword": "Tenant admin password"
+      "adminEmail": "Tenant admin email"
     },
     "placeholders": {
       "name": "Company name",
@@ -491,7 +527,7 @@
       "adminEmail": "admin@company.com"
     },
     "actions": {
-      "create": "Create tenant and admin",
+      "create": "Create tenant and invite admin",
       "edit": "Edit",
       "save": "Save changes",
       "delete": "Delete"
@@ -509,9 +545,9 @@
     },
     "messages": {
       "createSuccessTitle": "Tenant created",
-      "createSuccessDesc": "The tenant and its admin were created successfully.",
+      "createSuccessDesc": "The tenant was created and the admin invitation was sent.",
       "createErrorTitle": "Tenant creation error",
-      "createErrorFallback": "Unable to create the tenant or its admin (check permissions and data).",
+      "createErrorFallback": "Unable to create the tenant or send the invitation (check permissions and data).",
       "updateSuccessTitle": "Tenant updated",
       "updateSuccessDesc": "The tenant was updated successfully.",
       "updateErrorTitle": "Tenant update error",
@@ -725,6 +761,9 @@
       "title": "Manage teams and structure",
       "subtitle": "Track departments, profiles, and costs from one panel."
     },
+    "talent": {
+      "title": "Talent"
+    },
     "tenant": {
       "label": "Tenant",
       "loading": "Loading tenants...",
@@ -861,6 +900,7 @@
       "tabs": {
         "summary": "Summary",
         "projects": "Projects",
+      "workManagement": "Work management",
         "create": "Create",
         "gantt": "Gantt"
       },

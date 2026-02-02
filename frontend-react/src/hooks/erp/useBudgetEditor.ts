@@ -55,6 +55,8 @@ export const useBudgetEditor = ({
     updateBudgetMutation,
     deleteBudgetMutation,
     createBudgetMilestoneMutation,
+    deleteBudgetMilestoneMutation,
+    updateBudgetMilestoneMutation,
   } = useBudgetData(projectId, tenantId);
 
   const budgetRows = budgetsQuery.data ?? [];
@@ -70,8 +72,7 @@ export const useBudgetEditor = ({
   >({});
   const [savingBudgets, setSavingBudgets] = useState(false);
   const [seedingTemplate, setSeedingTemplate] = useState(false);
-  const [seedingProjectMilestones, setSeedingProjectMilestones] =
-    useState(false);
+  const syncingBudgetMilestonesRef = useRef(false);
 
   const externalCollaborationsQuery = useExternalCollaborations(tenantId);
   const [extraBudgetRows, setExtraBudgetRows] = useState<ProjectBudgetLine[]>(
@@ -283,56 +284,87 @@ export const useBudgetEditor = ({
   };
 
   useEffect(() => {
-    const autoSeed = async () => {
+    const syncBudgetMilestones = async () => {
       if (
         !projectId ||
-        seedingProjectMilestones ||
-        budgetMilestonesQuery.isFetching ||
-        (budgetMilestones && budgetMilestones.length > 0)
+        syncingBudgetMilestonesRef.current ||
+        budgetMilestonesQuery.isFetching
       ) {
         return;
       }
-      const milestonesForProject = projectMilestones.filter(
-        (m) => m.project_id === projectId,
-      );
-      if (milestonesForProject.length === 0) return;
-      setSeedingProjectMilestones(true);
+      if (projectMilestones.length === 0) return;
+      syncingBudgetMilestonesRef.current = true;
       try {
-        const ordered = [...milestonesForProject].sort((a, b) => {
+        const orderedProjectMilestones = [...projectMilestones].sort((a, b) => {
           if (a.due_date && b.due_date) {
             return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
           }
           return (a.id ?? 0) - (b.id ?? 0);
         });
-        for (let idx = 0; idx < ordered.length; idx += 1) {
-          const m = ordered[idx];
-          await createBudgetMilestoneMutation.mutateAsync({
-            name: m.title || `Hito ${idx + 1}`,
-            order_index: idx + 1,
-          });
+        const budgetByOrder = new Map(
+          budgetMilestones.map((m) => [m.order_index, m]),
+        );
+
+        for (let idx = 0; idx < orderedProjectMilestones.length; idx += 1) {
+          const projectMilestone = orderedProjectMilestones[idx];
+          const orderIndex = idx + 1;
+          const desiredName = projectMilestone.title || `Hito ${orderIndex}`;
+          const existing = budgetByOrder.get(orderIndex);
+          if (!existing) {
+            await createBudgetMilestoneMutation.mutateAsync({
+              name: desiredName,
+              order_index: orderIndex,
+            });
+            continue;
+          }
+          const normalizedExisting = (existing.name || "").trim();
+          const normalizedDesired = desiredName.trim();
+          if (normalizedExisting !== normalizedDesired) {
+            await updateBudgetMilestoneMutation.mutateAsync({
+              milestoneId: existing.id,
+              payload: { name: desiredName, order_index: orderIndex },
+            });
+          } else if (existing.order_index !== orderIndex) {
+            await updateBudgetMilestoneMutation.mutateAsync({
+              milestoneId: existing.id,
+              payload: { order_index: orderIndex },
+            });
+          }
         }
-        queryClient.invalidateQueries({
+
+        const maxOrderIndex = orderedProjectMilestones.length;
+        const extras = budgetMilestones.filter(
+          (m) => m.order_index > maxOrderIndex,
+        );
+        for (const extra of extras) {
+          await deleteBudgetMilestoneMutation.mutateAsync(extra.id);
+        }
+
+        await queryClient.invalidateQueries({
           queryKey: ["project-budget-milestones", projectId],
         });
       } catch (err: any) {
         toast({
-          title: "No se pudieron crear los hitos de presupuesto",
-          description: err?.response?.data?.detail ?? "Revisa el backend.",
+          title: "Error al sincronizar hitos",
+          description:
+            err?.response?.data?.detail ??
+            "No se pudieron sincronizar los hitos del proyecto.",
           status: "error",
         });
       } finally {
-        setSeedingProjectMilestones(false);
+        syncingBudgetMilestonesRef.current = false;
       }
     };
-    autoSeed();
+    syncBudgetMilestones();
   }, [
     projectId,
+    projectMilestones,
     budgetMilestones,
     budgetMilestonesQuery.isFetching,
-    projectMilestones,
     createBudgetMilestoneMutation,
+    updateBudgetMilestoneMutation,
+    deleteBudgetMilestoneMutation,
     queryClient,
-    seedingProjectMilestones,
     toast,
   ]);
 
@@ -574,6 +606,44 @@ export const useBudgetEditor = ({
         return latestBudgets.find((r) => getBudgetMatchKey(r.concept ?? "") === key);
       };
 
+      const deriveMilestoneValues = (
+        draftPayload: ProjectBudgetLineUpdatePayload,
+        fallback: ProjectBudgetLine | undefined,
+      ) => {
+        const milestones = draftPayload.milestones ?? [];
+        if (milestones.length === 0) {
+          const h1 = safeNumber(draftPayload.hito1_budget ?? fallback?.hito1_budget ?? 0);
+          const h2 = safeNumber(draftPayload.hito2_budget ?? fallback?.hito2_budget ?? 0);
+          const j1 = safeNumber(draftPayload.justified_hito1 ?? fallback?.justified_hito1 ?? 0);
+          const j2 = safeNumber(draftPayload.justified_hito2 ?? fallback?.justified_hito2 ?? 0);
+          const approved = safeNumber(
+            draftPayload.approved_budget ?? fallback?.approved_budget ?? h1 + h2,
+          );
+          return {
+            hasMilestones: false,
+            h1,
+            h2,
+            j1,
+            j2,
+            approved,
+            milestones,
+          };
+        }
+
+        const amounts = milestones.map((m) => safeNumber(m.amount ?? 0));
+        const justifications = milestones.map((m) => safeNumber(m.justified ?? 0));
+        const approved = amounts.reduce((sum, value) => sum + value, 0);
+        return {
+          hasMilestones: true,
+          h1: amounts[0] ?? 0,
+          h2: amounts[1] ?? 0,
+          j1: justifications[0] ?? 0,
+          j2: justifications[1] ?? 0,
+          approved,
+          milestones,
+        };
+      };
+
       for (const [idStr, draftPayload] of Object.entries(budgetDrafts)) {
         const id = Number(idStr);
         const base =
@@ -588,17 +658,16 @@ export const useBudgetEditor = ({
         const baseKey = getBudgetParentKey(base.concept);
         const isParentRow = isAllCapsConcept(base.concept);
         const parentTotals = isParentRow ? budgetParentTotals.get(baseKey) : undefined;
-        const h1 = safeNumber(draftPayload.hito1_budget ?? base.hito1_budget ?? 0);
-        const h2 = safeNumber(draftPayload.hito2_budget ?? base.hito2_budget ?? 0);
-        const approved = safeNumber(
-          draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
-        );
+        const milestoneValues = deriveMilestoneValues(draftPayload, base);
+        const h1 = milestoneValues.h1;
+        const h2 = milestoneValues.h2;
+        const approved = milestoneValues.approved;
         const j1 = parentTotals
           ? parentTotals.j1
-          : safeNumber(draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0);
+          : milestoneValues.j1;
         const j2 = parentTotals
           ? parentTotals.j2
-          : safeNumber(draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0);
+          : milestoneValues.j2;
         if (j1 > h1) {
           throw new Error(
             `Justificado H1 mayor que presupuesto en "${base.concept}".`,
@@ -646,20 +715,19 @@ export const useBudgetEditor = ({
               defaultBudgetTemplate.find((r) => r.id === numericId);
             if (!base) return Promise.resolve();
             if (!conceptValue) return Promise.resolve();
-            const h1 = safeNumber(draftPayload.hito1_budget ?? base.hito1_budget ?? 0);
-            const h2 = safeNumber(draftPayload.hito2_budget ?? base.hito2_budget ?? 0);
-            const approved = safeNumber(
-              draftPayload.approved_budget ?? base.approved_budget ?? h1 + h2,
-            );
+            const milestoneValues = deriveMilestoneValues(draftPayload, base);
+            const h1 = milestoneValues.h1;
+            const h2 = milestoneValues.h2;
+            const approved = milestoneValues.approved;
             const baseKey = getBudgetParentKey(base.concept ?? "");
             const isParentRow = isAllCapsConcept(base.concept);
             const parentTotals = isParentRow ? budgetParentTotals.get(baseKey) : undefined;
             const j1 = parentTotals
               ? parentTotals.j1
-              : safeNumber(draftPayload.justified_hito1 ?? base.justified_hito1 ?? 0);
+              : milestoneValues.j1;
             const j2 = parentTotals
               ? parentTotals.j2
-              : safeNumber(draftPayload.justified_hito2 ?? base.justified_hito2 ?? 0);
+              : milestoneValues.j2;
             const forecast = safeNumber(
               draftPayload.forecasted_spent ?? base.forecasted_spent ?? 0,
             );
@@ -798,11 +866,63 @@ export const useBudgetEditor = ({
     });
   };
 
-  const addBudgetMilestone = (nextIndex: number) => {
+  const ensureBaseBudgetMilestones = async () => {
+    if (!projectId) return [] as typeof budgetMilestones;
+    if (budgetMilestones.length > 0) return budgetMilestones;
+    const created = [];
+    const m1 = await createBudgetMilestoneMutation.mutateAsync({
+      name: "HITO 1",
+      order_index: 1,
+    });
+    created.push(m1);
+    const m2 = await createBudgetMilestoneMutation.mutateAsync({
+      name: "HITO 2",
+      order_index: 2,
+    });
+    created.push(m2);
+    return created;
+  };
+
+  const addBudgetMilestone = async () => {
     if (!projectId) return;
-    createBudgetMilestoneMutation.mutate({
-      name: `Hito ${nextIndex}`,
-      order_index: nextIndex,
+    try {
+      const current = await ensureBaseBudgetMilestones();
+      const maxIndex = current.reduce(
+        (max, milestone) => Math.max(max, milestone.order_index || 0),
+        0,
+      );
+      const nextIndex = maxIndex + 1;
+      createBudgetMilestoneMutation.mutate({
+        name: `Hito ${nextIndex}`,
+        order_index: nextIndex,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al crear hito",
+        description:
+          error?.response?.data?.detail ?? "No se pudo crear el hito.",
+        status: "error",
+      });
+    }
+  };
+
+  const removeBudgetMilestone = (milestoneId: number) => {
+    if (!projectId || !milestoneId) return;
+    deleteBudgetMilestoneMutation.mutate(milestoneId, {
+      onSuccess: () => {
+        setBudgetDrafts((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((key) => {
+            const draft = next[Number(key)];
+            if (!draft?.milestones) return;
+            const filtered = draft.milestones.filter(
+              (m) => m.milestone_id !== milestoneId,
+            );
+            next[Number(key)] = { ...draft, milestones: filtered };
+          });
+          return next;
+        });
+      },
     });
   };
 
@@ -829,17 +949,20 @@ export const useBudgetEditor = ({
     hasRealBudgets,
     hasBudgetDrafts,
     budgetMilestonesCount: budgetMilestones.length,
+    budgetMilestones,
     budgetsQueryState: {
       isFetching: budgetsQuery.isFetching,
       isError: budgetsQuery.isError,
     },
     seedTemplateBudgetLines,
     addBudgetMilestone,
+    removeBudgetMilestone,
     handleGeneralExpensesPercent,
     handleGeneralExpensesAmount,
     handleAddExternalCollaborationRow,
     handleRemoveExternalCollaborationRow,
     handleBudgetCellSave,
+    handleBudgetMilestoneChange,
     handleBudgetMilestoneChange,
     handleBudgetSaveAll,
     handleBudgetSave,

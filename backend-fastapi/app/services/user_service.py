@@ -14,6 +14,8 @@ from app.models.hr import EmployeeProfile
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.role import Role
+from app.models.permission import Permission
+from app.models.role_permission import RolePermission
 from app.models.audit_log import AuditLog
 from app.schemas.user import (
     UserCreate,
@@ -35,7 +37,11 @@ def _resolve_avatar_url(avatar_url: str | None) -> str | None:
     return avatar_url
 
 
-def _user_to_read(user: User) -> UserRead:
+def _user_to_read(
+    user: User,
+    role_name: str | None = None,
+    permissions: list[str] | None = None,
+) -> UserRead:
     return UserRead(
         id=user.id,
         email=user.email,
@@ -44,6 +50,8 @@ def _user_to_read(user: User) -> UserRead:
         is_super_admin=user.is_super_admin,
         tenant_id=user.tenant_id,
         role_id=user.role_id,
+        role_name=role_name,
+        permissions=permissions or [],
         language=user.language,
         avatar_url=_resolve_avatar_url(user.avatar_url),
         avatar_data=user.avatar_data,
@@ -51,12 +59,28 @@ def _user_to_read(user: User) -> UserRead:
     )
 
 
-def get_user_me(current_user: User) -> UserRead:
+def get_user_me(session: Session, current_user: User) -> UserRead:
     """
     Devuelve la representación de lectura del usuario actual.
     """
 
-    return _user_to_read(current_user)
+    role_name: str | None = None
+    permissions: list[str] = []
+    if current_user.role_id:
+        role = session.get(Role, current_user.role_id)
+        role_name = role.name if role else None
+        statement = (
+            select(Permission.code)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == current_user.role_id)
+        )
+        permissions = [row[0] for row in session.exec(statement).all()]
+
+    return _user_to_read(
+        current_user,
+        role_name=role_name,
+        permissions=permissions,
+    )
 
 
 def list_users_by_tenant(
@@ -98,9 +122,15 @@ def list_users_by_tenant(
         details=f"Listado de {len(users)} usuarios para tenant_id={tenant_id}",
     )
 
+    role_ids = {u.role_id for u in users if u.role_id}
+    roles_by_id: dict[int, str] = {}
+    if role_ids:
+        roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
+        roles_by_id = {role.id: role.name for role in roles if role.id is not None}
+
     result: List[UserRead] = []
     for u in users:
-        result.append(_user_to_read(u))
+        result.append(_user_to_read(u, role_name=roles_by_id.get(u.role_id)))
 
     return result
 
@@ -259,7 +289,7 @@ def create_user(
         details=f"Usuario creado con email '{user.email}'",
     )
 
-    return _user_to_read(user)
+    return _user_to_read(user, role_name=user_in.role_name)
 
 
 def delete_user(

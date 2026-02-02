@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -32,6 +32,8 @@ class UserRead(UserBase):
     id: int
     tenant_id: int | None
     role_id: int | None
+    role_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     language: str | None = None
     avatar_url: str | None = None
     avatar_data: str | None = None

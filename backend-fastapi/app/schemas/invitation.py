@@ -52,4 +52,4 @@ class UserInvitationAccept(BaseModel):
   token: str
   full_name: str
   password: str
-
+  password_confirm: str

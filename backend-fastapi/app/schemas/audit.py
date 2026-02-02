@@ -11,7 +11,7 @@ class AuditLogRead(BaseModel):
     id: int
     created_at: datetime
     user_email: EmailStr | None = None
+    source: str | None = None
     action: str
     details: str | None = None
-
 

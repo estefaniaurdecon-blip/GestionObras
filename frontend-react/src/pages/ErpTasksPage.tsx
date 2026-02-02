@@ -61,7 +61,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 export const ErpTasksPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const cardBg = useColorModeValue("white", "gray.700");
   const subtleText = useColorModeValue("gray.500", "gray.300");
@@ -80,6 +80,29 @@ export const ErpTasksPage: React.FC = () => {
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   `;
+  const padDatePart = (value: number) => String(value).padStart(2, "0");
+  const toDateTimeInput = (value?: string | null) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${parsed.getFullYear()}-${padDatePart(
+      parsed.getMonth() + 1,
+    )}-${padDatePart(parsed.getDate())}T${padDatePart(
+      parsed.getHours(),
+    )}:${padDatePart(parsed.getMinutes())}`;
+  };
+  const formatTaskDateTime = (value?: string | null) => {
+    if (!value) return t("erp.tasks.drawer.noDate");
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString(i18n.language, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   type KanbanStatus = "pending" | "in_progress" | "done";
   const kanbanColumns: { id: KanbanStatus; label: string; color: string }[] =
@@ -146,7 +169,7 @@ export const ErpTasksPage: React.FC = () => {
   // Determina permisos y tenant del usuario actual.
   const { data: currentUser } = useCurrentUser();
   const tenantId = currentUser?.tenant_id;
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
   const effectiveTenantId = isSuperAdmin
     ? undefined
     : (currentUser?.tenant_id ?? undefined);
@@ -457,8 +480,8 @@ export const ErpTasksPage: React.FC = () => {
       task.subactivity_id ? String(task.subactivity_id) : "",
     );
     setEditAssigneeId(task.assigned_to_id ? String(task.assigned_to_id) : "");
-    setEditStartDate(task.start_date ?? "");
-    setEditEndDate(task.end_date ?? "");
+    setEditStartDate(toDateTimeInput(task.start_date));
+    setEditEndDate(toDateTimeInput(task.end_date));
     setEditStatus(getTaskStatus(task));
     setEditOpen(true);
   };
@@ -890,7 +913,7 @@ export const ErpTasksPage: React.FC = () => {
                                   colorScheme="gray"
                                   fontSize="0.65rem"
                                 >
-                                  {task.start_date}
+                                  {formatTaskDateTime(task.start_date)}
                                 </Badge>
                               )}
                             </Stack>
@@ -1036,7 +1059,7 @@ export const ErpTasksPage: React.FC = () => {
                       <FormControl>
                         <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                         <Input
-                          type="date"
+                          type="datetime-local"
                           value={quickAddStartDate}
                           onChange={(e) => setQuickAddStartDate(e.target.value)}
                         />
@@ -1044,7 +1067,7 @@ export const ErpTasksPage: React.FC = () => {
                       <FormControl>
                         <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                         <Input
-                          type="date"
+                          type="datetime-local"
                           value={quickAddEndDate}
                           onChange={(e) => setQuickAddEndDate(e.target.value)}
                         />
@@ -1168,7 +1191,7 @@ export const ErpTasksPage: React.FC = () => {
                       <FormControl>
                         <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                         <Input
-                          type="date"
+                          type="datetime-local"
                           value={editStartDate}
                           onChange={(e) => setEditStartDate(e.target.value)}
                         />
@@ -1176,7 +1199,7 @@ export const ErpTasksPage: React.FC = () => {
                       <FormControl>
                         <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                         <Input
-                          type="date"
+                          type="datetime-local"
                           value={editEndDate}
                           onChange={(e) => setEditEndDate(e.target.value)}
                         />
@@ -1277,7 +1300,7 @@ export const ErpTasksPage: React.FC = () => {
                       {t("erp.tasks.fields.start")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {viewTask.start_date ?? t("erp.tasks.drawer.noDate")}
+                      {formatTaskDateTime(viewTask.start_date)}
                     </Text>
                   </Box>
                   <Box>
@@ -1285,7 +1308,7 @@ export const ErpTasksPage: React.FC = () => {
                       {t("erp.tasks.fields.end")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {viewTask.end_date ?? t("erp.tasks.drawer.noDate")}
+                      {formatTaskDateTime(viewTask.end_date)}
                     </Text>
                   </Box>
                 </SimpleGrid>
@@ -1404,7 +1427,7 @@ export const ErpTasksPage: React.FC = () => {
                 <FormControl>
                   <FormLabel>{t("erp.tasks.fields.start")}</FormLabel>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     value={taskStartDate}
                     onChange={(e) => setTaskStartDate(e.target.value)}
                   />
@@ -1412,7 +1435,7 @@ export const ErpTasksPage: React.FC = () => {
                 <FormControl>
                   <FormLabel>{t("erp.tasks.fields.end")}</FormLabel>
                   <Input
-                    type="date"
+                    type="datetime-local"
                     value={taskEndDate}
                     onChange={(e) => setTaskEndDate(e.target.value)}
                   />
@@ -1492,7 +1515,7 @@ export const ErpTasksPage: React.FC = () => {
                       {t("erp.tasks.fields.start")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {selectedTask.start_date ?? t("erp.tasks.drawer.noDate")}
+                      {formatTaskDateTime(selectedTask.start_date)}
                     </Text>
                   </Box>
                   <Box>
@@ -1500,7 +1523,7 @@ export const ErpTasksPage: React.FC = () => {
                       {t("erp.tasks.fields.end")}
                     </Text>
                     <Text fontWeight="semibold">
-                      {selectedTask.end_date ?? t("erp.tasks.drawer.noDate")}
+                      {formatTaskDateTime(selectedTask.end_date)}
                     </Text>
                   </Box>
                 </SimpleGrid>

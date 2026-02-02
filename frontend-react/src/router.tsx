@@ -20,6 +20,9 @@ import { TimeControlPage } from "./pages/TimeControlPage";
 import { TimeReportPage } from "./pages/TimeReportPage";
 import { SupportTicketsPage } from "./pages/SupportTicketsPage";
 import { HrPage } from "./pages/HrPage";
+import { HrDepartmentsPage } from "./pages/HrDepartmentsPage";
+import { HrEmployeesPage } from "./pages/HrEmployeesPage";
+import { HrTalentPage } from "./pages/HrTalentPage";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { ErpProjectsPage } from "./pages/ErpProjectsPage";
 import { ErpProjectDetailPage } from "./pages/ErpProjectDetailPage";
@@ -29,6 +32,7 @@ import { ErpTasksPage } from "./pages/ErpTasksPage";
 import { ErpExternalCollaborationsPage } from "./pages/ErpExternalCollaborationsPage";
 import { ErpSimulationsPage } from "./pages/ErpSimulationsPage";
 import { ErpInvoicesPage } from "./pages/ErpInvoicesPage";
+import { ErpWorkManagementPage } from "./pages/ErpWorkManagementPage";
 
 // Layout raíz muy simple: delega en cada página.
 const RootLayout: React.FC = () => <Outlet />;
@@ -111,6 +115,12 @@ const erpTasksRoute = createRoute({
   component: ErpTasksPage,
 });
 
+const erpWorkManagementRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/work-management",
+  component: ErpWorkManagementPage,
+});
+
 const erpExternalCollaborationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/erp/external-collaborations",
@@ -183,6 +193,24 @@ const hrRoute = createRoute({
   component: HrPage,
 });
 
+const hrDepartmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/hr/departments",
+  component: HrDepartmentsPage,
+});
+
+const hrEmployeesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/hr/employees",
+  component: HrEmployeesPage,
+});
+
+const hrTalentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/hr/talent",
+  component: HrTalentPage,
+});
+
 // Árbol completo de rutas.
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -200,6 +228,7 @@ const routeTree = rootRoute.addChildren([
   erpProjectBudgetRoute,
   erpProjectDocumentsRoute,
   erpTasksRoute,
+  erpWorkManagementRoute,
   erpExternalCollaborationsRoute,
   erpSimulationsRoute,
   erpInvoicesRoute,
@@ -209,6 +238,9 @@ const routeTree = rootRoute.addChildren([
   userSettingsRoute,
   supportRoute,
   hrRoute,
+  hrDepartmentsRoute,
+  hrEmployeesRoute,
+  hrTalentRoute,
 ]);
 
 // Instancia de router de TanStack.

@@ -1,6 +1,9 @@
 from typing import List, Optional
 
+from datetime import datetime
+
 from sqlmodel import Session, select
+from sqlalchemy import func
 
 from app.models.audit_log import AuditLog
 from app.models.user import User
@@ -13,6 +16,11 @@ def list_audit_logs(
     current_user: UserModel,
     *,
     tenant_id: Optional[int] = None,
+    source: Optional[str] = None,
+    user_email: Optional[str] = None,
+    user_id: Optional[int] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     limit: int = 100,
 ) -> List[AuditLogRead]:
     """
@@ -34,6 +42,26 @@ def list_audit_logs(
             raise PermissionError("El usuario no está asociado a ningún tenant")
         statement = statement.where(AuditLog.tenant_id == current_user.tenant_id)
 
+    if source:
+        statement = statement.where(AuditLog.source == source)
+
+    if start_date:
+        statement = statement.where(AuditLog.created_at >= start_date)
+    if end_date:
+        statement = statement.where(AuditLog.created_at <= end_date)
+
+    if user_id is not None:
+        statement = statement.where(AuditLog.user_id == user_id)
+    elif user_email:
+        matching_ids = session.exec(
+            select(User.id).where(
+                func.lower(User.email).contains(user_email.lower()),
+            ),
+        ).all()
+        if not matching_ids:
+            return []
+        statement = statement.where(AuditLog.user_id.in_(matching_ids))
+
     logs = session.exec(statement).all()
 
     # Resolvemos emails de usuarios para mostrar en la tabla.
@@ -50,10 +78,10 @@ def list_audit_logs(
             id=log.id,
             created_at=log.created_at,
             user_email=email_by_id.get(log.user_id),
+            source=log.source,
             action=log.action,
             details=log.details,
         )
         for log in logs
     ]
-
 

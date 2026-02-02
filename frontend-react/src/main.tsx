@@ -31,7 +31,7 @@ const rootElement = document.getElementById("root") as HTMLElement;
 const AppRoot: React.FC = () => {
   const { data: currentUser } = useCurrentUser();
   const tenantId = currentUser?.tenant_id ?? null;
-  const isSuperAdmin = Boolean(currentUser?.is_super_admin);
+  const isSuperAdmin = currentUser?.is_super_admin === true;
 
   const brandingQuery = useQuery({
     queryKey: ["tenant-branding-global", tenantId],

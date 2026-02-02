@@ -361,6 +361,18 @@ def init_db() -> None:
                 text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_DAILY'")
             )
 
+    if "audit_log" in table_names or "auditlog" in table_names:
+        audit_table = "audit_log" if "audit_log" in table_names else "auditlog"
+        audit_columns = {col["name"] for col in inspector.get_columns(audit_table)}
+        with engine.begin() as conn:
+            if "source" not in audit_columns:
+                conn.execute(
+                    text(f"ALTER TABLE {audit_table} ADD COLUMN source VARCHAR(16) NULL")
+                )
+                conn.execute(
+                    text(f"UPDATE {audit_table} SET source = 'app' WHERE source IS NULL")
+                )
+
     if "user" in table_names:
         user_columns = {col["name"] for col in inspector.get_columns("user")}
         with engine.begin() as conn:
@@ -416,6 +428,10 @@ def init_db() -> None:
                     text(
                         "ALTER TABLE employeeprofile ADD COLUMN availability_percentage DECIMAL NULL"
                     )
+                )
+            if "titulacion" not in emp_columns:
+                conn.execute(
+                    text("ALTER TABLE employeeprofile ADD COLUMN titulacion VARCHAR(255) NULL")
                 )
 
     # Migración sencilla a hitos dinámicos: si no hay hitos de presupuesto creados,

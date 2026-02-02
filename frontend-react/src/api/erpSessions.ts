@@ -2,7 +2,7 @@ import { apiClient } from "./client";
 
 export interface TimeSessionBlock {
   id: number;
-  task_id: number;
+  task_id: number | null;
   user_id: number;
   description?: string | null;
   started_at: string;

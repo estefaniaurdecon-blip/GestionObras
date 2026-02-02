@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class ProjectRead(BaseModel):
@@ -326,7 +326,7 @@ class ExternalCollaborationBase(BaseModel):
     name: str
     legal_name: str
     cif: str
-    contact_email: str
+    contact_email: EmailStr
 
 
 class ExternalCollaborationCreate(ExternalCollaborationBase):
@@ -338,11 +338,16 @@ class ExternalCollaborationUpdate(BaseModel):
     name: Optional[str] = None
     legal_name: Optional[str] = None
     cif: Optional[str] = None
-    contact_email: Optional[str] = None
+    contact_email: Optional[EmailStr] = None
 
 
-class ExternalCollaborationRead(ExternalCollaborationBase):
+class ExternalCollaborationRead(BaseModel):
     id: int
+    collaboration_type: str
+    name: str
+    legal_name: str
+    cif: str
+    contact_email: str
     created_at: datetime
     updated_at: datetime
 

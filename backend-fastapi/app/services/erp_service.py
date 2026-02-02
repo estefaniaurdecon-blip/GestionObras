@@ -137,6 +137,22 @@ def _validate_budget_totals(
             "La suma de los hitos no puede superar el presupuesto aprobado."
         )
 
+
+def _validate_budget_milestones_totals(
+    *,
+    total_amount: Decimal,
+    total_justified: Decimal,
+    approved_budget: Decimal,
+) -> None:
+    if total_amount > approved_budget:
+        raise ValueError(
+            "La suma de los hitos no puede superar el presupuesto aprobado."
+        )
+    if total_justified > approved_budget:
+        raise ValueError(
+            "El justificado total no puede superar el presupuesto aprobado."
+        )
+
 # Lista líneas de presupuesto de un proyecto
 def list_project_budget_lines(
     session: Session, project_id: int, tenant_id: Optional[int]
@@ -303,10 +319,10 @@ def create_project_budget_line(
     if milestones_payload:
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
-        approved_budget = data.approved_budget
-        _validate_budget_totals(
-            hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
-            hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
+        approved_budget = total_amount
+        _validate_budget_milestones_totals(
+            total_amount=total_amount,
+            total_justified=total_justified,
             approved_budget=approved_budget,
         )
         percent_spent = Decimal(0)
@@ -379,10 +395,10 @@ def update_project_budget_line(
         # Recalcula totales desde hitos.
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
-        approved_budget = data.approved_budget if data.approved_budget is not None else line.approved_budget
-        _validate_budget_totals(
-            hito1_budget=milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0),
-            hito2_budget=milestones_payload[1].amount if len(milestones_payload) > 1 else Decimal(0),
+        approved_budget = total_amount
+        _validate_budget_milestones_totals(
+            total_amount=total_amount,
+            total_justified=total_justified,
             approved_budget=approved_budget,
         )
         line.hito1_budget = milestones_payload[0].amount if len(milestones_payload) > 0 else Decimal(0)
@@ -1082,21 +1098,29 @@ def get_active_time_session(
 def start_time_session(
     session: Session,
     user: User,
-    task_id: int,
+    task_id: Optional[int],
     tenant_id: Optional[int],
     payload_tenant_id: Optional[int] = None,
 ) -> TimeSession:
-    task = session.get(Task, task_id)
-    if not task:
-        raise ValueError("Tarea no encontrada")
     if payload_tenant_id is not None and not user.is_super_admin:
-        raise ValueError("No tienes permisos para iniciar sesiones para otros tenants.")
+        if user.tenant_id is None or payload_tenant_id != user.tenant_id:
+            raise ValueError(
+                "No tienes permisos para iniciar sesiones para otros tenants."
+            )
+
+    task: Optional[Task] = None
+    if task_id is not None:
+        task = session.get(Task, task_id)
+        if not task:
+            raise ValueError("Tarea no encontrada")
 
     # Resuelve el tenant: payload > parámetro header > tenant de la tarea > tenant del usuario
-    resolved_tenant_id = payload_tenant_id or tenant_id or task.tenant_id or user.tenant_id
+    resolved_tenant_id = payload_tenant_id or tenant_id or (task.tenant_id if task else None) or user.tenant_id
+    if resolved_tenant_id is None:
+        raise ValueError("Tenant requerido para iniciar una sesión sin tarea.")
     
     # Valida que la tarea pertenezca al tenant especificado (si ambos existen)
-    if task.tenant_id is not None and resolved_tenant_id is not None and task.tenant_id != resolved_tenant_id:
+    if task and task.tenant_id is not None and resolved_tenant_id is not None and task.tenant_id != resolved_tenant_id:
         raise ValueError("Tarea no encontrada")
 
     active = get_active_time_session(session, user, resolved_tenant_id)
@@ -1111,19 +1135,20 @@ def start_time_session(
         active.is_active = False
         session.add(active)
 
-        hours_decimal = Decimal(active.duration_seconds) / Decimal(3600)
-        hours_decimal = hours_decimal.quantize(Decimal("0.01"))
-        session.add(
-            TimeEntry(
-                tenant_id=active.tenant_id,
-                task_id=active.task_id,
-                user_id=user.id,
-                time_session_id=active.id,
-                hours=hours_decimal,
-                description="Generado automaticamente desde control de tiempo",
-                created_at=now,
-            ),
-        )
+        if active.task_id is not None:
+            hours_decimal = Decimal(active.duration_seconds) / Decimal(3600)
+            hours_decimal = hours_decimal.quantize(Decimal("0.01"))
+            session.add(
+                TimeEntry(
+                    tenant_id=active.tenant_id,
+                    task_id=active.task_id,
+                    user_id=user.id,
+                    time_session_id=active.id,
+                    hours=hours_decimal,
+                    description="Generado automaticamente desde control de tiempo",
+                    created_at=now,
+                ),
+            )
 
     new_session = TimeSession(
         tenant_id=resolved_tenant_id,
@@ -1157,19 +1182,20 @@ def stop_time_session(
     active.is_active = False
     session.add(active)
 
-    hours_decimal = Decimal(active.duration_seconds) / Decimal(3600)
-    hours_decimal = hours_decimal.quantize(Decimal("0.01"))
-    session.add(
-        TimeEntry(
-            tenant_id=active.tenant_id,
-            task_id=active.task_id,
-            user_id=user.id,
-            time_session_id=active.id,
-            hours=hours_decimal,
-            description="Generado automaticamente desde control de tiempo",
-            created_at=now,
-        ),
-    )
+    if active.task_id is not None:
+        hours_decimal = Decimal(active.duration_seconds) / Decimal(3600)
+        hours_decimal = hours_decimal.quantize(Decimal("0.01"))
+        session.add(
+            TimeEntry(
+                tenant_id=active.tenant_id,
+                task_id=active.task_id,
+                user_id=user.id,
+                time_session_id=active.id,
+                hours=hours_decimal,
+                description="Generado automaticamente desde control de tiempo",
+                created_at=now,
+            ),
+        )
 
     session.commit()
     session.refresh(active)
@@ -1365,6 +1391,21 @@ def update_time_session(
         session.add(entry)
         session.commit()
         session.refresh(entry)
+    elif ts.task_id is not None and ts.ended_at is not None:
+        hours_decimal = Decimal(ts.duration_seconds) / Decimal(3600)
+        hours_decimal = hours_decimal.quantize(Decimal("0.01"))
+        session.add(
+            TimeEntry(
+                tenant_id=ts.tenant_id,
+                task_id=ts.task_id,
+                user_id=user.id,
+                time_session_id=ts.id,
+                hours=hours_decimal,
+                description=ts.description or "Generado automaticamente desde control de tiempo",
+                created_at=ts.ended_at,
+            ),
+        )
+        session.commit()
 
     return ts
 
