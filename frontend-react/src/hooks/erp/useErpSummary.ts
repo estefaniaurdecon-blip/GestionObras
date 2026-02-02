@@ -229,7 +229,25 @@ export const useErpSummary = ({
   const departmentAllocationPercentMap = useMemo(() => {
     const map: Record<number, number> = {};
     hrDepartments.forEach((dept) => {
-      map[dept.id] = Number(dept.project_allocation_percentage ?? 100);
+      const rawPercent = dept.project_allocation_percentage;
+      if (rawPercent !== null && rawPercent !== undefined) {
+        map[dept.id] = Number(rawPercent);
+        return;
+      }
+      const name = (dept.name || "").toLowerCase();
+      if (name.includes("jefes de obra") || name.includes("jefe de obra")) {
+        map[dept.id] = 30;
+        return;
+      }
+      if (name.includes("estudio")) {
+        map[dept.id] = 50;
+        return;
+      }
+      if (name.includes("i+d") || name.includes("id")) {
+        map[dept.id] = 100;
+        return;
+      }
+      map[dept.id] = 100;
     });
     return map;
   }, [hrDepartments]);
@@ -503,12 +521,18 @@ export const useErpSummary = ({
   useEffect(() => {
     const selected = new Set(selectedEmployeeIds);
     const all = hrEmployees.map((emp) => emp.id);
+    const arraysEqual = (a: number[], b: number[]) =>
+      a.length === b.length && a.every((value, idx) => value === b[idx]);
+
     if (selectedEmployeeIds.length === 0) {
-      setSelectedEmployeeIds(all);
+      if (!arraysEqual(all, selectedEmployeeIds)) {
+        setSelectedEmployeeIds(all);
+      }
       return;
     }
+
     const filtered = all.filter((id) => selected.has(id));
-    if (filtered.length !== selectedEmployeeIds.length) {
+    if (!arraysEqual(filtered, selectedEmployeeIds)) {
       setSelectedEmployeeIds(filtered);
     }
   }, [hrEmployees, selectedEmployeeIds]);

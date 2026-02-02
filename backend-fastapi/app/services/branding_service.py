@@ -126,6 +126,7 @@ def update_branding(
     logo_upload,
     company_name: Optional[str],
     company_subtitle: Optional[str],
+    department_emails: Optional[Dict[str, str]] = None,
 ) -> TenantBranding:
     ensure_tenant_exists(session, tenant_id)
 
@@ -144,6 +145,18 @@ def update_branding(
 
     if company_subtitle is not None:
         branding.company_subtitle = company_subtitle.strip() or None
+
+    if department_emails is not None:
+        cleaned: Dict[str, str] = {}
+        for raw_key, raw_email in department_emails.items():
+            key = (raw_key or "").strip()
+            email = (raw_email or "").strip()
+            if not key or not email:
+                continue
+            if "@" not in email:
+                raise ValueError(f"Email inválido para '{key}'")
+            cleaned[key] = email
+        branding.department_emails = cleaned or None
 
     if logo_upload is not None:
         content_type = getattr(logo_upload, "content_type", None) or ""

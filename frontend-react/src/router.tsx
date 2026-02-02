@@ -15,6 +15,7 @@ import { ToolsAdminPage } from "./pages/ToolsAdminPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { TenantSettingsPage } from "./pages/TenantSettingsPage";
 import { TenantBrandingPage } from "./pages/TenantBrandingPage";
+import { TenantDepartmentEmailsPage } from "./pages/TenantDepartmentEmailsPage";
 import { UserSettingsPage } from "./pages/UserSettingsPage";
 import { TimeControlPage } from "./pages/TimeControlPage";
 import { TimeReportPage } from "./pages/TimeReportPage";
@@ -175,6 +176,12 @@ const tenantBrandingRoute = createRoute({
   component: TenantBrandingPage,
 });
 
+const tenantDepartmentEmailsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tenant-department-emails",
+  component: TenantDepartmentEmailsPage,
+});
+
 const userSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/user-settings",
@@ -222,6 +229,7 @@ const routeTree = rootRoute.addChildren([
   auditRoute,
   tenantSettingsRoute,
   tenantBrandingRoute,
+  tenantDepartmentEmailsRoute,
   timeControlRoute,
   erpProjectsRoute,
   erpProjectDetailRoute,

@@ -276,6 +276,7 @@ export const ErpProjectsPage: React.FC = () => {
     saveStatusLabel,
     saveErrorMessage,
     loadingSummaryYear,
+    departmentAllocationPercentMap,
     departmentColorMap,
     departmentMap,
     allocationKey,
@@ -719,6 +720,7 @@ export const ErpProjectsPage: React.FC = () => {
               filteredSummaryEmployees={filteredSummaryEmployees}
               employeeAvailability={employeeAvailability}
               departmentMap={departmentMap}
+              departmentAllocationPercentMap={departmentAllocationPercentMap}
               employeeDepartmentPercentages={employeeDepartmentPercentages}
               allocationKey={allocationKey}
               allocationIndex={allocationIndex}

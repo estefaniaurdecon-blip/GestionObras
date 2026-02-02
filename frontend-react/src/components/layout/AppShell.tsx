@@ -50,11 +50,20 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const pathname = router.state.location.pathname;
   const isErpRoute = useMemo(() => pathname.startsWith("/erp/"), [pathname]);
   const isHrRoute = useMemo(() => pathname.startsWith("/hr"), [pathname]);
+  const isSettingsRoute = useMemo(
+    () =>
+      pathname.startsWith("/tenant-branding") ||
+      pathname.startsWith("/tenant-department-emails"),
+    [pathname],
+  );
   const [erpAccordionIndex, setErpAccordionIndex] = useState(
     isErpRoute ? 0 : -1
   );
   const [hrAccordionIndex, setHrAccordionIndex] = useState(
     isHrRoute ? 0 : -1
+  );
+  const [settingsAccordionIndex, setSettingsAccordionIndex] = useState(
+    isSettingsRoute ? 0 : -1
   );
   const isActive = (path: string) => pathname === path;
   const isActivePrefix = (path: string) =>
@@ -73,6 +82,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       setHrAccordionIndex(0);
     }
   }, [isHrRoute]);
+
+  useEffect(() => {
+    if (isSettingsRoute) {
+      setSettingsAccordionIndex(0);
+    }
+  }, [isSettingsRoute]);
+
 
   const { data: currentUser, isLoading: isUserLoading } = useCurrentUser();
 
@@ -365,15 +381,61 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   {t("layout.nav.tenantSettings")}
                 </Button>
               )}
-              <Button
-                as={Link}
-                to="/tenant-branding"
-                variant={isActivePrefix("/tenant-branding") ? "solid" : "ghost"}
-                justifyContent="flex-start"
-                size="sm"
+              <Accordion
+                allowToggle
+                index={settingsAccordionIndex}
+                onChange={(nextIndex) => {
+                  setSettingsAccordionIndex(
+                    typeof nextIndex === "number" ? nextIndex : nextIndex[0] ?? -1
+                  );
+                }}
+                borderWidth="1px"
+                borderRadius="md"
               >
-                {t("layout.nav.branding")}
-              </Button>
+                <AccordionItem border="none">
+                  <AccordionButton px={3} py={2}>
+                    <Box
+                      flex="1"
+                      textAlign="left"
+                      fontSize="sm"
+                      fontWeight="semibold"
+                    >
+                      {t("layout.nav.settings")}
+                    </Box>
+                    <AccordionIcon />
+                  </AccordionButton>
+                  <AccordionPanel px={2} pb={3}>
+                    <VStack align="stretch" spacing={1}>
+                      <Button
+                        as={Link}
+                        to="/tenant-branding"
+                        variant={
+                          isActivePrefix("/tenant-branding")
+                            ? "solid"
+                            : "ghost"
+                        }
+                        justifyContent="flex-start"
+                        size="sm"
+                      >
+                        {t("layout.nav.branding")}
+                      </Button>
+                      <Button
+                        as={Link}
+                        to="/tenant-department-emails"
+                        variant={
+                          isActivePrefix("/tenant-department-emails")
+                            ? "solid"
+                            : "ghost"
+                        }
+                        justifyContent="flex-start"
+                        size="sm"
+                      >
+                        {t("layout.nav.departmentEmails")}
+                      </Button>
+                    </VStack>
+                  </AccordionPanel>
+                </AccordionItem>
+              </Accordion>
               {isSuperAdmin && (
                 <Button
                   as={Link}

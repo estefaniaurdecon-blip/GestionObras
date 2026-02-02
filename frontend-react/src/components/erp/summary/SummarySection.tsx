@@ -29,6 +29,7 @@ import {
   Tag,
   VStack,
   Wrap,
+  useColorModeValue,
 } from "@chakra-ui/react";
 
 import type { EmployeeAllocation, EmployeeProfile, Department } from "../../../api/hr";
@@ -72,6 +73,7 @@ interface SummarySectionProps {
   filteredSummaryEmployees: EmployeeProfile[];
   employeeAvailability: Record<number, number>;
   departmentMap: Record<number, string>;
+  departmentAllocationPercentMap: Record<number, number>;
   employeeDepartmentPercentages: Record<number, DepartmentUsage[]>;
   allocationKey: (
     employeeId: number,
@@ -135,6 +137,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
   filteredSummaryEmployees,
   employeeAvailability,
   departmentMap,
+  departmentAllocationPercentMap,
   employeeDepartmentPercentages,
   allocationKey,
   allocationIndex,
@@ -159,153 +162,244 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
   onAddDrawerSearchChange,
   employeesAvailableToAdd,
   onAddEmployee,
-}) => (
-  <Stack spacing={5} minW="0">
-    <Flex align="center" justify="space-between" gap={4} flexWrap="wrap">
-      <Box>
-        <Heading size="md" mb={1}>
-          Gestion y seguimiento de proyectos
-        </Heading>
-        <HStack spacing={2} mb={1}>
-          <Tag colorScheme="green" size="sm">
-            Ano {summaryYear}
-          </Tag>
-          <Text fontSize="xs" color={subtleText}>
-            Filtrando por ano {summaryYear}
-          </Text>
-        </HStack>
-        <Text fontSize="sm" color={subtleText}>
-          Tablero tipo Excel con horas a justificar, justificadas y asignacion
-          por empleado.
-        </Text>
-        {loadingSummaryYear && (
-          <Text fontSize="xs" color={subtleText} mt={1}>
-            Cargando los datos del ano {summaryYear}...
-          </Text>
-        )}
-        {saveStatusLabel && !loadingSummaryYear && (
-          <Text fontSize="xs" color="gray.500" mt={1}>
-            {saveStatusLabel}
-          </Text>
-        )}
-        {saveErrorMessage && !loadingSummaryYear && (
-          <Text fontSize="xs" color="red.500" mt={1}>
-            {saveErrorMessage}
-          </Text>
-        )}
-      </Box>
+}) => {
+  const cardBg = useColorModeValue("white", "gray.800");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
+  const headerGradient = "linear(to-r, teal.600, green.700)";
+  const badgeBg = useColorModeValue("teal.50", "teal.900");
+  const badgeColor = useColorModeValue("teal.700", "teal.100");
 
-      <HStack spacing={3} align="flex-end" flexWrap="wrap">
-        <FormControl maxW="220px">
-          <FormLabel fontSize="xs" mb={1}>
-            Buscar empleado
-          </FormLabel>
-          <Input
-            size="sm"
-            placeholder="Nombre o apellidos"
-            value={summarySearch}
-            onChange={(e) => onSummarySearchChange(e.target.value)}
-          />
-        </FormControl>
-
-        <FormControl maxW="180px">
-          <FormLabel fontSize="xs" mb={1}>
-            Departamento
-          </FormLabel>
-          <Select
-            size="sm"
-            value={departmentFilter}
-            onChange={(e) => {
-              const value = e.target.value;
-              onDepartmentFilterChange(
-                value === "all" ? "all" : Number(value),
-              );
-            }}
-          >
-            <option value="all">Todos</option>
-            {hrDepartments.map((dept) => (
-              <option key={dept.id} value={dept.id}>
-                {dept.name}
-              </option>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl maxW="120px">
-          <FormLabel fontSize="xs" mb={1}>
-            Ano
-          </FormLabel>
-          <Select
-            size="sm"
-            value={summaryYear}
-            onChange={(e) => {
-              const parsed = Number(e.target.value);
-              onSummaryYearChange(
-                Number.isFinite(parsed) ? parsed : new Date().getFullYear(),
-              );
-            }}
-          >
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
-        </FormControl>
-
-        <Button
-          size="sm"
-          colorScheme="green"
-          variant="solid"
-          onClick={onRefreshAllocations}
-        >
-          Refrescar
-        </Button>
-
-        <Button
-          size="sm"
-          variant={summaryEditMode ? "solid" : "outline"}
-          colorScheme={summaryEditMode ? "green" : "gray"}
-          onClick={onToggleSummaryEdit}
-        >
-          {summaryEditMode ? "Guardar" : "Editar"}
-        </Button>
-      </HStack>
-      <Flex wrap="wrap" gap={3} mt={2} mb={4}>
-        {hrDepartments.map((dept) => (
-          <HStack key={`legend-${dept.id}`} spacing={2}>
-            <Box
-              w="12px"
-              h="12px"
-              borderRadius="full"
-              bg={departmentColorMap[dept.id] ?? "gray.300"}
-            />
-            <Text fontSize="xs" color="gray.600">
-              {dept.name}
-            </Text>
-          </HStack>
-        ))}
-      </Flex>
-    </Flex>
+  return (
     <Box
-      borderWidth="1px"
-      borderRadius="xl"
-      bg="white"
-      boxShadow="md"
-      w="100%"
-      maxW="100%"
-      minW="0"
-      overflow="hidden"
+      minH="100vh"
+      bg="linear-gradient(135deg, #f0f4f8 0%, #d9e8f5 100%)"
+      p={{ base: 4, md: 6 }}
     >
+      <Stack spacing={6} maxW="100%" mx="auto">
+        <Flex align="flex-start" justify="space-between" gap={4} flexWrap="wrap">
+          <Box>
+            <Heading
+              size="lg"
+              bgGradient={headerGradient}
+              bgClip="text"
+              fontWeight="black"
+              letterSpacing="tight"
+              mb={2}
+            >
+              Gestion y seguimiento de proyectos
+            </Heading>
+            <HStack spacing={2} mb={2}>
+              <Tag
+                colorScheme="green"
+                size="sm"
+                px={3}
+                py={1}
+                borderRadius="full"
+                bg={badgeBg}
+                color={badgeColor}
+                fontWeight="bold"
+              >
+                Ano {summaryYear}
+              </Tag>
+              <Text fontSize="sm" color={subtleText}>
+                Filtrando por ano {summaryYear}
+              </Text>
+            </HStack>
+            <Text fontSize="sm" color={subtleText} maxW="600px">
+              Tablero tipo Excel con horas a justificar, justificadas y
+              asignacion por empleado.
+            </Text>
+            {loadingSummaryYear && (
+              <Text fontSize="xs" color={subtleText} mt={1}>
+                Cargando los datos del ano {summaryYear}...
+              </Text>
+            )}
+            {saveStatusLabel && !loadingSummaryYear && (
+              <Text fontSize="xs" color="gray.500" mt={1}>
+                {saveStatusLabel}
+              </Text>
+            )}
+            {saveErrorMessage && !loadingSummaryYear && (
+              <Text fontSize="xs" color="red.500" mt={1}>
+                {saveErrorMessage}
+              </Text>
+            )}
+          </Box>
+        </Flex>
+
+        <Box
+          p={5}
+          bg={cardBg}
+          borderRadius="2xl"
+          borderWidth="1px"
+          borderColor={borderColor}
+          boxShadow="xl"
+        >
+          <Flex justify="space-between" align="flex-end" flexWrap="wrap" gap={4}>
+            <HStack spacing={3} flexWrap="wrap">
+              <FormControl maxW="220px">
+                <FormLabel
+                  fontSize="sm"
+                  mb={1}
+                  fontWeight="semibold"
+                  color="gray.700"
+                >
+                  Buscar empleado
+                </FormLabel>
+                <Input
+                  size="sm"
+                  placeholder="Nombre o apellidos"
+                  value={summarySearch}
+                  onChange={(e) => onSummarySearchChange(e.target.value)}
+                  borderRadius="lg"
+                  focusBorderColor="teal.500"
+                />
+              </FormControl>
+
+              <FormControl maxW="180px">
+                <FormLabel
+                  fontSize="sm"
+                  mb={1}
+                  fontWeight="semibold"
+                  color="gray.700"
+                >
+                  Departamento
+                </FormLabel>
+                <Select
+                  size="sm"
+                  value={departmentFilter}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    onDepartmentFilterChange(
+                      value === "all" ? "all" : Number(value),
+                    );
+                  }}
+                  borderRadius="lg"
+                  focusBorderColor="teal.500"
+                >
+                  <option value="all">Todos</option>
+                  {hrDepartments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl maxW="120px">
+                <FormLabel
+                  fontSize="sm"
+                  mb={1}
+                  fontWeight="semibold"
+                  color="gray.700"
+                >
+                  Ano
+                </FormLabel>
+                <Select
+                  size="sm"
+                  value={summaryYear}
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    onSummaryYearChange(
+                      Number.isFinite(parsed)
+                        ? parsed
+                        : new Date().getFullYear(),
+                    );
+                  }}
+                  borderRadius="lg"
+                  focusBorderColor="teal.500"
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            </HStack>
+
+            <HStack spacing={2}>
+              <Button
+                size="sm"
+                colorScheme="green"
+                borderRadius="xl"
+                fontWeight="bold"
+                boxShadow="sm"
+                _hover={{ transform: "translateY(-1px)", boxShadow: "lg" }}
+                transition="all 0.2s"
+                onClick={onRefreshAllocations}
+              >
+                Refrescar
+              </Button>
+
+              <Button
+                size="sm"
+                colorScheme={summaryEditMode ? "orange" : "teal"}
+                variant={summaryEditMode ? "solid" : "outline"}
+                onClick={onToggleSummaryEdit}
+                borderRadius="xl"
+                fontWeight="bold"
+                boxShadow="sm"
+                _hover={{ transform: "translateY(-1px)", boxShadow: "lg" }}
+                transition="all 0.2s"
+              >
+                {summaryEditMode ? "Guardar" : "Editar"}
+              </Button>
+            </HStack>
+          </Flex>
+
+          <Flex
+            wrap="wrap"
+            gap={4}
+            mt={4}
+            pt={4}
+            borderTop="1px"
+            borderColor={borderColor}
+          >
+            {hrDepartments.map((dept) => (
+              <HStack key={`legend-${dept.id}`} spacing={2}>
+                <Box
+                  w="12px"
+                  h="12px"
+                  borderRadius="full"
+                  bg={departmentColorMap[dept.id] ?? "gray.300"}
+                  boxShadow="sm"
+                />
+                <Text fontSize="sm" color="gray.700" fontWeight="medium">
+                  {dept.name}
+                </Text>
+              </HStack>
+            ))}
+          </Flex>
+        </Box>
+
+        <Box
+          borderRadius="2xl"
+          overflow="hidden"
+          boxShadow="2xl"
+          borderWidth="1px"
+          borderColor={borderColor}
+          bg={cardBg}
+        >
       <Box w="100%" maxW="100%" minW="0" overflowX="auto" overflowY="hidden">
-        <Table size="sm" variant="simple" minW="1400px" w="max-content">
+        <Table size="sm" variant="simple" minW="1600px" w="max-content">
           <Thead>
-            <Tr bg="gray.200">
-              <Th minW="60px">No</Th>
-              <Th minW="170px">Nombre</Th>
-              <Th minW="190px">Apellidos</Th>
-              <Th minW="150px">Titulacion</Th>
-              <Th minW="130px">Departamento</Th>
+            <Tr bgGradient={headerGradient}>
+              <Th minW="60px" color="white">
+                No
+              </Th>
+              <Th minW="170px" color="white">
+                Nombre
+              </Th>
+              <Th minW="190px" color="white">
+                Apellidos
+              </Th>
+              <Th minW="150px" color="white">
+                Titulacion
+              </Th>
+              <Th minW="130px" color="white">
+                Departamento
+              </Th>
               {projectColumns.map((p) => {
                 const count = (summaryMilestones[p.id] ?? []).length || 1;
                 return (
@@ -313,20 +407,21 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     key={p.id}
                     colSpan={count}
                     textAlign="center"
-                    bg="gray.200"
-                    borderColor="gray.300"
+                    borderLeftWidth="2px"
+                    borderLeftColor="whiteAlpha.400"
+                    color="white"
                   >
                     <HStack spacing={2} justify="center">
                       <Text fontWeight="semibold">{p.name}</Text>
                       <Button
                         size="xs"
-                        colorScheme="green"
+                        colorScheme="whiteAlpha"
                         variant="solid"
                         borderRadius="full"
                         onClick={() => onAddSummaryMilestone(p.id)}
                         aria-label={`Anadir hito a ${p.name}`}
-                        minW="22px"
-                        h="22px"
+                        minW="20px"
+                        h="20px"
                         p={0}
                       >
                         +
@@ -335,19 +430,19 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   </Th>
                 );
               })}
-              <Th textAlign="center" bg="green.700" color="white" minW="140px">
+              <Th textAlign="center" bg="green.600" color="white" minW="140px">
                 TOTAL HORAS JUSTIFICADAS
               </Th>
-              <Th textAlign="center" bg="gray.50" minW="90px">
+              <Th textAlign="center" minW="90px" color="white">
                 I+D 100%
               </Th>
-              <Th textAlign="center" bg="gray.50" minW="90px">
+              <Th textAlign="center" minW="90px" color="white">
                 Estudio 50%
               </Th>
-              <Th textAlign="center" bg="gray.50" minW="110px">
+              <Th textAlign="center" minW="110px" color="white">
                 Jefes de obra 30%
               </Th>
-              <Th textAlign="center" bg="gray.50" minW="110px">
+              <Th textAlign="center" minW="110px" color="white">
                 Limites especiales
               </Th>
               <Th textAlign="center" bg="red.600" color="white" minW="150px">
@@ -355,8 +450,8 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
               </Th>
             </Tr>
 
-            <Tr bg="gray.50" borderBottomWidth="1px">
-              <Th bg="gray.50" colSpan={5} textAlign="left">
+            <Tr bg="blue.50" borderBottomWidth="1px">
+              <Th bg="blue.100" colSpan={5} textAlign="left" color="blue.800">
                 Horas a justificar
               </Th>
               {projectColumns.map((p) => {
@@ -365,7 +460,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   <Th
                     key={p.id}
                     textAlign="center"
-                    borderColor="gray.200"
+                    borderColor="blue.200"
                     colSpan={count}
                   >
                     <Input
@@ -385,7 +480,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   </Th>
                 );
               })}
-              <Th textAlign="center" bg="green.50">
+              <Th textAlign="center" bg="blue.100" color="blue.800" fontSize="sm">
                 {Object.values(projectJustified).reduce(
                   (a, b) => a + (b || 0),
                   0,
@@ -396,7 +491,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
             </Tr>
 
             <Tr bg="green.50" borderBottomWidth="1px">
-              <Th bg="gray.50" colSpan={5} textAlign="left">
+              <Th bg="green.100" colSpan={5} textAlign="left" color="green.800">
                 Justificadas
               </Th>
               {projectColumns.map((p) => {
@@ -405,7 +500,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   <Th
                     key={p.id}
                     textAlign="center"
-                    borderColor="gray.200"
+                    borderColor="green.200"
                     colSpan={count}
                   >
                     <Input
@@ -421,14 +516,14 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   </Th>
                 );
               })}
-              <Th textAlign="center" bg="green.700" color="white">
+              <Th textAlign="center" bg="green.600" color="white" fontSize="sm" fontWeight="bold">
                 Justificadas totales
               </Th>
               <Th colSpan={5} />
             </Tr>
 
             <Tr bg="orange.50" borderBottomWidth="1px">
-              <Th bg="orange.50" colSpan={5} textAlign="left">
+              <Th bg="orange.100" colSpan={5} textAlign="left" color="orange.800">
                 Faltan
               </Th>
               {projectColumns.map((p) => {
@@ -446,12 +541,12 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   </Th>
                 );
               })}
-              <Th textAlign="center" bg="orange.50" />
+              <Th textAlign="center" bg="orange.100" />
               <Th colSpan={5} />
             </Tr>
 
             <Tr bg="blue.100" borderBottomWidth="2px" borderColor="blue.200">
-              <Th bg="blue.100" colSpan={5} textAlign="left" color="blue.700">
+              <Th bg="blue.200" colSpan={5} textAlign="left" color="blue.800">
                 % Ejecutado en {summaryYear}
               </Th>
               {projectColumns.map((p) => {
@@ -463,7 +558,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   <Th
                     key={p.id}
                     textAlign="center"
-                    color="blue.700"
+                    color="blue.800"
                     colSpan={count}
                   >
                     {pct}%
@@ -473,32 +568,32 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
               <Th colSpan={6} />
             </Tr>
 
-            <Tr bg="green.50" borderBottomWidth="2px" borderColor="green.200">
-              <Th bg="green.50" colSpan={5} textAlign="left" color="green.700">
+            <Tr bg="teal.50" borderBottomWidth="2px" borderColor="teal.200">
+              <Th bg="teal.100" colSpan={5} textAlign="left" color="teal.800">
                 Hitos (H1/H2/H3/H4)
               </Th>
               {projectColumns.map((p) => {
                 const ms = summaryMilestones[p.id] ?? [];
                 if (ms.length === 0) {
                   return (
-                    <Th
-                      key={`${p.id}-ms-empty`}
-                      textAlign="center"
-                      color="green.800"
-                    >
-                      <Text fontSize="xs" color="teal.600">
-                        Anade hitos con el +
-                      </Text>
-                    </Th>
+                      <Th
+                        key={`${p.id}-ms-empty`}
+                        textAlign="center"
+                        color="teal.800"
+                      >
+                        <Text fontSize="xs" color="teal.600">
+                          Anade hitos con el +
+                        </Text>
+                      </Th>
                   );
                 }
 
                 return ms.map((item, idx) => (
-                  <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
-                    <HStack justify="center" spacing={1}>
-                      <Text fontSize="xs" fontWeight="semibold">
-                        {item.label || `H${idx + 1}`}
-                      </Text>
+                      <Th key={`${p.id}-ms-${idx}`} textAlign="center" p={2}>
+                        <HStack justify="center" spacing={1}>
+                          <Text fontSize="xs" fontWeight="semibold" color="teal.800">
+                            {item.label || `H${idx + 1}`}
+                          </Text>
                       <Button
                         size="xs"
                         variant="ghost"
@@ -665,18 +760,58 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     >
                       {totalEmpAllocated} h
                     </Td>
-                    <Td textAlign="center" bg="white">
-                      -
-                    </Td>
-                    <Td textAlign="center" bg="white">
-                      -
-                    </Td>
-                    <Td textAlign="center" bg="white">
-                      -
-                    </Td>
-                    <Td textAlign="center" bg="white">
-                      -
-                    </Td>
+                    {(() => {
+                      const deptName = (departmentMap[deptId] ?? "")
+                        .toLowerCase()
+                        .trim();
+                      const nameBasedPercent = deptName.includes("jefes de obra") ||
+                        deptName.includes("jefe de obra")
+                        ? 30
+                        : deptName.includes("estudio")
+                          ? 50
+                          : deptName.includes("i+d") || deptName.includes("id")
+                            ? 100
+                            : null;
+                      const deptLimitPercent =
+                        nameBasedPercent ??
+                        departmentAllocationPercentMap[deptId] ??
+                        100;
+                      const deptLimitHours = Math.round(
+                        (available * deptLimitPercent) / 100,
+                      );
+                      const label =
+                        deptLimitPercent > 0
+                          ? `${deptLimitPercent}% (${deptLimitHours}h)`
+                          : "-";
+
+                      const idValue = deptLimitPercent === 100 ? label : "-";
+                      const estudioValue = deptLimitPercent === 50 ? label : "-";
+                      const jefesValue = deptLimitPercent === 30 ? label : "-";
+                      const especialesValue =
+                        deptLimitPercent !== 100 &&
+                        deptLimitPercent !== 50 &&
+                        deptLimitPercent !== 30 &&
+                        deptLimitPercent > 0
+                          ? label
+                          : "-";
+
+                      return (
+                        <>
+                          <Td textAlign="center" bg="white">
+                            {idValue}
+                          </Td>
+                          <Td textAlign="center" bg="white">
+                            {estudioValue}
+                          </Td>
+                          <Td textAlign="center" bg="white">
+                            {jefesValue}
+                          </Td>
+                          <Td textAlign="center" bg="white">
+                            {especialesValue}
+                          </Td>
+                        </>
+                      );
+                    })()}
                     <Td
                       textAlign="center"
                       bg="white"
@@ -970,7 +1105,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
     </Modal>
 
     <SimpleGrid columns={{ base: 1, md: 3 }} gap={4}>
-      <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
+      <Box p={4} borderRadius="lg" bg={cardBg} borderWidth="1px" borderColor={borderColor}>
         <Text fontSize="xs" color={subtleText}>
           Horas a justificar
         </Text>
@@ -979,7 +1114,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
         </Heading>
       </Box>
 
-      <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
+      <Box p={4} borderRadius="lg" bg={cardBg} borderWidth="1px" borderColor={borderColor}>
         <Text fontSize="xs" color={subtleText}>
           Justificadas
         </Text>
@@ -988,7 +1123,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
         </Heading>
       </Box>
 
-      <Box p={4} borderRadius="lg" bg="white" borderWidth="1px">
+      <Box p={4} borderRadius="lg" bg={cardBg} borderWidth="1px" borderColor={borderColor}>
         <Text fontSize="xs" color={subtleText}>
           Faltantes
         </Text>
@@ -1004,5 +1139,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
         </Heading>
       </Box>
     </SimpleGrid>
-  </Stack>
-);
+      </Stack>
+    </Box>
+  );
+};

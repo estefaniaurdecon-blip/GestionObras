@@ -150,6 +150,8 @@
       "support": "Soporte",
       "tools": "Herramientas",
       "audit": "Logs",
+      "settings": "Ajustes",
+      "departmentEmails": "Correos por departamento",
       "tenantSettings": "Ajustes de tenants",
       "branding": "Ajustes",
       "simulations": "Simulaciones"
@@ -574,6 +576,15 @@
       "companySubtitle": "Subtitulo",
       "accentColor": "Color de acento",
       "palette": "Paleta generada"
+    },
+    "departmentEmails": {
+      "title": "Correos por departamento",
+      "subtitle": "Define el correo de contacto para cada departamento.",
+      "add": "Anadir correo",
+      "remove": "Quitar",
+      "empty": "Aun no hay departamentos configurados.",
+      "department": "Departamento",
+      "email": "Correo"
     },
     "actions": {
       "save": "Guardar cambios"

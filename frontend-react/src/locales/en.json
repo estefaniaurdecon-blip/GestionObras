@@ -150,6 +150,8 @@
       "support": "Support",
       "tools": "Tools",
       "audit": "Audit",
+      "settings": "Settings",
+      "departmentEmails": "Department emails",
       "tenantSettings": "Tenant settings",
       "branding": "Branding",
       "simulations": "Simulations"
@@ -574,6 +576,15 @@
       "companySubtitle": "Subtitle",
       "accentColor": "Accent color",
       "palette": "Generated palette"
+    },
+    "departmentEmails": {
+      "title": "Department emails",
+      "subtitle": "Set the contact email for each department.",
+      "add": "Add email",
+      "remove": "Remove",
+      "empty": "No departments configured yet.",
+      "department": "Department",
+      "email": "Email"
     },
     "actions": {
       "save": "Save changes"

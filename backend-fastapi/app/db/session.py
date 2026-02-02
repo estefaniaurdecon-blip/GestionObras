@@ -414,6 +414,12 @@ def init_db() -> None:
                         "ALTER TABLE tenant_branding ADD COLUMN company_subtitle VARCHAR(256) NULL"
                     )
                 )
+            if "department_emails" not in branding_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tenant_branding ADD COLUMN department_emails JSON NULL"
+                    )
+                )
 
     # Campos de disponibilidad en perfiles de empleado.
     if "employeeprofile" in table_names:

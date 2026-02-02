@@ -6,6 +6,7 @@ export interface BrandingResponse {
   color_palette: Record<string, string>;
   company_name?: string | null;
   company_subtitle?: string | null;
+  department_emails?: Record<string, string> | null;
   updated_at?: string | null;
 }
 
@@ -23,6 +24,7 @@ export async function updateBranding(
     logoFile?: File | null;
     companyName?: string;
     companySubtitle?: string;
+    departmentEmails?: Record<string, string>;
   },
 ): Promise<BrandingResponse> {
   const formData = new FormData();
@@ -34,6 +36,12 @@ export async function updateBranding(
   }
   if (payload.companySubtitle !== undefined) {
     formData.append("company_subtitle", payload.companySubtitle);
+  }
+  if (payload.departmentEmails !== undefined) {
+    formData.append(
+      "department_emails",
+      JSON.stringify(payload.departmentEmails ?? {}),
+    );
   }
   if (payload.logoFile) {
     formData.append("logo", payload.logoFile);

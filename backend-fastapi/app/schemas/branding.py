@@ -10,6 +10,7 @@ class BrandingRead(BaseModel):
     accent_color: str
     company_name: Optional[str] = None
     company_subtitle: Optional[str] = None
+    department_emails: Optional[Dict[str, str]] = None
     updated_at: Optional[datetime] = None
 
 
@@ -17,3 +18,4 @@ class BrandingUpdate(BaseModel):
     accent_color: Optional[str] = None
     company_name: Optional[str] = None
     company_subtitle: Optional[str] = None
+    department_emails: Optional[Dict[str, str]] = None

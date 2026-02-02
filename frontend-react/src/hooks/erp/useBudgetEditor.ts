@@ -963,7 +963,6 @@ export const useBudgetEditor = ({
     handleRemoveExternalCollaborationRow,
     handleBudgetCellSave,
     handleBudgetMilestoneChange,
-    handleBudgetMilestoneChange,
     handleBudgetSaveAll,
     handleBudgetSave,
     openBudgetModal,

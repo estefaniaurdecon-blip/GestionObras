@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Dict, Optional
 
+from sqlalchemy import Column, JSON
 from sqlmodel import Field, SQLModel
 
 
@@ -17,5 +18,9 @@ class TenantBranding(SQLModel, table=True):
     logo_path: Optional[str] = Field(default=None, max_length=512)
     company_name: Optional[str] = Field(default=None, max_length=128)
     company_subtitle: Optional[str] = Field(default=None, max_length=256)
+    department_emails: Optional[Dict[str, str]] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
