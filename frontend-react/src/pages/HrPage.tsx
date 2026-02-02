@@ -950,7 +950,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   <VStack align="stretch" spacing={2}>
                     <FormControl>
                       <FormLabel fontSize="xs" mb={1}>
-                        Ano
+                        Año
                       </FormLabel>
                       <Select
                         size="sm"

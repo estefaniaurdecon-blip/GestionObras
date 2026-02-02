@@ -78,8 +78,14 @@ interface NewUserFormState {
   role: "tenant_admin" | "user";
 }
 
+interface EditUserFormState {
+  email: string;
+  full_name: string;
+  role: "tenant_admin" | "user";
+}
+
 /**
- * Gestion de usuarios por tenant.
+ * Gestión de usuarios por tenant.
  *
  * Super Admin:
  *   - Puede seleccionar cualquier tenant.
@@ -87,7 +93,7 @@ interface NewUserFormState {
  * Admin de tenant:
  *   - Gestiona solo los usuarios de su propio tenant (sin selector).
  */
-// Pantalla de gestion de usuarios: listado, filtros y acciones.
+// Pantalla de gestión de usuarios: listado, filtros y acciones.
 export const UsersPage: React.FC = () => {
   // Utilidades y estilos base.
   const toast = useToast();
@@ -121,6 +127,13 @@ export const UsersPage: React.FC = () => {
     role: "tenant_admin",
   });
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState<EditUserFormState>({
+    email: "",
+    full_name: "",
+    role: "user",
+  });
 
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
@@ -208,6 +221,70 @@ export const UsersPage: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createInvitationMutation.mutate(form);
+  };
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (payload: EditUserFormState & { id: number }) => {
+      const { id, ...data } = payload;
+      return apiClient.patch<User>(
+        `/api/v1/users/${id}`,
+        {
+          email: data.email,
+          full_name: data.full_name,
+          role_name: data.role,
+        },
+        {
+          headers: {
+            "X-Tenant-Id": (selectedTenantId ?? "").toString(),
+          },
+        },
+      );
+    },
+    onSuccess: () => {
+      if (selectedTenantId) {
+        queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
+      }
+      toast({
+        title: t("users.messages.updateSuccessTitle"),
+        description: t("users.messages.updateSuccessDesc"),
+        status: "success",
+      });
+      setEditOpen(false);
+      setEditingUser(null);
+    },
+    onError: (error: any) => {
+      const detail =
+        error?.response?.data?.detail ??
+        t("users.messages.updateErrorFallback");
+      toast({
+        title: t("users.messages.updateErrorTitle"),
+        description: detail,
+        status: "error",
+      });
+    },
+  });
+
+  const openEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditForm({
+      email: user.email,
+      full_name: user.full_name ?? "",
+      role: user.role_name === "tenant_admin" ? "tenant_admin" : "user",
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    updateUserMutation.mutate({ id: editingUser.id, ...editForm });
   };
 
   const getRoleLabel = (user: User): string => {
@@ -434,16 +511,27 @@ export const UsersPage: React.FC = () => {
                         </HStack>
                       </Td>
                       <Td>
-                        {!user.is_super_admin && (
-                          <Button
-                            size="xs"
-                            colorScheme="red"
-                            variant="outline"
-                            onClick={() => handleDeleteUser(user.id)}
-                          >
-                            {t("users.table.delete")}
-                          </Button>
-                        )}
+                        <HStack spacing={2}>
+                          {!user.is_super_admin && (
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => openEditUser(user)}
+                            >
+                              {t("users.table.edit")}
+                            </Button>
+                          )}
+                          {!user.is_super_admin && (
+                            <Button
+                              size="xs"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
+                              {t("users.table.delete")}
+                            </Button>
+                          )}
+                        </HStack>
                       </Td>
                     </Tr>
                   ))
@@ -501,6 +589,55 @@ export const UsersPage: React.FC = () => {
               isDisabled={!selectedTenantId}
             >
               {t("users.invite.submit")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={editOpen} onClose={() => setEditOpen(false)} size="lg">
+        <ModalOverlay />
+        <ModalContent as="form" onSubmit={handleEditSubmit}>
+          <ModalHeader>{t("users.edit.title")}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={3}>
+              <FormControl isRequired>
+                <FormLabel>{t("users.edit.fullName")}</FormLabel>
+                <Input
+                  name="full_name"
+                  value={editForm.full_name}
+                  onChange={handleEditChange}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t("users.edit.email")}</FormLabel>
+                <Input
+                  name="email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={handleEditChange}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("users.edit.role")}</FormLabel>
+                <Select name="role" value={editForm.role} onChange={handleEditChange}>
+                  <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="user">{t("users.roles.standard")}</option>
+                </Select>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setEditOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              colorScheme="green"
+              isLoading={updateUserMutation.isPending}
+              isDisabled={!selectedTenantId}
+            >
+              {t("users.edit.save")}
             </Button>
           </ModalFooter>
         </ModalContent>

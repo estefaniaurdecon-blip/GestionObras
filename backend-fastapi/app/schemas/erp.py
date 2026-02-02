@@ -10,6 +10,7 @@ class ProjectRead(BaseModel):
     tenant_id: Optional[int] = None
     name: str
     description: Optional[str] = None
+    project_type: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None
@@ -20,6 +21,7 @@ class ProjectRead(BaseModel):
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    project_type: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None
@@ -29,6 +31,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    project_type: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None

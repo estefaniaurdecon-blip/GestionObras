@@ -231,7 +231,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
             <Tr>
               <Th color="gray.300">Concepto</Th>
               <Th color="gray.300">Importe (€)</Th>
-              <Th color="gray.300">Accion</Th>
+              <Th color="gray.300">Acción</Th>
             </Tr>
           </Thead>
           <Tbody>

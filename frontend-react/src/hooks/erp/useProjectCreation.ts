@@ -23,6 +23,9 @@ export const useProjectCreation = ({
 
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
+  const [projectType, setProjectType] = useState<
+    "regional" | "nacional" | "internacional"
+  >("regional");
   const [projectStart, setProjectStart] = useState("");
   const [projectEnd, setProjectEnd] = useState("");
   const [projectActivities, setProjectActivities] = useState<ProjectActivityForm[]>([]);
@@ -80,6 +83,7 @@ export const useProjectCreation = ({
         {
           name: projectName.trim(),
           description: projectDescription.trim() || null,
+          project_type: projectType,
           start_date: projectStart || null,
           end_date: projectEnd || null,
         },
@@ -144,6 +148,7 @@ export const useProjectCreation = ({
     onSuccess: async () => {
       setProjectName("");
       setProjectDescription("");
+      setProjectType("regional");
       setProjectStart("");
       setProjectEnd("");
       setProjectActivities([]);
@@ -178,6 +183,8 @@ export const useProjectCreation = ({
     setProjectName,
     projectDescription,
     setProjectDescription,
+    projectType,
+    setProjectType,
     projectStart,
     setProjectStart,
     projectEnd,

@@ -277,6 +277,13 @@ def init_db() -> None:
                 )
 
     if "erp_project" in table_names:
+        project_columns = {col["name"] for col in inspector.get_columns("erp_project")}
+        with engine.begin() as conn:
+            if "project_type" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN project_type VARCHAR(32) NULL")
+                )
+
         from sqlmodel import select
         from app.models.erp import Project
 
@@ -412,6 +419,18 @@ def init_db() -> None:
                 conn.execute(
                     text(
                         "ALTER TABLE tenant_branding ADD COLUMN company_subtitle VARCHAR(256) NULL"
+                    )
+                )
+            if "show_company_name" not in branding_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tenant_branding ADD COLUMN show_company_name BOOLEAN NOT NULL DEFAULT TRUE"
+                    )
+                )
+            if "show_company_subtitle" not in branding_columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tenant_branding ADD COLUMN show_company_subtitle BOOLEAN NOT NULL DEFAULT TRUE"
                     )
                 )
             if "department_emails" not in branding_columns:

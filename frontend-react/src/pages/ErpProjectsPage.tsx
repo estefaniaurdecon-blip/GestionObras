@@ -110,6 +110,8 @@ export const ErpProjectsPage: React.FC = () => {
     setProjectName,
     projectDescription,
     setProjectDescription,
+    projectType,
+    setProjectType,
     projectStart,
     setProjectStart,
     projectEnd,
@@ -225,6 +227,8 @@ export const ErpProjectsPage: React.FC = () => {
     setEditName,
     editDescription,
     setEditDescription,
+    editProjectType,
+    setEditProjectType,
     editStart,
     setEditStart,
     editEnd,
@@ -485,6 +489,8 @@ export const ErpProjectsPage: React.FC = () => {
 
         description: editDescription.trim() || null,
 
+        project_type: editProjectType,
+
         start_date: editStart || null,
 
         end_date: editEnd || null,
@@ -621,7 +627,7 @@ export const ErpProjectsPage: React.FC = () => {
     <AppShell>
       <ProjectHero
         items={heroItems}
-        title="Gestion de Proyectos"
+        title="Gestión de Proyectos"
         subtitle="Control y visualizacion de proyectos y tareas"
         animation={`${fadeUp} 0.6s ease-out`}
       />
@@ -766,6 +772,8 @@ export const ErpProjectsPage: React.FC = () => {
               onProjectNameChange={setProjectName}
               projectDescription={projectDescription}
               onProjectDescriptionChange={setProjectDescription}
+              projectType={projectType}
+              onProjectTypeChange={setProjectType}
               projectStart={projectStart}
               onProjectStartChange={setProjectStart}
               projectEnd={projectEnd}
@@ -802,6 +810,8 @@ export const ErpProjectsPage: React.FC = () => {
         setEditActive={setEditActive}
         editDescription={editDescription}
         setEditDescription={setEditDescription}
+        editProjectType={editProjectType}
+        setEditProjectType={setEditProjectType}
         editStart={editStart}
         setEditStart={setEditStart}
         editEnd={editEnd}

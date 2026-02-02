@@ -3,6 +3,7 @@ import { apiClient } from "./client";
 export interface ErpProjectCreate {
   name: string;
   description?: string | null;
+  project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
   subsidy_percent?: number | null;
@@ -13,6 +14,7 @@ export interface ErpProjectResponse {
   id: number;
   name: string;
   description?: string | null;
+  project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;
@@ -24,6 +26,7 @@ export interface ErpProjectResponse {
 export interface ErpProjectUpdate {
   name?: string | null;
   description?: string | null;
+  project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
   subsidy_percent?: number | null;

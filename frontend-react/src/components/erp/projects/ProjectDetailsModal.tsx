@@ -46,6 +46,8 @@ interface ProjectDetailsModalProps {
   setEditActive: (value: boolean) => void;
   editDescription: string;
   setEditDescription: (value: string) => void;
+  editProjectType: "regional" | "nacional" | "internacional";
+  setEditProjectType: (value: "regional" | "nacional" | "internacional") => void;
   editStart: string;
   setEditStart: (value: string) => void;
   editEnd: string;
@@ -85,6 +87,8 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
   setEditActive,
   editDescription,
   setEditDescription,
+  editProjectType,
+  setEditProjectType,
   editStart,
   setEditStart,
   editEnd,
@@ -149,6 +153,14 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
               <Box borderWidth="1px" borderRadius="md" p={3}>
                 <Text fontSize="xs" color={subtleText}>
+                  Tipo de proyecto
+                </Text>
+                <Text fontWeight="semibold">
+                  {selectedProject.project_type ?? "Sin tipo"}
+                </Text>
+              </Box>
+              <Box borderWidth="1px" borderRadius="md" p={3}>
+                <Text fontSize="xs" color={subtleText}>
                   Inicio
                 </Text>
                 <Text fontWeight="semibold">
@@ -210,6 +222,22 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={3}
                 />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Tipo de proyecto</FormLabel>
+                <Select
+                  value={editProjectType}
+                  onChange={(e) =>
+                    setEditProjectType(
+                      e.target.value as "regional" | "nacional" | "internacional",
+                    )
+                  }
+                >
+                  <option value="regional">Regional</option>
+                  <option value="nacional">Nacional</option>
+                  <option value="internacional">Internacional</option>
+                </Select>
               </FormControl>
 
               <FormControl>

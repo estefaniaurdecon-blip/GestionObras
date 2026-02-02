@@ -118,15 +118,21 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   const brandingLogo =
     !isSuperAdmin ? brandingQuery.data?.logo ?? null : null;
+  const showCompanyName =
+    brandingQuery.data?.show_company_name ?? true;
+  const showCompanySubtitle =
+    brandingQuery.data?.show_company_subtitle ?? true;
   const brandingName =
     !isSuperAdmin
-      ? brandingQuery.data?.company_name ??
-        t("layout.brand.title")
+      ? showCompanyName
+        ? brandingQuery.data?.company_name ?? t("layout.brand.title")
+        : t("layout.brand.title")
       : t("layout.brand.title");
   const brandingSubtitle =
     !isSuperAdmin
-      ? brandingQuery.data?.company_subtitle ??
-        t("layout.brand.subtitle")
+      ? showCompanySubtitle
+        ? brandingQuery.data?.company_subtitle ?? t("layout.brand.subtitle")
+        : t("layout.brand.subtitle")
       : t("layout.brand.subtitle");
   const brandingLogoUrl = brandingLogo
     ? brandingLogo.startsWith("http")

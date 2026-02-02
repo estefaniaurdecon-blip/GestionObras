@@ -1,11 +1,11 @@
-{
+﻿{
   "common": {
     "save": "Guardar",
     "cancel": "Cancelar"
   },
   "settings": {
     "title": "Ajustes de usuario",
-    "subtitle": "Configura tu perfil, contrasena y preferencias.",
+    "subtitle": "Configura tu perfil, Contraseña y preferencias.",
     "profile": "Perfil",
     "email": "Correo electronico",
     "fullName": "Nombre completo",
@@ -13,22 +13,22 @@
     "profilePhotoHint": "Formatos permitidos: JPG, PNG o WebP (max 5MB).",
     "darkMode": "Modo oscuro",
     "saveProfile": "Guardar cambios",
-    "password": "Cambiar contrasena",
-    "currentPassword": "Contrasena actual",
-    "newPassword": "Nueva contrasena",
-    "confirmPassword": "Repetir nueva contrasena",
-    "updatePassword": "Actualizar contrasena",
+    "password": "Cambiar Contraseña",
+    "currentPassword": "Contraseña actual",
+    "newPassword": "Nueva Contraseña",
+    "confirmPassword": "Repetir nueva Contraseña",
+    "updatePassword": "Actualizar Contraseña",
     "language": "Idioma",
     "languageHelp": "Elige el idioma de la interfaz",
     "languageOptions": {
       "en": "Ingles",
-      "es": "Espanol"
+      "es": "Español"
     },
     "messages": {
       "loadErrorTitle": "Error al cargar perfil",
-      "loadErrorFallback": "No se ha podido cargar la informacion de usuario.",
+      "loadErrorFallback": "No se ha podido cargar la información de usuario.",
       "profileUpdatedTitle": "Perfil actualizado",
-      "profileUpdatedDesc": "Tu informacion de usuario se ha guardado correctamente.",
+      "profileUpdatedDesc": "Tu información de usuario se ha guardado correctamente.",
       "profileUpdateErrorTitle": "Error al actualizar perfil",
       "profileUpdateErrorFallback": "No se ha podido actualizar tu perfil (revisa los datos).",
       "profilePhotoUpdatedTitle": "Foto de perfil actualizada",
@@ -36,27 +36,27 @@
       "profilePhotoUpdateErrorTitle": "Error al subir foto",
       "profilePhotoUpdateErrorFallback": "No se ha podido subir la foto de perfil.",
       "passwordMissingTitle": "Datos incompletos",
-      "passwordMissingDesc": "Rellena todos los campos de contrasena.",
-      "passwordMismatchTitle": "Contrasena no coincide",
-      "passwordMismatchDesc": "La nueva contrasena y su confirmacion deben ser iguales.",
-      "passwordUpdatedTitle": "Contrasena actualizada",
-      "passwordUpdatedDesc": "Tu contrasena se ha cambiado correctamente.",
-      "passwordUpdateErrorTitle": "Error al cambiar contrasena",
-      "passwordUpdateErrorFallback": "No se ha podido cambiar la contrasena."
+      "passwordMissingDesc": "Rellena todos los campos de Contraseña.",
+      "passwordMismatchTitle": "Contraseña no coincide",
+      "passwordMismatchDesc": "La nueva Contraseña y su confirmación deben ser iguales.",
+      "passwordUpdatedTitle": "Contraseña actualizada",
+      "passwordUpdatedDesc": "Tu Contraseña se ha cambiado correctamente.",
+      "passwordUpdateErrorTitle": "Error al cambiar Contraseña",
+      "passwordUpdateErrorFallback": "No se ha podido cambiar la Contraseña."
     }
   },
   "auth": {
     "logoAlt": "Logo de Urdecon",
     "login": {
       "title": "Acceso a URDECON INNOVA",
-      "subtitle": "Inicia sesion con tu usuario corporativo",
+      "subtitle": "Inicia sesión con tu usuario corporativo",
       "email": "Correo electronico",
-      "password": "Contrasena",
+      "password": "Contraseña",
       "submit": "Entrar"
     },
     "messages": {
       "unexpectedTitle": "Error",
-      "unexpectedDesc": "Respuesta de autenticacion inesperada",
+      "unexpectedDesc": "Respuesta de autenticación inesperada",
       "invalidFallback": "Credenciales incorrectas o error de servidor",
       "loginErrorTitle": "Error de login"
     }
@@ -77,7 +77,7 @@
     },
     "actions": {
       "title": "Acciones rapidas",
-      "subtitle": "Gestiona tu organizacion y accede al ERP, Moodle y las herramientas clave de la plataforma.",
+      "subtitle": "Gestiona tu organización y accede al ERP, Moodle y las herramientas clave de la plataforma.",
       "manageTenants": "Crear / gestionar tenants",
       "manageUsers": "Gestionar usuarios",
       "viewTimeReport": "Ver informe de horas",
@@ -120,7 +120,7 @@
       "reportLoadTitle": "Error al cargar informe",
       "reportLoadFallback": "No se ha podido cargar el informe de horas.",
       "toolLaunchTitle": "Error al lanzar herramienta",
-      "toolLaunchFallback": "No se ha podido lanzar la herramienta (revisa permisos y configuracion)."
+      "toolLaunchFallback": "No se ha podido lanzar la herramienta (revisa permisos y configuración)."
     }
   },
   "layout": {
@@ -151,18 +151,18 @@
       "tools": "Herramientas",
       "audit": "Logs",
       "settings": "Ajustes",
-      "departmentEmails": "Correos por departamento",
+      "departmentEmails": "Correos",
       "tenantSettings": "Ajustes de tenants",
-      "branding": "Ajustes",
+      "branding": "Branding",
       "simulations": "Simulaciones"
     },
     "header": {
       "title": "Panel de control",
-      "subtitle": "Vista general de tu organizacion y herramientas"
+      "subtitle": "Vista general de tu organización y herramientas"
     },
     "userMenu": {
       "settings": "Ajustes de usuario",
-      "logout": "Cerrar sesion"
+      "logout": "Cerrar sesión"
     },
     "user": {
       "fallbackName": "Usuario",
@@ -197,9 +197,9 @@
       "contactEmail": "Correo de contacto",
       "contactPlaceholder": "correo@empresa.com",
       "selectPlaceholder": "Selecciona colaboracion",
-      "add": "Anadir colaboracion",
+      "add": "Añadir colaboración",
       "update": "Actualizar colaboracion",
-      "cancelEdit": "Cancelar edicion"
+      "cancelEdit": "Cancelar edición"
     },
     "table": {
       "type": "Tipo",
@@ -284,7 +284,7 @@
       "totalWeeklyHours": "Total Horas Semanal"
     },
     "controls": {
-      "currentTask": "Que estas trabajando?",
+      "currentTask": "Â¿Qué estás trabajando?",
       "selectTask": "Selecciona una tarea",
       "adjustment": "Ajuste",
       "prevWeek": "Semana anterior",
@@ -314,8 +314,8 @@
       "empty": "Sin sesiones registradas."
     },
     "modal": {
-      "editTitle": "Editar sesion",
-      "createTitle": "Crear sesion"
+      "editTitle": "Editar sesión",
+      "createTitle": "Crear sesión"
     },
     "fields": {
       "task": "Tarea",
@@ -341,22 +341,22 @@
     "messages": {
       "tasksLoadError": "No se han podido cargar las tareas del ERP.",
       "sessionsLoadError": "No se han podido cargar las sesiones.",
-      "sessionUpdateErrorTitle": "Error al actualizar sesion",
-      "sessionCreateErrorTitle": "Error al crear sesion",
-      "sessionDeleteErrorTitle": "Error al eliminar sesion",
+      "sessionUpdateErrorTitle": "Error al actualizar sesión",
+      "sessionCreateErrorTitle": "Error al crear sesión",
+      "sessionDeleteErrorTitle": "Error al eliminar sesión",
       "genericErrorFallback": "Revisa los datos.",
       "invalidTaskTitle": "Tarea no valida",
       "invalidTaskDesc": "Selecciona una tarea del ERP.",
       "trackingStartedTitle": "Tracking iniciado",
       "trackingStartedDesc": "Sesion de tiempo iniciada para la tarea {{taskId}}.",
       "trackingStartErrorTitle": "Error al iniciar tracking",
-      "trackingStartErrorFallback": "No se ha podido iniciar la sesion de tiempo.",
-      "sessionActiveTitle": "Ya hay una sesion activa",
-      "sessionActiveDesc": "Deten la sesion actual antes de iniciar otra.",
+      "trackingStartErrorFallback": "No se ha podido iniciar la sesión de tiempo.",
+      "sessionActiveTitle": "Ya hay una sesión activa",
+      "sessionActiveDesc": "Deten la sesión actual antes de iniciar otra.",
       "trackingStopTitle": "Tracking detenido",
       "trackingStopDesc": "Sesion finalizada. Duracion: {{duration}}.",
       "trackingStopErrorTitle": "Error al detener tracking",
-      "trackingStopErrorFallback": "No se ha podido detener la sesion de tiempo activa.",
+      "trackingStopErrorFallback": "No se ha podido detener la sesión de tiempo activa.",
       "selectTask": "Selecciona una tarea",
       "selectRange": "Selecciona el rango horario",
       "sessionUpdated": "Sesion actualizada",
@@ -367,7 +367,7 @@
   "invitation": {
     "title": "Aceptar invitacion",
     "subtitle": "Completa tus datos para activar tu usuario en la plataforma.",
-    "loading": "Cargando informacion de la invitacion...",
+    "loading": "Cargando información de la invitacion...",
     "invalid": "La invitacion no es valida (puede estar caducada o ya usada).",
     "labels": {
       "tenant": "Tenant:",
@@ -376,19 +376,19 @@
     },
     "fields": {
       "fullName": "Nombre completo",
-      "password": "Contrasena",
-      "passwordConfirm": "Confirmar contrasena"
+      "password": "Contraseña",
+      "passwordConfirm": "Confirmar Contraseña"
     },
     "actions": {
       "createAccount": "Crear cuenta"
     },
     "messages": {
       "passwordMissingTitle": "Datos incompletos",
-      "passwordMissingDesc": "Rellena todos los campos de contrasena.",
-      "passwordMismatchTitle": "Contrasena no coincide",
-      "passwordMismatchDesc": "La contrasena y su confirmacion deben ser iguales.",
+      "passwordMissingDesc": "Rellena todos los campos de Contraseña.",
+      "passwordMismatchTitle": "Contraseña no coincide",
+      "passwordMismatchDesc": "La Contraseña y su confirmación deben ser iguales.",
       "successTitle": "Cuenta creada",
-      "successDesc": "Ya puedes iniciar sesion con tus credenciales.",
+      "successDesc": "Ya puedes iniciar sesión con tus credenciales.",
       "errorTitle": "Error al aceptar invitacion",
       "errorFallback": "No se ha podido completar la invitacion."
     }
@@ -433,7 +433,7 @@
       "date": "Fecha",
       "user": "Usuario",
       "source": "Fuente",
-      "action": "Accion",
+      "action": "Acción",
       "details": "Detalles",
       "empty": "Todavia no hay registros de auditoria para mostrar."
     }
@@ -573,14 +573,16 @@
       "logo": "Logo",
       "noLogo": "Sin logo cargado",
       "companyName": "Nombre de la empresa",
-      "companySubtitle": "Subtitulo",
+      "companySubtitle": "Subtítulo",
+      "companyNameEnabled": "Mostrar título",
+      "companySubtitleEnabled": "Mostrar subtítulo",
       "accentColor": "Color de acento",
       "palette": "Paleta generada"
     },
     "departmentEmails": {
       "title": "Correos por departamento",
       "subtitle": "Define el correo de contacto para cada departamento.",
-      "add": "Anadir correo",
+      "add": "Añadir correo",
       "remove": "Quitar",
       "empty": "Aun no hay departamentos configurados.",
       "department": "Departamento",
@@ -696,7 +698,7 @@
       "assignErrorTitle": "Error al asignar",
       "assignErrorFallback": "No se ha podido asignar el ticket.",
       "missingDataTitle": "Datos incompletos",
-      "missingDataDesc": "Asunto y descripcion son obligatorios.",
+      "missingDataDesc": "Asunto y descripción son obligatorios.",
       "emptyMessageTitle": "Mensaje vacio",
       "emptyMessageDesc": "Escribe un mensaje antes de enviarlo.",
       "loadingConversation": "Cargando conversacion...",
@@ -723,7 +725,7 @@
       "email": "Email",
       "emailPlaceholder": "usuario@empresa.com",
       "role": "Rol",
-      "submit": "Enviar invitacion"
+      "submit": "Enviar invitación"
     },
     "filters": {
       "search": "Buscar",
@@ -742,7 +744,15 @@
       "empty": "No hay usuarios que coincidan con los filtros.",
       "active": "Activo",
       "inactive": "Inactivo",
+      "edit": "Editar",
       "delete": "Eliminar"
+    },
+    "edit": {
+      "title": "Editar usuario",
+      "fullName": "Nombre completo",
+      "email": "Email",
+      "role": "Rol",
+      "save": "Guardar cambios"
     },
     "roles": {
       "superAdmin": "Super admin",
@@ -755,10 +765,14 @@
       "title": "Lista de usuarios"
     },
     "messages": {
-      "inviteSuccessTitle": "Invitacion enviada",
-      "inviteSuccessDesc": "Se ha enviado un correo de invitacion al usuario para que complete su alta.",
-      "inviteErrorTitle": "Error al enviar invitacion",
-      "inviteErrorFallback": "No se ha podido enviar la invitacion (revisa permisos y datos).",
+      "inviteSuccessTitle": "Invitación enviada",
+      "inviteSuccessDesc": "Se ha enviado un correo de invitación al usuario para que complete su alta.",
+      "inviteErrorTitle": "Error al enviar invitación",
+      "inviteErrorFallback": "No se ha podido enviar la invitación (revisa permisos y datos).",
+      "updateSuccessTitle": "Usuario actualizado",
+      "updateSuccessDesc": "El usuario se ha actualizado correctamente.",
+      "updateErrorTitle": "Error al actualizar usuario",
+      "updateErrorFallback": "No se ha podido actualizar el usuario (revisa permisos y datos).",
       "deleteSuccessTitle": "Usuario eliminado",
       "deleteSuccessDesc": "El usuario se ha eliminado correctamente.",
       "deleteErrorTitle": "Error al eliminar usuario",
@@ -856,7 +870,7 @@
     },
     "alert": {
       "title": "Eliminar empleado",
-      "body": "Esta accion no se puede deshacer. Quieres continuar?",
+      "body": "Esta acción no se puede deshacer. Â¿Quieres continuar?",
       "cancel": "Cancelar",
       "confirm": "Eliminar"
     },
@@ -912,7 +926,7 @@
       "tabs": {
         "summary": "Resumen",
         "projects": "Proyectos",
-      "workManagement": "Gesti?n de obra",
+      "workManagement": "Gestión de obra",
         "create": "Crear",
         "gantt": "Gantt"
       },
@@ -946,13 +960,13 @@
         "title": "Actividades",
         "weightSum": "Suma de pesos: {{weight}}% (objetivo 100%)",
         "itemLabel": "Actividad #{{index}}",
-        "addSubactivity": "+ Anadir subactividad",
+        "addSubactivity": "+ Añadir subactividad",
         "emptySubactivities": "Aun no hay subactividades.",
         "subactivityLabel": "Subactividad #{{index}}",
         "subactivityWeightSum": "Suma de subactividades: {{weight}}% (objetivo {{target}}%)",
         "taskCatalog": "Tareas del catalogo",
         "taskCatalogPlaceholder": "Selecciona una tarea",
-        "addTask": "Anadir tarea",
+        "addTask": "Añadir tarea",
         "addManualTask": "+ Tarea manual",
         "emptyTasks": "Aun no hay tareas agregadas.",
         "taskTitlePlaceholder": "Titulo de tarea",
@@ -973,7 +987,7 @@
         "typeLink": "Link",
         "typeText": "Texto",
         "value": "Valor",
-        "addDeliverable": "+ Anadir entregable",
+        "addDeliverable": "+ Añadir entregable",
         "removeDeliverable": "Quitar entregable",
         "removeMilestone": "Eliminar hito"
       },
@@ -1051,7 +1065,7 @@
       },
       "fields": {
         "title": "Nombre de la tarea",
-        "titlePlaceholder": "Escribe el titulo",
+        "titlePlaceholder": "Escribe el título",
         "description": "Descripcion",
         "start": "Inicio",
         "end": "Fin",
@@ -1074,7 +1088,7 @@
         "create": "Crear tarea",
         "toggleCreate": "Crear tarea",
         "hideForm": "Ocultar formulario",
-        "addQuick": "+ Anadir tarea",
+        "addQuick": "+ Añadir tarea",
         "edit": "Editar",
         "saveChanges": "Guardar cambios"
       },
@@ -1113,8 +1127,11 @@
         "assigned": "Asignado",
         "unassigned": "Sin asignar",
         "noDate": "Sin fecha",
-        "noDescription": "Sin descripcion"
+        "noDescription": "Sin descripción"
       }
     }
   }
 }
+
+
+

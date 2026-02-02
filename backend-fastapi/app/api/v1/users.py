@@ -9,7 +9,13 @@ from app.api.deps import (
 )
 from app.db.session import get_session
 from app.models.user import User
-from app.schemas.user import UserCreate, UserRead, UserUpdateMe, UserStatusUpdate
+from app.schemas.user import (
+    UserCreate,
+    UserRead,
+    UserUpdateAdmin,
+    UserUpdateMe,
+    UserStatusUpdate,
+)
 from app.services.user_service import (
     create_user as svc_create_user,
     get_user_me as svc_get_user_me,
@@ -18,6 +24,7 @@ from app.services.user_service import (
     update_user_status as svc_update_user_status,
     update_user_me as svc_update_user_me,
     update_user_avatar as svc_update_user_avatar,
+    update_user_admin as svc_update_user_admin,
 )
 
 
@@ -178,6 +185,45 @@ def delete_user_endpoint(
     except PermissionError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
+@router.patch(
+    "/{user_id}",
+    response_model=UserRead,
+    summary="Editar usuario",
+)
+def update_user_endpoint(
+    user_id: int,
+    payload: UserUpdateAdmin,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["users:update"])),
+) -> UserRead:
+    """
+    Actualiza datos bÃ¡sicos de un usuario (admin).
+    """
+
+    try:
+        return svc_update_user_admin(
+            session=session,
+            current_user=current_user,
+            user_id=user_id,
+            data=payload,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
 

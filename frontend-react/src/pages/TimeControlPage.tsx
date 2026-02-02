@@ -1512,7 +1512,7 @@ export const TimeControlPage: React.FC = () => {
                         {formatSeconds(session.duration_seconds)}
                       </Badge>
                       <HStack>
-                        {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
+                        {/* Acción coherente por fila: si la tarea está activa, muestra stop; si no, play. */}
                         {isRunning && activeSession?.id === session.id ? (
                           <IconButton
                             aria-label={t("timeControl.actions.stop")}
@@ -1637,7 +1637,7 @@ export const TimeControlPage: React.FC = () => {
                           <Text fontSize="sm" color={subtleText}>
                             {formatSeconds(session.duration_seconds)}
                           </Text>
-                          {/* Accion coherente por fila: si la tarea esta activa, muestra stop; si no, play. */}
+                          {/* Acción coherente por fila: si la tarea está activa, muestra stop; si no, play. */}
                           {isRunning && activeSession?.id === session.id ? (
                             <IconButton
                               aria-label={t("timeControl.actions.stop")}

@@ -151,7 +151,7 @@
       "tools": "Tools",
       "audit": "Audit",
       "settings": "Settings",
-      "departmentEmails": "Department emails",
+      "departmentEmails": "Emails",
       "tenantSettings": "Tenant settings",
       "branding": "Branding",
       "simulations": "Simulations"
@@ -574,6 +574,8 @@
       "noLogo": "No logo uploaded",
       "companyName": "Company name",
       "companySubtitle": "Subtitle",
+      "companyNameEnabled": "Show title",
+      "companySubtitleEnabled": "Show subtitle",
       "accentColor": "Accent color",
       "palette": "Generated palette"
     },
@@ -742,7 +744,15 @@
       "empty": "No users match the filters.",
       "active": "Active",
       "inactive": "Inactive",
+      "edit": "Edit",
       "delete": "Delete"
+    },
+    "edit": {
+      "title": "Edit user",
+      "fullName": "Full name",
+      "email": "Email",
+      "role": "Role",
+      "save": "Save changes"
     },
     "roles": {
       "superAdmin": "Super admin",
@@ -758,6 +768,10 @@
       "inviteSuccessDesc": "An invitation email was sent to the user to complete onboarding.",
       "inviteErrorTitle": "Invitation error",
       "inviteErrorFallback": "Unable to send the invitation (check permissions and data).",
+      "updateSuccessTitle": "User updated",
+      "updateSuccessDesc": "The user was updated successfully.",
+      "updateErrorTitle": "Update user error",
+      "updateErrorFallback": "Unable to update the user (check permissions and data).",
       "deleteSuccessTitle": "User deleted",
       "deleteSuccessDesc": "The user was deleted successfully.",
       "deleteErrorTitle": "Delete user error",

@@ -27,6 +27,8 @@ interface CreateProjectSectionProps {
   onProjectNameChange: (value: string) => void;
   projectDescription: string;
   onProjectDescriptionChange: (value: string) => void;
+  projectType: "regional" | "nacional" | "internacional";
+  onProjectTypeChange: (value: "regional" | "nacional" | "internacional") => void;
   projectStart: string;
   onProjectStartChange: (value: string) => void;
   projectEnd: string;
@@ -53,6 +55,8 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
   onProjectNameChange,
   projectDescription,
   onProjectDescriptionChange,
+  projectType,
+  onProjectTypeChange,
   projectStart,
   onProjectStartChange,
   projectEnd,
@@ -96,6 +100,22 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
       <FormControl>
         <FormLabel>Descripcion</FormLabel>
         <Input value={projectDescription} onChange={(e) => onProjectDescriptionChange(e.target.value)} />
+      </FormControl>
+
+      <FormControl>
+        <FormLabel>Tipo de proyecto</FormLabel>
+        <Select
+          value={projectType}
+          onChange={(e) =>
+            onProjectTypeChange(
+              e.target.value as "regional" | "nacional" | "internacional",
+            )
+          }
+        >
+          <option value="regional">Regional</option>
+          <option value="nacional">Nacional</option>
+          <option value="internacional">Internacional</option>
+        </Select>
       </FormControl>
 
       <FormControl>
