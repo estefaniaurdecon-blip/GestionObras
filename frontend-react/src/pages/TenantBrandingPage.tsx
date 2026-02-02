@@ -8,6 +8,7 @@ import {
   HStack,
   Image,
   Input,
+  Checkbox,
   Select,
   SimpleGrid,
   Stack,
@@ -47,6 +48,8 @@ export const TenantBrandingPage: React.FC = () => {
   const [logoVersion, setLogoVersion] = useState(0);
   const [companyName, setCompanyName] = useState("");
   const [companySubtitle, setCompanySubtitle] = useState("");
+  const [showCompanyName, setShowCompanyName] = useState(true);
+  const [showCompanySubtitle, setShowCompanySubtitle] = useState(true);
 
   useEffect(() => {
     if (!currentUser?.tenant_id) return;
@@ -85,6 +88,8 @@ export const TenantBrandingPage: React.FC = () => {
     setLogoVersion((prev) => prev + 1);
     setCompanyName(brandingQuery.data.company_name ?? "");
     setCompanySubtitle(brandingQuery.data.company_subtitle ?? "");
+    setShowCompanyName(brandingQuery.data.show_company_name ?? true);
+    setShowCompanySubtitle(brandingQuery.data.show_company_subtitle ?? true);
   }, [brandingQuery.data]);
 
   const previewPalette = useMemo(() => {
@@ -165,6 +170,8 @@ export const TenantBrandingPage: React.FC = () => {
         logoFile,
         companyName,
         companySubtitle,
+        showCompanyName,
+        showCompanySubtitle,
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(["tenant-branding", tenantId], data);
@@ -298,17 +305,33 @@ export const TenantBrandingPage: React.FC = () => {
 
             <FormControl maxW="420px">
               <FormLabel>{t("branding.fields.companyName")}</FormLabel>
+              <Checkbox
+                isChecked={showCompanyName}
+                onChange={(e) => setShowCompanyName(e.target.checked)}
+                mb={2}
+              >
+                {t("branding.fields.companyNameEnabled")}
+              </Checkbox>
               <Input
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                isDisabled={!showCompanyName}
               />
             </FormControl>
 
             <FormControl maxW="520px">
               <FormLabel>{t("branding.fields.companySubtitle")}</FormLabel>
+              <Checkbox
+                isChecked={showCompanySubtitle}
+                onChange={(e) => setShowCompanySubtitle(e.target.checked)}
+                mb={2}
+              >
+                {t("branding.fields.companySubtitleEnabled")}
+              </Checkbox>
               <Input
                 value={companySubtitle}
                 onChange={(e) => setCompanySubtitle(e.target.value)}
+                isDisabled={!showCompanySubtitle}
               />
             </FormControl>
 

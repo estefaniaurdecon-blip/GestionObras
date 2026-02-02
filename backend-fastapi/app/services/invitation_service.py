@@ -187,7 +187,7 @@ def accept_invitation(
         raise ValueError("La invitación ha caducado.")
 
     if data.password != data.password_confirm:
-        raise ValueError("La contrasena y su confirmacion deben ser iguales.")
+        raise ValueError("La contraseña y su confirmación deben ser iguales.")
 
     tenant = session.get(Tenant, invitation.tenant_id)
     if not tenant:

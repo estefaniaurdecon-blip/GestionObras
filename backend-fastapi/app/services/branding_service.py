@@ -126,6 +126,8 @@ def update_branding(
     logo_upload,
     company_name: Optional[str],
     company_subtitle: Optional[str],
+    show_company_name: Optional[bool] = None,
+    show_company_subtitle: Optional[bool] = None,
     department_emails: Optional[Dict[str, str]] = None,
 ) -> TenantBranding:
     ensure_tenant_exists(session, tenant_id)
@@ -145,6 +147,12 @@ def update_branding(
 
     if company_subtitle is not None:
         branding.company_subtitle = company_subtitle.strip() or None
+
+    if show_company_name is not None:
+        branding.show_company_name = bool(show_company_name)
+
+    if show_company_subtitle is not None:
+        branding.show_company_subtitle = bool(show_company_subtitle)
 
     if department_emails is not None:
         cleaned: Dict[str, str] = {}

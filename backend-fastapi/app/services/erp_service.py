@@ -486,10 +486,12 @@ def delete_project_budget_line(
 def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[int]) -> Project:
     tenant_id = _require_tenant(tenant_id)
     _validate_date_range(data.start_date, data.end_date)
+    project_type = _normalize_project_type(data.project_type)
     project = Project(
         tenant_id=tenant_id,
         name=data.name,
         description=data.description,
+        project_type=project_type,
         start_date=data.start_date,
         end_date=data.end_date,
         duration_months=_calculate_duration_months(data.start_date, data.end_date),
@@ -510,6 +512,8 @@ def update_project(
         project.name = data.name
     if data.description is not None:
         project.description = data.description
+    if data.project_type is not None:
+        project.project_type = _normalize_project_type(data.project_type)
     if data.start_date is not None or data.end_date is not None:
         start_date = data.start_date if data.start_date is not None else project.start_date
         end_date = data.end_date if data.end_date is not None else project.end_date
@@ -576,6 +580,18 @@ def _validate_date_range(start_date: Optional[datetime], end_date: Optional[date
     # Evita rangos inconsistentes en proyectos/tareas.
     if start_date and end_date and end_date < start_date:
         raise ValueError("La fecha de fin debe ser posterior a la de inicio.")
+
+
+def _normalize_project_type(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip().lower()
+    if not cleaned:
+        return None
+    allowed = {"regional", "nacional", "internacional"}
+    if cleaned not in allowed:
+        raise ValueError("Tipo de proyecto no válido")
+    return cleaned
 
 def _calculate_duration_months(
     start_date: Optional[datetime],

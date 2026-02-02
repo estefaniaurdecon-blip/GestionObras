@@ -68,3 +68,13 @@ class UserUpdateMe(BaseModel):
     full_name: str
     language: str | None = None
     avatar_url: str | None = None
+
+
+class UserUpdateAdmin(BaseModel):
+    """
+    Esquema para editar usuarios desde administraciÃ³n.
+    """
+
+    email: EmailStr | None = None
+    full_name: str | None = None
+    role_name: str | None = None

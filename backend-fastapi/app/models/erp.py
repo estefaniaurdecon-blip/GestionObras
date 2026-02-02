@@ -13,6 +13,7 @@ class Project(SQLModel, table=True):
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     name: str
     description: Optional[str] = None
+    project_type: Optional[str] = Field(default=None, max_length=32)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None

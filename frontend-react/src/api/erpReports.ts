@@ -4,6 +4,7 @@ export interface ErpProject {
   id: number;
   name: string;
   description?: string | null;
+  project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;

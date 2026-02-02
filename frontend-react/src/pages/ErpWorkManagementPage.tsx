@@ -17,7 +17,7 @@ export const ErpWorkManagementPage: React.FC = () => {
       />
       <Box borderWidth="1px" borderRadius="xl" p={6} bg={panelBg}>
         <Text fontSize="sm" color="gray.500">
-          Proximamente mas opciones para la gestion de obra.
+          Próximamente más opciones para la gestión de obra.
         </Text>
       </Box>
     </AppShell>

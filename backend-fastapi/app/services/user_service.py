@@ -20,6 +20,7 @@ from app.models.audit_log import AuditLog
 from app.schemas.user import (
     UserCreate,
     UserRead,
+    UserUpdateAdmin,
     UserUpdateMe,
     UserStatusUpdate,
 )
@@ -205,6 +206,68 @@ def update_user_avatar(
     )
 
     return _user_to_read(current_user)
+
+
+def update_user_admin(
+    session: Session,
+    current_user: User,
+    user_id: int,
+    data: UserUpdateAdmin,
+) -> UserRead:
+    """
+    Actualiza datos bÃ¡sicos de un usuario (admin).
+    """
+
+    user = session.get(User, user_id)
+    if not user:
+        raise LookupError("Usuario no encontrado")
+
+    if not current_user.is_super_admin:
+        if user.is_super_admin:
+            raise PermissionError("No puedes editar un Super Admin")
+        if current_user.tenant_id != user.tenant_id:
+            raise PermissionError("No tienes permisos para editar este usuario")
+
+    if data.email is not None:
+        email = data.email.strip().lower()
+        if not email:
+            raise ValueError("Email no vÃ¡lido")
+        existing = session.exec(select(User).where(User.email == email)).one_or_none()
+        if existing and existing.id != user.id:
+            raise ValueError("Ya existe un usuario con ese email")
+        user.email = email
+
+    if data.full_name is not None:
+        user.full_name = data.full_name.strip()
+
+    if data.role_name is not None:
+        if data.role_name == "super_admin" and not current_user.is_super_admin:
+            raise PermissionError("No tienes permisos para asignar rol Super Admin")
+        role = session.exec(
+            select(Role).where(Role.name == data.role_name),
+        ).one_or_none()
+        if not role:
+            raise ValueError("Rol no vÃ¡lido")
+        user.role_id = role.id
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    log_action(
+        session,
+        user_id=current_user.id,
+        tenant_id=user.tenant_id,
+        action="user.update",
+        details=f"ActualizaciÃ³n de usuario_id={user.id}",
+    )
+
+    role_name = None
+    if user.role_id:
+        role = session.get(Role, user.role_id)
+        role_name = role.name if role else None
+
+    return _user_to_read(user, role_name=role_name)
 
 
 def create_user(

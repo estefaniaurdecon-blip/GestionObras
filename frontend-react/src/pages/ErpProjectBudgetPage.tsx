@@ -47,12 +47,12 @@ export const ErpProjectBudgetPage: React.FC = () => {
     enabled: isValidProject,
   });
 
+  const projectMilestones = milestonesQuery.data ?? [];
   const budgetEditor = useBudgetEditor({
     projectId: isValidProject ? numericProjectId : null,
     projectMilestones,
     tenantId: effectiveTenantId,
   });
-  const projectMilestones = milestonesQuery.data ?? [];
   const budgetMilestonesForView: ProjectBudgetMilestone[] = useMemo(() => {
     if (budgetEditor.budgetMilestones.length > 0) {
       return budgetEditor.budgetMilestones;

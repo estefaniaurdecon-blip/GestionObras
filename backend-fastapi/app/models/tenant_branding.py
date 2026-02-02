@@ -18,6 +18,8 @@ class TenantBranding(SQLModel, table=True):
     logo_path: Optional[str] = Field(default=None, max_length=512)
     company_name: Optional[str] = Field(default=None, max_length=128)
     company_subtitle: Optional[str] = Field(default=None, max_length=256)
+    show_company_name: bool = Field(default=True)
+    show_company_subtitle: bool = Field(default=True)
     department_emails: Optional[Dict[str, str]] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),

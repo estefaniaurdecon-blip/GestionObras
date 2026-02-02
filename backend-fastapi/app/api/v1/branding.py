@@ -47,6 +47,8 @@ def get_branding(
         accent_color=accent_color,
         company_name=branding.company_name if branding else None,
         company_subtitle=branding.company_subtitle if branding else None,
+        show_company_name=branding.show_company_name if branding else True,
+        show_company_subtitle=branding.show_company_subtitle if branding else True,
         department_emails=branding.department_emails if branding else None,
         updated_at=branding.updated_at if branding else None,
     )
@@ -61,6 +63,8 @@ def update_branding_endpoint(
     accent_color: Optional[str] = Form(default=None),
     company_name: Optional[str] = Form(default=None),
     company_subtitle: Optional[str] = Form(default=None),
+    show_company_name: Optional[bool] = Form(default=None),
+    show_company_subtitle: Optional[bool] = Form(default=None),
     department_emails: Optional[str] = Form(default=None),
     logo: Optional[UploadFile] = File(default=None),
     session: Session = Depends(get_session),
@@ -86,6 +90,8 @@ def update_branding_endpoint(
             logo,
             company_name,
             company_subtitle,
+            show_company_name,
+            show_company_subtitle,
             parsed_department_emails,
         )
     except ValueError as exc:
@@ -99,6 +105,8 @@ def update_branding_endpoint(
         accent_color=branding.accent_color,
         company_name=branding.company_name,
         company_subtitle=branding.company_subtitle,
+        show_company_name=branding.show_company_name,
+        show_company_subtitle=branding.show_company_subtitle,
         department_emails=branding.department_emails,
         updated_at=branding.updated_at,
     )

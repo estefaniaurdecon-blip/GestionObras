@@ -186,7 +186,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
               letterSpacing="tight"
               mb={2}
             >
-              Gestion y seguimiento de proyectos
+              Gestión y seguimiento de proyectos
             </Heading>
             <HStack spacing={2} mb={2}>
               <Tag
@@ -199,7 +199,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                 color={badgeColor}
                 fontWeight="bold"
               >
-                Ano {summaryYear}
+                Año {summaryYear}
               </Tag>
               <Text fontSize="sm" color={subtleText}>
                 Filtrando por ano {summaryYear}
@@ -293,7 +293,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   fontWeight="semibold"
                   color="gray.700"
                 >
-                  Ano
+                  Año
                 </FormLabel>
                 <Select
                   size="sm"
@@ -395,7 +395,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                 Apellidos
               </Th>
               <Th minW="150px" color="white">
-                Titulacion
+                    Titulación
               </Th>
               <Th minW="130px" color="white">
                 Departamento
