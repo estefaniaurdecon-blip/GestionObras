@@ -21,6 +21,7 @@ import {
   ModalHeader,
   ModalOverlay,
   SimpleGrid,
+  Select,
   Stack,
   Switch,
   Text,
