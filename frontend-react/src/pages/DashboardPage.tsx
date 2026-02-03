@@ -44,11 +44,8 @@ import {
 import { AppShell } from "../components/layout/AppShell";
 import { PageHero } from "../components/layout/PageHero";
 import { ToolGrid } from "../components/tools/ToolGrid";
-import { useCurrentUser } from "../hooks/useCurrentUser";
-<<<<<<< HEAD
-=======
 import { HRPanel, type Employee as HREmployee } from "../hr-panel";
->>>>>>> dev
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import {
   buildParentChildMap,
   EXTERNAL_COLLAB_LABEL,
@@ -94,8 +91,6 @@ export const DashboardPage: React.FC = () => {
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
   const subtleText = useColorModeValue("gray.500", "gray.300");
   const statAccent = useColorModeValue("brand.500", "brand.300");
-  const donutTrack = useColorModeValue("#e2e8f0", "#1e293b");
-  const donutInner = useColorModeValue("#cbd5f5", "#1f2937");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -107,10 +102,6 @@ export const DashboardPage: React.FC = () => {
   const canCreateTimeReports =
     isSuperAdmin ||
     (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
-<<<<<<< HEAD
-  const canReadHr =
-    isSuperAdmin || (currentUser?.permissions?.includes("hr:read") ?? false);
-=======
   const roleName = currentUser?.role_name ?? null;
   const hasHrPermission =
     currentUser?.permissions?.includes("hr:read") ?? false;
@@ -119,7 +110,6 @@ export const DashboardPage: React.FC = () => {
     hasHrPermission ||
     roleName === "tenant_admin" ||
     roleName === "hr_manager";
->>>>>>> dev
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
@@ -228,68 +218,6 @@ export const DashboardPage: React.FC = () => {
     enabled: canReadHr && (isSuperAdmin || Boolean(tenantId)),
   });
 
-<<<<<<< HEAD
-  const [selectedDegree, setSelectedDegree] = useState<string>("all");
-
-  const availabilityByDegree = useMemo(() => {
-    const list = hrEmployeesQuery.data ?? [];
-    const totals: Record<string, number> = {
-      doctorado: 0,
-      universitario: 0,
-      no_universitario: 0,
-      sin_titulacion: 0,
-    };
-    list
-      .filter((e) => e.is_active)
-      .forEach((e) => {
-        const hours = Number(e.available_hours ?? 0);
-        if (hours <= 0) return;
-        const key = e.titulacion || "sin_titulacion";
-        if (!Object.prototype.hasOwnProperty.call(totals, key)) {
-          totals.sin_titulacion += hours;
-          return;
-        }
-        totals[key] += hours;
-      });
-    return [
-      { key: "doctorado", label: "Doctorado", hours: totals.doctorado, color: AVAIL_COLORS[0] },
-      { key: "universitario", label: "Universitario", hours: totals.universitario, color: AVAIL_COLORS[1] },
-      { key: "no_universitario", label: "No universitario", hours: totals.no_universitario, color: AVAIL_COLORS[2] },
-    ].filter((item) => item.hours > 0);
-  }, [hrEmployeesQuery.data]);
-
-  const filteredAvailability = useMemo(() => {
-    if (selectedDegree === "all") return availabilityByDegree;
-    return availabilityByDegree.filter((item) => item.key === selectedDegree);
-  }, [availabilityByDegree, selectedDegree]);
-
-  const employeesByDegree = useMemo(() => {
-    const list = hrEmployeesQuery.data ?? [];
-    const counts: Record<string, number> = {
-      doctorado: 0,
-      universitario: 0,
-      no_universitario: 0,
-    };
-    list
-      .filter((e) => e.is_active)
-      .forEach((e) => {
-        const key = e.titulacion ?? "";
-        if (!Object.prototype.hasOwnProperty.call(counts, key)) return;
-        counts[key] += 1;
-      });
-    return [
-      { key: "doctorado", label: "Doctorado", count: counts.doctorado, color: AVAIL_COLORS[0] },
-      { key: "universitario", label: "Universitario", count: counts.universitario, color: AVAIL_COLORS[1] },
-      { key: "no_universitario", label: "No universitario", count: counts.no_universitario, color: AVAIL_COLORS[2] },
-    ].filter((item) => item.count > 0);
-  }, [hrEmployeesQuery.data]);
-
-  const totalAvailableHours = useMemo(
-    () => filteredAvailability.reduce((acc, item) => acc + item.hours, 0),
-    [filteredAvailability],
-  );
-
-=======
   const hrPanelEmployees = useMemo<HREmployee[]>(() => {
     const list = hrEmployeesQuery.data ?? [];
     return list.map((employee) => {
@@ -313,8 +241,6 @@ export const DashboardPage: React.FC = () => {
       };
     });
   }, [hrEmployeesQuery.data]);
-
->>>>>>> dev
   const defaultBudgetTemplate = useMemo(() => getDefaultBudgetTemplate(), []);
   const baseParentMap = useMemo(
     () => buildParentChildMap(defaultBudgetTemplate),
@@ -459,20 +385,6 @@ export const DashboardPage: React.FC = () => {
     return values.length > 0 ? Math.max(...values) : 0;
   }, [balanceSeries]);
 
-<<<<<<< HEAD
-  const availabilitySegments = useMemo(() => {
-    if (totalAvailableHours <= 0) return [];
-    let offset = 0;
-    return filteredAvailability.map((item) => {
-      const frac = item.hours / totalAvailableHours;
-      const segment = { ...item, frac, offset };
-      offset += frac;
-      return segment;
-    });
-  }, [filteredAvailability, totalAvailableHours]);
-
-=======
->>>>>>> dev
   const formatCompact = (value: number) => {
     const abs = Math.abs(value);
     if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -568,149 +480,8 @@ export const DashboardPage: React.FC = () => {
       </Box>
 
       {canReadHr && (
-<<<<<<< HEAD
-        <Box
-          borderWidth="1px"
-          borderRadius="xl"
-          bg={cardBg}
-          p={{ base: 4, md: 6 }}
-          mb={8}
-        >
-          <HStack justify="space-between" align="center" mb={4} flexWrap="wrap">
-            <Heading as="h2" size="md">
-              {t("dashboard.hrAvailability.title")}
-            </Heading>
-            <HStack spacing={3}>
-              <Text fontSize="sm" color={subtleText}>
-                {t("dashboard.hrAvailability.available")}
-              </Text>
-              <FormControl maxW="220px" size="sm">
-                <FormLabel fontSize="xs" mb={1} color={subtleText}>
-                  {t("dashboard.hrAvailability.filterLabel")}
-                </FormLabel>
-                <Select
-                  size="sm"
-                  value={selectedDegree}
-                  onChange={(e) => setSelectedDegree(e.target.value)}
-                >
-                  <option value="all">
-                    {t("dashboard.hrAvailability.filterAll")}
-                  </option>
-                  <option value="doctorado">
-                    {t("dashboard.hrAvailability.filterDoctorado")}
-                  </option>
-                  <option value="universitario">
-                    {t("dashboard.hrAvailability.filterUniversitario")}
-                  </option>
-                  <option value="no_universitario">
-                    {t("dashboard.hrAvailability.filterNoUniversitario")}
-                  </option>
-                </Select>
-              </FormControl>
-            </HStack>
-          </HStack>
-          <Box position="relative" width="220px" height="220px" mx="auto">
-            <svg
-              width={220}
-              height={220}
-              viewBox="0 0 220 220"
-              style={{ transform: "rotate(-90deg)" }}
-            >
-              <circle
-                cx={110}
-                cy={110}
-                r={88}
-                fill="none"
-                stroke={donutTrack}
-                strokeWidth={22}
-              />
-              {availabilitySegments.map((seg, idx) => {
-                const circumference = 2 * Math.PI * 88;
-                const dashLen = circumference * seg.frac;
-                const dashOff = circumference * (1 - seg.offset - seg.frac);
-                return (
-                  <circle
-                    key={`${seg.key}-${idx}`}
-                    cx={110}
-                    cy={110}
-                    r={88}
-                    fill="none"
-                    stroke={seg.color}
-                    strokeWidth={22}
-                    strokeDasharray={`${dashLen} ${circumference - dashLen}`}
-                    strokeDashoffset={dashOff}
-                    strokeLinecap="butt"
-                    style={{ transition: "all 0.6s cubic-bezier(.4,0,.2,1)" }}
-                  />
-                );
-              })}
-              <circle
-                cx={110}
-                cy={110}
-                r={88 - 22 / 2 - 1}
-                fill="none"
-                stroke={donutInner}
-                strokeWidth={1}
-                opacity={0.4}
-              />
-            </svg>
-            <Box
-              position="absolute"
-              inset={0}
-              display="flex"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
-              pointerEvents="none"
-            >
-              <Text fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="0.2em">
-                {t("dashboard.hrAvailability.available")}
-              </Text>
-              <Heading size="lg" color={statAccent}>
-                {totalAvailableHours.toFixed(0)}h
-              </Heading>
-            </Box>
-          </Box>
-          {hrEmployeesQuery.isLoading && (
-            <Text fontSize="sm" color={subtleText} mt={4} textAlign="center">
-              {t("dashboard.hrAvailability.loading")}
-            </Text>
-          )}
-          {!hrEmployeesQuery.isLoading && filteredAvailability.length === 0 && (
-            <Text fontSize="sm" color={subtleText} mt={4} textAlign="center">
-              {t("dashboard.hrAvailability.empty")}
-            </Text>
-          )}
-          {!hrEmployeesQuery.isLoading && employeesByDegree.length > 0 && (
-            <Box mt={4}>
-              <Text fontSize="sm" color={subtleText} textAlign="center" mb={2}>
-                {t("dashboard.hrAvailability.countTitle")}
-              </Text>
-              <VStack spacing={2} align="stretch" maxW="260px" mx="auto">
-                {employeesByDegree.map((item) => (
-                  <HStack key={item.key} justify="space-between">
-                    <HStack spacing={2}>
-                      <Box
-                        w="10px"
-                        h="10px"
-                        borderRadius="full"
-                        bg={item.color}
-                        flexShrink={0}
-                      />
-                      <Text fontSize="sm">{item.label}</Text>
-                    </HStack>
-                    <Text fontSize="sm" fontWeight="semibold">
-                      {item.count}
-                    </Text>
-                  </HStack>
-                ))}
-              </VStack>
-            </Box>
-          )}
-=======
         <Box mb={8}>
           <HRPanel employees={hrPanelEmployees} loading={hrEmployeesQuery.isLoading} />
->>>>>>> dev
         </Box>
       )}
 
@@ -922,14 +693,6 @@ export const DashboardPage: React.FC = () => {
             </Flex>
 
             <Box
-<<<<<<< HEAD
-              bg={panelBg}
-              border="1px solid"
-              borderColor={tableHeadBg}
-              borderRadius="18px"
-              px={4}
-              py={4}
-=======
               bg={useColorModeValue("gray.200", "gray.950")}
               border="1px solid"
               borderColor={tableHeadBg}
@@ -937,7 +700,6 @@ export const DashboardPage: React.FC = () => {
               px={5}
               py={5}
               boxShadow="inset 0 0 0 1px rgba(0,0,0,0.08)"
->>>>>>> dev
               mb={6}
             >
               <Flex justify="space-between" align="center" mb={3}>
@@ -969,13 +731,8 @@ export const DashboardPage: React.FC = () => {
               </Flex>
 
               {(() => {
-<<<<<<< HEAD
-                const W = 700;
-                const H = 280;
-=======
                 const W = 980;
                 const H = 380;
->>>>>>> dev
                 const PAD = { top: 30, right: 28, bottom: 44, left: 74 };
                 const chartW = W - PAD.left - PAD.right;
                 const chartH = H - PAD.top - PAD.bottom;
@@ -985,17 +742,6 @@ export const DashboardPage: React.FC = () => {
                 const minVal = Math.min(0, ...values);
                 const maxVal = Math.max(0, ...values);
                 const range = maxVal - minVal || 1;
-<<<<<<< HEAD
-                const x = (i: number) =>
-                  PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
-                const y = (val: number) =>
-                  PAD.top + chartH - ((val - minVal) / range) * chartH;
-                const gridCount = 5;
-                const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
-                  const val = minVal + (range / gridCount) * i;
-                  return { val, yPos: y(val) };
-                });
-=======
                 const paddedMin = minVal - range * 0.1;
                 const paddedMax = maxVal + range * 0.1;
                 const paddedRange = paddedMax - paddedMin || 1;
@@ -1025,7 +771,6 @@ export const DashboardPage: React.FC = () => {
                   }
                   return path;
                 };
->>>>>>> dev
                 return (
                   <Box>
                     <svg
@@ -1034,22 +779,6 @@ export const DashboardPage: React.FC = () => {
                     >
                       <defs>
                         {balanceSeries.map((series) => (
-<<<<<<< HEAD
-                          <linearGradient
-                            key={`grad-${series.project.id}`}
-                            id={`balanceGrad-${series.project.id}`}
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop offset="0%" stopColor={series.color} stopOpacity={0.2} />
-                            <stop offset="100%" stopColor={series.color} stopOpacity={0.02} />
-                          </linearGradient>
-                        ))}
-                        <filter id="balanceGlow">
-                          <feGaussianBlur stdDeviation="2" result="blur" />
-=======
                           <React.Fragment key={`grad-${series.project.id}`}>
                             <linearGradient
                               id={`balanceGrad-${series.project.id}`}
@@ -1077,16 +806,11 @@ export const DashboardPage: React.FC = () => {
                         ))}
                         <filter id="balanceGlow">
                           <feGaussianBlur stdDeviation="2.2" result="blur" />
->>>>>>> dev
                           <feMerge>
                             <feMergeNode in="blur" />
                             <feMergeNode in="SourceGraphic" />
                           </feMerge>
                         </filter>
-<<<<<<< HEAD
-                      </defs>
-
-=======
                         <filter id="balanceShadow">
                           <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.22" />
                         </filter>
@@ -1122,7 +846,6 @@ export const DashboardPage: React.FC = () => {
                         strokeWidth={1.4}
                       />
 
->>>>>>> dev
                       {gridLines.map((g, idx) => (
                         <g key={`grid-${idx}`}>
                           <line
@@ -1132,10 +855,7 @@ export const DashboardPage: React.FC = () => {
                             y2={g.yPos}
                             stroke="#e2e8f0"
                             strokeWidth={1}
-<<<<<<< HEAD
-=======
                             strokeDasharray="4 4"
->>>>>>> dev
                           />
                           <text
                             x={PAD.left - 8}
@@ -1155,23 +875,11 @@ export const DashboardPage: React.FC = () => {
                           (year) =>
                             series.points.find((p) => p.year === year)?.value ?? 0,
                         );
-<<<<<<< HEAD
-                        const linePath = vals
-                          .map((val, idx) => {
-                            if (idx === 0) return `M ${x(idx)} ${y(val)}`;
-                            const x0 = x(idx - 1);
-                            const x1 = x(idx);
-                            const cpx = (x0 + x1) / 2;
-                            return `C ${cpx} ${y(vals[idx - 1])}, ${cpx} ${y(val)}, ${x1} ${y(val)}`;
-                          })
-                          .join(" ");
-=======
                         const points = vals.map((val, idx) => ({
                           x: x(idx),
                           y: y(val),
                         }));
                         const linePath = buildSmoothPath(points);
->>>>>>> dev
                         const areaPath = `${linePath} L ${x(vals.length - 1)} ${
                           PAD.top + chartH
                         } L ${x(0)} ${PAD.top + chartH} Z`;
@@ -1180,21 +888,13 @@ export const DashboardPage: React.FC = () => {
                             <path
                               d={areaPath}
                               fill={`url(#balanceGrad-${series.project.id})`}
-<<<<<<< HEAD
-=======
                               filter="url(#balanceShadow)"
->>>>>>> dev
                             />
                             <path
                               d={linePath}
                               fill="none"
-<<<<<<< HEAD
-                              stroke={series.color}
-                              strokeWidth={2.5}
-=======
                               stroke={`url(#balanceLine-${series.project.id})`}
                               strokeWidth={3.2}
->>>>>>> dev
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               filter="url(#balanceGlow)"
@@ -1326,13 +1026,13 @@ export const DashboardPage: React.FC = () => {
                           y={H - PAD.bottom + 20}
                           textAnchor="middle"
                           fontSize={12}
-                        fill="#64748b"
-                        fontFamily="'Georgia',serif"
-                        fontWeight={600}
-                      >
-                        {year}
-                      </text>
-                    ))}
+                          fill="#64748b"
+                          fontFamily="'Georgia',serif"
+                          fontWeight={600}
+                        >
+                          {year}
+                        </text>
+                      ))}
 
                     <text
                       x={14}
@@ -1352,32 +1052,13 @@ export const DashboardPage: React.FC = () => {
           </Box>
 
           <Box
-<<<<<<< HEAD
-            bg={panelBg}
-=======
             bg={useColorModeValue("gray.100", "gray.900")}
->>>>>>> dev
             border="1px solid"
             borderColor={tableHeadBg}
             borderRadius="18px"
             px={4}
             py={4}
           >
-<<<<<<< HEAD
-            <Text
-              fontSize="xs"
-              color={subtleText}
-              textTransform="uppercase"
-              letterSpacing="2px"
-              fontFamily="'Courier New',monospace"
-              mb={3}
-            >
-              {t("dashboard.balanceHistory.tableTitle")}
-            </Text>
-            <Box overflowX="auto">
-              <Table size="sm" variant="unstyled" minW="640px">
-                <Thead>
-=======
             <Flex justify="space-between" align="center" mb={3} wrap="wrap" gap={2}>
               <Text
                 fontSize="xs"
@@ -1414,24 +1095,14 @@ export const DashboardPage: React.FC = () => {
                 }}
               >
                 <Thead bg={useColorModeValue("gray.200", "gray.800")}>
->>>>>>> dev
                   <Tr>
                     <Th
                       textAlign="left"
                       fontSize="xs"
-<<<<<<< HEAD
-                      color={subtleText}
-                      textTransform="uppercase"
-                      letterSpacing="1.4px"
-                      fontFamily="'Courier New',monospace"
-                      borderBottom="1px solid"
-                      borderColor={tableHeadBg}
-=======
                       color={useColorModeValue("gray.600", "gray.300")}
                       textTransform="uppercase"
                       letterSpacing="1.4px"
                       fontFamily="'Courier New',monospace"
->>>>>>> dev
                     >
                       {t("dashboard.balanceHistory.tableYear")}
                     </Th>
@@ -1452,19 +1123,10 @@ export const DashboardPage: React.FC = () => {
                     <Th
                       textAlign="right"
                       fontSize="xs"
-<<<<<<< HEAD
-                      color={subtleText}
-                      textTransform="uppercase"
-                      letterSpacing="1.2px"
-                      fontFamily="'Courier New',monospace"
-                      borderBottom="1px solid"
-                      borderColor={tableHeadBg}
-=======
                       color={useColorModeValue("gray.600", "gray.300")}
                       textTransform="uppercase"
                       letterSpacing="1.2px"
                       fontFamily="'Courier New',monospace"
->>>>>>> dev
                     >
                       {t("dashboard.balanceHistory.tableTotal")}
                     </Th>
@@ -1476,14 +1138,6 @@ export const DashboardPage: React.FC = () => {
                     return (
                       <Tr key={`row-${year}`}>
                         <Td
-<<<<<<< HEAD
-                          py={2}
-                          color="gray.700"
-                          fontFamily="'Georgia',serif"
-                          fontWeight={600}
-                        >
-                          {year}
-=======
                           py={3}
                           color={useColorModeValue("gray.700", "gray.200")}
                           fontFamily="'Georgia',serif"
@@ -1499,7 +1153,6 @@ export const DashboardPage: React.FC = () => {
                             />
                             <Text>{year}</Text>
                           </HStack>
->>>>>>> dev
                         </Td>
                         {balanceSeries.map((series) => {
                           const value =
@@ -1508,17 +1161,10 @@ export const DashboardPage: React.FC = () => {
                             <Td
                               key={`cell-${series.project.id}-${year}`}
                               textAlign="right"
-<<<<<<< HEAD
-                              py={2}
-                            >
-                              <Text
-                                color="gray.800"
-=======
                               py={3}
                             >
                               <Text
                                 color={useColorModeValue("gray.800", "gray.100")}
->>>>>>> dev
                                 fontFamily="'Courier New',monospace"
                                 fontWeight={700}
                                 fontSize="sm"
@@ -1528,11 +1174,7 @@ export const DashboardPage: React.FC = () => {
                             </Td>
                           );
                         })}
-<<<<<<< HEAD
-                        <Td textAlign="right" py={2}>
-=======
                         <Td textAlign="right" py={3}>
->>>>>>> dev
                           <Text
                             color="#f97316"
                             fontFamily="'Courier New',monospace"
