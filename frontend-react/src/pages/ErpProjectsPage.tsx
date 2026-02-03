@@ -50,6 +50,7 @@ import {
   type ErpTask as ErpTaskApi,
 } from "../api/erpTimeTracking";
 
+import { fetchDepartments, type Department } from "../api/hr";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { fetchAllTenants, type TenantOption } from "../api/users";
 import { useRouter } from "@tanstack/react-router";
@@ -112,6 +113,8 @@ export const ErpProjectsPage: React.FC = () => {
     setProjectDescription,
     projectType,
     setProjectType,
+    projectDepartmentId,
+    setProjectDepartmentId,
     projectStart,
     setProjectStart,
     projectEnd,
@@ -136,6 +139,12 @@ export const ErpProjectsPage: React.FC = () => {
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects", effectiveTenantId ?? "all"],
     queryFn: () => fetchErpProjects(effectiveTenantId),
+    enabled: tenantReady,
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["erp-project-departments", effectiveTenantId ?? "all"],
+    queryFn: () => fetchDepartments(effectiveTenantId),
     enabled: tenantReady,
   });
 
@@ -229,6 +238,8 @@ export const ErpProjectsPage: React.FC = () => {
     setEditDescription,
     editProjectType,
     setEditProjectType,
+    editDepartmentId,
+    setEditDepartmentId,
     editStart,
     setEditStart,
     editEnd,
@@ -253,6 +264,19 @@ export const ErpProjectsPage: React.FC = () => {
     milestones: visibleMilestones,
     rawTasks: visibleTasks,
   });
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    const exists = projects.some((project) => project.id === selectedProject.id);
+    if (exists) return;
+    setSelectedProject(null);
+    closeProjectDetails();
+    toast({
+      title: "Proyecto no disponible",
+      description: "El proyecto ya no existe o pertenece a otro tenant.",
+      status: "warning",
+    });
+  }, [projects, selectedProject, closeProjectDetails, setSelectedProject, toast]);
 
   const {
     summaryYear,
@@ -432,7 +456,15 @@ export const ErpProjectsPage: React.FC = () => {
 
       if (error?.response?.status === 405 && selectedProject) {
         try {
-          await updateErpProject(selectedProject.id, { is_active: false });
+          const tenantIdForUpdate =
+            selectedProject.tenant_id ??
+            projects.find((project) => project.id === selectedProject.id)?.tenant_id ??
+            undefined;
+          await updateErpProject(
+            selectedProject.id,
+            { is_active: false },
+            tenantIdForUpdate,
+          );
 
           await queryClient.invalidateQueries({
             queryKey: ["erp-projects", effectiveTenantId ?? "all"],
@@ -483,22 +515,33 @@ export const ErpProjectsPage: React.FC = () => {
       if (!selectedProject) {
         throw new Error("No hay proyecto seleccionado");
       }
-
-      return updateErpProject(selectedProject.id, {
+      const tenantIdForUpdate = isSuperAdmin
+        ? selectedProject.tenant_id ??
+          projects.find((project) => project.id === selectedProject.id)?.tenant_id ??
+          undefined
+        : tenantId ??
+          selectedProject.tenant_id ??
+          projects.find((project) => project.id === selectedProject.id)?.tenant_id ??
+          undefined;
+      const payload = {
         name: editName.trim(),
-
         description: editDescription.trim() || null,
-
         project_type: editProjectType,
-
+        department_id: editDepartmentId === "" ? null : editDepartmentId,
         start_date: editStart || null,
-
         end_date: editEnd || null,
-
         subsidy_percent: editSubsidyPercent ? Number(editSubsidyPercent) : 0,
-
         is_active: editActive,
-      });
+      };
+
+      try {
+        return await updateErpProject(selectedProject.id, payload, tenantIdForUpdate);
+      } catch (error: any) {
+        if (error?.response?.status === 404 && tenantIdForUpdate != null && isSuperAdmin) {
+          return updateErpProject(selectedProject.id, payload);
+        }
+        throw error;
+      }
     },
 
     onSuccess: async (project) => {
@@ -511,7 +554,20 @@ export const ErpProjectsPage: React.FC = () => {
       toast({ title: "Proyecto actualizado", status: "success" });
     },
 
-    onError: (error: any) => {
+    onError: async (error: any) => {
+      if (error?.response?.status === 404) {
+        await queryClient.invalidateQueries({
+          queryKey: ["erp-projects", effectiveTenantId ?? "all"],
+        });
+        setSelectedProject(null);
+        closeProjectDetails();
+        toast({
+          title: "Proyecto no encontrado",
+          description: "El proyecto ya no existe o no tienes acceso.",
+          status: "warning",
+        });
+        return;
+      }
       toast({
         title: "Error al actualizar",
 
@@ -774,6 +830,17 @@ export const ErpProjectsPage: React.FC = () => {
               onProjectDescriptionChange={setProjectDescription}
               projectType={projectType}
               onProjectTypeChange={setProjectType}
+              departments={
+                isSuperAdmin && createTenantId
+                  ? departments.filter(
+                      (dept) => dept.tenant_id === Number(createTenantId),
+                    )
+                  : isSuperAdmin
+                    ? []
+                    : departments
+              }
+              projectDepartmentId={projectDepartmentId}
+              onProjectDepartmentChange={setProjectDepartmentId}
               projectStart={projectStart}
               onProjectStartChange={setProjectStart}
               projectEnd={projectEnd}
@@ -812,6 +879,15 @@ export const ErpProjectsPage: React.FC = () => {
         setEditDescription={setEditDescription}
         editProjectType={editProjectType}
         setEditProjectType={setEditProjectType}
+        departments={
+          selectedProject?.tenant_id != null
+            ? departments.filter(
+                (dept) => dept.tenant_id === selectedProject.tenant_id,
+              )
+            : departments
+        }
+        editDepartmentId={editDepartmentId}
+        setEditDepartmentId={setEditDepartmentId}
         editStart={editStart}
         setEditStart={setEditStart}
         editEnd={editEnd}

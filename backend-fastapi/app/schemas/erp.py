@@ -11,9 +11,11 @@ class ProjectRead(BaseModel):
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None
+    department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None
+    subsidy_percent: Optional[float] = None
     is_active: bool
     created_at: datetime
 
@@ -22,6 +24,7 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None
+    department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None
@@ -32,6 +35,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_type: Optional[str] = None
+    department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None

@@ -88,6 +88,18 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_project ADD COLUMN tenant_id INTEGER NULL")
                 )
+            if "project_type" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN project_type VARCHAR(32) NULL")
+                )
+            if "department_id" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN department_id INTEGER NULL")
+                )
+            if "subsidy_percent" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN subsidy_percent NUMERIC(5,2) NULL")
+                )
             if "start_date" not in project_columns:
                 conn.execute(
                     text(

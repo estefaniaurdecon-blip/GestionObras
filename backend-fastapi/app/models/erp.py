@@ -14,9 +14,11 @@ class Project(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = Field(default=None, max_length=32)
+    department_id: Optional[int] = Field(default=None, foreign_key="department.id")
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None
+    subsidy_percent: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

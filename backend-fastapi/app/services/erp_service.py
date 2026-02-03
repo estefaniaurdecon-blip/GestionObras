@@ -492,9 +492,13 @@ def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[in
         name=data.name,
         description=data.description,
         project_type=project_type,
+        department_id=data.department_id,
         start_date=data.start_date,
         end_date=data.end_date,
         duration_months=_calculate_duration_months(data.start_date, data.end_date),
+        subsidy_percent=Decimal(_clamp_percent(data.subsidy_percent) or 0)
+        if data.subsidy_percent is not None
+        else None,
         is_active=data.is_active,
     )
     session.add(project)
@@ -514,6 +518,8 @@ def update_project(
         project.description = data.description
     if data.project_type is not None:
         project.project_type = _normalize_project_type(data.project_type)
+    if data.department_id is not None:
+        project.department_id = data.department_id
     if data.start_date is not None or data.end_date is not None:
         start_date = data.start_date if data.start_date is not None else project.start_date
         end_date = data.end_date if data.end_date is not None else project.end_date

@@ -184,7 +184,13 @@ def api_update_project(
         tenant_id = _tenant_for_write(current_user, x_tenant_id)
         return update_project(session, project_id, payload, tenant_id)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "no encontrado" in detail.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
