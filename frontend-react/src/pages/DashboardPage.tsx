@@ -91,6 +91,15 @@ export const DashboardPage: React.FC = () => {
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
   const subtleText = useColorModeValue("gray.500", "gray.300");
   const statAccent = useColorModeValue("brand.500", "brand.300");
+  const balanceChartBg = useColorModeValue("gray.200", "gray.950");
+  const balanceTableBg = useColorModeValue("gray.100", "gray.900");
+  const balanceTableRowOddBg = useColorModeValue("white", "gray.800");
+  const balanceTableRowHoverBg = useColorModeValue("green.50", "whiteAlpha.100");
+  const balanceTableBorderColor = useColorModeValue("gray.200", "gray.700");
+  const balanceTableHeadBg = useColorModeValue("gray.200", "gray.800");
+  const balanceTableHeadText = useColorModeValue("gray.600", "gray.300");
+  const balanceTableYearText = useColorModeValue("gray.700", "gray.200");
+  const balanceTableTotalText = useColorModeValue("gray.800", "gray.100");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -693,7 +702,7 @@ export const DashboardPage: React.FC = () => {
             </Flex>
 
             <Box
-              bg={useColorModeValue("gray.200", "gray.950")}
+              bg={balanceChartBg}
               border="1px solid"
               borderColor={tableHeadBg}
               borderRadius="20px"
@@ -1052,7 +1061,7 @@ export const DashboardPage: React.FC = () => {
           </Box>
 
           <Box
-            bg={useColorModeValue("gray.100", "gray.900")}
+            bg={balanceTableBg}
             border="1px solid"
             borderColor={tableHeadBg}
             borderRadius="18px"
@@ -1086,20 +1095,20 @@ export const DashboardPage: React.FC = () => {
                 minW="640px"
                 sx={{
                   "tbody tr:nth-of-type(odd)": {
-                    bg: useColorModeValue("white", "gray.800"),
+                    bg: balanceTableRowOddBg,
                   },
                   "tbody tr:hover": {
-                    bg: useColorModeValue("green.50", "whiteAlpha.100"),
+                    bg: balanceTableRowHoverBg,
                   },
-                  "th, td": { borderColor: useColorModeValue("gray.200", "gray.700") },
+                  "th, td": { borderColor: balanceTableBorderColor },
                 }}
               >
-                <Thead bg={useColorModeValue("gray.200", "gray.800")}>
+                <Thead bg={balanceTableHeadBg}>
                   <Tr>
                     <Th
                       textAlign="left"
                       fontSize="xs"
-                      color={useColorModeValue("gray.600", "gray.300")}
+                      color={balanceTableHeadText}
                       textTransform="uppercase"
                       letterSpacing="1.4px"
                       fontFamily="'Courier New',monospace"
@@ -1123,7 +1132,7 @@ export const DashboardPage: React.FC = () => {
                     <Th
                       textAlign="right"
                       fontSize="xs"
-                      color={useColorModeValue("gray.600", "gray.300")}
+                      color={balanceTableHeadText}
                       textTransform="uppercase"
                       letterSpacing="1.2px"
                       fontFamily="'Courier New',monospace"
@@ -1139,7 +1148,7 @@ export const DashboardPage: React.FC = () => {
                       <Tr key={`row-${year}`}>
                         <Td
                           py={3}
-                          color={useColorModeValue("gray.700", "gray.200")}
+                          color={balanceTableYearText}
                           fontFamily="'Georgia',serif"
                           fontWeight={600}
                         >
@@ -1164,7 +1173,7 @@ export const DashboardPage: React.FC = () => {
                               py={3}
                             >
                               <Text
-                                color={useColorModeValue("gray.800", "gray.100")}
+                                color={balanceTableTotalText}
                                 fontFamily="'Courier New',monospace"
                                 fontWeight={700}
                                 fontSize="sm"
