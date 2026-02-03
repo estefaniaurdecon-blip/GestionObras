@@ -86,10 +86,12 @@ export async function createErpProject(
 export async function updateErpProject(
   projectId: number,
   payload: ErpProjectUpdate,
+  tenantId?: number,
 ): Promise<ErpProjectResponse> {
   const response = await apiClient.patch<ErpProjectResponse>(
     `/api/v1/erp/projects/${projectId}`,
     payload,
+    buildTenantHeaders(tenantId),
   );
   return response.data;
 }

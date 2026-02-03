@@ -51,8 +51,11 @@ apiClient.interceptors.request.use((config) => {
     const protocol = window.location.protocol === "https:" ? "https" : "http";
     config.baseURL = `${protocol}://${window.location.hostname}:8000`;
   }
+  const existingTenantHeader =
+    config.headers &&
+    (config.headers["X-Tenant-Id"] ?? (config.headers as any)["x-tenant-id"]);
   const tenantId = localStorage.getItem("x_tenant_id");
-  if (tenantId) {
+  if (!existingTenantHeader && tenantId) {
     config.headers = {
       ...config.headers,
       "X-Tenant-Id": tenantId,

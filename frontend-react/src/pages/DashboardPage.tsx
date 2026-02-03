@@ -45,6 +45,10 @@ import { AppShell } from "../components/layout/AppShell";
 import { PageHero } from "../components/layout/PageHero";
 import { ToolGrid } from "../components/tools/ToolGrid";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+<<<<<<< HEAD
+=======
+import { HRPanel, type Employee as HREmployee } from "../hr-panel";
+>>>>>>> dev
 import {
   buildParentChildMap,
   EXTERNAL_COLLAB_LABEL,
@@ -103,8 +107,19 @@ export const DashboardPage: React.FC = () => {
   const canCreateTimeReports =
     isSuperAdmin ||
     (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
+<<<<<<< HEAD
   const canReadHr =
     isSuperAdmin || (currentUser?.permissions?.includes("hr:read") ?? false);
+=======
+  const roleName = currentUser?.role_name ?? null;
+  const hasHrPermission =
+    currentUser?.permissions?.includes("hr:read") ?? false;
+  const canReadHr =
+    isSuperAdmin ||
+    hasHrPermission ||
+    roleName === "tenant_admin" ||
+    roleName === "hr_manager";
+>>>>>>> dev
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
@@ -167,23 +182,26 @@ export const DashboardPage: React.FC = () => {
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
       }),
-    onError: (error: any) => {
-      const message =
-        error?.response?.data?.detail ??
-        t("dashboard.messages.reportLoadFallback");
-      toast({
-        title: t("dashboard.messages.reportLoadTitle"),
-        description: message,
-        status: "error",
-      });
-    },
   });
 
-  const reportRows = reportQuery.data ?? [];
-  const filteredReportRows = useMemo(() => {
+  useEffect(() => {
+    if (!reportQuery.error) return;
+    const error = reportQuery.error as any;
+    const message =
+      error?.response?.data?.detail ??
+      t("dashboard.messages.reportLoadFallback");
+    toast({
+      title: t("dashboard.messages.reportLoadTitle"),
+      description: message,
+      status: "error",
+    });
+  }, [reportQuery.error, t, toast]);
+
+  const reportRows: TimeReportRow[] = reportQuery.data ?? [];
+  const filteredReportRows = useMemo<TimeReportRow[]>(() => {
     const normalized = userFilter.trim().toLowerCase();
     if (!normalized) return reportRows;
-    return reportRows.filter((row) =>
+    return reportRows.filter((row: TimeReportRow) =>
       `${row.username ?? ""}`.toLowerCase().includes(normalized),
     );
   }, [reportRows, userFilter]);
@@ -191,7 +209,8 @@ export const DashboardPage: React.FC = () => {
   const reportHours = useMemo(
     () =>
       filteredReportRows.reduce(
-        (acc, row) => acc + Number(row.total_hours || 0),
+        (acc: number, row: TimeReportRow) =>
+          acc + Number(row.total_hours || 0),
         0,
       ),
     [filteredReportRows],
@@ -209,6 +228,7 @@ export const DashboardPage: React.FC = () => {
     enabled: canReadHr && (isSuperAdmin || Boolean(tenantId)),
   });
 
+<<<<<<< HEAD
   const [selectedDegree, setSelectedDegree] = useState<string>("all");
 
   const availabilityByDegree = useMemo(() => {
@@ -269,6 +289,32 @@ export const DashboardPage: React.FC = () => {
     [filteredAvailability],
   );
 
+=======
+  const hrPanelEmployees = useMemo<HREmployee[]>(() => {
+    const list = hrEmployeesQuery.data ?? [];
+    return list.map((employee) => {
+      const name =
+        employee.full_name?.trim() ||
+        employee.email?.trim() ||
+        `Empleado ${employee.id}`;
+      const titulacion = (
+        employee.titulacion === "doctorado" ||
+        employee.titulacion === "universitario" ||
+        employee.titulacion === "no_universitario"
+          ? employee.titulacion
+          : "no_universitario"
+      ) as HREmployee["titulacion"];
+      return {
+        id: employee.id,
+        name,
+        titulacion,
+        available_hours: Number(employee.available_hours ?? 0),
+        is_active: employee.is_active,
+      };
+    });
+  }, [hrEmployeesQuery.data]);
+
+>>>>>>> dev
   const defaultBudgetTemplate = useMemo(() => getDefaultBudgetTemplate(), []);
   const baseParentMap = useMemo(
     () => buildParentChildMap(defaultBudgetTemplate),
@@ -413,6 +459,7 @@ export const DashboardPage: React.FC = () => {
     return values.length > 0 ? Math.max(...values) : 0;
   }, [balanceSeries]);
 
+<<<<<<< HEAD
   const availabilitySegments = useMemo(() => {
     if (totalAvailableHours <= 0) return [];
     let offset = 0;
@@ -424,6 +471,8 @@ export const DashboardPage: React.FC = () => {
     });
   }, [filteredAvailability, totalAvailableHours]);
 
+=======
+>>>>>>> dev
   const formatCompact = (value: number) => {
     const abs = Math.abs(value);
     if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -480,6 +529,14 @@ export const DashboardPage: React.FC = () => {
       }
 
       setSelectedTool(tool);
+      if (!tenantId) {
+        toast({
+          title: t("dashboard.messages.toolLaunchTitle"),
+          description: t("dashboard.messages.toolLaunchFallback"),
+          status: "error",
+        });
+        return;
+      }
       const result = await launchTool(tool.id, tenantId);
 
       if (tool.slug === "moodle") {
@@ -511,6 +568,7 @@ export const DashboardPage: React.FC = () => {
       </Box>
 
       {canReadHr && (
+<<<<<<< HEAD
         <Box
           borderWidth="1px"
           borderRadius="xl"
@@ -649,6 +707,10 @@ export const DashboardPage: React.FC = () => {
               </VStack>
             </Box>
           )}
+=======
+        <Box mb={8}>
+          <HRPanel employees={hrPanelEmployees} loading={hrEmployeesQuery.isLoading} />
+>>>>>>> dev
         </Box>
       )}
 
@@ -860,12 +922,22 @@ export const DashboardPage: React.FC = () => {
             </Flex>
 
             <Box
+<<<<<<< HEAD
               bg={panelBg}
               border="1px solid"
               borderColor={tableHeadBg}
               borderRadius="18px"
               px={4}
               py={4}
+=======
+              bg={useColorModeValue("gray.200", "gray.950")}
+              border="1px solid"
+              borderColor={tableHeadBg}
+              borderRadius="20px"
+              px={5}
+              py={5}
+              boxShadow="inset 0 0 0 1px rgba(0,0,0,0.08)"
+>>>>>>> dev
               mb={6}
             >
               <Flex justify="space-between" align="center" mb={3}>
@@ -897,8 +969,13 @@ export const DashboardPage: React.FC = () => {
               </Flex>
 
               {(() => {
+<<<<<<< HEAD
                 const W = 700;
                 const H = 280;
+=======
+                const W = 980;
+                const H = 380;
+>>>>>>> dev
                 const PAD = { top: 30, right: 28, bottom: 44, left: 74 };
                 const chartW = W - PAD.left - PAD.right;
                 const chartH = H - PAD.top - PAD.bottom;
@@ -908,6 +985,7 @@ export const DashboardPage: React.FC = () => {
                 const minVal = Math.min(0, ...values);
                 const maxVal = Math.max(0, ...values);
                 const range = maxVal - minVal || 1;
+<<<<<<< HEAD
                 const x = (i: number) =>
                   PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
                 const y = (val: number) =>
@@ -917,6 +995,37 @@ export const DashboardPage: React.FC = () => {
                   const val = minVal + (range / gridCount) * i;
                   return { val, yPos: y(val) };
                 });
+=======
+                const paddedMin = minVal - range * 0.1;
+                const paddedMax = maxVal + range * 0.1;
+                const paddedRange = paddedMax - paddedMin || 1;
+                const x = (i: number) =>
+                  PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
+                const y = (val: number) =>
+                  PAD.top + chartH - ((val - paddedMin) / paddedRange) * chartH;
+                const gridCount = 5;
+                const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+                  const val = paddedMin + (paddedRange / gridCount) * i;
+                  return { val, yPos: y(val) };
+                });
+                const buildSmoothPath = (points: Array<{ x: number; y: number }>) => {
+                  if (points.length < 2) return "";
+                  let path = `M ${points[0].x} ${points[0].y}`;
+                  const tension = 0.3;
+                  for (let i = 0; i < points.length - 1; i += 1) {
+                    const p0 = points[Math.max(i - 1, 0)];
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    const p3 = points[Math.min(i + 2, points.length - 1)];
+                    const cp1x = p1.x + (p2.x - p0.x) * tension;
+                    const cp1y = p1.y + (p2.y - p0.y) * tension;
+                    const cp2x = p2.x - (p3.x - p1.x) * tension;
+                    const cp2y = p2.y - (p3.y - p1.y) * tension;
+                    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+                  }
+                  return path;
+                };
+>>>>>>> dev
                 return (
                   <Box>
                     <svg
@@ -925,6 +1034,7 @@ export const DashboardPage: React.FC = () => {
                     >
                       <defs>
                         {balanceSeries.map((series) => (
+<<<<<<< HEAD
                           <linearGradient
                             key={`grad-${series.project.id}`}
                             id={`balanceGrad-${series.project.id}`}
@@ -939,13 +1049,80 @@ export const DashboardPage: React.FC = () => {
                         ))}
                         <filter id="balanceGlow">
                           <feGaussianBlur stdDeviation="2" result="blur" />
+=======
+                          <React.Fragment key={`grad-${series.project.id}`}>
+                            <linearGradient
+                              id={`balanceGrad-${series.project.id}`}
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop offset="0%" stopColor={series.color} stopOpacity={0.28} />
+                              <stop offset="65%" stopColor={series.color} stopOpacity={0.12} />
+                              <stop offset="100%" stopColor={series.color} stopOpacity={0.03} />
+                            </linearGradient>
+                            <linearGradient
+                              id={`balanceLine-${series.project.id}`}
+                              x1="0"
+                              y1="0"
+                              x2="1"
+                              y2="0"
+                            >
+                              <stop offset="0%" stopColor={series.color} stopOpacity={0.55} />
+                              <stop offset="50%" stopColor={series.color} stopOpacity={1} />
+                              <stop offset="100%" stopColor={series.color} stopOpacity={0.55} />
+                            </linearGradient>
+                          </React.Fragment>
+                        ))}
+                        <filter id="balanceGlow">
+                          <feGaussianBlur stdDeviation="2.2" result="blur" />
+>>>>>>> dev
                           <feMerge>
                             <feMergeNode in="blur" />
                             <feMergeNode in="SourceGraphic" />
                           </feMerge>
                         </filter>
+<<<<<<< HEAD
                       </defs>
 
+=======
+                        <filter id="balanceShadow">
+                          <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.22" />
+                        </filter>
+                        <pattern id="balanceDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
+                          <circle cx="1.5" cy="1.5" r="0.7" fill="#cbd5e1" opacity="0.4" />
+                        </pattern>
+                      </defs>
+
+                      <rect
+                        x={PAD.left}
+                        y={PAD.top}
+                        width={chartW}
+                        height={chartH}
+                        fill="url(#balanceDots)"
+                        opacity={0.35}
+                        rx={12}
+                      />
+
+                      <line
+                        x1={PAD.left}
+                        y1={PAD.top}
+                        x2={PAD.left}
+                        y2={H - PAD.bottom}
+                        stroke="#94a3b8"
+                        strokeWidth={1.4}
+                      />
+                      <line
+                        x1={PAD.left}
+                        y1={H - PAD.bottom}
+                        x2={W - PAD.right}
+                        y2={H - PAD.bottom}
+                        stroke="#94a3b8"
+                        strokeWidth={1.4}
+                      />
+
+>>>>>>> dev
                       {gridLines.map((g, idx) => (
                         <g key={`grid-${idx}`}>
                           <line
@@ -955,6 +1132,10 @@ export const DashboardPage: React.FC = () => {
                             y2={g.yPos}
                             stroke="#e2e8f0"
                             strokeWidth={1}
+<<<<<<< HEAD
+=======
+                            strokeDasharray="4 4"
+>>>>>>> dev
                           />
                           <text
                             x={PAD.left - 8}
@@ -974,6 +1155,7 @@ export const DashboardPage: React.FC = () => {
                           (year) =>
                             series.points.find((p) => p.year === year)?.value ?? 0,
                         );
+<<<<<<< HEAD
                         const linePath = vals
                           .map((val, idx) => {
                             if (idx === 0) return `M ${x(idx)} ${y(val)}`;
@@ -983,6 +1165,13 @@ export const DashboardPage: React.FC = () => {
                             return `C ${cpx} ${y(vals[idx - 1])}, ${cpx} ${y(val)}, ${x1} ${y(val)}`;
                           })
                           .join(" ");
+=======
+                        const points = vals.map((val, idx) => ({
+                          x: x(idx),
+                          y: y(val),
+                        }));
+                        const linePath = buildSmoothPath(points);
+>>>>>>> dev
                         const areaPath = `${linePath} L ${x(vals.length - 1)} ${
                           PAD.top + chartH
                         } L ${x(0)} ${PAD.top + chartH} Z`;
@@ -991,12 +1180,21 @@ export const DashboardPage: React.FC = () => {
                             <path
                               d={areaPath}
                               fill={`url(#balanceGrad-${series.project.id})`}
+<<<<<<< HEAD
+=======
+                              filter="url(#balanceShadow)"
+>>>>>>> dev
                             />
                             <path
                               d={linePath}
                               fill="none"
+<<<<<<< HEAD
                               stroke={series.color}
                               strokeWidth={2.5}
+=======
+                              stroke={`url(#balanceLine-${series.project.id})`}
+                              strokeWidth={3.2}
+>>>>>>> dev
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               filter="url(#balanceGlow)"
@@ -1154,13 +1352,18 @@ export const DashboardPage: React.FC = () => {
           </Box>
 
           <Box
+<<<<<<< HEAD
             bg={panelBg}
+=======
+            bg={useColorModeValue("gray.100", "gray.900")}
+>>>>>>> dev
             border="1px solid"
             borderColor={tableHeadBg}
             borderRadius="18px"
             px={4}
             py={4}
           >
+<<<<<<< HEAD
             <Text
               fontSize="xs"
               color={subtleText}
@@ -1174,16 +1377,61 @@ export const DashboardPage: React.FC = () => {
             <Box overflowX="auto">
               <Table size="sm" variant="unstyled" minW="640px">
                 <Thead>
+=======
+            <Flex justify="space-between" align="center" mb={3} wrap="wrap" gap={2}>
+              <Text
+                fontSize="xs"
+                color={subtleText}
+                textTransform="uppercase"
+                letterSpacing="2px"
+                fontFamily="'Courier New',monospace"
+              >
+                {t("dashboard.balanceHistory.tableTitle")}
+              </Text>
+              <Badge
+                variant="subtle"
+                colorScheme="green"
+                fontSize="xs"
+                letterSpacing="0.08em"
+                textTransform="uppercase"
+              >
+                {balanceYears.length} años
+              </Badge>
+            </Flex>
+            <Box overflowX="auto">
+              <Table
+                size="sm"
+                variant="simple"
+                minW="640px"
+                sx={{
+                  "tbody tr:nth-of-type(odd)": {
+                    bg: useColorModeValue("white", "gray.800"),
+                  },
+                  "tbody tr:hover": {
+                    bg: useColorModeValue("green.50", "whiteAlpha.100"),
+                  },
+                  "th, td": { borderColor: useColorModeValue("gray.200", "gray.700") },
+                }}
+              >
+                <Thead bg={useColorModeValue("gray.200", "gray.800")}>
+>>>>>>> dev
                   <Tr>
                     <Th
                       textAlign="left"
                       fontSize="xs"
+<<<<<<< HEAD
                       color={subtleText}
                       textTransform="uppercase"
                       letterSpacing="1.4px"
                       fontFamily="'Courier New',monospace"
                       borderBottom="1px solid"
                       borderColor={tableHeadBg}
+=======
+                      color={useColorModeValue("gray.600", "gray.300")}
+                      textTransform="uppercase"
+                      letterSpacing="1.4px"
+                      fontFamily="'Courier New',monospace"
+>>>>>>> dev
                     >
                       {t("dashboard.balanceHistory.tableYear")}
                     </Th>
@@ -1204,12 +1452,19 @@ export const DashboardPage: React.FC = () => {
                     <Th
                       textAlign="right"
                       fontSize="xs"
+<<<<<<< HEAD
                       color={subtleText}
                       textTransform="uppercase"
                       letterSpacing="1.2px"
                       fontFamily="'Courier New',monospace"
                       borderBottom="1px solid"
                       borderColor={tableHeadBg}
+=======
+                      color={useColorModeValue("gray.600", "gray.300")}
+                      textTransform="uppercase"
+                      letterSpacing="1.2px"
+                      fontFamily="'Courier New',monospace"
+>>>>>>> dev
                     >
                       {t("dashboard.balanceHistory.tableTotal")}
                     </Th>
@@ -1221,12 +1476,30 @@ export const DashboardPage: React.FC = () => {
                     return (
                       <Tr key={`row-${year}`}>
                         <Td
+<<<<<<< HEAD
                           py={2}
                           color="gray.700"
                           fontFamily="'Georgia',serif"
                           fontWeight={600}
                         >
                           {year}
+=======
+                          py={3}
+                          color={useColorModeValue("gray.700", "gray.200")}
+                          fontFamily="'Georgia',serif"
+                          fontWeight={600}
+                        >
+                          <HStack spacing={2}>
+                            <Box
+                              w="8px"
+                              h="8px"
+                              borderRadius="full"
+                              bg={statAccent}
+                              flexShrink={0}
+                            />
+                            <Text>{year}</Text>
+                          </HStack>
+>>>>>>> dev
                         </Td>
                         {balanceSeries.map((series) => {
                           const value =
@@ -1235,10 +1508,17 @@ export const DashboardPage: React.FC = () => {
                             <Td
                               key={`cell-${series.project.id}-${year}`}
                               textAlign="right"
+<<<<<<< HEAD
                               py={2}
                             >
                               <Text
                                 color="gray.800"
+=======
+                              py={3}
+                            >
+                              <Text
+                                color={useColorModeValue("gray.800", "gray.100")}
+>>>>>>> dev
                                 fontFamily="'Courier New',monospace"
                                 fontWeight={700}
                                 fontSize="sm"
@@ -1248,7 +1528,11 @@ export const DashboardPage: React.FC = () => {
                             </Td>
                           );
                         })}
+<<<<<<< HEAD
                         <Td textAlign="right" py={2}>
+=======
+                        <Td textAlign="right" py={3}>
+>>>>>>> dev
                           <Text
                             color="#f97316"
                             fontFamily="'Courier New',monospace"

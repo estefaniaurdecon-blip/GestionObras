@@ -938,7 +938,8 @@
       "nameRequired": "Name required",
       "employeeNameRequiredDesc": "Provide the full name if no user is selected.",
       "selectTenant": "Select a tenant",
-      "genericErrorDesc": "Check permissions and data."
+      "genericErrorDesc": "Check permissions and data.",
+      "titulacionRequired": "Select a degree"
     },
     "status": {
       "active": "Active",
@@ -976,7 +977,7 @@
       "tabs": {
         "summary": "Summary",
         "projects": "Projects",
-      "workManagement": "Work management",
+        "workManagement": "Work management",
         "create": "Create",
         "gantt": "Gantt"
       },

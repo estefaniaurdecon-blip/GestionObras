@@ -692,6 +692,15 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
       });
       return;
     }
+    if (!employeeForm.titulacion) {
+      toast({
+        title: t("hr.messages.titulacionRequired"),
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
     if (isSuperAdmin && !effectiveTenantId) {
       toast({
         title: t("hr.messages.selectTenant"),
@@ -1279,11 +1288,17 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   onChange={handleEmployeeEditChange}
                   placeholder={t("hr.employees.form.titulacionPlaceholder")}
                 >
+<<<<<<< HEAD
                   {TITULACION_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
                   ))}
+=======
+                  <option value="doctorado">Doctorado</option>
+                  <option value="universitario">Universitario</option>
+                  <option value="no_universitario">No universitario</option>
+>>>>>>> dev
                 </Select>
               </FormControl>
               <FormControl>
@@ -1420,6 +1435,19 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   value={employeeForm.position}
                   onChange={handleEmployeeChange}
                 />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t("hr.employees.form.titulacion")}</FormLabel>
+                <Select
+                  name="titulacion"
+                  value={employeeForm.titulacion}
+                  onChange={handleEmployeeChange}
+                  placeholder={t("hr.employees.form.titulacionPlaceholder")}
+                >
+                  <option value="doctorado">Doctorado</option>
+                  <option value="universitario">Universitario</option>
+                  <option value="no_universitario">No universitario</option>
+                </Select>
               </FormControl>
               <FormControl>
                 <FormLabel>{t("hr.employees.form.titulacion")}</FormLabel>

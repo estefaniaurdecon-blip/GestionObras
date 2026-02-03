@@ -175,12 +175,12 @@
     },
     "nav": {
       "dashboard": "Dashboard",
-      "erp": "Gesti\u00f3n de proyectos",
+      "erp": "Gestión de proyectos",
       "timeReport": "Informe de horas",
       "timeControl": "Control de tiempo",
       "tasks": "Tareas",
       "projects": "Proyectos",
-      "workManagement": "Gesti\u00f3n de obra",
+      "workManagement": "Gestión de obra",
       "externalCollaborations": "Colaboraciones externas",
       "users": "Usuarios",
       "hr": "Recursos humanos",
@@ -925,7 +925,8 @@
       "nameRequired": "Nombre obligatorio",
       "employeeNameRequiredDesc": "Indica el nombre completo si no seleccionas usuario.",
       "selectTenant": "Selecciona un tenant",
-      "genericErrorDesc": "Revisa permisos y datos."
+      "genericErrorDesc": "Revisa permisos y datos.",
+      "titulacionRequired": "Selecciona una titulación"
     },
     "status": {
       "active": "Activo",
@@ -1168,4 +1169,8 @@
       }
     }
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> dev
