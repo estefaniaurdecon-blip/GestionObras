@@ -1288,17 +1288,11 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   onChange={handleEmployeeEditChange}
                   placeholder={t("hr.employees.form.titulacionPlaceholder")}
                 >
-<<<<<<< HEAD
                   {TITULACION_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
                   ))}
-=======
-                  <option value="doctorado">Doctorado</option>
-                  <option value="universitario">Universitario</option>
-                  <option value="no_universitario">No universitario</option>
->>>>>>> dev
                 </Select>
               </FormControl>
               <FormControl>
