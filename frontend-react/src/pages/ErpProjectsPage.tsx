@@ -52,7 +52,6 @@ import {
 
 import { fetchDepartments, type Department } from "../api/hr";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { fetchDepartments, type Department } from "../api/hr";
 import { fetchAllTenants, type TenantOption } from "../api/users";
 import { useRouter } from "@tanstack/react-router";
 import {
@@ -529,10 +528,6 @@ export const ErpProjectsPage: React.FC = () => {
         description: editDescription.trim() || null,
         project_type: editProjectType,
         department_id: editDepartmentId === "" ? null : editDepartmentId,
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
         start_date: editStart || null,
         end_date: editEnd || null,
         subsidy_percent: editSubsidyPercent ? Number(editSubsidyPercent) : 0,
