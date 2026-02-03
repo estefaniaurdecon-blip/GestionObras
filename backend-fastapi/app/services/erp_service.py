@@ -509,7 +509,6 @@ def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[in
         name=data.name,
         description=data.description,
         project_type=project_type,
-        department_id=data.department_id,
         start_date=data.start_date,
         end_date=data.end_date,
         duration_months=_calculate_duration_months(data.start_date, data.end_date),
@@ -535,7 +534,6 @@ def update_project(
         project.description = data.description
     if data.project_type is not None:
         project.project_type = _normalize_project_type(data.project_type)
-<<<<<<< HEAD
     if "department_id" in data.__fields_set__:
         if data.department_id is None:
             project.department_id = None
@@ -544,10 +542,6 @@ def update_project(
                 session, data.department_id, project.tenant_id
             )
             project.department_id = department.id if department else None
-=======
-    if data.department_id is not None:
-        project.department_id = data.department_id
->>>>>>> dev
     if data.start_date is not None or data.end_date is not None:
         start_date = data.start_date if data.start_date is not None else project.start_date
         end_date = data.end_date if data.end_date is not None else project.end_date
