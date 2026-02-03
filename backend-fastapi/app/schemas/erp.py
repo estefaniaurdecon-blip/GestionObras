@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 class ProjectRead(BaseModel):
     id: int
     tenant_id: Optional[int] = None
+    department_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None
@@ -22,6 +23,7 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None
+    department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None
@@ -32,6 +34,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     project_type: Optional[str] = None
+    department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     subsidy_percent: Optional[float] = None

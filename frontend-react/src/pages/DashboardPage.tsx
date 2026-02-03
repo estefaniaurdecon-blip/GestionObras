@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
   Button,
+  Flex,
   FormControl,
   FormLabel,
   Heading,
@@ -21,6 +22,7 @@ import {
   Th,
   Thead,
   Tr,
+  VStack,
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
@@ -31,6 +33,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
 import { fetchDashboardSummary, type DashboardSummary } from "../api/dashboard";
+import { fetchProjectBudgets, type ProjectBudgetLine } from "../api/erpBudgets";
+import { fetchEmployees, type EmployeeProfile } from "../api/hr";
 import {
   fetchErpProjects,
   fetchTimeReport,
@@ -41,6 +45,18 @@ import { AppShell } from "../components/layout/AppShell";
 import { PageHero } from "../components/layout/PageHero";
 import { ToolGrid } from "../components/tools/ToolGrid";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import {
+  buildParentChildMap,
+  EXTERNAL_COLLAB_LABEL,
+  getDefaultBudgetTemplate,
+  groupBudgetsByConcept,
+  isAllCapsConcept,
+  isExternalCollaborationConcept,
+  isGeneralExpensesConcept,
+  normalizeConceptKey,
+  parseExternalCollaborationDetails,
+  formatEuroValue,
+} from "../utils/erp";
 
 const formatDate = (value: Date) => value.toISOString().slice(0, 10);
 
@@ -49,6 +65,19 @@ const addDays = (value: Date, days: number) => {
   copy.setDate(copy.getDate() + days);
   return copy;
 };
+
+const AVAIL_COLORS = [
+  "#f97316",
+  "#8b5cf6",
+  "#06b6d4",
+  "#10b981",
+  "#ec4899",
+  "#f59e0b",
+  "#3b82f6",
+  "#ef4444",
+  "#14b8a6",
+  "#a855f7",
+];
 
 export const DashboardPage: React.FC = () => {
   const toast = useToast();
@@ -61,6 +90,8 @@ export const DashboardPage: React.FC = () => {
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
   const subtleText = useColorModeValue("gray.500", "gray.300");
   const statAccent = useColorModeValue("brand.500", "brand.300");
+  const donutTrack = useColorModeValue("#e2e8f0", "#1e293b");
+  const donutInner = useColorModeValue("#cbd5f5", "#1f2937");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -72,6 +103,8 @@ export const DashboardPage: React.FC = () => {
   const canCreateTimeReports =
     isSuperAdmin ||
     (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
+  const canReadHr =
+    isSuperAdmin || (currentUser?.permissions?.includes("hr:read") ?? false);
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
@@ -80,6 +113,11 @@ export const DashboardPage: React.FC = () => {
   });
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [selectedBalanceProjectIds, setSelectedBalanceProjectIds] = useState<number[]>([]);
+  const [balanceHover, setBalanceHover] = useState<{
+    projectId: number;
+    year: number;
+  } | null>(null);
   const [dateFrom, setDateFrom] = useState(() =>
     formatDate(addDays(new Date(), -6)),
   );
@@ -91,6 +129,34 @@ export const DashboardPage: React.FC = () => {
   >({
     queryKey: ["dashboard-erp-projects", effectiveTenantId],
     queryFn: () => fetchErpProjects(effectiveTenantId),
+  });
+
+  useEffect(() => {
+    if (selectedBalanceProjectIds.length > 0) return;
+    if (projects && projects.length > 0) {
+      setSelectedBalanceProjectIds(projects.slice(0, 3).map((p) => p.id));
+    }
+  }, [projects, selectedBalanceProjectIds.length]);
+
+  const budgetLinesQuery = useQuery<
+    Array<{ projectId: number; lines: ProjectBudgetLine[] }>
+  >({
+    queryKey: [
+      "dashboard-project-budgets",
+      selectedBalanceProjectIds,
+      effectiveTenantId ?? "all",
+    ],
+    queryFn: async () => {
+      if (selectedBalanceProjectIds.length === 0) return [];
+      const results = await Promise.all(
+        selectedBalanceProjectIds.map(async (projectId) => ({
+          projectId,
+          lines: await fetchProjectBudgets(projectId, effectiveTenantId),
+        })),
+      );
+      return results;
+    },
+    enabled: selectedBalanceProjectIds.length > 0,
   });
 
   const reportQuery = useQuery<TimeReportRow[]>({
@@ -137,6 +203,273 @@ export const DashboardPage: React.FC = () => {
     enabled: Boolean(tenantId),
   });
 
+  const hrEmployeesQuery = useQuery<EmployeeProfile[]>({
+    queryKey: ["dashboard-hr-employees", effectiveTenantId ?? "all"],
+    queryFn: () => fetchEmployees(effectiveTenantId ?? null),
+    enabled: canReadHr && (isSuperAdmin || Boolean(tenantId)),
+  });
+
+  const [selectedDegree, setSelectedDegree] = useState<string>("all");
+
+  const availabilityByDegree = useMemo(() => {
+    const list = hrEmployeesQuery.data ?? [];
+    const totals: Record<string, number> = {
+      doctorado: 0,
+      universitario: 0,
+      no_universitario: 0,
+      sin_titulacion: 0,
+    };
+    list
+      .filter((e) => e.is_active)
+      .forEach((e) => {
+        const hours = Number(e.available_hours ?? 0);
+        if (hours <= 0) return;
+        const key = e.titulacion || "sin_titulacion";
+        if (!Object.prototype.hasOwnProperty.call(totals, key)) {
+          totals.sin_titulacion += hours;
+          return;
+        }
+        totals[key] += hours;
+      });
+    return [
+      { key: "doctorado", label: "Doctorado", hours: totals.doctorado, color: AVAIL_COLORS[0] },
+      { key: "universitario", label: "Universitario", hours: totals.universitario, color: AVAIL_COLORS[1] },
+      { key: "no_universitario", label: "No universitario", hours: totals.no_universitario, color: AVAIL_COLORS[2] },
+    ].filter((item) => item.hours > 0);
+  }, [hrEmployeesQuery.data]);
+
+  const filteredAvailability = useMemo(() => {
+    if (selectedDegree === "all") return availabilityByDegree;
+    return availabilityByDegree.filter((item) => item.key === selectedDegree);
+  }, [availabilityByDegree, selectedDegree]);
+
+  const employeesByDegree = useMemo(() => {
+    const list = hrEmployeesQuery.data ?? [];
+    const counts: Record<string, number> = {
+      doctorado: 0,
+      universitario: 0,
+      no_universitario: 0,
+    };
+    list
+      .filter((e) => e.is_active)
+      .forEach((e) => {
+        const key = e.titulacion ?? "";
+        if (!Object.prototype.hasOwnProperty.call(counts, key)) return;
+        counts[key] += 1;
+      });
+    return [
+      { key: "doctorado", label: "Doctorado", count: counts.doctorado, color: AVAIL_COLORS[0] },
+      { key: "universitario", label: "Universitario", count: counts.universitario, color: AVAIL_COLORS[1] },
+      { key: "no_universitario", label: "No universitario", count: counts.no_universitario, color: AVAIL_COLORS[2] },
+    ].filter((item) => item.count > 0);
+  }, [hrEmployeesQuery.data]);
+
+  const totalAvailableHours = useMemo(
+    () => filteredAvailability.reduce((acc, item) => acc + item.hours, 0),
+    [filteredAvailability],
+  );
+
+  const defaultBudgetTemplate = useMemo(() => getDefaultBudgetTemplate(), []);
+  const baseParentMap = useMemo(
+    () => buildParentChildMap(defaultBudgetTemplate),
+    [defaultBudgetTemplate],
+  );
+
+  const projectColorMap = useMemo(() => {
+    const map = new Map<number, string>();
+    (projects ?? []).forEach((project, idx) => {
+      map.set(project.id, AVAIL_COLORS[idx % AVAIL_COLORS.length]);
+    });
+    return map;
+  }, [projects]);
+
+  const budgetLinesByProject = useMemo(() => {
+    const map = new Map<number, ProjectBudgetLine[]>();
+    (budgetLinesQuery.data ?? []).forEach((item) => {
+      map.set(item.projectId, item.lines);
+    });
+    return map;
+  }, [budgetLinesQuery.data]);
+
+  const resolveActiveMonthsInYear = (
+    start: Date,
+    end: Date,
+    year: number,
+  ) => {
+    const yearStartDate = new Date(year, 0, 1);
+    const yearEndDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    const effectiveStart = start > yearStartDate ? start : yearStartDate;
+    const effectiveEnd = end < yearEndDate ? end : yearEndDate;
+    if (effectiveEnd < effectiveStart) return 0;
+    return (
+      (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 +
+      (effectiveEnd.getMonth() - effectiveStart.getMonth()) +
+      1
+    );
+  };
+
+  const balanceSeries = useMemo(() => {
+    if (!projects || selectedBalanceProjectIds.length === 0) return [];
+    return selectedBalanceProjectIds
+      .map((projectId) => {
+        const project = projects.find((p) => p.id === projectId);
+        if (!project || !project.start_date || !project.end_date) return null;
+        const start = new Date(project.start_date);
+        const end = new Date(project.end_date);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+        if (end < start) return null;
+        const yearStart = start.getFullYear();
+        const yearEnd = end.getFullYear();
+        const durationDays =
+          Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+        const durationMonths = Math.max(1, Math.ceil(durationDays / 30));
+        const subsidyPercent = Number(project.subsidy_percent ?? 0);
+
+        const budgetRows = budgetLinesByProject.get(projectId) ?? [];
+        const mapCopy: Record<string, string[]> = {};
+        Object.entries(baseParentMap).forEach(([key, value]) => {
+          mapCopy[key] = [...value];
+        });
+        const externalParentKey = normalizeConceptKey(EXTERNAL_COLLAB_LABEL);
+        const externalChildren = mapCopy[externalParentKey] ?? [];
+        budgetRows
+          .filter((row) => isExternalCollaborationConcept(row.concept))
+          .forEach((row) => {
+            const details = parseExternalCollaborationDetails(row.concept);
+            if (!details) return;
+            const childKey = normalizeConceptKey(row.concept);
+            if (!externalChildren.includes(childKey)) {
+              externalChildren.push(childKey);
+            }
+          });
+        mapCopy[externalParentKey] = externalChildren;
+        const groupedRows = groupBudgetsByConcept(budgetRows);
+        const parentKeys = new Set(Object.keys(mapCopy));
+        let approved = 0;
+        let forecasted = 0;
+        groupedRows.forEach((row) => {
+          const key = normalizeConceptKey(row.concept);
+          const isParentRow = isAllCapsConcept(row.concept) && parentKeys.has(key);
+          const isGeneralExpenses = isGeneralExpensesConcept(row.concept);
+          if (!isParentRow && !isGeneralExpenses) return;
+          const approvedValue =
+            row.approved_budget ??
+            Number(row.hito1_budget ?? 0) + Number(row.hito2_budget ?? 0);
+          approved += Number(approvedValue || 0);
+          forecasted += Number(row.forecasted_spent ?? 0);
+        });
+        const baseResult = (approved * subsidyPercent) / 100 - forecasted;
+
+        const points = [];
+        for (let year = yearStart; year <= yearEnd; year += 1) {
+          const monthsActive = resolveActiveMonthsInYear(start, end, year);
+          const annualized =
+            durationMonths > 0 ? (baseResult / durationMonths) * monthsActive : 0;
+          points.push({ year, value: annualized, monthsActive });
+        }
+        return {
+          project,
+          color: projectColorMap.get(projectId) ?? AVAIL_COLORS[0],
+          points,
+        };
+      })
+      .filter(Boolean) as Array<{
+      project: ErpProject;
+      color: string;
+      points: Array<{ year: number; value: number; monthsActive: number }>;
+    }>;
+  }, [
+    projects,
+    selectedBalanceProjectIds,
+    budgetLinesByProject,
+    baseParentMap,
+    projectColorMap,
+  ]);
+
+  const balanceYears = useMemo(() => {
+    const years = new Set<number>();
+    balanceSeries.forEach((series) => {
+      series.points.forEach((point) => years.add(point.year));
+    });
+    return Array.from(years).sort((a, b) => a - b);
+  }, [balanceSeries]);
+
+  const balanceTotalsByYear = useMemo(() => {
+    const totals: Record<number, number> = {};
+    balanceYears.forEach((year) => {
+      totals[year] = balanceSeries.reduce((acc, series) => {
+        const point = series.points.find((p) => p.year === year);
+        return acc + (point?.value ?? 0);
+      }, 0);
+    });
+    return totals;
+  }, [balanceSeries, balanceYears]);
+
+  const balanceMax = useMemo(() => {
+    if (balanceSeries.length === 0) return 0;
+    const values = balanceSeries.flatMap((series) =>
+      series.points.map((point) => Math.abs(point.value)),
+    );
+    return values.length > 0 ? Math.max(...values) : 0;
+  }, [balanceSeries]);
+
+  const availabilitySegments = useMemo(() => {
+    if (totalAvailableHours <= 0) return [];
+    let offset = 0;
+    return filteredAvailability.map((item) => {
+      const frac = item.hours / totalAvailableHours;
+      const segment = { ...item, frac, offset };
+      offset += frac;
+      return segment;
+    });
+  }, [filteredAvailability, totalAvailableHours]);
+
+  const formatCompact = (value: number) => {
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return formatEuroValue(value);
+  };
+
+  const formatFull = (value: number) => `${formatEuroValue(value)} EUR`;
+
+  const balanceKpis = useMemo(() => {
+    if (balanceYears.length === 0) {
+      return {
+        lastYear: null,
+        lastValue: 0,
+        growth: 0,
+        total: 0,
+        best: null as null | { name: string; total: number; color: string },
+      };
+    }
+    const lastYear = balanceYears[balanceYears.length - 1];
+    const prevYear =
+      balanceYears.length > 1 ? balanceYears[balanceYears.length - 2] : null;
+    const lastValue = balanceTotalsByYear[lastYear] ?? 0;
+    const prevValue = prevYear != null ? balanceTotalsByYear[prevYear] ?? 0 : 0;
+    const growth =
+      prevYear != null && prevValue !== 0
+        ? ((lastValue - prevValue) / Math.abs(prevValue)) * 100
+        : 0;
+    const total = Object.values(balanceTotalsByYear).reduce(
+      (acc, val) => acc + val,
+      0,
+    );
+    let best: { name: string; total: number; color: string } | null = null;
+    balanceSeries.forEach((series) => {
+      const seriesTotal = series.points.reduce((acc, p) => acc + p.value, 0);
+      if (!best || seriesTotal > best.total) {
+        best = {
+          name: series.project.name,
+          total: seriesTotal,
+          color: series.color,
+        };
+      }
+    });
+    return { lastYear, lastValue, growth, total, best };
+  }, [balanceTotalsByYear, balanceYears, balanceSeries]);
+
   const handleLaunch = async (tool: Tool) => {
     try {
       if (tool.slug === "erp") {
@@ -175,6 +508,765 @@ export const DashboardPage: React.FC = () => {
           title={t("dashboard.header.title")}
           subtitle={t("dashboard.header.subtitle")}
         />
+      </Box>
+
+      {canReadHr && (
+        <Box
+          borderWidth="1px"
+          borderRadius="xl"
+          bg={cardBg}
+          p={{ base: 4, md: 6 }}
+          mb={8}
+        >
+          <HStack justify="space-between" align="center" mb={4} flexWrap="wrap">
+            <Heading as="h2" size="md">
+              {t("dashboard.hrAvailability.title")}
+            </Heading>
+            <HStack spacing={3}>
+              <Text fontSize="sm" color={subtleText}>
+                {t("dashboard.hrAvailability.available")}
+              </Text>
+              <FormControl maxW="220px" size="sm">
+                <FormLabel fontSize="xs" mb={1} color={subtleText}>
+                  {t("dashboard.hrAvailability.filterLabel")}
+                </FormLabel>
+                <Select
+                  size="sm"
+                  value={selectedDegree}
+                  onChange={(e) => setSelectedDegree(e.target.value)}
+                >
+                  <option value="all">
+                    {t("dashboard.hrAvailability.filterAll")}
+                  </option>
+                  <option value="doctorado">
+                    {t("dashboard.hrAvailability.filterDoctorado")}
+                  </option>
+                  <option value="universitario">
+                    {t("dashboard.hrAvailability.filterUniversitario")}
+                  </option>
+                  <option value="no_universitario">
+                    {t("dashboard.hrAvailability.filterNoUniversitario")}
+                  </option>
+                </Select>
+              </FormControl>
+            </HStack>
+          </HStack>
+          <Box position="relative" width="220px" height="220px" mx="auto">
+            <svg
+              width={220}
+              height={220}
+              viewBox="0 0 220 220"
+              style={{ transform: "rotate(-90deg)" }}
+            >
+              <circle
+                cx={110}
+                cy={110}
+                r={88}
+                fill="none"
+                stroke={donutTrack}
+                strokeWidth={22}
+              />
+              {availabilitySegments.map((seg, idx) => {
+                const circumference = 2 * Math.PI * 88;
+                const dashLen = circumference * seg.frac;
+                const dashOff = circumference * (1 - seg.offset - seg.frac);
+                return (
+                  <circle
+                    key={`${seg.key}-${idx}`}
+                    cx={110}
+                    cy={110}
+                    r={88}
+                    fill="none"
+                    stroke={seg.color}
+                    strokeWidth={22}
+                    strokeDasharray={`${dashLen} ${circumference - dashLen}`}
+                    strokeDashoffset={dashOff}
+                    strokeLinecap="butt"
+                    style={{ transition: "all 0.6s cubic-bezier(.4,0,.2,1)" }}
+                  />
+                );
+              })}
+              <circle
+                cx={110}
+                cy={110}
+                r={88 - 22 / 2 - 1}
+                fill="none"
+                stroke={donutInner}
+                strokeWidth={1}
+                opacity={0.4}
+              />
+            </svg>
+            <Box
+              position="absolute"
+              inset={0}
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              justifyContent="center"
+              pointerEvents="none"
+            >
+              <Text fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="0.2em">
+                {t("dashboard.hrAvailability.available")}
+              </Text>
+              <Heading size="lg" color={statAccent}>
+                {totalAvailableHours.toFixed(0)}h
+              </Heading>
+            </Box>
+          </Box>
+          {hrEmployeesQuery.isLoading && (
+            <Text fontSize="sm" color={subtleText} mt={4} textAlign="center">
+              {t("dashboard.hrAvailability.loading")}
+            </Text>
+          )}
+          {!hrEmployeesQuery.isLoading && filteredAvailability.length === 0 && (
+            <Text fontSize="sm" color={subtleText} mt={4} textAlign="center">
+              {t("dashboard.hrAvailability.empty")}
+            </Text>
+          )}
+          {!hrEmployeesQuery.isLoading && employeesByDegree.length > 0 && (
+            <Box mt={4}>
+              <Text fontSize="sm" color={subtleText} textAlign="center" mb={2}>
+                {t("dashboard.hrAvailability.countTitle")}
+              </Text>
+              <VStack spacing={2} align="stretch" maxW="260px" mx="auto">
+                {employeesByDegree.map((item) => (
+                  <HStack key={item.key} justify="space-between">
+                    <HStack spacing={2}>
+                      <Box
+                        w="10px"
+                        h="10px"
+                        borderRadius="full"
+                        bg={item.color}
+                        flexShrink={0}
+                      />
+                      <Text fontSize="sm">{item.label}</Text>
+                    </HStack>
+                    <Text fontSize="sm" fontWeight="semibold">
+                      {item.count}
+                    </Text>
+                  </HStack>
+                ))}
+              </VStack>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      <Box
+        borderWidth="1px"
+        borderRadius="xl"
+        bg={cardBg}
+        p={{ base: 4, md: 6 }}
+        mb={8}
+      >
+        <Flex justify="space-between" align="flex-start" wrap="wrap" gap={4} mb={4}>
+          <Box>
+            <Heading as="h2" size="md">
+              {t("dashboard.balanceHistory.title")}
+            </Heading>
+            <Text fontSize="sm" color="#64748b">
+              {t("dashboard.balanceHistory.subtitle")}
+            </Text>
+          </Box>
+          <Box
+            display="flex"
+            alignItems="center"
+            gap={2}
+            bg={panelBg}
+            borderRadius="8px"
+            px={3}
+            py={2}
+            border="1px solid"
+            borderColor={tableHeadBg}
+          >
+            <Text fontSize="xs" color={subtleText} fontFamily="'Courier New',monospace">
+              {t("dashboard.balanceHistory.activeLabel")}
+            </Text>
+            <Text fontSize="sm" fontWeight="bold" fontFamily="'Courier New',monospace">
+              {selectedBalanceProjectIds.length}
+            </Text>
+            <Text fontSize="xs" color={subtleText} fontFamily="'Courier New',monospace">
+              / {projects?.length ?? 0}
+            </Text>
+          </Box>
+        </Flex>
+
+        <Flex wrap="wrap" gap={2} mb={6}>
+          {(projects ?? []).map((project) => {
+            const active = selectedBalanceProjectIds.includes(project.id);
+            const color = projectColorMap.get(project.id) ?? AVAIL_COLORS[0];
+            return (
+              <Box
+                key={project.id}
+                as="button"
+                onClick={() =>
+                  setSelectedBalanceProjectIds((prev) =>
+                    prev.includes(project.id)
+                      ? prev.length > 1
+                        ? prev.filter((id) => id !== project.id)
+                        : prev
+                      : [...prev, project.id],
+                  )
+                }
+                display="flex"
+                alignItems="center"
+                gap={2}
+                bg={active ? `${color}22` : panelBg}
+                borderRadius="10px"
+                px={3}
+                py={2}
+                border={`1.5px solid ${active ? color : tableHeadBg}`}
+                _hover={{ borderColor: color }}
+              >
+                <Box
+                  w="10px"
+                  h="10px"
+                  borderRadius="full"
+                  bg={color}
+                  boxShadow={active ? `0 0 6px ${color}88` : "none"}
+                />
+                <Text
+                  fontSize="sm"
+                  color={active ? color : subtleText}
+                  fontFamily="'Georgia',serif"
+                  fontWeight={active ? 600 : 400}
+                >
+                  {project.name}
+                </Text>
+              </Box>
+            );
+          })}
+        </Flex>
+
+        {balanceSeries.length === 0 && (
+          <Text fontSize="sm" color={subtleText}>
+            {t("dashboard.balanceHistory.empty")}
+          </Text>
+        )}
+
+        {balanceSeries.length > 0 && (
+          <>
+            <Flex wrap="wrap" gap={3} mb={6}>
+              <Box
+                flex="1 1 140px"
+                bg={panelBg}
+                borderRadius="14px"
+                px={4}
+                py={3}
+                border="1px solid"
+                borderColor={tableHeadBg}
+              >
+                <Text
+                  fontSize="xs"
+                  color={subtleText}
+                  textTransform="uppercase"
+                  letterSpacing="1.5px"
+                  fontFamily="'Courier New',monospace"
+                >
+                  {t("dashboard.balanceHistory.kpiLastYear", {
+                    year: balanceKpis.lastYear ?? "",
+                  })}
+                </Text>
+                <Text fontSize="lg" fontWeight="bold" color="#10b981">
+                  {formatCompact(balanceKpis.lastValue)}
+                </Text>
+                {balanceKpis.lastYear && (
+                  <Text fontSize="xs" color={subtleText}>
+                    {balanceKpis.lastYear}
+                  </Text>
+                )}
+              </Box>
+              <Box
+                flex="1 1 140px"
+                bg={panelBg}
+                borderRadius="14px"
+                px={4}
+                py={3}
+                border="1px solid"
+                borderColor={tableHeadBg}
+              >
+                <Text
+                  fontSize="xs"
+                  color={subtleText}
+                  textTransform="uppercase"
+                  letterSpacing="1.5px"
+                  fontFamily="'Courier New',monospace"
+                >
+                  {t("dashboard.balanceHistory.kpiGrowth")}
+                </Text>
+                <Text fontSize="lg" fontWeight="bold" color="#06b6d4">
+                  {balanceKpis.growth.toFixed(1)}%
+                </Text>
+                <Text fontSize="xs" color={subtleText}>
+                  {t("dashboard.balanceHistory.kpiGrowthSub")}
+                </Text>
+              </Box>
+              <Box
+                flex="1 1 140px"
+                bg={panelBg}
+                borderRadius="14px"
+                px={4}
+                py={3}
+                border="1px solid"
+                borderColor={tableHeadBg}
+              >
+                <Text
+                  fontSize="xs"
+                  color={subtleText}
+                  textTransform="uppercase"
+                  letterSpacing="1.5px"
+                  fontFamily="'Courier New',monospace"
+                >
+                  {t("dashboard.balanceHistory.kpiTotal")}
+                </Text>
+                <Text fontSize="lg" fontWeight="bold" color="#8b5cf6">
+                  {formatCompact(balanceKpis.total)}
+                </Text>
+                <Text fontSize="xs" color={subtleText}>
+                  {t("dashboard.balanceHistory.kpiTotalSub")}
+                </Text>
+              </Box>
+              <Box
+                flex="1 1 140px"
+                bg={panelBg}
+                borderRadius="14px"
+                px={4}
+                py={3}
+                border="1px solid"
+                borderColor={tableHeadBg}
+              >
+                <Text
+                  fontSize="xs"
+                  color={subtleText}
+                  textTransform="uppercase"
+                  letterSpacing="1.5px"
+                  fontFamily="'Courier New',monospace"
+                >
+                  {t("dashboard.balanceHistory.kpiBest")}
+                </Text>
+                <Text
+                  fontSize="lg"
+                  fontWeight="bold"
+                  color={balanceKpis.best?.color ?? "#94a3b8"}
+                >
+                  {balanceKpis.best?.name ?? "—"}
+                </Text>
+                {balanceKpis.best && (
+                  <Text fontSize="xs" color={subtleText}>
+                    {formatFull(balanceKpis.best.total)}
+                  </Text>
+                )}
+              </Box>
+            </Flex>
+
+            <Box
+              bg={panelBg}
+              border="1px solid"
+              borderColor={tableHeadBg}
+              borderRadius="18px"
+              px={4}
+              py={4}
+              mb={6}
+            >
+              <Flex justify="space-between" align="center" mb={3}>
+                <Text
+                  fontSize="xs"
+                  color={subtleText}
+                  textTransform="uppercase"
+                  letterSpacing="2px"
+                  fontFamily="'Courier New',monospace"
+                >
+                  {t("dashboard.balanceHistory.chartTitle")}
+                </Text>
+                <HStack spacing={4} flexWrap="wrap">
+                  {balanceSeries.map((series) => (
+                    <HStack key={series.project.id} spacing={2}>
+                      <Box
+                        w="20px"
+                        h="2px"
+                        bg={series.color}
+                        borderRadius="2px"
+                        boxShadow={`0 0 4px ${series.color}66`}
+                      />
+                      <Text fontSize="xs" color="#94a3b8">
+                        {series.project.name}
+                      </Text>
+                    </HStack>
+                  ))}
+                </HStack>
+              </Flex>
+
+              {(() => {
+                const W = 700;
+                const H = 280;
+                const PAD = { top: 30, right: 28, bottom: 44, left: 74 };
+                const chartW = W - PAD.left - PAD.right;
+                const chartH = H - PAD.top - PAD.bottom;
+                const values = balanceSeries.flatMap((series) =>
+                  series.points.map((point) => point.value),
+                );
+                const minVal = Math.min(0, ...values);
+                const maxVal = Math.max(0, ...values);
+                const range = maxVal - minVal || 1;
+                const x = (i: number) =>
+                  PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
+                const y = (val: number) =>
+                  PAD.top + chartH - ((val - minVal) / range) * chartH;
+                const gridCount = 5;
+                const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+                  const val = minVal + (range / gridCount) * i;
+                  return { val, yPos: y(val) };
+                });
+                return (
+                  <Box>
+                    <svg
+                      viewBox={`0 0 ${W} ${H}`}
+                      style={{ width: "100%", maxWidth: W, display: "block", margin: "0 auto" }}
+                    >
+                      <defs>
+                        {balanceSeries.map((series) => (
+                          <linearGradient
+                            key={`grad-${series.project.id}`}
+                            id={`balanceGrad-${series.project.id}`}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop offset="0%" stopColor={series.color} stopOpacity={0.2} />
+                            <stop offset="100%" stopColor={series.color} stopOpacity={0.02} />
+                          </linearGradient>
+                        ))}
+                        <filter id="balanceGlow">
+                          <feGaussianBlur stdDeviation="2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+
+                      {gridLines.map((g, idx) => (
+                        <g key={`grid-${idx}`}>
+                          <line
+                            x1={PAD.left}
+                            y1={g.yPos}
+                            x2={W - PAD.right}
+                            y2={g.yPos}
+                            stroke="#e2e8f0"
+                            strokeWidth={1}
+                          />
+                          <text
+                            x={PAD.left - 8}
+                            y={g.yPos + 4}
+                            textAnchor="end"
+                            fontSize={10}
+                            fill="#64748b"
+                            fontFamily="'Courier New',monospace"
+                          >
+                            {formatCompact(g.val)}
+                          </text>
+                        </g>
+                      ))}
+
+                      {balanceSeries.map((series) => {
+                        const vals = balanceYears.map(
+                          (year) =>
+                            series.points.find((p) => p.year === year)?.value ?? 0,
+                        );
+                        const linePath = vals
+                          .map((val, idx) => {
+                            if (idx === 0) return `M ${x(idx)} ${y(val)}`;
+                            const x0 = x(idx - 1);
+                            const x1 = x(idx);
+                            const cpx = (x0 + x1) / 2;
+                            return `C ${cpx} ${y(vals[idx - 1])}, ${cpx} ${y(val)}, ${x1} ${y(val)}`;
+                          })
+                          .join(" ");
+                        const areaPath = `${linePath} L ${x(vals.length - 1)} ${
+                          PAD.top + chartH
+                        } L ${x(0)} ${PAD.top + chartH} Z`;
+                        return (
+                          <g key={`series-${series.project.id}`}>
+                            <path
+                              d={areaPath}
+                              fill={`url(#balanceGrad-${series.project.id})`}
+                            />
+                            <path
+                              d={linePath}
+                              fill="none"
+                              stroke={series.color}
+                              strokeWidth={2.5}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              filter="url(#balanceGlow)"
+                            />
+                          </g>
+                        );
+                      })}
+
+                      {balanceSeries.map((series) => {
+                        const vals = balanceYears.map(
+                          (year) =>
+                            series.points.find((p) => p.year === year)?.value ?? 0,
+                        );
+                        return vals.map((val, idx) => {
+                          const year = balanceYears[idx];
+                          const isHover =
+                            balanceHover?.projectId === series.project.id &&
+                            balanceHover?.year === year;
+                          return (
+                            <g key={`pt-${series.project.id}-${year}`}>
+                              <circle
+                                cx={x(idx)}
+                                cy={y(val)}
+                                r={12}
+                                fill="transparent"
+                                style={{ cursor: "pointer" }}
+                                onMouseEnter={() =>
+                                  setBalanceHover({
+                                    projectId: series.project.id,
+                                    year,
+                                  })
+                                }
+                                onMouseLeave={() => setBalanceHover(null)}
+                              />
+                              <circle
+                                cx={x(idx)}
+                                cy={y(val)}
+                                r={isHover ? 6 : 3.5}
+                                fill={isHover ? "#fff" : series.color}
+                                stroke="#0f172a"
+                                strokeWidth={2}
+                                style={{ transition: "r 0.15s, fill 0.15s" }}
+                              />
+                            </g>
+                          );
+                        });
+                      })}
+
+                      {balanceHover &&
+                        (() => {
+                          const series = balanceSeries.find(
+                            (item) => item.project.id === balanceHover.projectId,
+                          );
+                          if (!series) return null;
+                          const yearIndex = balanceYears.indexOf(balanceHover.year);
+                          if (yearIndex < 0) return null;
+                          const point = series.points.find(
+                            (p) => p.year === balanceHover.year,
+                          );
+                          if (!point) return null;
+                          const tx = x(yearIndex);
+                          const ty = y(point.value);
+                          const boxW = 150;
+                          const boxH = 58;
+                          const bx = Math.min(
+                            Math.max(tx - boxW / 2, PAD.left),
+                            W - PAD.right - boxW,
+                          );
+                          const by = Math.max(ty - boxH - 14, 4);
+                          return (
+                            <g pointerEvents="none">
+                              <rect
+                                x={bx}
+                                y={by}
+                                width={boxW}
+                                height={boxH}
+                                rx={10}
+                        fill="#e2e8f0"
+                        stroke={series.color}
+                        strokeWidth={1.5}
+                      />
+                              <rect
+                                x={bx + 10}
+                                y={by + 12}
+                                width={8}
+                                height={8}
+                                rx={2}
+                                fill={series.color}
+                              />
+                              <text
+                                x={bx + 24}
+                                y={by + 19}
+                                fontSize={11}
+                                fill={series.color}
+                                fontFamily="'Georgia',serif"
+                                fontWeight={600}
+                              >
+                                {series.project.name}
+                              </text>
+                              <text
+                                x={bx + boxW / 2}
+                                y={by + 38}
+                                textAnchor="middle"
+                                fontSize={11}
+                                fill="#64748b"
+                                fontFamily="'Courier New',monospace"
+                              >
+                                {balanceHover.year}
+                              </text>
+                              <text
+                                x={bx + boxW / 2}
+                                y={by + 52}
+                                textAnchor="middle"
+                                fontSize={13}
+                                fill="#f1f5f9"
+                                fontFamily="'Georgia',serif"
+                                fontWeight={700}
+                              >
+                                {formatFull(point.value)}
+                              </text>
+                            </g>
+                          );
+                        })()}
+
+                      {balanceYears.map((year, idx) => (
+                        <text
+                          key={`year-${year}`}
+                          x={x(idx)}
+                          y={H - PAD.bottom + 20}
+                          textAnchor="middle"
+                          fontSize={12}
+                        fill="#64748b"
+                        fontFamily="'Georgia',serif"
+                        fontWeight={600}
+                      >
+                        {year}
+                      </text>
+                    ))}
+
+                    <text
+                      x={14}
+                      y={H / 2}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fill="#64748b"
+                      fontFamily="'Courier New',monospace"
+                      transform={`rotate(-90, 14, ${H / 2})`}
+                    >
+                      {t("dashboard.balanceHistory.axisLabel")}
+                    </text>
+                  </svg>
+                </Box>
+              );
+            })()}
+          </Box>
+
+          <Box
+            bg={panelBg}
+            border="1px solid"
+            borderColor={tableHeadBg}
+            borderRadius="18px"
+            px={4}
+            py={4}
+          >
+            <Text
+              fontSize="xs"
+              color={subtleText}
+              textTransform="uppercase"
+              letterSpacing="2px"
+              fontFamily="'Courier New',monospace"
+              mb={3}
+            >
+              {t("dashboard.balanceHistory.tableTitle")}
+            </Text>
+            <Box overflowX="auto">
+              <Table size="sm" variant="unstyled" minW="640px">
+                <Thead>
+                  <Tr>
+                    <Th
+                      textAlign="left"
+                      fontSize="xs"
+                      color={subtleText}
+                      textTransform="uppercase"
+                      letterSpacing="1.4px"
+                      fontFamily="'Courier New',monospace"
+                      borderBottom="1px solid"
+                      borderColor={tableHeadBg}
+                    >
+                      {t("dashboard.balanceHistory.tableYear")}
+                    </Th>
+                    {balanceSeries.map((series) => (
+                      <Th
+                        key={`head-${series.project.id}`}
+                        textAlign="right"
+                        fontSize="xs"
+                        color={series.color}
+                        textTransform="uppercase"
+                        letterSpacing="1.2px"
+                        fontFamily="'Courier New',monospace"
+                        borderBottom={`2px solid ${series.color}55`}
+                      >
+                        {series.project.name}
+                      </Th>
+                    ))}
+                    <Th
+                      textAlign="right"
+                      fontSize="xs"
+                      color={subtleText}
+                      textTransform="uppercase"
+                      letterSpacing="1.2px"
+                      fontFamily="'Courier New',monospace"
+                      borderBottom="1px solid"
+                      borderColor={tableHeadBg}
+                    >
+                      {t("dashboard.balanceHistory.tableTotal")}
+                    </Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {balanceYears.map((year) => {
+                    const total = balanceTotalsByYear[year] ?? 0;
+                    return (
+                      <Tr key={`row-${year}`}>
+                        <Td
+                          py={2}
+                          color="gray.700"
+                          fontFamily="'Georgia',serif"
+                          fontWeight={600}
+                        >
+                          {year}
+                        </Td>
+                        {balanceSeries.map((series) => {
+                          const value =
+                            series.points.find((p) => p.year === year)?.value ?? 0;
+                          return (
+                            <Td
+                              key={`cell-${series.project.id}-${year}`}
+                              textAlign="right"
+                              py={2}
+                            >
+                              <Text
+                                color="gray.800"
+                                fontFamily="'Courier New',monospace"
+                                fontWeight={700}
+                                fontSize="sm"
+                              >
+                                {formatFull(value)}
+                              </Text>
+                            </Td>
+                          );
+                        })}
+                        <Td textAlign="right" py={2}>
+                          <Text
+                            color="#f97316"
+                            fontFamily="'Courier New',monospace"
+                            fontWeight={800}
+                            fontSize="sm"
+                          >
+                            {formatFull(total)}
+                          </Text>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
+            </Box>
+          </Box>
+        </>
+      )}
       </Box>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={5} mb={8}>

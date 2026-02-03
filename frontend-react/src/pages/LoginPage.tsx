@@ -7,11 +7,15 @@ import {
   Heading,
   Image,
   Input,
+  InputGroup,
+  InputRightElement,
   Stack,
   Text,
   useColorModeValue,
   useToast,
+  IconButton,
 } from "@chakra-ui/react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,6 +34,7 @@ import { login } from "../api/auth";
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
   const router = useRouter();
@@ -131,12 +136,23 @@ export const LoginPage: React.FC = () => {
               <FormLabel htmlFor="password" color={labelColor}>
                 {t("auth.login.password")}
               </FormLabel>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <InputGroup>
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <InputRightElement>
+                  <IconButton
+                    aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                    variant="ghost"
+                    size="sm"
+                    icon={showPassword ? <FiEyeOff /> : <FiEye />}
+                    onClick={() => setShowPassword((prev) => !prev)}
+                  />
+                </InputRightElement>
+              </InputGroup>
             </FormControl>
             <Button type="submit" colorScheme="blue" isLoading={isLoading}>
               {t("auth.login.submit")}

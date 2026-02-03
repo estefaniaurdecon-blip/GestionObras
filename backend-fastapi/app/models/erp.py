@@ -11,6 +11,7 @@ class Project(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    department_id: Optional[int] = Field(default=None, foreign_key="department.id")
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = Field(default=None, max_length=32)

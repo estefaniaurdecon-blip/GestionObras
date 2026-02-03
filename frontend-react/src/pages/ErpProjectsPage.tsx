@@ -51,6 +51,7 @@ import {
 } from "../api/erpTimeTracking";
 
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { fetchDepartments, type Department } from "../api/hr";
 import { fetchAllTenants, type TenantOption } from "../api/users";
 import { useRouter } from "@tanstack/react-router";
 import {
@@ -112,6 +113,8 @@ export const ErpProjectsPage: React.FC = () => {
     setProjectDescription,
     projectType,
     setProjectType,
+    projectDepartmentId,
+    setProjectDepartmentId,
     projectStart,
     setProjectStart,
     projectEnd,
@@ -136,6 +139,12 @@ export const ErpProjectsPage: React.FC = () => {
   const { data: projects = [] } = useQuery<ErpProjectApi[]>({
     queryKey: ["erp-projects", effectiveTenantId ?? "all"],
     queryFn: () => fetchErpProjects(effectiveTenantId),
+    enabled: tenantReady,
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["erp-project-departments", effectiveTenantId ?? "all"],
+    queryFn: () => fetchDepartments(effectiveTenantId),
     enabled: tenantReady,
   });
 
@@ -229,6 +238,8 @@ export const ErpProjectsPage: React.FC = () => {
     setEditDescription,
     editProjectType,
     setEditProjectType,
+    editDepartmentId,
+    setEditDepartmentId,
     editStart,
     setEditStart,
     editEnd,
@@ -490,6 +501,7 @@ export const ErpProjectsPage: React.FC = () => {
         description: editDescription.trim() || null,
 
         project_type: editProjectType,
+        department_id: editDepartmentId === "" ? null : editDepartmentId,
 
         start_date: editStart || null,
 
@@ -774,6 +786,17 @@ export const ErpProjectsPage: React.FC = () => {
               onProjectDescriptionChange={setProjectDescription}
               projectType={projectType}
               onProjectTypeChange={setProjectType}
+              departments={
+                isSuperAdmin && createTenantId
+                  ? departments.filter(
+                      (dept) => dept.tenant_id === Number(createTenantId),
+                    )
+                  : isSuperAdmin
+                    ? []
+                    : departments
+              }
+              projectDepartmentId={projectDepartmentId}
+              onProjectDepartmentChange={setProjectDepartmentId}
               projectStart={projectStart}
               onProjectStartChange={setProjectStart}
               projectEnd={projectEnd}
@@ -812,6 +835,15 @@ export const ErpProjectsPage: React.FC = () => {
         setEditDescription={setEditDescription}
         editProjectType={editProjectType}
         setEditProjectType={setEditProjectType}
+        departments={
+          selectedProject?.tenant_id != null
+            ? departments.filter(
+                (dept) => dept.tenant_id === selectedProject.tenant_id,
+              )
+            : departments
+        }
+        editDepartmentId={editDepartmentId}
+        setEditDepartmentId={setEditDepartmentId}
         editStart={editStart}
         setEditStart={setEditStart}
         editEnd={editEnd}

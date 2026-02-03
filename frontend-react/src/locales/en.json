@@ -116,6 +116,46 @@
       "embeddedFallback": "Tool integrated into the platform.",
       "erpNote": "Internal ERP integrated into the dashboard to manage projects, tasks, and time tracking."
     },
+    "hrAvailability": {
+      "title": "Available hours by degree",
+      "available": "Available",
+      "filterLabel": "Degree",
+      "filterAll": "All",
+      "filterDoctorado": "Doctorate",
+      "filterUniversitario": "University",
+      "filterNoUniversitario": "Non-university",
+      "countTitle": "Employees by degree",
+      "loading": "Loading availability...",
+      "empty": "No available hours recorded."
+    },
+    "balanceByDepartment": {
+      "title": "Annualized balance by department",
+      "projectLabel": "Project",
+      "projectPlaceholder": "Select project",
+      "departmentLabel": "Department",
+      "noDepartment": "No department",
+      "emptyProject": "Select a project to see the balance.",
+      "loading": "Calculating balance...",
+      "empty": "No budget data for this project.",
+      "months": "{{count}} months"
+    },
+    "balanceHistory": {
+      "title": "Annualized projection",
+      "subtitle": "Select projects to compare",
+      "activeLabel": "Active",
+      "empty": "No projects with dates and budgets.",
+      "kpiLastYear": "Latest year {{year}}",
+      "kpiGrowth": "Growth",
+      "kpiGrowthSub": "Year over year",
+      "kpiTotal": "Total projected",
+      "kpiTotalSub": "Historical total",
+      "kpiBest": "Best project",
+      "chartTitle": "Projection by year",
+      "tableTitle": "Project by year detail",
+      "tableYear": "Year",
+      "tableTotal": "Total",
+      "axisLabel": "Profit (EUR)"
+    },
     "messages": {
       "reportLoadTitle": "Report load error",
       "reportLoadFallback": "Unable to load the time report.",
@@ -801,6 +841,10 @@
       "form": {
         "name": "Name",
         "description": "Description",
+        "allocation": "Available hours %",
+        "createTitle": "Create department",
+        "editTitle": "Edit department",
+        "save": "Save",
         "create": "Create department"
       },
       "loading": "Loading departments...",
@@ -808,7 +852,11 @@
       "table": {
         "name": "Name",
         "description": "Description",
+        "allocation": "Hours %",
         "status": "Status",
+        "actions": "Actions",
+        "edit": "Edit",
+        "delete": "Delete",
         "empty": "No departments created yet."
       }
     },
@@ -821,6 +869,8 @@
         "noEmail": "no email",
         "fullName": "Full name",
         "position": "Position",
+        "titulacion": "Degree",
+        "titulacionPlaceholder": "Select degree",
         "hourlyRate": "Hourly rate",
         "hourlyRatePlaceholder": "Ex: 35.5",
         "primaryDepartment": "Primary department",
@@ -857,6 +907,7 @@
       "fullName": "Full name",
       "email": "Email",
       "position": "Position",
+      "titulacion": "Degree",
       "hourlyRate": "Hourly rate",
       "primaryDepartment": "Primary department",
       "departmentPlaceholder": "Select department",

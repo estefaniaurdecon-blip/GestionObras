@@ -27,6 +27,7 @@ export const useProjectDetails = ({
   const [editProjectType, setEditProjectType] = useState<
     "regional" | "nacional" | "internacional"
   >("regional");
+  const [editDepartmentId, setEditDepartmentId] = useState<number | "">("");
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [editActive, setEditActive] = useState(true);
@@ -91,6 +92,9 @@ export const useProjectDetails = ({
         | "nacional"
         | "internacional"
         | null) ?? "regional",
+    );
+    setEditDepartmentId(
+      selectedProject.department_id != null ? selectedProject.department_id : "",
     );
     setEditStart(toDateInput(selectedProject.start_date));
     setEditEnd(toDateInput(selectedProject.end_date));
@@ -164,6 +168,8 @@ export const useProjectDetails = ({
     setEditDescription,
     editProjectType,
     setEditProjectType,
+    editDepartmentId,
+    setEditDepartmentId,
     editStart,
     setEditStart,
     editEnd,

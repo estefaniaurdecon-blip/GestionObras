@@ -7,6 +7,7 @@ from app.core.audit import log_action
 from app.models.permission import Permission
 from app.models.role_permission import RolePermission
 from app.models.ticket import Ticket, TicketPriority, TicketStatus
+from app.models.notification import NotificationType
 from app.models.ticket_message import TicketMessage
 from app.models.ticket_participant import TicketParticipant
 from app.models.user import User
@@ -17,6 +18,7 @@ from app.schemas.ticket import (
     TicketRead,
     TicketUpdate,
 )
+from app.services.notification_service import create_notification
 
 
 def _user_has_permission(session: Session, user: User, code: str) -> bool:
@@ -40,6 +42,70 @@ def _user_has_permission(session: Session, user: User, code: str) -> bool:
     permissions = {row[0] for row in session.exec(statement).all()}
     return code in permissions
 
+
+def _get_ticket_agent_user_ids(session: Session, tenant_id: int) -> set[int]:
+    tenant_users = session.exec(
+        select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True))
+    ).all()
+    superadmins = session.exec(
+        select(User).where(User.is_super_admin.is_(True), User.is_active.is_(True))
+    ).all()
+    return {
+        user.id
+        for user in [*tenant_users, *superadmins]
+        if user.is_super_admin or _user_has_permission(session, user, "tickets:manage")
+    }
+
+
+def _get_ticket_participant_ids(session: Session, ticket_id: int) -> set[int]:
+    statement = select(TicketParticipant.user_id).where(
+        TicketParticipant.ticket_id == ticket_id,
+    )
+    return {row for row in session.exec(statement).all()}
+
+
+def _notify_ticket_users(
+    session: Session,
+    *,
+    ticket: Ticket,
+    actor_id: int,
+    notification_type: NotificationType,
+    title: str,
+    body: Optional[str] = None,
+    only_agents: bool = False,
+    extra_user_ids: Optional[set[int]] = None,
+) -> None:
+    recipient_ids = _get_ticket_participant_ids(session, ticket.id)
+    recipient_ids.add(ticket.created_by_id)
+    if ticket.assigned_to_id:
+        recipient_ids.add(ticket.assigned_to_id)
+    if extra_user_ids:
+        recipient_ids.update(extra_user_ids)
+    recipient_ids.discard(actor_id)
+    if not recipient_ids:
+        return
+
+    if only_agents:
+        users = session.exec(select(User).where(User.id.in_(recipient_ids))).all()
+        recipient_ids = {
+            user.id
+            for user in users
+            if user.is_super_admin or _user_has_permission(session, user, "tickets:manage")
+        }
+        if not recipient_ids:
+            return
+
+    reference = f"ticket_id={ticket.id}"
+    for user_id in recipient_ids:
+        create_notification(
+            session,
+            tenant_id=ticket.tenant_id,
+            user_id=user_id,
+            type=notification_type,
+            title=title,
+            body=body,
+            reference=reference,
+        )
 
 def _touch_activity(ticket: Ticket) -> None:
     """
@@ -183,7 +249,7 @@ def create_ticket(
         created_by_id=current_user.id,
         subject=data.subject,
         description=data.description,
-        priority=data.priority,
+        priority=TicketPriority.MEDIUM,
         tool_slug=data.tool_slug,
         category=data.category,
         created_at=now,
@@ -209,6 +275,18 @@ def create_ticket(
         tenant_id=ticket.tenant_id,
         action="ticket.create",
         details=f"ticket_id={ticket.id}, subject={ticket.subject}",
+    )
+
+    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id)
+    _notify_ticket_users(
+        session,
+        ticket=ticket,
+        actor_id=current_user.id,
+        notification_type=NotificationType.TICKET_STATUS,
+        title="Ticket creado",
+        body=ticket.subject,
+        only_agents=True,
+        extra_user_ids=agent_ids,
     )
 
     return _ticket_to_read(session, ticket)
@@ -384,6 +462,18 @@ def add_message(
     session.refresh(message)
     session.refresh(ticket)
 
+    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id)
+    _notify_ticket_users(
+        session,
+        ticket=ticket,
+        actor_id=current_user.id,
+        notification_type=NotificationType.TICKET_COMMENT,
+        title="Nuevo comentario en ticket",
+        body=ticket.subject,
+        only_agents=data.is_internal,
+        extra_user_ids=agent_ids,
+    )
+
     return _message_to_read(session, message)
 
 
@@ -398,6 +488,15 @@ def update_ticket(
     """
 
     ticket = _get_ticket_for_manage(session, current_user, ticket_id)
+
+    status_changed = data.status is not None and data.status != ticket.status
+    priority_changed = (
+        data.priority is not None and data.priority != ticket.priority
+    )
+    assignee_changed = (
+        data.assigned_to_id is not None
+        and data.assigned_to_id != ticket.assigned_to_id
+    )
 
     if data.status is not None:
         ticket.status = data.status
@@ -419,6 +518,26 @@ def update_ticket(
         action="ticket.update",
         details=f"ticket_id={ticket.id}",
     )
+
+    if assignee_changed and ticket.assigned_to_id:
+        _notify_ticket_users(
+            session,
+            ticket=ticket,
+            actor_id=current_user.id,
+            notification_type=NotificationType.TICKET_ASSIGNED,
+            title="Ticket asignado",
+            body=ticket.subject,
+            extra_user_ids={ticket.assigned_to_id},
+        )
+    if status_changed or priority_changed:
+        _notify_ticket_users(
+            session,
+            ticket=ticket,
+            actor_id=current_user.id,
+            notification_type=NotificationType.TICKET_STATUS,
+            title="Actualización de ticket",
+            body=ticket.subject,
+        )
 
     return _ticket_to_read(session, ticket)
 
@@ -457,6 +576,15 @@ def close_ticket(
         details=f"ticket_id={ticket.id}",
     )
 
+    _notify_ticket_users(
+        session,
+        ticket=ticket,
+        actor_id=current_user.id,
+        notification_type=NotificationType.TICKET_STATUS,
+        title="Ticket cerrado",
+        body=ticket.subject,
+    )
+
     return _ticket_to_read(session, ticket)
 
 
@@ -489,6 +617,15 @@ def reopen_ticket(
         tenant_id=ticket.tenant_id,
         action="ticket.reopen",
         details=f"ticket_id={ticket.id}",
+    )
+
+    _notify_ticket_users(
+        session,
+        ticket=ticket,
+        actor_id=current_user.id,
+        notification_type=NotificationType.TICKET_STATUS,
+        title="Ticket reabierto",
+        body=ticket.subject,
     )
 
     return _ticket_to_read(session, ticket)
@@ -534,5 +671,15 @@ def assign_ticket(
     session.add(ticket)
     session.commit()
     session.refresh(ticket)
+
+    _notify_ticket_users(
+        session,
+        ticket=ticket,
+        actor_id=current_user.id,
+        notification_type=NotificationType.TICKET_ASSIGNED,
+        title="Ticket asignado",
+        body=ticket.subject,
+        extra_user_ids={assignee_id},
+    )
 
     return _ticket_to_read(session, ticket)

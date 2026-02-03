@@ -26,6 +26,7 @@ export const useProjectCreation = ({
   const [projectType, setProjectType] = useState<
     "regional" | "nacional" | "internacional"
   >("regional");
+  const [projectDepartmentId, setProjectDepartmentId] = useState<number | "">("");
   const [projectStart, setProjectStart] = useState("");
   const [projectEnd, setProjectEnd] = useState("");
   const [projectActivities, setProjectActivities] = useState<ProjectActivityForm[]>([]);
@@ -84,6 +85,7 @@ export const useProjectCreation = ({
           name: projectName.trim(),
           description: projectDescription.trim() || null,
           project_type: projectType,
+          department_id: projectDepartmentId === "" ? null : projectDepartmentId,
           start_date: projectStart || null,
           end_date: projectEnd || null,
         },
@@ -149,6 +151,7 @@ export const useProjectCreation = ({
       setProjectName("");
       setProjectDescription("");
       setProjectType("regional");
+      setProjectDepartmentId("");
       setProjectStart("");
       setProjectEnd("");
       setProjectActivities([]);
@@ -185,6 +188,8 @@ export const useProjectCreation = ({
     setProjectDescription,
     projectType,
     setProjectType,
+    projectDepartmentId,
+    setProjectDepartmentId,
     projectStart,
     setProjectStart,
     projectEnd,

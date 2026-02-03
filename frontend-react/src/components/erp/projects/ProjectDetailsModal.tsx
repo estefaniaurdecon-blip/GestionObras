@@ -28,6 +28,7 @@ import {
   Textarea,
 } from "@chakra-ui/react";
 
+import type { Department } from "../../../api/hr";
 import type { ErpProject as ErpProjectApi } from "../../../api/erpReports";
 import type { ErpActivity, ErpMilestone, ErpSubActivity } from "../../../api/erpStructure";
 import type { ErpTask as ErpTaskApi } from "../../../api/erpTimeTracking";
@@ -49,6 +50,9 @@ interface ProjectDetailsModalProps {
   setEditDescription: (value: string) => void;
   editProjectType: "regional" | "nacional" | "internacional";
   setEditProjectType: (value: "regional" | "nacional" | "internacional") => void;
+  departments: Department[];
+  editDepartmentId: number | "";
+  setEditDepartmentId: (value: number | "") => void;
   editStart: string;
   setEditStart: (value: string) => void;
   editEnd: string;
@@ -90,6 +94,9 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
   setEditDescription,
   editProjectType,
   setEditProjectType,
+  departments,
+  editDepartmentId,
+  setEditDepartmentId,
   editStart,
   setEditStart,
   editEnd,
@@ -158,6 +165,15 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
                 </Text>
                 <Text fontWeight="semibold">
                   {selectedProject.project_type ?? "Sin tipo"}
+                </Text>
+              </Box>
+              <Box borderWidth="1px" borderRadius="md" p={3}>
+                <Text fontSize="xs" color={subtleText}>
+                  Departamento
+                </Text>
+                <Text fontWeight="semibold">
+                  {departments.find((d) => d.id === selectedProject.department_id)?.name ??
+                    "Sin departamento"}
                 </Text>
               </Box>
               <Box borderWidth="1px" borderRadius="md" p={3}>
@@ -238,6 +254,25 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
                   <option value="regional">Regional</option>
                   <option value="nacional">Nacional</option>
                   <option value="internacional">Internacional</option>
+                </Select>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Departamento</FormLabel>
+                <Select
+                  placeholder="Selecciona departamento"
+                  value={editDepartmentId === "" ? "" : String(editDepartmentId)}
+                  onChange={(e) =>
+                    setEditDepartmentId(
+                      e.target.value ? Number(e.target.value) : "",
+                    )
+                  }
+                >
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
                 </Select>
               </FormControl>
 

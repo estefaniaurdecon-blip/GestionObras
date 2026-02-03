@@ -42,7 +42,7 @@ export interface TicketFilters {
 }
 
 export async function fetchTickets(filters: TicketFilters = {}): Promise<Ticket[]> {
-  const response = await apiClient.get<Ticket[]>("/api/v1/tickets", {
+  const response = await apiClient.get<Ticket[]>("/api/v1/tickets/", {
     params: filters,
   });
   return response.data;
@@ -51,11 +51,22 @@ export async function fetchTickets(filters: TicketFilters = {}): Promise<Ticket[
 export async function createTicket(payload: {
   subject: string;
   description: string;
-  priority: TicketPriority;
   tool_slug?: string;
   category?: string;
+  priority?: TicketPriority;
 }): Promise<Ticket> {
-  const response = await apiClient.post<Ticket>("/api/v1/tickets", payload);
+  const response = await apiClient.post<Ticket>("/api/v1/tickets/", payload);
+  return response.data;
+}
+
+export async function updateTicket(
+  ticketId: number,
+  payload: { priority?: TicketPriority; status?: TicketStatus },
+): Promise<Ticket> {
+  const response = await apiClient.patch<Ticket>(
+    `/api/v1/tickets/${ticketId}`,
+    payload,
+  );
   return response.data;
 }
 

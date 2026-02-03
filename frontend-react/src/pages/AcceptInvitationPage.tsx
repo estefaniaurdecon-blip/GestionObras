@@ -6,11 +6,15 @@ import {
   FormLabel,
   Heading,
   Input,
+  InputGroup,
+  InputRightElement,
   Stack,
   Text,
   useColorModeValue,
   useToast,
+  IconButton,
 } from "@chakra-ui/react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useRouter } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
@@ -30,6 +34,8 @@ export const AcceptInvitationPage: React.FC = () => {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -171,19 +177,47 @@ export const AcceptInvitationPage: React.FC = () => {
               </FormControl>
               <FormControl isRequired>
                 <FormLabel>{t("invitation.fields.password")}</FormLabel>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <InputGroup>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={
+                        showPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+                      }
+                      variant="ghost"
+                      size="sm"
+                      icon={showPassword ? <FiEyeOff /> : <FiEye />}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
               </FormControl>
               <FormControl isRequired>
                 <FormLabel>{t("invitation.fields.passwordConfirm")}</FormLabel>
-                <Input
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                />
+                <InputGroup>
+                  <Input
+                    type={showPasswordConfirm ? "text" : "password"}
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={
+                        showPasswordConfirm
+                          ? "Ocultar contrasena"
+                          : "Mostrar contrasena"
+                      }
+                      variant="ghost"
+                      size="sm"
+                      icon={showPasswordConfirm ? <FiEyeOff /> : <FiEye />}
+                      onClick={() => setShowPasswordConfirm((prev) => !prev)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
               </FormControl>
               <Button
                 type="submit"

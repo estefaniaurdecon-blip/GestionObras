@@ -6,7 +6,10 @@ import {
   FormControl,
   FormLabel,
   Heading,
+  IconButton,
   Input,
+  InputGroup,
+  InputRightElement,
   Select,
   Stack,
   Switch,
@@ -15,6 +18,7 @@ import {
   useColorModeValue,
   useToast,
 } from "@chakra-ui/react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -41,6 +45,9 @@ export const UserSettingsPage: React.FC = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showNewPasswordConfirm, setShowNewPasswordConfirm] = useState(false);
 
   const cardBg = useColorModeValue("white", "gray.700");
   const labelColor = useColorModeValue("gray.700", "gray.100");
@@ -289,27 +296,68 @@ export const UserSettingsPage: React.FC = () => {
           <Stack spacing={4}>
             <FormControl isRequired>
               <FormLabel color={labelColor}>{t("settings.currentPassword")}</FormLabel>
-              <Input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
+              <InputGroup>
+                <Input
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+                <InputRightElement>
+                  <IconButton
+                    aria-label={
+                      showCurrentPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+                    }
+                    variant="ghost"
+                    size="sm"
+                    icon={showCurrentPassword ? <FiEyeOff /> : <FiEye />}
+                    onClick={() => setShowCurrentPassword((prev) => !prev)}
+                  />
+                </InputRightElement>
+              </InputGroup>
             </FormControl>
             <FormControl isRequired>
               <FormLabel color={labelColor}>{t("settings.newPassword")}</FormLabel>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <InputGroup>
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <InputRightElement>
+                  <IconButton
+                    aria-label={
+                      showNewPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+                    }
+                    variant="ghost"
+                    size="sm"
+                    icon={showNewPassword ? <FiEyeOff /> : <FiEye />}
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                  />
+                </InputRightElement>
+              </InputGroup>
             </FormControl>
             <FormControl isRequired>
               <FormLabel color={labelColor}>{t("settings.confirmPassword")}</FormLabel>
-              <Input
-                type="password"
-                value={newPasswordConfirm}
-                onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              />
+              <InputGroup>
+                <Input
+                  type={showNewPasswordConfirm ? "text" : "password"}
+                  value={newPasswordConfirm}
+                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                />
+                <InputRightElement>
+                  <IconButton
+                    aria-label={
+                      showNewPasswordConfirm
+                        ? "Ocultar contrasena"
+                        : "Mostrar contrasena"
+                    }
+                    variant="ghost"
+                    size="sm"
+                    icon={showNewPasswordConfirm ? <FiEyeOff /> : <FiEye />}
+                    onClick={() => setShowNewPasswordConfirm((prev) => !prev)}
+                  />
+                </InputRightElement>
+              </InputGroup>
             </FormControl>
             <Button
               type="button"
