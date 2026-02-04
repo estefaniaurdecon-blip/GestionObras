@@ -5,7 +5,8 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import en from "./locales/en.json";
 import es from "./locales/es.json";
 
-// Inicializa i18n y detecta idioma desde navegador/localStorage.
+// Inicializa i18n y detecta idioma desde el navegador,
+// sin usar localStorage para cachear la selección.
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -18,6 +19,11 @@ i18n
     },
     interpolation: {
       escapeValue: false,
+    },
+    detection: {
+      // Solo navegador / headers, nada de localStorage.
+      order: ["navigator"],
+      caches: [],
     },
   });
 

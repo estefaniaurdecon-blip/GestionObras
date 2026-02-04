@@ -184,14 +184,7 @@ export const TimeControlPage: React.FC = () => {
   const [now, setNow] = useState<Date>(new Date());
   const [dragTaskId, setDragTaskId] = useState<number | null>(null);
   const [isDraggingSession, setIsDraggingSession] = useState(false);
-  const [recentTaskIds, setRecentTaskIds] = useState<number[]>(() => {
-    try {
-      const raw = localStorage.getItem("recent_task_ids");
-      return raw ? (JSON.parse(raw) as number[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [recentTaskIds, setRecentTaskIds] = useState<number[]>([]);
 
   // Vista activa del modulo de tiempo.
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "timesheet">(
@@ -574,7 +567,6 @@ export const TimeControlPage: React.FC = () => {
   const updateRecentTaskIds = (taskId: number) => {
     setRecentTaskIds((prev) => {
       const next = [taskId, ...prev.filter((id) => id !== taskId)].slice(0, 10);
-      localStorage.setItem("recent_task_ids", JSON.stringify(next));
       return next;
     });
   };

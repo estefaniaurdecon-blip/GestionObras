@@ -45,7 +45,7 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
-// Inyecta X-Tenant-Id si existe en localStorage (superadmin).
+// Inyecta cabeceras comunes. Se evita depender de localStorage.
 apiClient.interceptors.request.use((config) => {
   if (config.baseURL && config.baseURL.includes("backend-fastapi")) {
     const protocol = window.location.protocol === "https:" ? "https" : "http";
@@ -54,19 +54,11 @@ apiClient.interceptors.request.use((config) => {
   const existingTenantHeader =
     config.headers &&
     (config.headers["X-Tenant-Id"] ?? (config.headers as any)["x-tenant-id"]);
-  const tenantId = localStorage.getItem("x_tenant_id");
-  if (!existingTenantHeader && tenantId) {
-    config.headers = {
-      ...config.headers,
-      "X-Tenant-Id": tenantId,
-      "X-Source": "web",
-    };
-  } else {
-    config.headers = {
-      ...config.headers,
-      "X-Source": "web",
-    };
-  }
+  config.headers = {
+    ...config.headers,
+    ...(existingTenantHeader ? {} : {}),
+    "X-Source": "web",
+  };
   return config;
 });
 
