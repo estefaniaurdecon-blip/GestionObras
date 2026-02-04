@@ -60,11 +60,17 @@ export const isAllCapsConcept = (value?: string) => {
 };
 
 export const getBudgetGroupKey = (value?: string) => {
-  if (isGeneralExpensesConcept(value)) return normalizeConceptKey(GENERAL_EXPENSES_LABEL);
-  if (isExternalCollaborationConcept(value)) {
-    const details = parseExternalCollaborationDetails(value);
-    if (!details) return normalizeConceptKey(EXTERNAL_COLLAB_LABEL);
+  // Agrupamos siempre por el concepto normalizado salvo para
+  // gastos generales, que deben aparecer como una única fila
+  // agregada aunque existan varias variantes.
+  if (isGeneralExpensesConcept(value)) {
+    return normalizeConceptKey(GENERAL_EXPENSES_LABEL);
   }
+  // Para colaboraciones externas mantenemos una clave por
+  // centro concreto (tipo + nombre) en lugar de agrupar todas
+  // bajo "COLABORACIONES EXTERNAS". De lo contrario, al volver
+  // a cargar los datos tras "Guardar tabla" los centros
+  // individuales se colapsan en una sola fila y "desaparecen".
   return normalizeConceptKey(value);
 };
 

@@ -43,7 +43,6 @@ export const BUDGET_ORDER = [
   normalizeKey("MATERIAL FUNGIBLE"),
   normalizeKey("Materiales para pruebas y ensayos"),
   normalizeKey("COLABORACIONES EXTERNAS"),
-  normalizeKey("Centros Tecnologicos"),
   normalizeKey(GENERAL_EXPENSES_LABEL),
   normalizeKey("OTROS GASTOS"),
   normalizeKey("Auditoria"),

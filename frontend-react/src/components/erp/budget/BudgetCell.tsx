@@ -12,6 +12,7 @@ export const EuroCell: React.FC<{
     color={color ?? "green.700"}
     fontWeight={bold ? "semibold" : "normal"}
     fontFamily="mono"
+    textAlign="center"
     whiteSpace="nowrap"
   >
     {formatEuroValue(value)}
@@ -32,6 +33,7 @@ export const BudgetNumberCell: React.FC<{
       pattern="[0-9.,]*"
       defaultValue={value.toLocaleString("es-ES")}
       min={min}
+      textAlign="center"
       onBlur={(e) => {
         const raw = e.target.value.trim();
         const normalized = raw.replace(/\./g, "").replace(",", ".");

@@ -278,7 +278,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   let totalForecasted = 0;
   groupedBudgetRows.forEach((row) => {
     const rowKey = normalizeConceptKey(row.concept);
-    const isParentRow = parentKeys.has(rowKey);
+    const isParentRow = isAllCapsConcept(row.concept) && parentKeys.has(rowKey);
     const isGeneralExpenses = isGeneralExpensesConcept(row.concept);
     if (!isParentRow && !isGeneralExpenses) return;
     const h1 = Number(row.hito1_budget ?? 0);
@@ -288,13 +288,12 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     const fallback = { h1, h2, j1, j2 };
     let rowApproved = 0;
     milestonesToRender.forEach((milestone, idx) => {
-      const useParentTotals = isParentRow && hasDynamicMilestones && !isGeneralExpenses;
       const amountValue =
-        useParentTotals
+        isParentRow && hasDynamicMilestones
           ? parentMilestoneTotals[rowKey]?.amount[idx] ?? 0
           : resolveMilestoneValue(row, milestone.id, idx, "amount", fallback);
       const justifiedValue =
-        useParentTotals
+        isParentRow && hasDynamicMilestones
           ? parentMilestoneTotals[rowKey]?.justified[idx] ?? 0
           : resolveMilestoneValue(row, milestone.id, idx, "justified", fallback);
       totalsByMilestone[idx].amount += Number(amountValue || 0);
@@ -533,12 +532,12 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
             <Tbody>
               {displayBudgetRows.length === 0 ? (
                 <Tr>
-                    <Td
-                      colSpan={milestoneColumnsCount * 2 + 5}
-                      textAlign="center"
-                      py={10}
-                      color="gray.500"
-                    >
+                  <Td
+                    colSpan={milestoneColumnsCount * 2 + 5}
+                    textAlign="center"
+                    py={10}
+                    color="gray.500"
+                  >
                     Aun no hay presupuestos guardados para este proyecto.
                   </Td>
                 </Tr>
@@ -593,11 +592,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                   };
                   const milestoneAmounts = milestonesToRender.map(
                     (milestone, idx) => {
-                      // Para filas padre normales usamos los totales agregados
-                      // de los hijos. En GASTOS GENERALES queremos permitir
-                      // que el usuario introduzca los hitos manualmente, así
-                      // que ignoramos parentMilestoneTotals.
-                      if (isParentRow && hasDynamicMilestones && !isGeneralExpenses) {
+                      if (isParentRow && hasDynamicMilestones) {
                         return (
                           parentMilestoneTotals[baseKey]?.amount[idx] ?? 0
                         );
@@ -613,7 +608,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                   );
                   const milestoneJustified = milestonesToRender.map(
                     (milestone, idx) => {
-                      if (isParentRow && hasDynamicMilestones && !isGeneralExpenses) {
+                      if (isParentRow && hasDynamicMilestones) {
                         return (
                           parentMilestoneTotals[baseKey]?.justified[idx] ?? 0
                         );
@@ -631,24 +626,13 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                     (sum, value) => sum + Number(value || 0),
                     0,
                   );
-                  // El presupuesto aprobado lo introduce el usuario; usamos el
-                  // valor guardado o, en su defecto, la suma de hitos.
-                  const approved = (
-                    budgetDrafts[budget.id]?.approved_budget ??
-                    Number(budget.approved_budget ?? 0) ??
-                    approvedFromMilestones ??
-                    h1 + h2
-                  );
-                  const totalJustified = milestoneJustified.reduce(
-                    (sum, value) => sum + Number(value || 0),
-                    0,
-                  );
+                  // El presupuesto aprobado siempre se calcula como suma de hitos
+                  // (dinámicos o HITO1 + HITO2).
+                  const approved =
+                    approvedFromMilestones || h1 + h2;
+                  const forecast = Number(budget.forecasted_spent ?? 0);
                   const percentSpent =
-                    approved > 0
-                      ? isGeneralExpenses
-                        ? generalPercent
-                        : (totalJustified / approved) * 100
-                      : 0;
+                    approved > 0 ? (forecast / approved) * 100 : 0;
                   const isExternalParent =
                     isExternalCollab && isParentRow && !externalCollabName;
                   const isExternalChild = isExternalCollab && !isExternalParent;
@@ -739,7 +723,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                             </HStack>
                           ) : (
                             <Text fontWeight="semibold">
-                              {formatGeneralExpensesConcept(generalPercent)}
+                              {draftConcept ||
+                                formatGeneralExpensesConcept(generalPercent)}
                             </Text>
                           )
                         ) : isExternalCollab ? (
@@ -824,14 +809,10 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                         const amountValue = milestoneAmounts[idx] ?? 0;
                         const justifiedValue = milestoneJustified[idx] ?? 0;
                         const canEditMilestone =
-                          canEditRow &&
-                          // Permitimos editar hitos en filas normales y,
-                          // de forma especial, en GASTOS GENERALES aunque
-                          // se consideren filas padre.
-                          (!isParentRow || isGeneralExpenses || milestone.id <= 0);
+                          canEditRow && !(isParentRow && milestone.id > 0);
                         return (
                           <React.Fragment key={`milestone-cell-${budget.id}-${milestone.id}`}>
-                            <Td textAlign="center">
+                            <Td textAlign="right">
                               <BudgetNumberCell
                                 value={amountValue}
                                 isEditing={canEditMilestone}
@@ -850,13 +831,10 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                                 }}
                               />
                             </Td>
-                            <Td textAlign="center">
+                            <Td textAlign="right">
                               <BudgetNumberCell
                                 value={justifiedValue}
-                                isEditing={
-                                  canEditMilestone &&
-                                  (!isParentRow || isGeneralExpenses)
-                                }
+                                isEditing={canEditMilestone && !isParentRow}
                                 onSubmit={(value) => {
                                   if (milestone.id > 0) {
                                     onBudgetMilestoneChange(
@@ -876,25 +854,31 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                           </React.Fragment>
                         );
                       })}
-                      <Td textAlign="center">
+                      <Td textAlign="right">
                         <BudgetNumberCell
-                          value={approved}
-                          isEditing={canEditRow}
-                          onSubmit={(value) =>
+                          value={
+                            hasDynamicMilestones
+                              ? approved
+                              : budgetDrafts[budget.id]?.approved_budget ??
+                                approved
+                          }
+                          isEditing={canEditRow && !hasDynamicMilestones}
+                          onSubmit={(value) => {
+                            if (hasDynamicMilestones) return;
                             onBudgetCellSave(
                               budget.id,
                               "approved_budget",
                               value,
-                            )
-                          }
+                            );
+                          }}
                         />
                       </Td>
-                      <Td textAlign="center">
+                      <Td textAlign="right">
                         <Text fontFamily="mono">
                           {formatPercent(percentSpent)}
                         </Text>
                       </Td>
-                      <Td textAlign="center">
+                      <Td textAlign="right">
                         <BudgetNumberCell
                           value={
                             budgetDrafts[budget.id]?.forecasted_spent ??
@@ -945,41 +929,41 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
             </Tbody>
             <Tfoot>
               <Tr bg="rgba(196,116,255,0.15)" fontWeight="semibold">
-                <Td textAlign="center">Total</Td>
+                <Td>Total</Td>
                 {totalsByMilestone.map((item, idx) => (
                   <React.Fragment key={`total-ms-${idx}`}>
-                    <Td textAlign="center">
+                    <Td textAlign="right">
                       <EuroCell value={item.amount} />
                     </Td>
-                    <Td textAlign="center">
+                    <Td textAlign="right">
                       <EuroCell value={item.justified} />
                     </Td>
                   </React.Fragment>
                 ))}
-                <Td textAlign="center">
+                <Td textAlign="right">
                   <EuroCell value={totalApproved} />
                 </Td>
                 <Td />
-                <Td textAlign="center">
+                <Td textAlign="right">
                   <EuroCell value={totalForecasted} />
                 </Td>
                 <Td />
               </Tr>
               <Tr bg="rgba(196,116,255,0.2)" fontWeight="semibold">
-                <Td textAlign="center">Diferencia (por justificar)</Td>
+                <Td>Diferencia (por justificar)</Td>
                 {totalsByMilestone.map((item, idx) => (
                   <React.Fragment key={`diff-ms-${idx}`}>
-                    <Td textAlign="center">
+                    <Td textAlign="right">
                       <EuroCell value={item.amount - item.justified} />
                     </Td>
                     <Td />
                   </React.Fragment>
                 ))}
-                <Td textAlign="center">
+                <Td textAlign="right">
                   <EuroCell value={totalApproved - totalJustified} />
                 </Td>
                 <Td />
-                <Td textAlign="center">
+                <Td textAlign="right">
                   <EuroCell value={totalForecasted} />
                 </Td>
                 <Td />
@@ -992,7 +976,3 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     </Stack>
   );
 };
-
-
-
-

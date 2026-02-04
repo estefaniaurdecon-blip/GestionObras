@@ -30,8 +30,11 @@ export const calculateBudgetTotals = (
     const h1 = Number(row.hito1_budget ?? 0);
     const h2 = Number(row.hito2_budget ?? 0);
     const parentJustified = parentTotals.get(rowKey);
-    const j1 = parentJustified ? parentJustified.j1 : Number(row.justified_hito1 ?? 0);
-    const j2 = parentJustified ? parentJustified.j2 : Number(row.justified_hito2 ?? 0);
+    // Para GASTOS GENERALES queremos usar siempre los valores
+    // introducidos en la propia fila (no los agregados de hijas).
+    const useParentTotals = parentJustified && !isGeneralExpenses;
+    const j1 = useParentTotals ? parentJustified.j1 : Number(row.justified_hito1 ?? 0);
+    const j2 = useParentTotals ? parentJustified.j2 : Number(row.justified_hito2 ?? 0);
     approved += h1 + h2;
     forecasted += Number(row.forecasted_spent ?? 0);
     totalsByMilestone[1].amount += h1;
@@ -82,30 +85,18 @@ export const groupBudgetsByConcept = (rows: ProjectBudgetLine[]) => {
     const key = getBudgetGroupKey(row.concept || `row-${row.id}`);
     const current = map.get(key);
     if (!current) {
+      // Primera aparición de este concepto: usamos la línea tal cual.
       map.set(key, { ...row });
       return;
     }
-    const h1 = Number(current.hito1_budget ?? 0) + Number(row.hito1_budget ?? 0);
-    const h2 = Number(current.hito2_budget ?? 0) + Number(row.hito2_budget ?? 0);
-    const j1 =
-      Number(current.justified_hito1 ?? 0) + Number(row.justified_hito1 ?? 0);
-    const j2 =
-      Number(current.justified_hito2 ?? 0) + Number(row.justified_hito2 ?? 0);
-    const forecast =
-      Number(current.forecasted_spent ?? 0) + Number(row.forecasted_spent ?? 0);
-    const approved = h1 + h2;
-    const percent =
-      approved > 0 ? Number(((forecast / approved) * 100).toFixed(2)) : 0;
-    map.set(key, {
-      ...current,
-      hito1_budget: h1,
-      hito2_budget: h2,
-      justified_hito1: j1,
-      justified_hito2: j2,
-      approved_budget: approved,
-      forecasted_spent: forecast,
-      percent_spent: percent,
-    });
+    // Si ya existe una línea para este concepto, elegimos la "mejor" sin sumar:
+    // - Preferimos la que tenga mayor presupuesto aprobado (la más reciente
+    //   o la que refleja el valor final que el usuario ha fijado).
+    const currentApproved = Number(current.approved_budget ?? 0);
+    const newApproved = Number(row.approved_budget ?? 0);
+    if (newApproved >= currentApproved) {
+      map.set(key, { ...row });
+    }
   });
   const ordered = Array.from(map.values());
   ordered.sort((a, b) => {

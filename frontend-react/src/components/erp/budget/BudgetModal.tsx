@@ -96,14 +96,21 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
   }, [initialValues, isOpen]);
 
   const parseNumber = (value: string) => {
-    const parsed = Number(value);
+    const raw = value.trim().replace(/\s+/g, "");
+    if (!raw) return 0;
+    // Aceptar formato español: "29.161,58" o "29161,58"
+    const normalized = raw.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
   const hitoSum =
     parseNumber(form.hito1_budget) + parseNumber(form.hito2_budget);
   const approvedValue = parseNumber(form.approved_budget);
-  const totalsMatch = Math.abs(hitoSum - approvedValue) < 0.01;
+  // Regla de negocio: la suma de los hitos
+  // no puede superar el presupuesto aprobado,
+  // pero puede ser menor mientras no se haya repartido todo.
+  const totalsValid = hitoSum <= approvedValue + 0.01;
 
   const handleSubmit = () => {
     onSave({
@@ -141,7 +148,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>Hito 1</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.hito1_budget}
                   onChange={(e) => updateField("hito1_budget", e.target.value)}
                 />
@@ -149,7 +158,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>Justificado H1</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.justified_hito1}
                   onChange={(e) =>
                     updateField("justified_hito1", e.target.value)
@@ -161,7 +172,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>Hito 2</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.hito2_budget}
                   onChange={(e) => updateField("hito2_budget", e.target.value)}
                 />
@@ -169,7 +182,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>Justificado H2</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.justified_hito2}
                   onChange={(e) =>
                     updateField("justified_hito2", e.target.value)
@@ -181,7 +196,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>Total aprobado</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.approved_budget}
                   onChange={(e) =>
                     updateField("approved_budget", e.target.value)
@@ -191,7 +208,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <FormControl>
                 <FormLabel>% Gastado</FormLabel>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9.,]*"
                   value={form.percent_spent}
                   onChange={(e) => updateField("percent_spent", e.target.value)}
                 />
@@ -200,17 +219,19 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
             <FormControl>
               <FormLabel>Gasto previsto</FormLabel>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.,]*"
                 value={form.forecasted_spent}
                 onChange={(e) =>
                   updateField("forecasted_spent", e.target.value)
                 }
               />
             </FormControl>
-            <Text color={totalsMatch ? "green.500" : "red.500"} fontSize="sm">
-              {totalsMatch
-                ? "El total aprobado coincide con la suma de Hito 1 y Hito 2."
-                : "El total aprobado debe igualar la suma de los hitos."}
+            <Text color={totalsValid ? "green.500" : "red.500"} fontSize="sm">
+              {totalsValid
+                ? "La suma de Hito 1 y Hito 2 no supera el presupuesto aprobado."
+                : "La suma de los hitos no puede superar el presupuesto aprobado."}
             </Text>
           </Stack>
         </ModalBody>
@@ -221,7 +242,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
           <Button
             colorScheme="green"
             onClick={handleSubmit}
-            isDisabled={!totalsMatch || !form.concept.trim()}
+            isDisabled={!totalsValid || !form.concept.trim()}
             isLoading={isSaving}
           >
             {submitLabel ?? "Guardar"}

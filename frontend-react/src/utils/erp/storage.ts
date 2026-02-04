@@ -1,28 +1,15 @@
-import { SUMMARY_STORAGE_KEY } from "./constants";
 import type { SummaryStorage, SummaryYearlyData } from "./types";
 
+// En esta versión evitamos usar localStorage por requisitos del proyecto.
+// Mantener una referencia en memoria es suficiente como fallback básico.
+let inMemorySummaryStorage: SummaryStorage = {};
+
 export const readSummaryStorage = (): SummaryStorage => {
-  if (typeof window === "undefined") return {};
-  try {
-    const stored = window.localStorage.getItem(SUMMARY_STORAGE_KEY);
-    if (!stored) return {};
-    const parsed = JSON.parse(stored);
-    if (parsed && typeof parsed === "object") {
-      return parsed;
-    }
-  } catch (err) {
-    console.warn("Failed to read summary storage", err);
-  }
-  return {};
+  return inMemorySummaryStorage;
 };
 
 export const writeSummaryStorage = (value: SummaryStorage) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify(value));
-  } catch (err) {
-    console.warn("Failed to write summary storage", err);
-  }
+  inMemorySummaryStorage = value;
 };
 
 export const cloneYearData = (data: SummaryYearlyData): SummaryYearlyData => ({

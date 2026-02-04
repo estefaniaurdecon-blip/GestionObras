@@ -86,7 +86,37 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
       toast({ title: "Presupuesto actualizado", status: "success" });
     },
 
-    onError: (error: any) => {
+    onError: async (error: any, variables) => {
+      const status = error?.response?.status;
+      if (status === 404 && projectId !== null && variables?.payload) {
+        try {
+          await createProjectBudgetLine(
+            projectId as number,
+            variables.payload as any,
+            tenantId,
+          );
+          await queryClient.invalidateQueries({
+            queryKey: ["project-budgets", ...scopedKey],
+          });
+          toast({
+            title: "Presupuesto recreado",
+            description:
+              "La línea no existía en el servidor y se ha vuelto a crear.",
+            status: "info",
+          });
+          return;
+        } catch (innerError: any) {
+          toast({
+            title: "Error al recrear presupuesto",
+            description:
+              innerError?.response?.data?.detail ??
+              "No se pudo recrear el presupuesto desincronizado.",
+            status: "error",
+          });
+          return;
+        }
+      }
+
       toast({
         title: "Error al actualizar presupuesto",
         description: "No se pudo actualizar el presupuesto.",

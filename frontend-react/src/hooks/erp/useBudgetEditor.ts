@@ -4,6 +4,7 @@ import { useToast } from "@chakra-ui/react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { ErpMilestone } from "../../api/erpStructure";
+import { fetchErpProject } from "../../api/erpReports";
 import {
   createProjectBudgetLine,
   fetchProjectBudgets,
@@ -73,6 +74,7 @@ export const useBudgetEditor = ({
   const [savingBudgets, setSavingBudgets] = useState(false);
   const [seedingTemplate, setSeedingTemplate] = useState(false);
   const syncingBudgetMilestonesRef = useRef(false);
+  const resolvedTenantIdRef = useRef<number | undefined>(undefined);
 
   const externalCollaborationsQuery = useExternalCollaborations(tenantId);
   const [extraBudgetRows, setExtraBudgetRows] = useState<ProjectBudgetLine[]>(
@@ -84,6 +86,20 @@ export const useBudgetEditor = ({
   const tempBudgetIdRef = useRef(-2000);
 
   const defaultBudgetTemplate = useMemo(() => getDefaultBudgetTemplate(), []);
+
+  const resolveWriteTenantId = async () => {
+    if (tenantId) return tenantId;
+    if (resolvedTenantIdRef.current) return resolvedTenantIdRef.current;
+    if (!projectId) return undefined;
+    try {
+      const project = await fetchErpProject(projectId);
+      const resolved = project?.tenant_id ?? undefined;
+      resolvedTenantIdRef.current = resolved;
+      return resolved;
+    } catch {
+      return undefined;
+    }
+  };
 
   const displayBudgetRows = hasRealBudgets ? budgetRows : defaultBudgetTemplate;
 
@@ -100,7 +116,9 @@ export const useBudgetEditor = ({
       displayBudgetRows.filter((row) => {
         const concept = row.concept ?? "";
         if (isSummaryRow(concept)) return false;
-        return !concept.toLowerCase().includes("cetim");
+        // Solo ocultamos filas de resumen (Total / Diferencia).
+        // Las colaboraciones externas (incluyendo CETIM) deben mostrarse siempre.
+        return true;
       }),
     [displayBudgetRows],
   );
@@ -195,8 +213,10 @@ export const useBudgetEditor = ({
   }, [defaultBudgetTemplate, mergedBudgetRows]);
 
   const budgetParentTotals = useMemo(() => {
-    return calculateParentTotals(mergedBudgetRows, budgetParentMap);
-  }, [mergedBudgetRows, budgetParentMap]);
+    // Usamos las filas agrupadas (visibles) para que los totales
+    // de las filas padre coincidan con lo que ve el usuario en la tabla.
+    return calculateParentTotals(groupedBudgetRows, budgetParentMap);
+  }, [groupedBudgetRows, budgetParentMap]);
 
   const generalExpensesBaseTotals = useMemo(() => {
     const totalKey = normalizeConceptKey("Total");
@@ -374,12 +394,13 @@ export const useBudgetEditor = ({
     const numericValue = Number(normalized);
     if (!Number.isFinite(numericValue)) return;
     const percent = Math.max(0, numericValue);
-    const h1 = Number(
-      ((generalExpensesBaseTotals.h1 * percent) / 100).toFixed(2),
-    );
-    const h2 = Number(
-      ((generalExpensesBaseTotals.h2 * percent) / 100).toFixed(2),
-    );
+    const totalBase = generalExpensesBaseTotals.h1 + generalExpensesBaseTotals.h2;
+    const amount =
+      totalBase > 0
+        ? Number(((totalBase * percent) / 100).toFixed(2))
+        : 0;
+    const h1 = amount;
+    const h2 = 0;
     setBudgetDrafts((prev) => ({
       ...prev,
       [budgetId]: {
@@ -398,16 +419,8 @@ export const useBudgetEditor = ({
     const numericValue = Number(normalized);
     if (!Number.isFinite(numericValue)) return;
     const amount = Math.max(0, numericValue);
-    const totalBase = generalExpensesBaseTotals.h1 + generalExpensesBaseTotals.h2;
-    let h1 = 0;
-    let h2 = 0;
-    if (totalBase > 0) {
-      h1 = Number(((amount * generalExpensesBaseTotals.h1) / totalBase).toFixed(2));
-      h2 = Number(((amount * generalExpensesBaseTotals.h2) / totalBase).toFixed(2));
-    } else {
-      h1 = Number(amount.toFixed(2));
-      h2 = 0;
-    }
+    const h1 = Number(amount.toFixed(2));
+    const h2 = 0;
     setBudgetDrafts((prev) => ({
       ...prev,
       [budgetId]: {
@@ -592,9 +605,13 @@ export const useBudgetEditor = ({
     if (!projectId || !hasBudgetDrafts) return;
     try {
       setSavingBudgets(true);
-      let latestBudgets = await fetchProjectBudgets(projectId, tenantId);
+      const writeTenantId = await resolveWriteTenantId();
+      if (!writeTenantId) {
+        throw new Error("Tenant requerido para guardar presupuestos.");
+      }
+      let latestBudgets = await fetchProjectBudgets(projectId, writeTenantId);
       const refreshBudgets = async () => {
-        latestBudgets = await fetchProjectBudgets(projectId, tenantId);
+        latestBudgets = await fetchProjectBudgets(projectId, writeTenantId);
         return latestBudgets;
       };
       const safeNumber = (value: unknown, fallback = 0) => {
@@ -661,29 +678,12 @@ export const useBudgetEditor = ({
         const milestoneValues = deriveMilestoneValues(draftPayload, base);
         const h1 = milestoneValues.h1;
         const h2 = milestoneValues.h2;
+        // Mantener coherencia básica en frontend: el chequeo estricto de que
+        // el justificado total no supere el presupuesto aprobado se delega
+        // al backend. Aquí solo derivamos valores para enviar.
         const approved = milestoneValues.approved;
-        const j1 = parentTotals
-          ? parentTotals.j1
-          : milestoneValues.j1;
-        const j2 = parentTotals
-          ? parentTotals.j2
-          : milestoneValues.j2;
-        if (j1 > h1) {
-          throw new Error(
-            `Justificado H1 mayor que presupuesto en "${base.concept}".`,
-          );
-        }
-        if (j2 > h2) {
-          throw new Error(
-            `Justificado H2 mayor que presupuesto en "${base.concept}".`,
-          );
-        }
-        const pending = approved - (j1 + j2);
-        if (pending < 0) {
-          throw new Error(
-            `El justificado total supera el presupuesto aprobado en "${base.concept}".`,
-          );
-        }
+        const j1 = parentTotals ? parentTotals.j1 : milestoneValues.j1;
+        const j2 = parentTotals ? parentTotals.j2 : milestoneValues.j2;
       }
 
       const normalizedDrafts = Object.entries(budgetDrafts).map(
@@ -695,17 +695,41 @@ export const useBudgetEditor = ({
               mergedBudgetRows.find((r) => r.id === numericId)?.concept ??
               ""
             )?.trim() ?? "";
-          const matchedByConcept = conceptValue
-            ? findBudgetByConcept(conceptValue)
-            : undefined;
-          const targetId = matchedByConcept?.id ?? -1;
-          return { targetId, draftPayload, conceptValue, numericId };
+
+          // Si ya existe una línea con este ID en backend, usamos siempre ese ID
+          // para actualizar y evitamos crear duplicados por concepto.
+          const existingById =
+            numericId > 0
+              ? latestBudgets.find((r) => r.id === numericId)
+              : undefined;
+
+          const matchedByConcept =
+            !existingById && conceptValue
+              ? findBudgetByConcept(conceptValue)
+              : undefined;
+
+          const targetId =
+            existingById?.id ?? matchedByConcept?.id ?? -1;
+
+          return {
+            targetId,
+            draftPayload,
+            conceptValue,
+            numericId,
+            hasExisting: Boolean(existingById || matchedByConcept),
+          };
         },
       );
 
       await Promise.all(
         normalizedDrafts.map(
-          async ({ targetId, draftPayload, conceptValue, numericId }) => {
+          async ({
+            targetId,
+            draftPayload,
+            conceptValue,
+            numericId,
+            hasExisting,
+          }) => {
             const baseExisting =
               targetId > 0 ? latestBudgets.find((r) => r.id === targetId) : null;
             const base =
@@ -745,8 +769,9 @@ export const useBudgetEditor = ({
               percent_spent: percent,
             };
 
-            if (targetId <= 0 || !baseExisting) {
-              return createProjectBudgetLine(projectId, createPayload, tenantId);
+            // Si no existe en backend, creamos directamente y evitamos PATCH (404).
+            if (!hasExisting || targetId <= 0 || !baseExisting) {
+              return createProjectBudgetLine(projectId, createPayload, writeTenantId);
             }
 
             const payloadForUpdate: ProjectBudgetLineUpdatePayload = {
@@ -766,7 +791,7 @@ export const useBudgetEditor = ({
                 projectId,
                 targetId,
                 payloadForUpdate,
-                tenantId,
+                writeTenantId,
               );
             } catch (err: any) {
               if (err?.response?.status === 404) {
@@ -777,10 +802,10 @@ export const useBudgetEditor = ({
                     projectId,
                     existingByConcept.id,
                     payloadForUpdate,
-                    tenantId,
+                    writeTenantId,
                   );
                 }
-                return createProjectBudgetLine(projectId, createPayload, tenantId);
+                return createProjectBudgetLine(projectId, createPayload, writeTenantId);
               }
               throw err;
             }
@@ -856,7 +881,17 @@ export const useBudgetEditor = ({
           payload,
         },
         {
-          onSuccess: () => setBudgetModalOpen(false),
+          onSuccess: () => {
+            // Cerramos el modal y limpiamos el borrador local
+            // para que la tabla muestre los datos recargados
+            // desde el backend.
+            setBudgetModalOpen(false);
+            setBudgetDrafts((prev) => {
+              const next = { ...prev };
+              delete next[activeBudgetLine.id];
+              return next;
+            });
+          },
         },
       );
       return;

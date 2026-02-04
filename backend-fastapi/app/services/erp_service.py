@@ -148,6 +148,7 @@ def _validate_budget_milestones_totals(
         raise ValueError(
             "La suma de los hitos no puede superar el presupuesto aprobado."
         )
+    # El total justificado tampoco puede superar el presupuesto aprobado.
     if total_justified > approved_budget:
         raise ValueError(
             "El justificado total no puede superar el presupuesto aprobado."
@@ -314,12 +315,15 @@ def create_project_budget_line(
     tenant_id: Optional[int],
 ) -> ProjectBudgetLine:
     project = _get_project_or_404(session, project_id, tenant_id)
-    # Si vienen hitos dinÃ¡micos, recalculamos totales.
+    # Si vienen hitos dinámicos, recalculamos totales pero el presupuesto aprobado
+    # lo decide el usuario y los hitos no pueden superarlo.
     milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
     if milestones_payload:
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
-        approved_budget = total_amount
+        approved_budget = data.approved_budget
+        if approved_budget is None:
+            approved_budget = total_amount
         _validate_budget_milestones_totals(
             total_amount=total_amount,
             total_justified=total_justified,
@@ -355,11 +359,21 @@ def create_project_budget_line(
         session.commit()
         return line
 
+    # Sin hitos dinámicos: el presupuesto aprobado lo decide el usuario, pero
+    # la suma de HITO1 + HITO2 no puede superarlo.
+    total_amount = Decimal(data.hito1_budget) + Decimal(data.hito2_budget)
+    approved_budget = data.approved_budget
+    if approved_budget is None:
+        approved_budget = total_amount
     _validate_budget_totals(
         hito1_budget=data.hito1_budget,
         hito2_budget=data.hito2_budget,
-        approved_budget=data.approved_budget,
+        approved_budget=approved_budget,
     )
+    total_justified = Decimal(data.justified_hito1) + Decimal(data.justified_hito2)
+    percent_spent = Decimal(0)
+    if approved_budget and approved_budget != 0:
+        percent_spent = (total_justified / approved_budget) * Decimal(100)
     line = ProjectBudgetLine(
         project_id=project_id,
         tenant_id=project.tenant_id,
@@ -368,8 +382,8 @@ def create_project_budget_line(
         justified_hito1=data.justified_hito1,
         hito2_budget=data.hito2_budget,
         justified_hito2=data.justified_hito2,
-        approved_budget=data.approved_budget,
-        percent_spent=data.percent_spent,
+        approved_budget=approved_budget,
+        percent_spent=percent_spent,
         forecasted_spent=data.forecasted_spent,
     )
     session.add(line)
@@ -388,14 +402,47 @@ def update_project_budget_line(
     _get_project_or_404(session, project_id, tenant_id)
     line = session.get(ProjectBudgetLine, budget_id)
     if not line or line.project_id != project_id:
-        raise ValueError("Presupuesto no encontrado para el proyecto.")
+        # Si la línea no existe, hacemos upsert creando una nueva.
+        if data.concept is None:
+            raise ValueError("Presupuesto no encontrado para el proyecto.")
+        h1 = Decimal(data.hito1_budget or 0)
+        h2 = Decimal(data.hito2_budget or 0)
+        j1 = Decimal(data.justified_hito1 or 0)
+        j2 = Decimal(data.justified_hito2 or 0)
+        approved_budget = (
+            Decimal(data.approved_budget)
+            if data.approved_budget is not None
+            else h1 + h2
+        )
+        total_justified = j1 + j2
+        percent_spent = (
+            (total_justified / approved_budget * Decimal(100))
+            if approved_budget
+            else Decimal(0)
+        )
+        forecasted_spent = Decimal(data.forecasted_spent or 0)
+        create_payload = ProjectBudgetLineCreate(
+            concept=data.concept.strip() or "Concepto",
+            hito1_budget=h1,
+            justified_hito1=j1,
+            hito2_budget=h2,
+            justified_hito2=j2,
+            approved_budget=approved_budget,
+            percent_spent=percent_spent,
+            forecasted_spent=forecasted_spent,
+            milestones=data.milestones,
+        )
+        return create_project_budget_line(session, project_id, create_payload, tenant_id)
 
     milestones_payload: list[BudgetLineMilestoneCreate] = data.milestones or []
     if milestones_payload:
-        # Recalcula totales desde hitos.
+        # Recalcula totales desde hitos; el presupuesto aprobado lo decide el usuario
+        # y los hitos no pueden superarlo.
         total_amount = sum(Decimal(m.amount) for m in milestones_payload)
         total_justified = sum(Decimal(m.justified) for m in milestones_payload)
-        approved_budget = total_amount
+        approved_budget = data.approved_budget if data.approved_budget is not None else line.approved_budget
+        if approved_budget is None:
+            approved_budget = total_amount
         _validate_budget_milestones_totals(
             total_amount=total_amount,
             total_justified=total_justified,
@@ -436,7 +483,10 @@ def update_project_budget_line(
 
     hito1_budget = data.hito1_budget if data.hito1_budget is not None else line.hito1_budget
     hito2_budget = data.hito2_budget if data.hito2_budget is not None else line.hito2_budget
+    # Presupuesto aprobado decidido por el usuario; la suma de hitos no puede superarlo.
     approved_budget = data.approved_budget if data.approved_budget is not None else line.approved_budget
+    if approved_budget is None:
+        approved_budget = hito1_budget + hito2_budget
 
     _validate_budget_totals(
         hito1_budget=hito1_budget,
@@ -454,10 +504,14 @@ def update_project_budget_line(
         line.hito2_budget = data.hito2_budget
     if data.justified_hito2 is not None:
         line.justified_hito2 = data.justified_hito2
-    if data.approved_budget is not None:
-        line.approved_budget = data.approved_budget
-    if data.percent_spent is not None:
-        line.percent_spent = data.percent_spent
+    # Sin hitos dinámicos, mantenemos approved_budget consistente con la regla
+    # de validación pero editable por el usuario.
+    line.approved_budget = approved_budget
+    # Recalcula % gasto en base al total justificado de la línea.
+    total_justified_line = Decimal(line.justified_hito1 or 0) + Decimal(line.justified_hito2 or 0)
+    line.percent_spent = (
+        (total_justified_line / approved_budget * Decimal(100)) if approved_budget else Decimal(0)
+    )
     if data.forecasted_spent is not None:
         line.forecasted_spent = data.forecasted_spent
 
