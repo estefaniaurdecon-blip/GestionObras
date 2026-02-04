@@ -219,6 +219,19 @@ export const useBudgetEditor = ({
   }, [groupedBudgetRows, budgetParentMap]);
 
   const generalExpensesBaseTotals = useMemo(() => {
+    // En tu Excel, GASTOS GENERALES (19%) se calcula sobre PERSONAL.
+    const personalKey = normalizeConceptKey("PERSONAL");
+    const personalRow = mergedBudgetRows.find(
+      (row) => normalizeConceptKey(row.concept) === personalKey,
+    );
+    if (personalRow) {
+      return {
+        h1: Number(personalRow.hito1_budget ?? 0),
+        h2: Number(personalRow.hito2_budget ?? 0),
+      };
+    }
+
+    // Fallback anterior si no existe PERSONAL.
     const totalKey = normalizeConceptKey("Total");
     const diffKey = normalizeConceptKey("Diferencia");
     let h1 = 0;
@@ -394,13 +407,12 @@ export const useBudgetEditor = ({
     const numericValue = Number(normalized);
     if (!Number.isFinite(numericValue)) return;
     const percent = Math.max(0, numericValue);
-    const totalBase = generalExpensesBaseTotals.h1 + generalExpensesBaseTotals.h2;
-    const amount =
-      totalBase > 0
-        ? Number(((totalBase * percent) / 100).toFixed(2))
-        : 0;
-    const h1 = amount;
-    const h2 = 0;
+    const h1 = Number(
+      ((generalExpensesBaseTotals.h1 * percent) / 100).toFixed(2),
+    );
+    const h2 = Number(
+      ((generalExpensesBaseTotals.h2 * percent) / 100).toFixed(2),
+    );
     setBudgetDrafts((prev) => ({
       ...prev,
       [budgetId]: {
@@ -419,8 +431,16 @@ export const useBudgetEditor = ({
     const numericValue = Number(normalized);
     if (!Number.isFinite(numericValue)) return;
     const amount = Math.max(0, numericValue);
-    const h1 = Number(amount.toFixed(2));
-    const h2 = 0;
+    const totalBase = generalExpensesBaseTotals.h1 + generalExpensesBaseTotals.h2;
+    let h1 = 0;
+    let h2 = 0;
+    if (totalBase > 0) {
+      h1 = Number(((amount * generalExpensesBaseTotals.h1) / totalBase).toFixed(2));
+      h2 = Number(((amount * generalExpensesBaseTotals.h2) / totalBase).toFixed(2));
+    } else {
+      h1 = Number(amount.toFixed(2));
+      h2 = 0;
+    }
     setBudgetDrafts((prev) => ({
       ...prev,
       [budgetId]: {
