@@ -19,6 +19,7 @@ class Project(SQLModel, table=True):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None
+    loan_percent: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
     subsidy_percent: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

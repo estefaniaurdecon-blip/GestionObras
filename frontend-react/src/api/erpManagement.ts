@@ -7,6 +7,7 @@ export interface ErpProjectCreate {
   department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active?: boolean;
 }
@@ -20,6 +21,7 @@ export interface ErpProjectResponse {
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active: boolean;
   created_at: string;
@@ -32,6 +34,7 @@ export interface ErpProjectUpdate {
   department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active?: boolean | null;
 }

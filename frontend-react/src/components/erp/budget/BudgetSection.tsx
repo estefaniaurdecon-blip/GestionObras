@@ -359,6 +359,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     : baseTotalsForecasted;
   const baseResult =
     (effectiveTotalApproved * subsidyPercent) / 100 - effectiveTotalForecasted;
+
+
   const monthsActivePerYear =
     projectDateRange && resolvedSelectedYear != null
       ? resolveActiveMonthsInYear(
@@ -371,6 +373,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     durationMonths != null && durationMonths > 0
       ? (baseResult / durationMonths) * monthsActivePerYear
       : 0;
+
 
   const [milestoneToRemove, setMilestoneToRemove] = React.useState("");
   const sortedBudgetMilestones = React.useMemo(
@@ -406,7 +409,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
       <Box>
         <HStack spacing={2}>
           <Text fontWeight="bold">Resultado</Text>
-          <Text>{formatEuroValue(annualizedResult)} ?</Text>
+          <Text>{formatEuroValue(baseResult)} €</Text>
         </HStack>
         <HStack spacing={2}>
           <Text fontSize="sm" color={subtleText}>

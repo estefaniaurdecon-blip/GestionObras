@@ -16,6 +16,7 @@ class ProjectRead(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     duration_months: Optional[int] = None
+    loan_percent: Optional[float] = None
     subsidy_percent: Optional[float] = None
     is_active: bool
     created_at: datetime
@@ -28,6 +29,7 @@ class ProjectCreate(BaseModel):
     department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    loan_percent: Optional[float] = None
     subsidy_percent: Optional[float] = None
     is_active: bool = True
 
@@ -39,6 +41,7 @@ class ProjectUpdate(BaseModel):
     department_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    loan_percent: Optional[float] = None
     subsidy_percent: Optional[float] = None
     is_active: Optional[bool] = None
 

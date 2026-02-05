@@ -29,6 +29,8 @@ export const useProjectCreation = ({
   const [projectDepartmentId, setProjectDepartmentId] = useState<number | "">("");
   const [projectStart, setProjectStart] = useState("");
   const [projectEnd, setProjectEnd] = useState("");
+  const [projectLoanPercent, setProjectLoanPercent] = useState("85");
+  const [projectSubsidyPercent, setProjectSubsidyPercent] = useState("25");
   const [projectActivities, setProjectActivities] = useState<ProjectActivityForm[]>([]);
   const [projectMilestones, setProjectMilestones] = useState<ProjectMilestoneForm[]>([]);
 
@@ -88,6 +90,8 @@ export const useProjectCreation = ({
           department_id: projectDepartmentId === "" ? null : projectDepartmentId,
           start_date: projectStart || null,
           end_date: projectEnd || null,
+          loan_percent: projectLoanPercent ? Number(projectLoanPercent) : null,
+          subsidy_percent: projectSubsidyPercent ? Number(projectSubsidyPercent) : null,
         },
         effectiveTenantId,
       );
@@ -154,6 +158,8 @@ export const useProjectCreation = ({
       setProjectDepartmentId("");
       setProjectStart("");
       setProjectEnd("");
+      setProjectLoanPercent("85");
+      setProjectSubsidyPercent("25");
       setProjectActivities([]);
       setProjectMilestones([]);
       await queryClient.invalidateQueries({ queryKey: ["erp-projects"] });
@@ -194,6 +200,10 @@ export const useProjectCreation = ({
     setProjectStart,
     projectEnd,
     setProjectEnd,
+    projectLoanPercent,
+    setProjectLoanPercent,
+    projectSubsidyPercent,
+    setProjectSubsidyPercent,
     projectActivities,
     setProjectActivities,
     projectMilestones,

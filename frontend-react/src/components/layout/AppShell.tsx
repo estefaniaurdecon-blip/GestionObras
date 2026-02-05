@@ -50,7 +50,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = router.state.location.pathname;
-  const isErpRoute = useMemo(() => pathname.startsWith("/erp/"), [pathname]);
+  const isWorkManagementRoute = useMemo(
+    () => pathname.startsWith("/erp/work-management"),
+    [pathname],
+  );
+  const isErpRoute = useMemo(
+    () => pathname.startsWith("/erp/") && !isWorkManagementRoute,
+    [pathname, isWorkManagementRoute],
+  );
   const isHrRoute = useMemo(() => pathname.startsWith("/hr"), [pathname]);
   const isSettingsRoute = useMemo(
     () =>

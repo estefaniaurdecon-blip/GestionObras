@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@chakra-ui/react";
+import { useRef } from "react";
 
 import {
   createBudgetMilestone,
@@ -11,6 +12,7 @@ import {
   updateBudgetMilestone,
   updateProjectBudgetLine,
 } from "../../api/erpBudgets";
+import { fetchErpProject } from "../../api/erpReports";
 
 /**
  * Hook centralizado para:
@@ -22,6 +24,21 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
   const toast = useToast();
   const queryClient = useQueryClient();
   const scopedKey = projectId ? [projectId, tenantId ?? "all"] : [projectId];
+  const resolvedTenantIdRef = useRef<number | undefined>(undefined);
+
+  const resolveWriteTenantId = async () => {
+    if (tenantId) return tenantId;
+    if (resolvedTenantIdRef.current) return resolvedTenantIdRef.current;
+    if (!projectId) return undefined;
+    try {
+      const project = await fetchErpProject(projectId);
+      const resolved = project?.tenant_id ?? undefined;
+      resolvedTenantIdRef.current = resolved;
+      return resolved;
+    } catch {
+      return undefined;
+    }
+  };
 
   /**
    * QUERY: líneas de presupuesto del proyecto
@@ -47,8 +64,10 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
    * - al success: invalida lista de budgets para recargar
    */
   const createBudgetMutation = useMutation({
-    mutationFn: (payload: Parameters<typeof createProjectBudgetLine>[1]) =>
-      createProjectBudgetLine(projectId as number, payload, tenantId),
+    mutationFn: async (payload: Parameters<typeof createProjectBudgetLine>[1]) => {
+      const writeTenantId = await resolveWriteTenantId();
+      return createProjectBudgetLine(projectId as number, payload, writeTenantId);
+    },
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -77,7 +96,15 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
     }: {
       budgetId: number;
       payload: Parameters<typeof updateProjectBudgetLine>[2];
-    }) => updateProjectBudgetLine(projectId as number, budgetId, payload, tenantId),
+    }) =>
+      resolveWriteTenantId().then((writeTenantId) =>
+        updateProjectBudgetLine(
+          projectId as number,
+          budgetId,
+          payload,
+          writeTenantId,
+        ),
+      ),
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -90,10 +117,11 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
       const status = error?.response?.status;
       if (status === 404 && projectId !== null && variables?.payload) {
         try {
+          const writeTenantId = await resolveWriteTenantId();
           await createProjectBudgetLine(
             projectId as number,
             variables.payload as any,
-            tenantId,
+            writeTenantId,
           );
           await queryClient.invalidateQueries({
             queryKey: ["project-budgets", ...scopedKey],
@@ -129,8 +157,10 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
    * MUTATION: eliminar línea de presupuesto
    */
   const deleteBudgetMutation = useMutation({
-    mutationFn: (budgetId: number) =>
-      deleteProjectBudgetLine(projectId as number, budgetId, tenantId),
+    mutationFn: async (budgetId: number) => {
+      const writeTenantId = await resolveWriteTenantId();
+      return deleteProjectBudgetLine(projectId as number, budgetId, writeTenantId);
+    },
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -155,8 +185,10 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
    * - invalida milestones y budgets (porque el total puede depender de hitos)
    */
   const createBudgetMilestoneMutation = useMutation({
-    mutationFn: (payload: Parameters<typeof createBudgetMilestone>[1]) =>
-      createBudgetMilestone(projectId as number, payload, tenantId),
+    mutationFn: async (payload: Parameters<typeof createBudgetMilestone>[1]) => {
+      const writeTenantId = await resolveWriteTenantId();
+      return createBudgetMilestone(projectId as number, payload, writeTenantId);
+    },
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -190,7 +222,14 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
       milestoneId: number;
       payload: Parameters<typeof updateBudgetMilestone>[2];
     }) =>
-      updateBudgetMilestone(projectId as number, milestoneId, payload, tenantId),
+      resolveWriteTenantId().then((writeTenantId) =>
+        updateBudgetMilestone(
+          projectId as number,
+          milestoneId,
+          payload,
+          writeTenantId,
+        ),
+      ),
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -204,8 +243,10 @@ export const useBudgetData = (projectId: number | null, tenantId?: number) => {
    * - invalida milestones y budgets
    */
   const deleteBudgetMilestoneMutation = useMutation({
-    mutationFn: (milestoneId: number) =>
-      deleteBudgetMilestone(projectId as number, milestoneId, tenantId),
+    mutationFn: async (milestoneId: number) => {
+      const writeTenantId = await resolveWriteTenantId();
+      return deleteBudgetMilestone(projectId as number, milestoneId, writeTenantId);
+    },
 
     onSuccess: () => {
       queryClient.invalidateQueries({

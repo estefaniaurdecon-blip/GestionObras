@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Box,
@@ -30,6 +30,7 @@ import { keyframes } from "@emotion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import Plotly from "plotly.js-dist-min";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
 import { fetchDashboardSummary, type DashboardSummary } from "../api/dashboard";
@@ -128,10 +129,7 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedBalanceProjectIds, setSelectedBalanceProjectIds] = useState<number[]>([]);
-  const [balanceHover, setBalanceHover] = useState<{
-    projectId: number;
-    year: number;
-  } | null>(null);
+  const balanceChartRef = useRef<HTMLDivElement | null>(null);
   const [dateFrom, setDateFrom] = useState(() =>
     formatDate(addDays(new Date(), -6)),
   );
@@ -440,6 +438,173 @@ export const DashboardPage: React.FC = () => {
     return { lastYear, lastValue, growth, total, best };
   }, [balanceTotalsByYear, balanceYears, balanceSeries]);
 
+  useEffect(() => {
+    if (!balanceChartRef.current) return;
+    if (balanceYears.length === 0 || balanceSeries.length === 0) {
+      Plotly.purge(balanceChartRef.current);
+      return;
+    }
+
+    const traces = balanceSeries.map((series) => {
+      const pointMap = new Map(series.points.map((point) => [point.year, point.value]));
+      const xData: number[] = [];
+      const yData: number[] = [];
+      const hoverValues: string[] = [];
+      balanceYears.forEach((year) => {
+        const value = pointMap.get(year);
+        if (value == null) return;
+        xData.push(year);
+        yData.push(value);
+        hoverValues.push(formatFull(value));
+      });
+
+      return {
+        x: xData,
+        y: yData,
+        name: series.project.name,
+        type: "scatter",
+        mode: "lines+markers",
+        line: {
+          color: series.color,
+          width: 4.5,
+          shape: "spline",
+          smoothing: 1.25,
+        },
+        marker: {
+          color: series.color,
+          size: 11,
+          line: {
+            color: "#f8fafc",
+            width: 2.5,
+          },
+          symbol: "circle",
+        },
+        fill: "tozeroy",
+        fillcolor: `${series.color}2b`,
+        customdata: hoverValues,
+        hovertemplate:
+          `<b>${series.project.name}</b><br>` +
+          "Año: %{x}<br>" +
+          "Balance: %{customdata}<br>" +
+          "<extra></extra>",
+        hoverlabel: {
+          bgcolor: series.color,
+          font: {
+            family: "Inter, sans-serif",
+            size: 13,
+            color: "white",
+          },
+          bordercolor: "#ffffff",
+        },
+      };
+    });
+
+    const layout = {
+      dragmode: false,
+      xaxis: {
+        title: {
+          text: `<b>${t("dashboard.balanceHistory.tableYear")}</b>`,
+          font: {
+            family: "Inter, sans-serif",
+            size: 14,
+            color: balanceTableHeadText,
+          },
+        },
+        showgrid: true,
+        gridcolor: balanceTableBorderColor,
+        gridwidth: 1,
+        tickfont: {
+          family: "Inter, sans-serif",
+          size: 12,
+          color: balanceTableYearText,
+        },
+        linecolor: balanceTableBorderColor,
+        linewidth: 2,
+        dtick: 1,
+        zeroline: false,
+      },
+      yaxis: {
+        title: {
+          text: `<b>${t("dashboard.balanceHistory.axisLabel")}</b>`,
+          font: {
+            family: "Inter, sans-serif",
+            size: 14,
+            color: balanceTableHeadText,
+          },
+        },
+        showgrid: true,
+        gridcolor: balanceTableBorderColor,
+        gridwidth: 1,
+        tickfont: {
+          family: "Inter, sans-serif",
+          size: 12,
+          color: balanceTableYearText,
+        },
+        linecolor: balanceTableBorderColor,
+        linewidth: 2,
+        tickformat: ",.0f",
+        separatethousands: true,
+        zeroline: true,
+        zerolinecolor: balanceTableBorderColor,
+        zerolinewidth: 2,
+      },
+      plot_bgcolor: "rgba(248,250,252,0.95)",
+      paper_bgcolor: "rgba(0,0,0,0)",
+      hovermode: "x unified",
+      showlegend: true,
+      legend: {
+        orientation: "h",
+        yanchor: "bottom",
+        y: 1.12,
+        xanchor: "left",
+        x: 0,
+        font: {
+          family: "Inter, sans-serif",
+          size: 12,
+          color: balanceTableHeadText,
+        },
+        bgcolor: "rgba(248, 250, 252, 0.85)",
+        bordercolor: balanceTableBorderColor,
+        borderwidth: 1,
+        itemwidth: 40,
+      },
+      margin: {
+        l: 70,
+        r: 30,
+        t: 56,
+        b: 60,
+      },
+      autosize: true,
+      font: {
+        family: "Inter, sans-serif",
+      },
+    };
+
+    const config = {
+      responsive: true,
+      displayModeBar: true,
+      displaylogo: false,
+      modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
+      toImageButtonOptions: {
+        format: "png",
+        filename: "balance_anualizado",
+        height: 800,
+        width: 1400,
+        scale: 2,
+      },
+    };
+
+    Plotly.react(balanceChartRef.current, traces, layout, config);
+  }, [
+    balanceSeries,
+    balanceYears,
+    formatFull,
+    t,
+    balanceTableBorderColor,
+    balanceTableHeadText,
+    balanceTableYearText,
+  ]);
+
   const handleLaunch = async (tool: Tool) => {
     try {
       if (tool.slug === "erp") {
@@ -711,7 +876,7 @@ export const DashboardPage: React.FC = () => {
               boxShadow="inset 0 0 0 1px rgba(0,0,0,0.08)"
               mb={6}
             >
-              <Flex justify="space-between" align="center" mb={3}>
+              <Flex justify="space-between" align="center" mb={3} wrap="wrap" gap={2}>
                 <Text
                   fontSize="xs"
                   color={subtleText}
@@ -721,23 +886,23 @@ export const DashboardPage: React.FC = () => {
                 >
                   {t("dashboard.balanceHistory.chartTitle")}
                 </Text>
-                <HStack spacing={4} flexWrap="wrap">
-                  {balanceSeries.map((series) => (
-                    <HStack key={series.project.id} spacing={2}>
-                      <Box
-                        w="20px"
-                        h="2px"
-                        bg={series.color}
-                        borderRadius="2px"
-                        boxShadow={`0 0 4px ${series.color}66`}
-                      />
-                      <Text fontSize="xs" color="#94a3b8">
-                        {series.project.name}
-                      </Text>
-                    </HStack>
-                  ))}
-                </HStack>
               </Flex>
+
+
+              {balanceSeries.length === 0 || balanceYears.length === 0 ? (
+                <Text fontSize="sm" color={subtleText}>
+                  {t("dashboard.balanceHistory.empty")}
+                </Text>
+              ) : (
+                <Box
+                  ref={balanceChartRef}
+                  w="100%"
+                  h="380px"
+                  borderRadius="16px"
+                  bg="white"
+                  boxShadow="inset 0 0 0 1px rgba(15,23,42,0.04)"
+                />
+              )}
 
               {(() => {
                 const W = 980;
@@ -1058,6 +1223,7 @@ export const DashboardPage: React.FC = () => {
                 </Box>
               );
             })()}
+
           </Box>
 
           <Box

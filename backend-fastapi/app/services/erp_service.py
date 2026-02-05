@@ -566,6 +566,9 @@ def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[in
         start_date=data.start_date,
         end_date=data.end_date,
         duration_months=_calculate_duration_months(data.start_date, data.end_date),
+        loan_percent=Decimal(_clamp_percent(data.loan_percent) or 0)
+        if data.loan_percent is not None
+        else None,
         subsidy_percent=Decimal(_clamp_percent(data.subsidy_percent) or 0)
         if data.subsidy_percent is not None
         else None,
@@ -602,6 +605,8 @@ def update_project(
         _validate_date_range(start_date, end_date)
         project.start_date = start_date
         project.end_date = end_date
+    if data.loan_percent is not None:
+        project.loan_percent = Decimal(_clamp_percent(data.loan_percent) or 0)
     if data.subsidy_percent is not None:
         project.subsidy_percent = Decimal(_clamp_percent(data.subsidy_percent) or 0)
     if data.is_active is not None:

@@ -57,6 +57,8 @@ interface ProjectDetailsModalProps {
   setEditStart: (value: string) => void;
   editEnd: string;
   setEditEnd: (value: string) => void;
+  editLoanPercent: string;
+  setEditLoanPercent: (value: string) => void;
   editSubsidyPercent: string;
   setEditSubsidyPercent: (value: string) => void;
   activityEdits: Record<number, { name: string; start: string; end: string; description: string }>;
@@ -101,6 +103,8 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
   setEditStart,
   editEnd,
   setEditEnd,
+  editLoanPercent,
+  setEditLoanPercent,
   editSubsidyPercent,
   setEditSubsidyPercent,
   activityEdits,
@@ -287,7 +291,17 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
               </FormControl>
 
               <FormControl>
-                <FormLabel>% subvencion</FormLabel>
+                <FormLabel>% préstamo</FormLabel>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={editLoanPercent}
+                  onChange={(e) => setEditLoanPercent(e.target.value)}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>% subvención no reembolsable</FormLabel>
                 <Input
                   type="text"
                   inputMode="decimal"
