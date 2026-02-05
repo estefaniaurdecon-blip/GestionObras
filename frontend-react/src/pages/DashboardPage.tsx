@@ -30,7 +30,6 @@ import { keyframes } from "@emotion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import Plotly from "plotly.js-dist-min";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
 import { fetchDashboardSummary, type DashboardSummary } from "../api/dashboard";
@@ -442,7 +441,12 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     if (!balanceChartRef.current) return;
     if (balanceYears.length === 0 || balanceSeries.length === 0) {
-      Plotly.purge(balanceChartRef.current);
+      // Lazy-load Plotly to avoid build-time evaluation issues.
+      void (async () => {
+        const mod = await import("plotly.js-dist-min");
+        const plotly = (mod as any).default ?? mod;
+        plotly?.purge?.(balanceChartRef.current);
+      })();
       return;
     }
 
@@ -595,7 +599,11 @@ export const DashboardPage: React.FC = () => {
       },
     };
 
-    Plotly.react(balanceChartRef.current, traces, layout, config);
+    void (async () => {
+      const mod = await import("plotly.js-dist-min");
+      const plotly = (mod as any).default ?? mod;
+      plotly.react(balanceChartRef.current, traces, layout, config);
+    })();
   }, [
     balanceSeries,
     balanceYears,
