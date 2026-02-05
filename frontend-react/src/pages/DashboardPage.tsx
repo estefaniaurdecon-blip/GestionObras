@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -30,6 +30,16 @@ import { keyframes } from "@emotion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
 import { fetchDashboardSummary, type DashboardSummary } from "../api/dashboard";
@@ -128,7 +138,6 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedBalanceProjectIds, setSelectedBalanceProjectIds] = useState<number[]>([]);
-  const balanceChartRef = useRef<HTMLDivElement | null>(null);
   const [dateFrom, setDateFrom] = useState(() =>
     formatDate(addDays(new Date(), -6)),
   );
@@ -437,181 +446,40 @@ export const DashboardPage: React.FC = () => {
     return { lastYear, lastValue, growth, total, best };
   }, [balanceTotalsByYear, balanceYears, balanceSeries]);
 
-  useEffect(() => {
-    if (!balanceChartRef.current) return;
-    if (balanceYears.length === 0 || balanceSeries.length === 0) {
-      // Lazy-load Plotly to avoid build-time evaluation issues.
-      void (async () => {
-        const mod = await import("plotly.js-dist-min");
-        const plotly = (mod as any).default ?? mod;
-        plotly?.purge?.(balanceChartRef.current);
-      })();
-      return;
-    }
-
-    const traces = balanceSeries.map((series) => {
-      const pointMap = new Map(series.points.map((point) => [point.year, point.value]));
-      const xData: number[] = [];
-      const yData: number[] = [];
-      const hoverValues: string[] = [];
-      balanceYears.forEach((year) => {
-        const value = pointMap.get(year);
-        if (value == null) return;
-        xData.push(year);
-        yData.push(value);
-        hoverValues.push(formatFull(value));
+  const balanceChartData = useMemo<Array<Record<string, number | string>>>(() => {
+    if (balanceYears.length === 0) return [];
+    const rows: Array<Record<string, number | string>> = balanceYears.map((year) => ({
+      year,
+    }));
+    balanceSeries.forEach((series) => {
+      series.points.forEach((point) => {
+        const row = rows.find((r) => r.year === point.year);
+        if (row) {
+          row[`${series.project.id}`] = point.value;
+        }
       });
-
-      return {
-        x: xData,
-        y: yData,
-        name: series.project.name,
-        type: "scatter",
-        mode: "lines+markers",
-        line: {
-          color: series.color,
-          width: 4.5,
-          shape: "spline",
-          smoothing: 1.25,
-        },
-        marker: {
-          color: series.color,
-          size: 11,
-          line: {
-            color: "#f8fafc",
-            width: 2.5,
-          },
-          symbol: "circle",
-        },
-        fill: "tozeroy",
-        fillcolor: `${series.color}2b`,
-        customdata: hoverValues,
-        hovertemplate:
-          `<b>${series.project.name}</b><br>` +
-          "Año: %{x}<br>" +
-          "Balance: %{customdata}<br>" +
-          "<extra></extra>",
-        hoverlabel: {
-          bgcolor: series.color,
-          font: {
-            family: "Inter, sans-serif",
-            size: 13,
-            color: "white",
-          },
-          bordercolor: "#ffffff",
-        },
-      };
     });
+    return rows;
+  }, [balanceSeries, balanceYears]);
 
-    const layout = {
-      dragmode: false,
-      xaxis: {
-        title: {
-          text: `<b>${t("dashboard.balanceHistory.tableYear")}</b>`,
-          font: {
-            family: "Inter, sans-serif",
-            size: 14,
-            color: balanceTableHeadText,
-          },
-        },
-        showgrid: true,
-        gridcolor: balanceTableBorderColor,
-        gridwidth: 1,
-        tickfont: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableYearText,
-        },
-        linecolor: balanceTableBorderColor,
-        linewidth: 2,
-        dtick: 1,
-        zeroline: false,
-      },
-      yaxis: {
-        title: {
-          text: `<b>${t("dashboard.balanceHistory.axisLabel")}</b>`,
-          font: {
-            family: "Inter, sans-serif",
-            size: 14,
-            color: balanceTableHeadText,
-          },
-        },
-        showgrid: true,
-        gridcolor: balanceTableBorderColor,
-        gridwidth: 1,
-        tickfont: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableYearText,
-        },
-        linecolor: balanceTableBorderColor,
-        linewidth: 2,
-        tickformat: ",.0f",
-        separatethousands: true,
-        zeroline: true,
-        zerolinecolor: balanceTableBorderColor,
-        zerolinewidth: 2,
-      },
-      plot_bgcolor: "rgba(248,250,252,0.95)",
-      paper_bgcolor: "rgba(0,0,0,0)",
-      hovermode: "x unified",
-      showlegend: true,
-      legend: {
-        orientation: "h",
-        yanchor: "bottom",
-        y: 1.12,
-        xanchor: "left",
-        x: 0,
-        font: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableHeadText,
-        },
-        bgcolor: "rgba(248, 250, 252, 0.85)",
-        bordercolor: balanceTableBorderColor,
-        borderwidth: 1,
-        itemwidth: 40,
-      },
-      margin: {
-        l: 70,
-        r: 30,
-        t: 56,
-        b: 60,
-      },
-      autosize: true,
-      font: {
-        family: "Inter, sans-serif",
-      },
-    };
+  const balanceLegendPayload = useMemo(
+    () =>
+      balanceSeries.map((series) => ({
+        value: series.project.name,
+        type: "line",
+        id: `${series.project.id}`,
+        color: series.color,
+      })),
+    [balanceSeries],
+  );
 
-    const config = {
-      responsive: true,
-      displayModeBar: true,
-      displaylogo: false,
-      modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
-      toImageButtonOptions: {
-        format: "png",
-        filename: "balance_anualizado",
-        height: 800,
-        width: 1400,
-        scale: 2,
-      },
-    };
-
-    void (async () => {
-      const mod = await import("plotly.js-dist-min");
-      const plotly = (mod as any).default ?? mod;
-      plotly.react(balanceChartRef.current, traces, layout, config);
-    })();
-  }, [
-    balanceSeries,
-    balanceYears,
-    formatFull,
-    t,
-    balanceTableBorderColor,
-    balanceTableHeadText,
-    balanceTableYearText,
-  ]);
+  const balanceKeyById = useMemo(() => {
+    const map = new Map<string, string>();
+    balanceSeries.forEach((series) => {
+      map.set(`${series.project.id}`, series.project.name);
+    });
+    return map;
+  }, [balanceSeries]);
 
   const handleLaunch = async (tool: Tool) => {
     try {
@@ -903,334 +771,84 @@ export const DashboardPage: React.FC = () => {
                 </Text>
               ) : (
                 <Box
-                  ref={balanceChartRef}
                   w="100%"
                   h="380px"
                   borderRadius="16px"
                   bg="white"
                   boxShadow="inset 0 0 0 1px rgba(15,23,42,0.04)"
-                />
-              )}
-
-              {(() => {
-                const W = 980;
-                const H = 380;
-                const PAD = { top: 30, right: 28, bottom: 44, left: 74 };
-                const chartW = W - PAD.left - PAD.right;
-                const chartH = H - PAD.top - PAD.bottom;
-                const values = balanceSeries.flatMap((series) =>
-                  series.points.map((point) => point.value),
-                );
-                const minVal = Math.min(0, ...values);
-                const maxVal = Math.max(0, ...values);
-                const range = maxVal - minVal || 1;
-                const paddedMin = minVal - range * 0.1;
-                const paddedMax = maxVal + range * 0.1;
-                const paddedRange = paddedMax - paddedMin || 1;
-                const x = (i: number) =>
-                  PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
-                const y = (val: number) =>
-                  PAD.top + chartH - ((val - paddedMin) / paddedRange) * chartH;
-                const gridCount = 5;
-                const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
-                  const val = paddedMin + (paddedRange / gridCount) * i;
-                  return { val, yPos: y(val) };
-                });
-                const buildSmoothPath = (points: Array<{ x: number; y: number }>) => {
-                  if (points.length < 2) return "";
-                  let path = `M ${points[0].x} ${points[0].y}`;
-                  const tension = 0.3;
-                  for (let i = 0; i < points.length - 1; i += 1) {
-                    const p0 = points[Math.max(i - 1, 0)];
-                    const p1 = points[i];
-                    const p2 = points[i + 1];
-                    const p3 = points[Math.min(i + 2, points.length - 1)];
-                    const cp1x = p1.x + (p2.x - p0.x) * tension;
-                    const cp1y = p1.y + (p2.y - p0.y) * tension;
-                    const cp2x = p2.x - (p3.x - p1.x) * tension;
-                    const cp2y = p2.y - (p3.y - p1.y) * tension;
-                    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-                  }
-                  return path;
-                };
-                return (
-                  <Box>
-                    <svg
-                      viewBox={`0 0 ${W} ${H}`}
-                      style={{ width: "100%", maxWidth: W, display: "block", margin: "0 auto" }}
+                  px={3}
+                  py={2}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={balanceChartData}
+                      margin={{ top: 20, right: 30, left: 10, bottom: 10 }}
                     >
                       <defs>
                         {balanceSeries.map((series) => (
-                          <React.Fragment key={`grad-${series.project.id}`}>
-                            <linearGradient
-                              id={`balanceGrad-${series.project.id}`}
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop offset="0%" stopColor={series.color} stopOpacity={0.28} />
-                              <stop offset="65%" stopColor={series.color} stopOpacity={0.12} />
-                              <stop offset="100%" stopColor={series.color} stopOpacity={0.03} />
-                            </linearGradient>
-                            <linearGradient
-                              id={`balanceLine-${series.project.id}`}
-                              x1="0"
-                              y1="0"
-                              x2="1"
-                              y2="0"
-                            >
-                              <stop offset="0%" stopColor={series.color} stopOpacity={0.55} />
-                              <stop offset="50%" stopColor={series.color} stopOpacity={1} />
-                              <stop offset="100%" stopColor={series.color} stopOpacity={0.55} />
-                            </linearGradient>
-                          </React.Fragment>
-                        ))}
-                        <filter id="balanceGlow">
-                          <feGaussianBlur stdDeviation="2.2" result="blur" />
-                          <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                          </feMerge>
-                        </filter>
-                        <filter id="balanceShadow">
-                          <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.22" />
-                        </filter>
-                        <pattern id="balanceDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
-                          <circle cx="1.5" cy="1.5" r="0.7" fill="#cbd5e1" opacity="0.4" />
-                        </pattern>
-                      </defs>
-
-                      <rect
-                        x={PAD.left}
-                        y={PAD.top}
-                        width={chartW}
-                        height={chartH}
-                        fill="url(#balanceDots)"
-                        opacity={0.35}
-                        rx={12}
-                      />
-
-                      <line
-                        x1={PAD.left}
-                        y1={PAD.top}
-                        x2={PAD.left}
-                        y2={H - PAD.bottom}
-                        stroke="#94a3b8"
-                        strokeWidth={1.4}
-                      />
-                      <line
-                        x1={PAD.left}
-                        y1={H - PAD.bottom}
-                        x2={W - PAD.right}
-                        y2={H - PAD.bottom}
-                        stroke="#94a3b8"
-                        strokeWidth={1.4}
-                      />
-
-                      {gridLines.map((g, idx) => (
-                        <g key={`grid-${idx}`}>
-                          <line
-                            x1={PAD.left}
-                            y1={g.yPos}
-                            x2={W - PAD.right}
-                            y2={g.yPos}
-                            stroke="#e2e8f0"
-                            strokeWidth={1}
-                            strokeDasharray="4 4"
-                          />
-                          <text
-                            x={PAD.left - 8}
-                            y={g.yPos + 4}
-                            textAnchor="end"
-                            fontSize={10}
-                            fill="#64748b"
-                            fontFamily="'Courier New',monospace"
+                          <linearGradient
+                            key={`grad-${series.project.id}`}
+                            id={`balance-grad-${series.project.id}`}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
                           >
-                            {formatCompact(g.val)}
-                          </text>
-                        </g>
-                      ))}
-
-                      {balanceSeries.map((series) => {
-                        const vals = balanceYears.map(
-                          (year) =>
-                            series.points.find((p) => p.year === year)?.value ?? 0,
-                        );
-                        const points = vals.map((val, idx) => ({
-                          x: x(idx),
-                          y: y(val),
-                        }));
-                        const linePath = buildSmoothPath(points);
-                        const areaPath = `${linePath} L ${x(vals.length - 1)} ${
-                          PAD.top + chartH
-                        } L ${x(0)} ${PAD.top + chartH} Z`;
-                        return (
-                          <g key={`series-${series.project.id}`}>
-                            <path
-                              d={areaPath}
-                              fill={`url(#balanceGrad-${series.project.id})`}
-                              filter="url(#balanceShadow)"
-                            />
-                            <path
-                              d={linePath}
-                              fill="none"
-                              stroke={`url(#balanceLine-${series.project.id})`}
-                              strokeWidth={3.2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              filter="url(#balanceGlow)"
-                            />
-                          </g>
-                        );
-                      })}
-
-                      {balanceSeries.map((series) => {
-                        const vals = balanceYears.map(
-                          (year) =>
-                            series.points.find((p) => p.year === year)?.value ?? 0,
-                        );
-                        return vals.map((val, idx) => {
-                          const year = balanceYears[idx];
-                          const isHover =
-                            balanceHover?.projectId === series.project.id &&
-                            balanceHover?.year === year;
-                          return (
-                            <g key={`pt-${series.project.id}-${year}`}>
-                              <circle
-                                cx={x(idx)}
-                                cy={y(val)}
-                                r={12}
-                                fill="transparent"
-                                style={{ cursor: "pointer" }}
-                                onMouseEnter={() =>
-                                  setBalanceHover({
-                                    projectId: series.project.id,
-                                    year,
-                                  })
-                                }
-                                onMouseLeave={() => setBalanceHover(null)}
-                              />
-                              <circle
-                                cx={x(idx)}
-                                cy={y(val)}
-                                r={isHover ? 6 : 3.5}
-                                fill={isHover ? "#fff" : series.color}
-                                stroke="#0f172a"
-                                strokeWidth={2}
-                                style={{ transition: "r 0.15s, fill 0.15s" }}
-                              />
-                            </g>
-                          );
-                        });
-                      })}
-
-                      {balanceHover &&
-                        (() => {
-                          const series = balanceSeries.find(
-                            (item) => item.project.id === balanceHover.projectId,
-                          );
-                          if (!series) return null;
-                          const yearIndex = balanceYears.indexOf(balanceHover.year);
-                          if (yearIndex < 0) return null;
-                          const point = series.points.find(
-                            (p) => p.year === balanceHover.year,
-                          );
-                          if (!point) return null;
-                          const tx = x(yearIndex);
-                          const ty = y(point.value);
-                          const boxW = 150;
-                          const boxH = 58;
-                          const bx = Math.min(
-                            Math.max(tx - boxW / 2, PAD.left),
-                            W - PAD.right - boxW,
-                          );
-                          const by = Math.max(ty - boxH - 14, 4);
-                          return (
-                            <g pointerEvents="none">
-                              <rect
-                                x={bx}
-                                y={by}
-                                width={boxW}
-                                height={boxH}
-                                rx={10}
-                        fill="#e2e8f0"
-                        stroke={series.color}
-                        strokeWidth={1.5}
+                            <stop offset="5%" stopColor={series.color} stopOpacity={0.35} />
+                            <stop offset="95%" stopColor={series.color} stopOpacity={0.05} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid stroke={balanceTableBorderColor} strokeDasharray="4 4" />
+                      <XAxis
+                        dataKey="year"
+                        tick={{ fill: balanceTableYearText, fontSize: 12 }}
+                        axisLine={{ stroke: balanceTableBorderColor }}
+                        tickLine={{ stroke: balanceTableBorderColor }}
                       />
-                              <rect
-                                x={bx + 10}
-                                y={by + 12}
-                                width={8}
-                                height={8}
-                                rx={2}
-                                fill={series.color}
-                              />
-                              <text
-                                x={bx + 24}
-                                y={by + 19}
-                                fontSize={11}
-                                fill={series.color}
-                                fontFamily="'Georgia',serif"
-                                fontWeight={600}
-                              >
-                                {series.project.name}
-                              </text>
-                              <text
-                                x={bx + boxW / 2}
-                                y={by + 38}
-                                textAnchor="middle"
-                                fontSize={11}
-                                fill="#64748b"
-                                fontFamily="'Courier New',monospace"
-                              >
-                                {balanceHover.year}
-                              </text>
-                              <text
-                                x={bx + boxW / 2}
-                                y={by + 52}
-                                textAnchor="middle"
-                                fontSize={13}
-                                fill="#f1f5f9"
-                                fontFamily="'Georgia',serif"
-                                fontWeight={700}
-                              >
-                                {formatFull(point.value)}
-                              </text>
-                            </g>
-                          );
-                        })()}
-
-                      {balanceYears.map((year, idx) => (
-                        <text
-                          key={`year-${year}`}
-                          x={x(idx)}
-                          y={H - PAD.bottom + 20}
-                          textAnchor="middle"
-                          fontSize={12}
-                          fill="#64748b"
-                          fontFamily="'Georgia',serif"
-                          fontWeight={600}
-                        >
-                          {year}
-                        </text>
+                      <YAxis
+                        tickFormatter={(value: number) => formatCompact(value)}
+                        tick={{ fill: balanceTableYearText, fontSize: 12 }}
+                        axisLine={{ stroke: balanceTableBorderColor }}
+                        tickLine={{ stroke: balanceTableBorderColor }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#0f172a",
+                          borderRadius: 10,
+                          border: "none",
+                          color: "#f8fafc",
+                        }}
+                        formatter={(value: number, name: string) => {
+                          const label = balanceKeyById.get(name) ?? name;
+                          return [formatFull(Number(value)), label];
+                        }}
+                        labelFormatter={(label) => `Año ${label}`}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        align="left"
+                        height={36}
+                        wrapperStyle={{ paddingLeft: 8 }}
+                        payload={balanceLegendPayload}
+                      />
+                      {balanceSeries.map((series) => (
+                        <Area
+                          key={`area-${series.project.id}`}
+                          type="monotone"
+                          dataKey={`${series.project.id}`}
+                          stroke={series.color}
+                          strokeWidth={3}
+                          fill={`url(#balance-grad-${series.project.id})`}
+                          dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1 }}
+                          activeDot={{ r: 6, stroke: "#0f172a", strokeWidth: 2 }}
+                          name={series.project.name}
+                        />
                       ))}
-
-                    <text
-                      x={14}
-                      y={H / 2}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fill="#64748b"
-                      fontFamily="'Courier New',monospace"
-                      transform={`rotate(-90, 14, ${H / 2})`}
-                    >
-                      {t("dashboard.balanceHistory.axisLabel")}
-                    </text>
-                  </svg>
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </Box>
-              );
-            })()}
+              )}
 
           </Box>
 
