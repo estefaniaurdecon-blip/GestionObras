@@ -119,6 +119,10 @@ export const ErpProjectsPage: React.FC = () => {
     setProjectStart,
     projectEnd,
     setProjectEnd,
+    projectLoanPercent,
+    setProjectLoanPercent,
+    projectSubsidyPercent,
+    setProjectSubsidyPercent,
     projectActivities,
     setProjectActivities,
     projectMilestones,
@@ -244,6 +248,8 @@ export const ErpProjectsPage: React.FC = () => {
     setEditStart,
     editEnd,
     setEditEnd,
+    editLoanPercent,
+    setEditLoanPercent,
     editSubsidyPercent,
     setEditSubsidyPercent,
     editActive,
@@ -530,6 +536,7 @@ export const ErpProjectsPage: React.FC = () => {
         department_id: editDepartmentId === "" ? null : editDepartmentId,
         start_date: editStart || null,
         end_date: editEnd || null,
+        loan_percent: editLoanPercent ? Number(editLoanPercent) : null,
         subsidy_percent: editSubsidyPercent ? Number(editSubsidyPercent) : 0,
         is_active: editActive,
       };
@@ -845,6 +852,10 @@ export const ErpProjectsPage: React.FC = () => {
               onProjectStartChange={setProjectStart}
               projectEnd={projectEnd}
               onProjectEndChange={setProjectEnd}
+              projectLoanPercent={projectLoanPercent}
+              onProjectLoanPercentChange={setProjectLoanPercent}
+              projectSubsidyPercent={projectSubsidyPercent}
+              onProjectSubsidyPercentChange={setProjectSubsidyPercent}
               projectActivities={projectActivities}
               setProjectActivities={setProjectActivities}
               onAddActivity={handleAddActivity}
@@ -892,6 +903,8 @@ export const ErpProjectsPage: React.FC = () => {
         setEditStart={setEditStart}
         editEnd={editEnd}
         setEditEnd={setEditEnd}
+        editLoanPercent={editLoanPercent}
+        setEditLoanPercent={setEditLoanPercent}
         editSubsidyPercent={editSubsidyPercent}
         setEditSubsidyPercent={setEditSubsidyPercent}
         activityEdits={activityEdits}

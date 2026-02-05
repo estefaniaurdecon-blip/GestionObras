@@ -33,6 +33,10 @@ interface CreateProjectSectionProps {
   onProjectStartChange: (value: string) => void;
   projectEnd: string;
   onProjectEndChange: (value: string) => void;
+  projectLoanPercent: string;
+  onProjectLoanPercentChange: (value: string) => void;
+  projectSubsidyPercent: string;
+  onProjectSubsidyPercentChange: (value: string) => void;
   projectActivities: ProjectActivityForm[];
   setProjectActivities: React.Dispatch<React.SetStateAction<ProjectActivityForm[]>>;
   onAddActivity: () => void;
@@ -61,6 +65,10 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
   onProjectStartChange,
   projectEnd,
   onProjectEndChange,
+  projectLoanPercent,
+  onProjectLoanPercentChange,
+  projectSubsidyPercent,
+  onProjectSubsidyPercentChange,
   projectActivities,
   setProjectActivities,
   onAddActivity,
@@ -126,6 +134,26 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
       <FormControl>
         <FormLabel>Fin</FormLabel>
         <Input type="date" value={projectEnd} onChange={(e) => onProjectEndChange(e.target.value)} />
+      </FormControl>
+
+      <FormControl>
+        <FormLabel>% Préstamo</FormLabel>
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={projectLoanPercent}
+          onChange={(e) => onProjectLoanPercentChange(e.target.value)}
+        />
+      </FormControl>
+
+      <FormControl>
+        <FormLabel>% Subvención no reembolsable</FormLabel>
+        <Input
+          type="text"
+          inputMode="decimal"
+          value={projectSubsidyPercent}
+          onChange={(e) => onProjectSubsidyPercentChange(e.target.value)}
+        />
       </FormControl>
     </SimpleGrid>
 

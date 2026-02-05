@@ -30,6 +30,7 @@ export const useProjectDetails = ({
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editLoanPercent, setEditLoanPercent] = useState("100");
   const [editSubsidyPercent, setEditSubsidyPercent] = useState("0");
 
   const [activityEdits, setActivityEdits] = useState<
@@ -95,6 +96,11 @@ export const useProjectDetails = ({
     setEditStart(toDateInput(selectedProject.start_date));
     setEditEnd(toDateInput(selectedProject.end_date));
     setEditActive(selectedProject.is_active ?? true);
+    setEditLoanPercent(
+      selectedProject.loan_percent != null
+        ? String(selectedProject.loan_percent)
+        : "100",
+    );
     setEditSubsidyPercent(
       selectedProject.subsidy_percent != null
         ? String(selectedProject.subsidy_percent)
@@ -170,6 +176,8 @@ export const useProjectDetails = ({
     setEditEnd,
     editActive,
     setEditActive,
+    editLoanPercent,
+    setEditLoanPercent,
     editSubsidyPercent,
     setEditSubsidyPercent,
     activityEdits,

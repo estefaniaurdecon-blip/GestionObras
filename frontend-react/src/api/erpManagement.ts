@@ -6,6 +6,7 @@ export interface ErpProjectCreate {
   project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active?: boolean;
 }
@@ -18,6 +19,7 @@ export interface ErpProjectResponse {
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active: boolean;
   created_at: string;
@@ -29,6 +31,7 @@ export interface ErpProjectUpdate {
   project_type?: "regional" | "nacional" | "internacional" | null;
   start_date?: string | null;
   end_date?: string | null;
+  loan_percent?: number | null;
   subsidy_percent?: number | null;
   is_active?: boolean | null;
 }

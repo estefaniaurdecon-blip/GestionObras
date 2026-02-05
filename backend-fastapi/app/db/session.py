@@ -100,6 +100,10 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_project ADD COLUMN subsidy_percent NUMERIC(5,2) NULL")
                 )
+            if "loan_percent" not in project_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_project ADD COLUMN loan_percent NUMERIC(5,2) NULL")
+                )
             if "start_date" not in project_columns:
                 conn.execute(
                     text(
