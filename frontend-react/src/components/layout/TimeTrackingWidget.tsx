@@ -142,7 +142,22 @@ export const TimeTrackingWidget: React.FC = () => {
     try {
       setIsLoading(true);
       const session = await stopTimeSession(effectiveTenantId);
-      setActiveSession(session);
+      setActiveSession(session?.is_active ? session : null);
+      if (session?.task_id) {
+        await updateErpTask(
+          session.task_id,
+          { status: "pending" },
+          effectiveTenantId,
+        );
+        queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+      } else if (activeSession?.task_id) {
+        await updateErpTask(
+          activeSession.task_id,
+          { status: "pending" },
+          effectiveTenantId,
+        );
+        queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+      }
       toast({
         title: "Tracking detenido",
         description: `Sesión finalizada. Duración: ${formattedElapsed}.`,

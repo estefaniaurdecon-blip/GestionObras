@@ -44,8 +44,8 @@ import {
 import { AppShell } from "../components/layout/AppShell";
 import { PageHero } from "../components/layout/PageHero";
 import { ToolGrid } from "../components/tools/ToolGrid";
-import { useCurrentUser } from "../hooks/useCurrentUser";
 import { HRPanel, type Employee as HREmployee } from "../hr-panel";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import {
   buildParentChildMap,
   EXTERNAL_COLLAB_LABEL,
@@ -247,7 +247,6 @@ export const DashboardPage: React.FC = () => {
       };
     });
   }, [hrEmployeesQuery.data]);
-
   const defaultBudgetTemplate = useMemo(() => getDefaultBudgetTemplate(), []);
   const baseParentMap = useMemo(
     () => buildParentChildMap(defaultBudgetTemplate),
@@ -897,6 +896,7 @@ export const DashboardPage: React.FC = () => {
                 </Text>
               </Flex>
 
+
               {balanceSeries.length === 0 || balanceYears.length === 0 ? (
                 <Text fontSize="sm" color={subtleText}>
                   {t("dashboard.balanceHistory.empty")}
@@ -911,6 +911,327 @@ export const DashboardPage: React.FC = () => {
                   boxShadow="inset 0 0 0 1px rgba(15,23,42,0.04)"
                 />
               )}
+
+              {(() => {
+                const W = 980;
+                const H = 380;
+                const PAD = { top: 30, right: 28, bottom: 44, left: 74 };
+                const chartW = W - PAD.left - PAD.right;
+                const chartH = H - PAD.top - PAD.bottom;
+                const values = balanceSeries.flatMap((series) =>
+                  series.points.map((point) => point.value),
+                );
+                const minVal = Math.min(0, ...values);
+                const maxVal = Math.max(0, ...values);
+                const range = maxVal - minVal || 1;
+                const paddedMin = minVal - range * 0.1;
+                const paddedMax = maxVal + range * 0.1;
+                const paddedRange = paddedMax - paddedMin || 1;
+                const x = (i: number) =>
+                  PAD.left + (i / Math.max(1, balanceYears.length - 1)) * chartW;
+                const y = (val: number) =>
+                  PAD.top + chartH - ((val - paddedMin) / paddedRange) * chartH;
+                const gridCount = 5;
+                const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+                  const val = paddedMin + (paddedRange / gridCount) * i;
+                  return { val, yPos: y(val) };
+                });
+                const buildSmoothPath = (points: Array<{ x: number; y: number }>) => {
+                  if (points.length < 2) return "";
+                  let path = `M ${points[0].x} ${points[0].y}`;
+                  const tension = 0.3;
+                  for (let i = 0; i < points.length - 1; i += 1) {
+                    const p0 = points[Math.max(i - 1, 0)];
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    const p3 = points[Math.min(i + 2, points.length - 1)];
+                    const cp1x = p1.x + (p2.x - p0.x) * tension;
+                    const cp1y = p1.y + (p2.y - p0.y) * tension;
+                    const cp2x = p2.x - (p3.x - p1.x) * tension;
+                    const cp2y = p2.y - (p3.y - p1.y) * tension;
+                    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+                  }
+                  return path;
+                };
+                return (
+                  <Box>
+                    <svg
+                      viewBox={`0 0 ${W} ${H}`}
+                      style={{ width: "100%", maxWidth: W, display: "block", margin: "0 auto" }}
+                    >
+                      <defs>
+                        {balanceSeries.map((series) => (
+                          <React.Fragment key={`grad-${series.project.id}`}>
+                            <linearGradient
+                              id={`balanceGrad-${series.project.id}`}
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop offset="0%" stopColor={series.color} stopOpacity={0.28} />
+                              <stop offset="65%" stopColor={series.color} stopOpacity={0.12} />
+                              <stop offset="100%" stopColor={series.color} stopOpacity={0.03} />
+                            </linearGradient>
+                            <linearGradient
+                              id={`balanceLine-${series.project.id}`}
+                              x1="0"
+                              y1="0"
+                              x2="1"
+                              y2="0"
+                            >
+                              <stop offset="0%" stopColor={series.color} stopOpacity={0.55} />
+                              <stop offset="50%" stopColor={series.color} stopOpacity={1} />
+                              <stop offset="100%" stopColor={series.color} stopOpacity={0.55} />
+                            </linearGradient>
+                          </React.Fragment>
+                        ))}
+                        <filter id="balanceGlow">
+                          <feGaussianBlur stdDeviation="2.2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                        <filter id="balanceShadow">
+                          <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.22" />
+                        </filter>
+                        <pattern id="balanceDots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
+                          <circle cx="1.5" cy="1.5" r="0.7" fill="#cbd5e1" opacity="0.4" />
+                        </pattern>
+                      </defs>
+
+                      <rect
+                        x={PAD.left}
+                        y={PAD.top}
+                        width={chartW}
+                        height={chartH}
+                        fill="url(#balanceDots)"
+                        opacity={0.35}
+                        rx={12}
+                      />
+
+                      <line
+                        x1={PAD.left}
+                        y1={PAD.top}
+                        x2={PAD.left}
+                        y2={H - PAD.bottom}
+                        stroke="#94a3b8"
+                        strokeWidth={1.4}
+                      />
+                      <line
+                        x1={PAD.left}
+                        y1={H - PAD.bottom}
+                        x2={W - PAD.right}
+                        y2={H - PAD.bottom}
+                        stroke="#94a3b8"
+                        strokeWidth={1.4}
+                      />
+
+                      {gridLines.map((g, idx) => (
+                        <g key={`grid-${idx}`}>
+                          <line
+                            x1={PAD.left}
+                            y1={g.yPos}
+                            x2={W - PAD.right}
+                            y2={g.yPos}
+                            stroke="#e2e8f0"
+                            strokeWidth={1}
+                            strokeDasharray="4 4"
+                          />
+                          <text
+                            x={PAD.left - 8}
+                            y={g.yPos + 4}
+                            textAnchor="end"
+                            fontSize={10}
+                            fill="#64748b"
+                            fontFamily="'Courier New',monospace"
+                          >
+                            {formatCompact(g.val)}
+                          </text>
+                        </g>
+                      ))}
+
+                      {balanceSeries.map((series) => {
+                        const vals = balanceYears.map(
+                          (year) =>
+                            series.points.find((p) => p.year === year)?.value ?? 0,
+                        );
+                        const points = vals.map((val, idx) => ({
+                          x: x(idx),
+                          y: y(val),
+                        }));
+                        const linePath = buildSmoothPath(points);
+                        const areaPath = `${linePath} L ${x(vals.length - 1)} ${
+                          PAD.top + chartH
+                        } L ${x(0)} ${PAD.top + chartH} Z`;
+                        return (
+                          <g key={`series-${series.project.id}`}>
+                            <path
+                              d={areaPath}
+                              fill={`url(#balanceGrad-${series.project.id})`}
+                              filter="url(#balanceShadow)"
+                            />
+                            <path
+                              d={linePath}
+                              fill="none"
+                              stroke={`url(#balanceLine-${series.project.id})`}
+                              strokeWidth={3.2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              filter="url(#balanceGlow)"
+                            />
+                          </g>
+                        );
+                      })}
+
+                      {balanceSeries.map((series) => {
+                        const vals = balanceYears.map(
+                          (year) =>
+                            series.points.find((p) => p.year === year)?.value ?? 0,
+                        );
+                        return vals.map((val, idx) => {
+                          const year = balanceYears[idx];
+                          const isHover =
+                            balanceHover?.projectId === series.project.id &&
+                            balanceHover?.year === year;
+                          return (
+                            <g key={`pt-${series.project.id}-${year}`}>
+                              <circle
+                                cx={x(idx)}
+                                cy={y(val)}
+                                r={12}
+                                fill="transparent"
+                                style={{ cursor: "pointer" }}
+                                onMouseEnter={() =>
+                                  setBalanceHover({
+                                    projectId: series.project.id,
+                                    year,
+                                  })
+                                }
+                                onMouseLeave={() => setBalanceHover(null)}
+                              />
+                              <circle
+                                cx={x(idx)}
+                                cy={y(val)}
+                                r={isHover ? 6 : 3.5}
+                                fill={isHover ? "#fff" : series.color}
+                                stroke="#0f172a"
+                                strokeWidth={2}
+                                style={{ transition: "r 0.15s, fill 0.15s" }}
+                              />
+                            </g>
+                          );
+                        });
+                      })}
+
+                      {balanceHover &&
+                        (() => {
+                          const series = balanceSeries.find(
+                            (item) => item.project.id === balanceHover.projectId,
+                          );
+                          if (!series) return null;
+                          const yearIndex = balanceYears.indexOf(balanceHover.year);
+                          if (yearIndex < 0) return null;
+                          const point = series.points.find(
+                            (p) => p.year === balanceHover.year,
+                          );
+                          if (!point) return null;
+                          const tx = x(yearIndex);
+                          const ty = y(point.value);
+                          const boxW = 150;
+                          const boxH = 58;
+                          const bx = Math.min(
+                            Math.max(tx - boxW / 2, PAD.left),
+                            W - PAD.right - boxW,
+                          );
+                          const by = Math.max(ty - boxH - 14, 4);
+                          return (
+                            <g pointerEvents="none">
+                              <rect
+                                x={bx}
+                                y={by}
+                                width={boxW}
+                                height={boxH}
+                                rx={10}
+                        fill="#e2e8f0"
+                        stroke={series.color}
+                        strokeWidth={1.5}
+                      />
+                              <rect
+                                x={bx + 10}
+                                y={by + 12}
+                                width={8}
+                                height={8}
+                                rx={2}
+                                fill={series.color}
+                              />
+                              <text
+                                x={bx + 24}
+                                y={by + 19}
+                                fontSize={11}
+                                fill={series.color}
+                                fontFamily="'Georgia',serif"
+                                fontWeight={600}
+                              >
+                                {series.project.name}
+                              </text>
+                              <text
+                                x={bx + boxW / 2}
+                                y={by + 38}
+                                textAnchor="middle"
+                                fontSize={11}
+                                fill="#64748b"
+                                fontFamily="'Courier New',monospace"
+                              >
+                                {balanceHover.year}
+                              </text>
+                              <text
+                                x={bx + boxW / 2}
+                                y={by + 52}
+                                textAnchor="middle"
+                                fontSize={13}
+                                fill="#f1f5f9"
+                                fontFamily="'Georgia',serif"
+                                fontWeight={700}
+                              >
+                                {formatFull(point.value)}
+                              </text>
+                            </g>
+                          );
+                        })()}
+
+                      {balanceYears.map((year, idx) => (
+                        <text
+                          key={`year-${year}`}
+                          x={x(idx)}
+                          y={H - PAD.bottom + 20}
+                          textAnchor="middle"
+                          fontSize={12}
+                          fill="#64748b"
+                          fontFamily="'Georgia',serif"
+                          fontWeight={600}
+                        >
+                          {year}
+                        </text>
+                      ))}
+
+                    <text
+                      x={14}
+                      y={H / 2}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fill="#64748b"
+                      fontFamily="'Courier New',monospace"
+                      transform={`rotate(-90, 14, ${H / 2})`}
+                    >
+                      {t("dashboard.balanceHistory.axisLabel")}
+                    </text>
+                  </svg>
+                </Box>
+              );
+            })()}
+
           </Box>
 
           <Box

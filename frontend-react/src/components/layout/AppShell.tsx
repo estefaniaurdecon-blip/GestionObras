@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Avatar,
+  Badge,
   Box,
   Button,
   Divider,
@@ -33,6 +34,7 @@ import { apiClient } from "../../api/client";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchBranding } from "../../api/branding";
+import { fetchNotifications } from "../../api/notifications";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 
 interface AppShellProps {
@@ -118,6 +120,18 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     queryFn: () => fetchBranding(tenantId as number),
     enabled: Boolean(tenantId) && !isSuperAdmin,
   });
+
+  const ticketNotificationsQuery = useQuery({
+    queryKey: ["notifications", { onlyUnread: true, scope: "tickets" }],
+    queryFn: () => fetchNotifications(true, 50),
+    refetchInterval: 30000,
+    enabled: (isSuperAdmin || isTenantAdmin) && !isUserLoading,
+  });
+
+  const ticketUnreadCount =
+    ticketNotificationsQuery.data?.items.filter((n) =>
+      n.type.startsWith("ticket_"),
+    ).length ?? 0;
 
   const needsBranding = !isSuperAdmin && Boolean(tenantId);
   const isBrandingLoading =
@@ -469,7 +483,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   justifyContent="flex-start"
                   size="sm"
                 >
-                  {t("layout.nav.support")}
+                  <HStack spacing={2}>
+                    <Text>{t("layout.nav.support")}</Text>
+                    {ticketUnreadCount > 0 && (
+                      <Badge colorScheme="red" borderRadius="full" px={2}>
+                        {ticketUnreadCount}
+                      </Badge>
+                    )}
+                  </HStack>
                 </Button>
               )}
             </VStack>

@@ -26,6 +26,7 @@ export const useProjectCreation = ({
   const [projectType, setProjectType] = useState<
     "regional" | "nacional" | "internacional"
   >("regional");
+  const [projectDepartmentId, setProjectDepartmentId] = useState<number | "">("");
   const [projectStart, setProjectStart] = useState("");
   const [projectEnd, setProjectEnd] = useState("");
   const [projectLoanPercent, setProjectLoanPercent] = useState("85");
@@ -86,6 +87,7 @@ export const useProjectCreation = ({
           name: projectName.trim(),
           description: projectDescription.trim() || null,
           project_type: projectType,
+          department_id: projectDepartmentId === "" ? null : projectDepartmentId,
           start_date: projectStart || null,
           end_date: projectEnd || null,
           loan_percent: projectLoanPercent ? Number(projectLoanPercent) : null,
@@ -153,6 +155,7 @@ export const useProjectCreation = ({
       setProjectName("");
       setProjectDescription("");
       setProjectType("regional");
+      setProjectDepartmentId("");
       setProjectStart("");
       setProjectEnd("");
       setProjectLoanPercent("85");
@@ -191,6 +194,8 @@ export const useProjectCreation = ({
     setProjectDescription,
     projectType,
     setProjectType,
+    projectDepartmentId,
+    setProjectDepartmentId,
     projectStart,
     setProjectStart,
     projectEnd,

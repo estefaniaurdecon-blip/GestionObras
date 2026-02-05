@@ -365,14 +365,6 @@ export const useBudgetEditor = ({
           }
         }
 
-        const maxOrderIndex = orderedProjectMilestones.length;
-        const extras = budgetMilestones.filter(
-          (m) => m.order_index > maxOrderIndex,
-        );
-        for (const extra of extras) {
-          await deleteBudgetMilestoneMutation.mutateAsync(extra.id);
-        }
-
         await queryClient.invalidateQueries({
           queryKey: ["project-budget-milestones", projectId],
         });

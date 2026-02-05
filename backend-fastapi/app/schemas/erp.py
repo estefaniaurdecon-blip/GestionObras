@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 class ProjectRead(BaseModel):
     id: int
     tenant_id: Optional[int] = None
+    department_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = None

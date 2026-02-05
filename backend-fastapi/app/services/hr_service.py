@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
 from sqlmodel import Session, select, func
@@ -28,6 +29,26 @@ def _ensure_same_tenant(tenant_id: int, user: User) -> None:
         raise PermissionError("No tienes permisos para gestionar este tenant")
 
 
+def _normalize_percentage(value: Optional[Decimal]) -> Decimal:
+    if value is None:
+        return Decimal(100)
+    return Decimal(value)
+
+
+def _apply_department_hours(
+    available_hours: Optional[Decimal],
+    availability_percentage: Optional[Decimal],
+    department_percentage: Optional[Decimal],
+) -> Optional[Decimal]:
+    if available_hours is None:
+        return None
+    pct_employee = _normalize_percentage(availability_percentage)
+    pct_department = _normalize_percentage(department_percentage)
+    return (Decimal(available_hours) * pct_employee / Decimal(100)) * (
+        pct_department / Decimal(100)
+    )
+
+
 def create_department(
     session: Session,
     current_user: User,
@@ -48,6 +69,7 @@ def create_department(
         description=data.description,
         manager_id=data.manager_id,
         is_active=data.is_active,
+        project_allocation_percentage=data.project_allocation_percentage,
     )
     session.add(dept)
     session.commit()
@@ -68,6 +90,7 @@ def create_department(
         description=dept.description,
         manager_id=dept.manager_id,
         is_active=dept.is_active,
+        project_allocation_percentage=dept.project_allocation_percentage,
         created_at=dept.created_at,
     )
 
@@ -94,6 +117,7 @@ def list_departments(
             description=d.description,
             manager_id=d.manager_id,
             is_active=d.is_active,
+            project_allocation_percentage=d.project_allocation_percentage,
             created_at=d.created_at,
         )
         for d in depts
@@ -125,6 +149,8 @@ def update_department(
         dept.manager_id = data.manager_id
     if data.is_active is not None:
         dept.is_active = data.is_active
+    if data.project_allocation_percentage is not None:
+        dept.project_allocation_percentage = data.project_allocation_percentage
 
     session.add(dept)
     session.commit()
@@ -145,6 +171,7 @@ def update_department(
         description=dept.description,
         manager_id=dept.manager_id,
         is_active=dept.is_active,
+        project_allocation_percentage=dept.project_allocation_percentage,
         created_at=dept.created_at,
     )
 
@@ -240,6 +267,16 @@ def create_employee_profile(
     primary_department_id = None
     if data.primary_department_id is not None:
         primary_department_id = data.primary_department_id
+    dept_percentage = None
+    if primary_department_id is not None:
+        dept = session.get(Department, primary_department_id)
+        if dept:
+            dept_percentage = dept.project_allocation_percentage
+    effective_hours = _apply_department_hours(
+        profile.available_hours,
+        profile.availability_percentage,
+        dept_percentage,
+    )
 
     return EmployeeProfileRead(
         id=profile.id,
@@ -248,7 +285,7 @@ def create_employee_profile(
         full_name=profile.full_name or (user.full_name if user else None),
         email=profile.email or (user.email if user else None),
         hourly_rate=profile.hourly_rate,
-        available_hours=profile.available_hours,
+        available_hours=effective_hours,
         availability_percentage=profile.availability_percentage,
         position=profile.position,
         titulacion=profile.titulacion,
@@ -293,8 +330,25 @@ def list_employee_profiles(
     else:
         primary_by_emp = {}
 
+    dept_percentages: dict[int, Decimal] = {}
+    if primary_by_emp:
+        dept_ids = list({dept_id for dept_id in primary_by_emp.values() if dept_id})
+        if dept_ids:
+            depts = session.exec(
+                select(Department).where(Department.id.in_(dept_ids)),
+            ).all()
+            dept_percentages = {
+                d.id: d.project_allocation_percentage or Decimal(100) for d in depts
+            }
+
     result: List[EmployeeProfileRead] = []
     for p in profiles:
+        dept_percentage = dept_percentages.get(primary_by_emp.get(p.id, 0))
+        effective_hours = _apply_department_hours(
+            p.available_hours,
+            p.availability_percentage,
+            dept_percentage,
+        )
         result.append(
             EmployeeProfileRead(
                 id=p.id,
@@ -303,7 +357,7 @@ def list_employee_profiles(
                 full_name=p.full_name or (user_map.get(p.user_id).full_name if p.user_id else None),
                 email=p.email or (user_map.get(p.user_id).email if p.user_id else None),
                 hourly_rate=p.hourly_rate,
-                available_hours=p.available_hours,
+                available_hours=effective_hours,
                 availability_percentage=p.availability_percentage,
                 position=p.position,
                 titulacion=p.titulacion,
@@ -571,6 +625,17 @@ def update_employee_profile(
         if link:
             primary_department_id = link.department_id
 
+    dept_percentage = None
+    if primary_department_id is not None:
+        dept = session.get(Department, primary_department_id)
+        if dept:
+            dept_percentage = dept.project_allocation_percentage
+    effective_hours = _apply_department_hours(
+        profile.available_hours,
+        profile.availability_percentage,
+        dept_percentage,
+    )
+
     return EmployeeProfileRead(
         id=profile.id,
         tenant_id=profile.tenant_id,
@@ -578,7 +643,7 @@ def update_employee_profile(
         full_name=profile.full_name,
         email=profile.email,
         hourly_rate=profile.hourly_rate,
-        available_hours=profile.available_hours,
+        available_hours=effective_hours,
         availability_percentage=profile.availability_percentage,
         position=profile.position,
         titulacion=profile.titulacion,

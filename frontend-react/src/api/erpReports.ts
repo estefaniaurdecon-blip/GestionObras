@@ -5,6 +5,7 @@ export interface ErpProject {
   name: string;
   description?: string | null;
   project_type?: "regional" | "nacional" | "internacional" | null;
+  department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;

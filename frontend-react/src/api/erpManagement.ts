@@ -4,6 +4,7 @@ export interface ErpProjectCreate {
   name: string;
   description?: string | null;
   project_type?: "regional" | "nacional" | "internacional" | null;
+  department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   loan_percent?: number | null;
@@ -16,6 +17,7 @@ export interface ErpProjectResponse {
   name: string;
   description?: string | null;
   project_type?: "regional" | "nacional" | "internacional" | null;
+  department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   duration_months?: number | null;
@@ -29,6 +31,7 @@ export interface ErpProjectUpdate {
   name?: string | null;
   description?: string | null;
   project_type?: "regional" | "nacional" | "internacional" | null;
+  department_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   loan_percent?: number | null;

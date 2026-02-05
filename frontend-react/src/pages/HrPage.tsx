@@ -83,9 +83,16 @@ const StatCell: React.FC<{ label: string; value: string }> = ({ label, value }) 
   );
 };
 
+const TITULACION_OPTIONS = [
+  { value: "doctorado", label: "Doctorado" },
+  { value: "universitario", label: "Universitario" },
+  { value: "no_universitario", label: "No universitario" },
+];
+
 interface DepartmentFormState {
   name: string;
   description: string;
+  projectAllocationPercentage: string;
 }
 
 interface EmployeeFormState {
@@ -165,6 +172,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
   const [deptForm, setDeptForm] = useState<DepartmentFormState>({
     name: "",
     description: "",
+    projectAllocationPercentage: "100",
   });
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
 
@@ -196,7 +204,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
 
   const handleCloseDeptModal = () => {
     setEditingDepartment(null);
-    setDeptForm({ name: "", description: "" });
+    setDeptForm({ name: "", description: "", projectAllocationPercentage: "100" });
     onDeptClose();
   };
 
@@ -621,6 +629,10 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
         data: {
           name: deptForm.name.trim(),
           description: deptForm.description || undefined,
+          project_allocation_percentage:
+            deptForm.projectAllocationPercentage.trim() === ""
+              ? null
+              : Number(deptForm.projectAllocationPercentage),
         },
       });
     } else {
@@ -629,6 +641,10 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
           name: deptForm.name.trim(),
           description: deptForm.description || undefined,
           is_active: true,
+          project_allocation_percentage:
+            deptForm.projectAllocationPercentage.trim() === ""
+              ? null
+              : Number(deptForm.projectAllocationPercentage),
         },
         tenantId: isSuperAdmin ? effectiveTenantId ?? undefined : undefined,
       });
@@ -640,6 +656,10 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
     setDeptForm({
       name: dept.name ?? "",
       description: dept.description ?? "",
+      projectAllocationPercentage:
+        dept.project_allocation_percentage != null
+          ? String(dept.project_allocation_percentage)
+          : "100",
     });
     onDeptOpen();
   };
@@ -809,7 +829,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
             {showDepartments && (
               <Box
                 id="departments"
-                gridColumn={{ base: "1 / -1", xl: "1 / span 1" }}
+                gridColumn={{ base: "1 / -1", xl: "1 / span 2" }}
                 borderWidth="1px"
                 borderRadius="xl"
                 p={6}
@@ -824,7 +844,11 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                     colorScheme="green"
                     onClick={() => {
                       setEditingDepartment(null);
-                      setDeptForm({ name: "", description: "" });
+                      setDeptForm({
+                        name: "",
+                        description: "",
+                        projectAllocationPercentage: "100",
+                      });
                       onDeptOpen();
                     }}
                   >
@@ -843,21 +867,22 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   borderWidth="1px"
                   borderRadius="xl"
                   bg={cardBg}
-                  overflow="hidden"
+                  overflowX="auto"
                 >
-                  <Table size="sm">
+                  <Table size="sm" minW="680px">
                     <Thead bg={tableHeadBg}>
                       <Tr>
                         <Th>{t("hr.departments.table.name")}</Th>
                         <Th>{t("hr.departments.table.description")}</Th>
+                        <Th>{t("hr.departments.table.allocation")}</Th>
                         <Th>{t("hr.departments.table.status")}</Th>
-                        <Th>{t("common.actions")}</Th>
+                        <Th>{t("hr.departments.table.actions")}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       {departments.length === 0 ? (
                         <Tr>
-                          <Td colSpan={3}>
+                          <Td colSpan={4}>
                             <Text fontSize="sm" color="gray.500">
                               {t("hr.departments.table.empty")}
                             </Text>
@@ -869,6 +894,11 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                             <Td>{d.name}</Td>
                             <Td>{d.description || "-"}</Td>
                             <Td>
+                              {d.project_allocation_percentage != null
+                                ? `${Number(d.project_allocation_percentage).toFixed(0)}%`
+                                : "100%"}
+                            </Td>
+                            <Td>
                               <Badge
                                 colorScheme={d.is_active ? "green" : "red"}
                               >
@@ -878,12 +908,12 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                             <Td>
                               <Button
                                 size="xs"
-                              variant="ghost"
-                              colorScheme="blue"
-                              mr={2}
-                              onClick={() => startEditDepartment(d)}
-                            >
-                                Editar
+                                variant="ghost"
+                                colorScheme="blue"
+                                mr={2}
+                                onClick={() => startEditDepartment(d)}
+                              >
+                                {t("hr.departments.table.edit")}
                               </Button>
                               <Button
                                 size="xs"
@@ -892,7 +922,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                                 onClick={() => handleDeleteDepartment(d)}
                                 isLoading={updateDeptMutation.isPending}
                               >
-                                Eliminar
+                                {t("hr.departments.table.delete")}
                               </Button>
                             </Td>
                           </Tr>
@@ -1160,8 +1190,8 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
         <ModalContent>
           <ModalHeader>
             {editingDepartment
-              ? t("hr.departments.form.update") || "Actualizar"
-              : t("hr.departments.form.create")}
+              ? t("hr.departments.form.editTitle")
+              : t("hr.departments.form.createTitle")}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
@@ -1188,6 +1218,17 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   onChange={handleDeptChange}
                 />
               </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.departments.form.allocation")}</FormLabel>
+                <Input
+                  name="projectAllocationPercentage"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={deptForm.projectAllocationPercentage}
+                  onChange={handleDeptChange}
+                />
+              </FormControl>
             </VStack>
           </ModalBody>
           <ModalFooter>
@@ -1201,7 +1242,7 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
               isLoading={createDeptMutation.isPending || updateDeptMutation.isPending}
             >
               {editingDepartment
-                ? t("hr.departments.form.update") || "Actualizar"
+                ? t("hr.departments.form.save")
                 : t("hr.departments.form.create")}
             </Button>
           </ModalFooter>
@@ -1247,9 +1288,11 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   onChange={handleEmployeeEditChange}
                   placeholder={t("hr.employees.form.titulacionPlaceholder")}
                 >
-                  <option value="doctorado">Doctorado</option>
-                  <option value="universitario">Universitario</option>
-                  <option value="no_universitario">No universitario</option>
+                  {TITULACION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </Select>
               </FormControl>
               <FormControl>
@@ -1398,6 +1441,21 @@ export const HrPage: React.FC<HrPageProps> = ({ section = "all" }) => {
                   <option value="doctorado">Doctorado</option>
                   <option value="universitario">Universitario</option>
                   <option value="no_universitario">No universitario</option>
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t("hr.employees.form.titulacion")}</FormLabel>
+                <Select
+                  name="titulacion"
+                  value={employeeForm.titulacion}
+                  onChange={handleEmployeeChange}
+                  placeholder={t("hr.employees.form.titulacionPlaceholder")}
+                >
+                  {TITULACION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </Select>
               </FormControl>
               <FormControl>

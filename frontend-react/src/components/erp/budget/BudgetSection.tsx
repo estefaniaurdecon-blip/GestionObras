@@ -163,6 +163,24 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     selectedBudgetProjectId != null
       ? projects.find((project) => project.id === selectedBudgetProjectId) ?? null
       : null;
+  const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
+
+  const resolveActiveMonthsInYear = (
+    start: Date,
+    end: Date,
+    year: number,
+  ) => {
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+    const effectiveStart = start > yearStart ? start : yearStart;
+    const effectiveEnd = end < yearEnd ? end : yearEnd;
+    if (effectiveEnd < effectiveStart) return 0;
+    return (
+      (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 +
+      (effectiveEnd.getMonth() - effectiveStart.getMonth()) +
+      1
+    );
+  };
   const fallbackDurationMonths = (() => {
     if (!selectedProject?.start_date || !selectedProject?.end_date) return null;
     const start = new Date(selectedProject.start_date);
@@ -177,6 +195,31 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   const subsidyPercent = selectedProject?.subsidy_percent ?? 0;
   const durationLabel =
     durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
+  const projectDateRange = React.useMemo(() => {
+    if (!selectedProject?.start_date || !selectedProject?.end_date) return null;
+    const start = new Date(selectedProject.start_date);
+    const end = new Date(selectedProject.end_date);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    if (end < start) return null;
+    return { start, end };
+  }, [selectedProject?.start_date, selectedProject?.end_date]);
+  const yearOptions = React.useMemo(() => {
+    if (!projectDateRange) return [];
+    const startYear = projectDateRange.start.getFullYear();
+    const endYear = projectDateRange.end.getFullYear();
+    const options = [];
+    for (let year = startYear; year <= endYear; year += 1) {
+      options.push(year);
+    }
+    return options;
+  }, [projectDateRange]);
+  const resolvedSelectedYear = React.useMemo(() => {
+    if (!yearOptions.length) return null;
+    if (selectedYear && yearOptions.includes(selectedYear)) return selectedYear;
+    const currentYear = new Date().getFullYear();
+    if (yearOptions.includes(currentYear)) return currentYear;
+    return yearOptions[0];
+  }, [selectedYear, yearOptions]);
   const baseTotalsApproved = Number(budgetsTabTotals.approved ?? 0);
   const baseTotalsForecasted = Number(budgetsTabTotals.gasto ?? 0);
 
@@ -317,6 +360,21 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
   const baseResult =
     (effectiveTotalApproved * subsidyPercent) / 100 - effectiveTotalForecasted;
 
+
+  const monthsActivePerYear =
+    projectDateRange && resolvedSelectedYear != null
+      ? resolveActiveMonthsInYear(
+          projectDateRange.start,
+          projectDateRange.end,
+          resolvedSelectedYear,
+        )
+      : 0;
+  const annualizedResult =
+    durationMonths != null && durationMonths > 0
+      ? (baseResult / durationMonths) * monthsActivePerYear
+      : 0;
+
+
   const [milestoneToRemove, setMilestoneToRemove] = React.useState("");
   const sortedBudgetMilestones = React.useMemo(
     () =>
@@ -358,6 +416,35 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
             Duracion del proyecto
           </Text>
           <Text fontWeight="semibold">{durationLabel}</Text>
+        </HStack>
+        <HStack spacing={2} mt={2} align="center">
+          <FormControl maxW="160px">
+            <FormLabel fontSize="xs" mb={1}>
+              Anualizar por aÃ±o
+            </FormLabel>
+            <Select
+              size="sm"
+              value={resolvedSelectedYear ?? ""}
+              onChange={(e) =>
+                setSelectedYear(e.target.value ? Number(e.target.value) : null)
+              }
+              isDisabled={!yearOptions.length}
+            >
+              {yearOptions.length === 0 && (
+                <option value="">Sin fechas</option>
+              )}
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Select>
+          </FormControl>
+          {resolvedSelectedYear != null && (
+            <Text fontSize="sm" color={subtleText}>
+              Meses activos: {monthsActivePerYear}
+            </Text>
+          )}
         </HStack>
       </Box>
       <HStack spacing={2}>

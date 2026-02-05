@@ -15,7 +15,7 @@ jobs:
           cd /home/server/projects/erp
           git fetch origin main
           git reset --hard origin/main
-          git clean -fd
+          git clean -fd -e infra/data/logos/
 
       - name: Tirar instancia actual de Docker
         run: |
