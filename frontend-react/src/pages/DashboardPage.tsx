@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -30,6 +30,16 @@ import { keyframes } from "@emotion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { fetchTenantTools, launchTool, Tool } from "../api/tools";
 import { fetchDashboardSummary, type DashboardSummary } from "../api/dashboard";
@@ -128,7 +138,6 @@ export const DashboardPage: React.FC = () => {
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedBalanceProjectIds, setSelectedBalanceProjectIds] = useState<number[]>([]);
-  const balanceChartRef = useRef<HTMLDivElement | null>(null);
   const [dateFrom, setDateFrom] = useState(() =>
     formatDate(addDays(new Date(), -6)),
   );
@@ -437,181 +446,40 @@ export const DashboardPage: React.FC = () => {
     return { lastYear, lastValue, growth, total, best };
   }, [balanceTotalsByYear, balanceYears, balanceSeries]);
 
-  useEffect(() => {
-    if (!balanceChartRef.current) return;
-    if (balanceYears.length === 0 || balanceSeries.length === 0) {
-      // Lazy-load Plotly to avoid build-time evaluation issues.
-      void (async () => {
-        const mod = await import("plotly.js-dist-min");
-        const plotly = (mod as any).default ?? mod;
-        plotly?.purge?.(balanceChartRef.current);
-      })();
-      return;
-    }
-
-    const traces = balanceSeries.map((series) => {
-      const pointMap = new Map(series.points.map((point) => [point.year, point.value]));
-      const xData: number[] = [];
-      const yData: number[] = [];
-      const hoverValues: string[] = [];
-      balanceYears.forEach((year) => {
-        const value = pointMap.get(year);
-        if (value == null) return;
-        xData.push(year);
-        yData.push(value);
-        hoverValues.push(formatFull(value));
+  const balanceChartData = useMemo<Array<Record<string, number | string>>>(() => {
+    if (balanceYears.length === 0) return [];
+    const rows: Array<Record<string, number | string>> = balanceYears.map((year) => ({
+      year,
+    }));
+    balanceSeries.forEach((series) => {
+      series.points.forEach((point) => {
+        const row = rows.find((r) => r.year === point.year);
+        if (row) {
+          row[`${series.project.id}`] = point.value;
+        }
       });
-
-      return {
-        x: xData,
-        y: yData,
-        name: series.project.name,
-        type: "scatter",
-        mode: "lines+markers",
-        line: {
-          color: series.color,
-          width: 4.5,
-          shape: "spline",
-          smoothing: 1.25,
-        },
-        marker: {
-          color: series.color,
-          size: 11,
-          line: {
-            color: "#f8fafc",
-            width: 2.5,
-          },
-          symbol: "circle",
-        },
-        fill: "tozeroy",
-        fillcolor: `${series.color}2b`,
-        customdata: hoverValues,
-        hovertemplate:
-          `<b>${series.project.name}</b><br>` +
-          "Año: %{x}<br>" +
-          "Balance: %{customdata}<br>" +
-          "<extra></extra>",
-        hoverlabel: {
-          bgcolor: series.color,
-          font: {
-            family: "Inter, sans-serif",
-            size: 13,
-            color: "white",
-          },
-          bordercolor: "#ffffff",
-        },
-      };
     });
+    return rows;
+  }, [balanceSeries, balanceYears]);
 
-    const layout = {
-      dragmode: false,
-      xaxis: {
-        title: {
-          text: `<b>${t("dashboard.balanceHistory.tableYear")}</b>`,
-          font: {
-            family: "Inter, sans-serif",
-            size: 14,
-            color: balanceTableHeadText,
-          },
-        },
-        showgrid: true,
-        gridcolor: balanceTableBorderColor,
-        gridwidth: 1,
-        tickfont: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableYearText,
-        },
-        linecolor: balanceTableBorderColor,
-        linewidth: 2,
-        dtick: 1,
-        zeroline: false,
-      },
-      yaxis: {
-        title: {
-          text: `<b>${t("dashboard.balanceHistory.axisLabel")}</b>`,
-          font: {
-            family: "Inter, sans-serif",
-            size: 14,
-            color: balanceTableHeadText,
-          },
-        },
-        showgrid: true,
-        gridcolor: balanceTableBorderColor,
-        gridwidth: 1,
-        tickfont: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableYearText,
-        },
-        linecolor: balanceTableBorderColor,
-        linewidth: 2,
-        tickformat: ",.0f",
-        separatethousands: true,
-        zeroline: true,
-        zerolinecolor: balanceTableBorderColor,
-        zerolinewidth: 2,
-      },
-      plot_bgcolor: "rgba(248,250,252,0.95)",
-      paper_bgcolor: "rgba(0,0,0,0)",
-      hovermode: "x unified",
-      showlegend: true,
-      legend: {
-        orientation: "h",
-        yanchor: "bottom",
-        y: 1.12,
-        xanchor: "left",
-        x: 0,
-        font: {
-          family: "Inter, sans-serif",
-          size: 12,
-          color: balanceTableHeadText,
-        },
-        bgcolor: "rgba(248, 250, 252, 0.85)",
-        bordercolor: balanceTableBorderColor,
-        borderwidth: 1,
-        itemwidth: 40,
-      },
-      margin: {
-        l: 70,
-        r: 30,
-        t: 56,
-        b: 60,
-      },
-      autosize: true,
-      font: {
-        family: "Inter, sans-serif",
-      },
-    };
+  const balanceLegendPayload = useMemo(
+    () =>
+      balanceSeries.map((series) => ({
+        value: series.project.name,
+        type: "line",
+        id: `${series.project.id}`,
+        color: series.color,
+      })),
+    [balanceSeries],
+  );
 
-    const config = {
-      responsive: true,
-      displayModeBar: true,
-      displaylogo: false,
-      modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
-      toImageButtonOptions: {
-        format: "png",
-        filename: "balance_anualizado",
-        height: 800,
-        width: 1400,
-        scale: 2,
-      },
-    };
-
-    void (async () => {
-      const mod = await import("plotly.js-dist-min");
-      const plotly = (mod as any).default ?? mod;
-      plotly.react(balanceChartRef.current, traces, layout, config);
-    })();
-  }, [
-    balanceSeries,
-    balanceYears,
-    formatFull,
-    t,
-    balanceTableBorderColor,
-    balanceTableHeadText,
-    balanceTableYearText,
-  ]);
+  const balanceKeyById = useMemo(() => {
+    const map = new Map<string, string>();
+    balanceSeries.forEach((series) => {
+      map.set(`${series.project.id}`, series.project.name);
+    });
+    return map;
+  }, [balanceSeries]);
 
   const handleLaunch = async (tool: Tool) => {
     try {
@@ -903,13 +771,83 @@ export const DashboardPage: React.FC = () => {
                 </Text>
               ) : (
                 <Box
-                  ref={balanceChartRef}
                   w="100%"
                   h="380px"
                   borderRadius="16px"
                   bg="white"
                   boxShadow="inset 0 0 0 1px rgba(15,23,42,0.04)"
-                />
+                  px={3}
+                  py={2}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={balanceChartData}
+                      margin={{ top: 20, right: 30, left: 10, bottom: 10 }}
+                    >
+                      <defs>
+                        {balanceSeries.map((series) => (
+                          <linearGradient
+                            key={`grad-${series.project.id}`}
+                            id={`balance-grad-${series.project.id}`}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop offset="5%" stopColor={series.color} stopOpacity={0.35} />
+                            <stop offset="95%" stopColor={series.color} stopOpacity={0.05} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid stroke={balanceTableBorderColor} strokeDasharray="4 4" />
+                      <XAxis
+                        dataKey="year"
+                        tick={{ fill: balanceTableYearText, fontSize: 12 }}
+                        axisLine={{ stroke: balanceTableBorderColor }}
+                        tickLine={{ stroke: balanceTableBorderColor }}
+                      />
+                      <YAxis
+                        tickFormatter={(value: number) => formatCompact(value)}
+                        tick={{ fill: balanceTableYearText, fontSize: 12 }}
+                        axisLine={{ stroke: balanceTableBorderColor }}
+                        tickLine={{ stroke: balanceTableBorderColor }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#0f172a",
+                          borderRadius: 10,
+                          border: "none",
+                          color: "#f8fafc",
+                        }}
+                        formatter={(value: number, name: string) => {
+                          const label = balanceKeyById.get(name) ?? name;
+                          return [formatFull(Number(value)), label];
+                        }}
+                        labelFormatter={(label) => `Año ${label}`}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        align="left"
+                        height={36}
+                        wrapperStyle={{ paddingLeft: 8 }}
+                        payload={balanceLegendPayload}
+                      />
+                      {balanceSeries.map((series) => (
+                        <Area
+                          key={`area-${series.project.id}`}
+                          type="monotone"
+                          dataKey={`${series.project.id}`}
+                          stroke={series.color}
+                          strokeWidth={3}
+                          fill={`url(#balance-grad-${series.project.id})`}
+                          dot={{ r: 3, stroke: "#0f172a", strokeWidth: 1 }}
+                          activeDot={{ r: 6, stroke: "#0f172a", strokeWidth: 2 }}
+                          name={series.project.name}
+                        />
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </Box>
               )}
 
               {(() => {
