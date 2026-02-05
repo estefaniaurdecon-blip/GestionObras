@@ -20,7 +20,7 @@ from app.models.erp import (
     TimeEntry,
     TimeSession,
 )
-from app.models.hr import EmployeeProfile
+from app.models.hr import Department, EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.erp import (
@@ -77,6 +77,21 @@ def _get_project_or_404(
     if tenant_id is not None and project.tenant_id != tenant_id:
         raise ValueError("Proyecto no encontrado.")
     return project
+
+
+def _resolve_department(
+    session: Session,
+    department_id: Optional[int],
+    tenant_id: Optional[int],
+) -> Optional[Department]:
+    if department_id is None:
+        return None
+    dept = session.get(Department, department_id)
+    if not dept:
+        raise ValueError("Departamento no encontrado.")
+    if tenant_id is not None and dept.tenant_id != tenant_id:
+        raise ValueError("El departamento no pertenece al tenant.")
+    return dept
 
 # Convierte una fecha a timezone-aware (UTC)
 def _as_aware(value: datetime) -> datetime:
@@ -541,12 +556,13 @@ def create_project(session: Session, data: ProjectCreate, tenant_id: Optional[in
     tenant_id = _require_tenant(tenant_id)
     _validate_date_range(data.start_date, data.end_date)
     project_type = _normalize_project_type(data.project_type)
+    department = _resolve_department(session, data.department_id, tenant_id)
     project = Project(
         tenant_id=tenant_id,
+        department_id=department.id if department else None,
         name=data.name,
         description=data.description,
         project_type=project_type,
-        department_id=data.department_id,
         start_date=data.start_date,
         end_date=data.end_date,
         duration_months=_calculate_duration_months(data.start_date, data.end_date),
@@ -575,8 +591,14 @@ def update_project(
         project.description = data.description
     if data.project_type is not None:
         project.project_type = _normalize_project_type(data.project_type)
-    if data.department_id is not None:
-        project.department_id = data.department_id
+    if "department_id" in data.__fields_set__:
+        if data.department_id is None:
+            project.department_id = None
+        else:
+            department = _resolve_department(
+                session, data.department_id, project.tenant_id
+            )
+            project.department_id = department.id if department else None
     if data.start_date is not None or data.end_date is not None:
         start_date = data.start_date if data.start_date is not None else project.start_date
         end_date = data.end_date if data.end_date is not None else project.end_date

@@ -41,6 +41,7 @@ export interface DepartmentCreateInput {
   description?: string;
   manager_id?: number | null;
   is_active?: boolean;
+  project_allocation_percentage?: number | null;
 }
 
 export interface DepartmentCreatePayload {
@@ -53,6 +54,7 @@ export interface DepartmentUpdateInput {
   description?: string | null;
   manager_id?: number | null;
   is_active?: boolean;
+  project_allocation_percentage?: number | null;
 }
 
 export interface DepartmentUpdatePayload {

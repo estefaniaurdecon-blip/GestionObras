@@ -8,8 +8,9 @@ import {
   Heading,
   HStack,
   Input,
+  Grid,
+  GridItem,
   Select,
-  SimpleGrid,
   Stack,
   Table,
   Tbody,
@@ -47,6 +48,7 @@ import {
   fetchTicketMessages,
   fetchTickets,
   reopenTicket,
+  updateTicket,
 } from "../api/tickets";
 
 const formatDateTime = (iso?: string | null) => {
@@ -78,8 +80,6 @@ export const SupportTicketsPage: React.FC = () => {
 
   const [newSubject, setNewSubject] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newPriority, setNewPriority] = useState<TicketPriority>("medium");
-  const [newToolSlug, setNewToolSlug] = useState("");
 
   const [replyBody, setReplyBody] = useState("");
   const [replyInternal, setReplyInternal] = useState(false);
@@ -110,6 +110,8 @@ export const SupportTicketsPage: React.FC = () => {
   const isSuperAdmin =
     currentUser?.is_super_admin === true ||
     currentUser?.email === "dios@cortecelestial.god";
+  const canManageTickets =
+    isSuperAdmin || (currentUser?.permissions?.includes("tickets:manage") ?? false);
   const currentTenantId = currentUser?.tenant_id ?? null;
 
   // Filtro de tenant solo para Super Admin
@@ -170,8 +172,6 @@ export const SupportTicketsPage: React.FC = () => {
       createTicket({
         subject: newSubject,
         description: newDescription,
-        priority: newPriority,
-        tool_slug: newToolSlug || undefined,
       }),
     onSuccess: (ticket) => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
@@ -182,7 +182,6 @@ export const SupportTicketsPage: React.FC = () => {
       });
       setNewSubject("");
       setNewDescription("");
-      setNewToolSlug("");
       setSelectedTicketId(ticket.id);
     },
     onError: (error: any) => {
@@ -195,6 +194,14 @@ export const SupportTicketsPage: React.FC = () => {
         description: detail,
         status: "error",
       });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: { priority?: TicketPriority; status?: TicketStatus }) =>
+      updateTicket(selectedTicketId as number, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
   });
 
@@ -357,9 +364,13 @@ export const SupportTicketsPage: React.FC = () => {
         {t("support.description")}
       </Text>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} alignItems="flex-start">
+      <Grid
+        templateColumns={{ base: "1fr", xl: "1.4fr 1fr" }}
+        gap={8}
+        alignItems="flex-start"
+      >
         {/* Columna izquierda: filtros + listado */}
-        <Box>
+        <GridItem>
           {isSuperAdmin && (
             <Box mb={4}>
               <FormControl maxW="280px">
@@ -433,7 +444,7 @@ export const SupportTicketsPage: React.FC = () => {
           </Box>
 
           <Box borderWidth="1px" borderRadius="md" overflow="hidden" bg={cardBg}>
-            <Table size="sm">
+            <Table size="md">
               <Thead bg={tableHeadBg}>
                 <Tr>
                   {isSuperAdmin && <Th>{t("support.table.tenant")}</Th>}
@@ -491,7 +502,11 @@ export const SupportTicketsPage: React.FC = () => {
                           ?.name ?? ticket.tenant_id}
                       </Td>
                     )}
-                    <Td>{ticket.subject}</Td>
+                    <Td>
+                      <Text fontSize="sm" fontWeight="semibold" noOfLines={2}>
+                        {ticket.subject}
+                      </Text>
+                    </Td>
                     <Td>
                       <Badge
                         colorScheme={
@@ -530,9 +545,10 @@ export const SupportTicketsPage: React.FC = () => {
               </Tbody>
             </Table>
           </Box>
-        </Box>
+        </GridItem>
 
         {/* Right column: creation (non super admin) + detail */}
+        <GridItem>
         <Stack spacing={6}>
           {!isSuperAdmin && (
             <Box
@@ -564,31 +580,6 @@ export const SupportTicketsPage: React.FC = () => {
                     placeholder={t("support.create.descriptionPlaceholder")}
                   />
                 </FormControl>
-                <HStack spacing={3}>
-                  <FormControl>
-                    <FormLabel>{t("support.filters.priority")}</FormLabel>
-                    <Select
-                      value={newPriority}
-                      onChange={(e) =>
-                        setNewPriority(e.target.value as TicketPriority)
-                      }
-                    >
-                      {priorityOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel>{t("support.create.toolOptional")}</FormLabel>
-                    <Input
-                      value={newToolSlug}
-                      onChange={(e) => setNewToolSlug(e.target.value)}
-                      placeholder={t("support.create.toolPlaceholder")}
-                    />
-                  </FormControl>
-                </HStack>
                 <Button
                   type="submit"
                   colorScheme="green"
@@ -614,24 +605,49 @@ export const SupportTicketsPage: React.FC = () => {
                   <Text fontWeight="bold" mb={1}>
                     {selectedTicket.subject}
                   </Text>
-                  <Text fontSize="sm" mb={2}>
-                    {t("support.detail.statusLabel")}{" "}
-                    <Badge mr={2}>
+                  <HStack spacing={2} align="center" flexWrap="wrap" mb={2}>
+                    <Text as="span" fontSize="sm">
+                      {t("support.detail.statusLabel")}
+                    </Text>
+                    <Badge>
                       {
                         statusOptions.find(
                           (s) => s.value === selectedTicket.status,
                         )?.label
                       }
                     </Badge>
-                    {t("support.detail.priorityLabel")}{" "}
-                    <Badge>
-                      {
-                        priorityOptions.find(
-                          (p) => p.value === selectedTicket.priority,
-                        )?.label
-                      }
-                    </Badge>
-                  </Text>
+                    <Text as="span" fontSize="sm">
+                      {t("support.detail.priorityLabel")}
+                    </Text>
+                    {canManageTickets ? (
+                      <Select
+                        size="xs"
+                        maxW="140px"
+                        display="inline-flex"
+                        value={selectedTicket.priority}
+                        onChange={(e) =>
+                          updateMutation.mutate({
+                            priority: e.target.value as TicketPriority,
+                          })
+                        }
+                        isDisabled={updateMutation.isPending}
+                      >
+                        {priorityOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Badge>
+                        {
+                          priorityOptions.find(
+                            (p) => p.value === selectedTicket.priority,
+                          )?.label
+                        }
+                      </Badge>
+                    )}
+                  </HStack>
                   <Text fontSize="sm" color={subtleText}>
                     {t("support.detail.createdBy", {
                       email: selectedTicket.created_by_email,
@@ -799,7 +815,8 @@ export const SupportTicketsPage: React.FC = () => {
             )}
           </Box>
         </Stack>
-      </SimpleGrid>
+        </GridItem>
+      </Grid>
     </AppShell>
   );
 };

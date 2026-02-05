@@ -13,7 +13,6 @@ class TicketBase(SQLModel):
 
     subject: str
     description: str
-    priority: TicketPriority
     tool_slug: Optional[str] = None
     category: Optional[str] = None
 
@@ -23,7 +22,7 @@ class TicketCreate(TicketBase):
     Payload de creación de ticket.
     """
 
-    pass
+    priority: Optional[TicketPriority] = None
 
 
 class TicketUpdate(SQLModel):

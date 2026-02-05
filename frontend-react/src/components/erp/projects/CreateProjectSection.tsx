@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 
 import type { ProjectActivityForm, ProjectMilestoneForm } from "../../../utils/erp";
+import type { Department } from "../../../api/hr";
 import type { TenantOption } from "../../../api/users";
 
 interface CreateProjectSectionProps {
@@ -33,10 +34,16 @@ interface CreateProjectSectionProps {
   onProjectStartChange: (value: string) => void;
   projectEnd: string;
   onProjectEndChange: (value: string) => void;
+
   projectLoanPercent: string;
   onProjectLoanPercentChange: (value: string) => void;
   projectSubsidyPercent: string;
   onProjectSubsidyPercentChange: (value: string) => void;
+
+  departments: Department[];
+  projectDepartmentId: number | "";
+  onProjectDepartmentChange: (value: number | "") => void;
+
   projectActivities: ProjectActivityForm[];
   setProjectActivities: React.Dispatch<React.SetStateAction<ProjectActivityForm[]>>;
   onAddActivity: () => void;
@@ -65,10 +72,16 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
   onProjectStartChange,
   projectEnd,
   onProjectEndChange,
+
   projectLoanPercent,
   onProjectLoanPercentChange,
   projectSubsidyPercent,
   onProjectSubsidyPercentChange,
+
+  departments,
+  projectDepartmentId,
+  onProjectDepartmentChange,
+
   projectActivities,
   setProjectActivities,
   onAddActivity,
@@ -123,6 +136,23 @@ export const CreateProjectSection: React.FC<CreateProjectSectionProps> = ({
           <option value="regional">Regional</option>
           <option value="nacional">Nacional</option>
           <option value="internacional">Internacional</option>
+        </Select>
+      </FormControl>
+
+      <FormControl>
+        <FormLabel>Departamento</FormLabel>
+        <Select
+          placeholder="Selecciona departamento"
+          value={projectDepartmentId === "" ? "" : String(projectDepartmentId)}
+          onChange={(e) =>
+            onProjectDepartmentChange(e.target.value ? Number(e.target.value) : "")
+          }
+        >
+          {departments.map((dept) => (
+            <option key={dept.id} value={dept.id}>
+              {dept.name}
+            </option>
+          ))}
         </Select>
       </FormControl>
 

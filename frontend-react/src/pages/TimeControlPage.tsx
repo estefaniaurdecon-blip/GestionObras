@@ -30,6 +30,7 @@ import { keyframes } from "@emotion/react";
 import { FaPlay, FaStop } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   ErpTask,
@@ -148,10 +149,25 @@ const formatMinutesLabel = (minutes: number): string => {
     .padStart(2, "0")}`;
 };
 
+const formatApiError = (error: any, fallback: string): string => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => item?.msg || item?.type || String(item))
+      .join(", ");
+  }
+  if (detail && typeof detail === "object") {
+    return detail.msg || detail.detail || JSON.stringify(detail);
+  }
+  return fallback;
+};
+
 // Pantalla principal de control de tiempo con calendario interactivo.
 export const TimeControlPage: React.FC = () => {
   // Utilidades globales (toasts y modal).
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const calendarRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +218,7 @@ export const TimeControlPage: React.FC = () => {
     startMinutes: number;
     endMinutes: number;
     offsetMinutes?: number;
+    originalSession?: TimeSessionBlock;
   } | null>(null);
 
   // Tokens de color para UI.
@@ -214,6 +231,9 @@ export const TimeControlPage: React.FC = () => {
   const calendarHeaderActiveText = useColorModeValue("white", "white");
   const calendarHeaderIdleBg = useColorModeValue("white", "gray.800");
   const calendarHeaderIdleText = useColorModeValue("green.600", "green.300");
+  const activeSessionBg = useColorModeValue("blue.200", "blue.300");
+  const activeSessionBorder = useColorModeValue("blue.400", "blue.500");
+  const activeSessionText = useColorModeValue("blue.700", "blue.100");
   const fadeUp = keyframes`
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
@@ -498,13 +518,22 @@ export const TimeControlPage: React.FC = () => {
         dragState.sessionId
       ) {
         setIsDraggingSession(false);
+        const originalSession =
+          dragState.originalSession ??
+          pendingDragOriginalRef.current ??
+          sessions.find((session) => session.id === dragState.sessionId);
+        if (!originalSession) {
+          pendingDragOriginalRef.current = null;
+          setDragState(null);
+          return;
+        }
         const startDate = minutesToDate(
           dragState.dayIndex,
           dragState.startMinutes,
         );
         const endDate = minutesToDate(dragState.dayIndex, dragState.endMinutes);
         const updatedSession: TimeSessionBlock = {
-          ...(pendingDragOriginalRef.current as TimeSessionBlock),
+          ...originalSession,
           started_at: toLocalIsoString(startDate),
           ended_at: toLocalIsoString(endDate),
           duration_seconds: Math.max(
@@ -517,7 +546,7 @@ export const TimeControlPage: React.FC = () => {
             session.id === dragState.sessionId ? updatedSession : session,
           ),
         );
-        setPendingEditOriginal(pendingDragOriginalRef.current);
+        setPendingEditOriginal(originalSession);
         pendingDragOriginalRef.current = null;
         openEditSession(updatedSession);
       }
@@ -532,7 +561,7 @@ export const TimeControlPage: React.FC = () => {
     return () => {
       window.removeEventListener("mousemove", handleMove);
     };
-  }, [dragState, selection, onOpen, taskIdInput, toast, weekDays]);
+  }, [dragState, selection, onOpen, taskIdInput, toast, weekDays, sessions]);
 
   // Guarda un historico corto de tareas seleccionadas por el usuario.
   const updateRecentTaskIds = (taskId: number) => {
@@ -620,6 +649,7 @@ export const TimeControlPage: React.FC = () => {
       const session = await startTimeSession(taskId, effectiveTenantId);
       updateRecentTaskIds(taskId);
       await updateErpTask(taskId, { status: "in_progress" }, effectiveTenantId);
+      queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
       setActiveSession(session);
       setTaskIdInput(String(taskId));
       setWeekStart(startOfWeek(new Date()));
@@ -652,8 +682,48 @@ export const TimeControlPage: React.FC = () => {
   const handleStop = async () => {
     try {
       setIsLoading(true);
-      const session = await stopTimeSession();
-      setActiveSession(session);
+      const session = await stopTimeSession(effectiveTenantId);
+      setActiveSession(session?.is_active ? session : null);
+      if (session) {
+        setSessions((prev) => {
+          const exists = prev.some((item) => item.id === session.id);
+          if (exists) {
+            return prev.map((item) =>
+              item.id === session.id ? { ...item, ...session } : item,
+            );
+          }
+          return [session, ...prev];
+        });
+      if (session.task_id) {
+        await updateErpTask(
+          session.task_id,
+          { status: "pending" },
+          effectiveTenantId,
+        );
+        queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === session.task_id
+              ? { ...task, status: "pending" }
+                : task,
+            ),
+          );
+        }
+      } else if (activeSession?.task_id) {
+        await updateErpTask(
+          activeSession.task_id,
+          { status: "pending" },
+          effectiveTenantId,
+        );
+        queryClient.invalidateQueries({ queryKey: ["erp-tasks"] });
+        setTasks((prev) =>
+          prev.map((task) =>
+            task.id === activeSession.task_id
+              ? { ...task, status: "pending" }
+              : task,
+          ),
+        );
+      }
       toast({
         title: t("timeControl.messages.trackingStopTitle"),
         description: t("timeControl.messages.trackingStopDesc", {
@@ -740,8 +810,8 @@ export const TimeControlPage: React.FC = () => {
         });
       }
 
-      handleCloseModal();
-    } catch (error: any) {
+        handleCloseModal(false);
+      } catch (error: any) {
       toast({
         title: editingSessionId
           ? t("timeControl.messages.sessionUpdateErrorTitle")
@@ -755,11 +825,11 @@ export const TimeControlPage: React.FC = () => {
   };
 
   // Limpia estado del modal de sesion.
-  const handleCloseModal = () => {
-    if (pendingEditOriginal && editingSessionId) {
+  const handleCloseModal = (revertChanges = true) => {
+    if (revertChanges && pendingEditOriginal) {
       setSessions((prev) =>
         prev.map((session) =>
-          session.id === editingSessionId ? pendingEditOriginal : session,
+          session.id === pendingEditOriginal.id ? pendingEditOriginal : session,
         ),
       );
       setPendingEditOriginal(null);
@@ -781,7 +851,7 @@ export const TimeControlPage: React.FC = () => {
         title: t("timeControl.messages.sessionDeleted"),
         status: "success",
       });
-      handleCloseModal();
+        handleCloseModal(false);
     } catch (error: any) {
       toast({
         title: t("timeControl.messages.sessionDeleteErrorTitle"),
@@ -810,6 +880,14 @@ export const TimeControlPage: React.FC = () => {
 
   // Elimina rapidamente una sesion desde la vista calendario.
   const handleQuickDelete = async (sessionId: number) => {
+    if (!Number.isFinite(sessionId)) {
+      toast({
+        title: t("timeControl.messages.sessionDeleteErrorTitle"),
+        description: t("timeControl.messages.genericErrorFallback"),
+        status: "error",
+      });
+      return;
+    }
     try {
       await deleteTimeSession(sessionId);
       setSessions((prev) => prev.filter((session) => session.id !== sessionId));
@@ -820,9 +898,10 @@ export const TimeControlPage: React.FC = () => {
     } catch (error: any) {
       toast({
         title: t("timeControl.messages.sessionDeleteErrorTitle"),
-        description:
-          error?.response?.data?.detail ??
+        description: formatApiError(
+          error,
           t("timeControl.messages.genericErrorFallback"),
+        ),
         status: "error",
       });
     }
@@ -1187,10 +1266,29 @@ export const TimeControlPage: React.FC = () => {
                 }px`}
                 width="100%"
                 height="2px"
-                bg="red.400"
-                boxShadow="sm"
+                bg="red.500"
                 zIndex={2}
-              />
+              >
+                <Box
+                  position="absolute"
+                  left="calc(12.5% + 8px)"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  bg="red.500"
+                  color="white"
+                  px={3}
+                  py={1}
+                  borderRadius="full"
+                  fontSize="xs"
+                  fontWeight="semibold"
+                  lineHeight="1"
+                >
+                  {now.toLocaleTimeString(i18n.language, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Box>
+              </Box>
             )}
             {dragState &&
               (dragState.mode === "move" || dragState.mode === "resize") &&
@@ -1291,19 +1389,15 @@ export const TimeControlPage: React.FC = () => {
                 : undefined;
               return (
                 <Box
-                  key={session.id}
+                  key={`${session.id}-${session.started_at}`}
                   position="absolute"
                   left={`calc(${(dayIndex + 1) * 12.5}% )`}
                   top={top}
                   width="12.5%"
                   height={`${height}px`}
-                  bg={
-                    session.is_active
-                      ? "rgba(0,102,43,0.25)"
-                      : "rgba(0,102,43,0.15)"
-                  }
+                  bg={session.is_active ? activeSessionBg : "green.100"}
                   border="1px solid"
-                  borderColor={session.is_active ? "green.400" : accent}
+                  borderColor={session.is_active ? activeSessionBorder : "transparent"}
                   borderRadius="md"
                   p={2}
                   overflow="visible"
@@ -1315,10 +1409,7 @@ export const TimeControlPage: React.FC = () => {
                         : "grab"
                   }
                   userSelect="none"
-                  transition="all 0.5s ease-in-out, box-shadow 0.2s ease"
-                  boxShadow={
-                    session.is_active ? "0 0 8px rgba(0,255,0,0.3)" : "none"
-                  }
+                  transition="all 0.5s ease-in-out"
                   onClick={(event) => {
                     event.stopPropagation();
                     if (isDraggingSession) return;
@@ -1339,6 +1430,7 @@ export const TimeControlPage: React.FC = () => {
                       startMinutes,
                       endMinutes,
                       offsetMinutes: offset,
+                      originalSession: session,
                     });
                   }}
                   onDoubleClick={(event) => {
@@ -1382,6 +1474,7 @@ export const TimeControlPage: React.FC = () => {
                           startMinutes,
                           endMinutes,
                           offsetMinutes: offset,
+                          originalSession: session,
                         });
                       }}
                     >
@@ -1394,20 +1487,34 @@ export const TimeControlPage: React.FC = () => {
                     align="start"
                     mb={1}
                   >
-                    <Text
-                      fontSize="xs"
-                      fontWeight="semibold"
-                      noOfLines={1}
-                      mt={!session.is_active ? 2 : 0}
-                    >
-                      {task
-                        ? task.title
-                        : session.task_id
-                          ? t("timeControl.labels.taskId", {
-                              id: session.task_id,
-                            })
-                          : t("timeControl.labels.noTask")}
-                    </Text>
+                    <HStack spacing={2} align="start">
+                      <Text
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        noOfLines={1}
+                        mt={!session.is_active ? 2 : 0}
+                      >
+                        {task
+                          ? task.title
+                          : session.task_id
+                            ? t("timeControl.labels.taskId", {
+                                id: session.task_id,
+                              })
+                            : t("timeControl.labels.noTask")}
+                      </Text>
+                      {session.is_active &&
+                        activeSession &&
+                        activeSession.id === session.id && (
+                          <Text
+                            fontSize="xs"
+                            fontWeight="semibold"
+                            color={activeSessionText}
+                            mt={!session.is_active ? 2 : 0}
+                          >
+                            {formattedElapsed}
+                          </Text>
+                        )}
+                    </HStack>
                   </HStack>
                   <Text fontSize="xs" color={subtleText}>
                     {start.toLocaleTimeString(i18n.language, {
@@ -1468,8 +1575,8 @@ export const TimeControlPage: React.FC = () => {
                 ? taskById.get(session.task_id)
                 : undefined;
               return (
-                <Box
-                  key={session.id}
+                  <Box
+                    key={`${session.id}-${session.started_at}`}
                   borderWidth="1px"
                   borderRadius="xl"
                   p={4}
@@ -1602,8 +1709,8 @@ export const TimeControlPage: React.FC = () => {
                       ? taskById.get(session.task_id)
                       : undefined;
                     return (
-                      <HStack
-                        key={session.id}
+                        <HStack
+                          key={`${session.id}-${session.started_at}`}
                         justify="space-between"
                         align="flex-start"
                         onClick={() => openEditSession(session)}
