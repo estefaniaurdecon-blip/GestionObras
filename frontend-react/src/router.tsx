@@ -33,6 +33,7 @@ import { ErpTasksPage } from "./pages/ErpTasksPage";
 import { ErpExternalCollaborationsPage } from "./pages/ErpExternalCollaborationsPage";
 import { ErpSimulationsPage } from "./pages/ErpSimulationsPage";
 import { ErpInvoicesPage } from "./pages/ErpInvoicesPage";
+import { ErpContractsPage } from "./pages/ErpContractsPage";
 import { ErpWorkManagementPage } from "./pages/ErpWorkManagementPage";
 
 // Layout raíz muy simple: delega en cada página.
@@ -140,6 +141,12 @@ const erpInvoicesRoute = createRoute({
   component: ErpInvoicesPage,
 });
 
+const erpContractsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/erp/contracts",
+  component: ErpContractsPage,
+});
+
 const erpTimeControlRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/erp/time-control",
@@ -240,6 +247,7 @@ const routeTree = rootRoute.addChildren([
   erpExternalCollaborationsRoute,
   erpSimulationsRoute,
   erpInvoicesRoute,
+  erpContractsRoute,
   erpTimeControlRoute,
   erpTimeReportRoute,
   timeReportRoute,

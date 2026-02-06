@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     invoice_due_extra_recipients_10: List[str] = []
     invoice_due_extra_recipients_5: List[str] = []
 
+    # Contratos
+    contracts_storage_path: str = "/data/contracts"
+    signature_request_ttl_hours: int = 168
+    public_api_base_url: str | None = None
+
     # Avatares y branding
     avatars_storage_path: str = str(BASE_DIR / "data" / "avatars")
     logos_storage_path: str = str(BASE_DIR / "data" / "logos")

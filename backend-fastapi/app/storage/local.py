@@ -126,3 +126,77 @@ def save_project_doc_to_disk(upload: UploadFile, project_id: int, extension: str
             f.write(chunk)
 
     return target_path
+
+
+def build_contract_base_path(tenant_id: int, contract_id: int) -> Path:
+    base = Path(settings.contracts_storage_path)
+    return base / f"tenant_{tenant_id}" / f"contract_{contract_id}"
+
+
+def build_contract_document_path(
+    tenant_id: int,
+    contract_id: int,
+    doc_type: object,
+    filename: str,
+) -> Path:
+    base = build_contract_base_path(tenant_id, contract_id)
+    raw = getattr(doc_type, "value", str(doc_type))
+    doc_folder = str(raw).lower().replace("contractdocumenttype.", "")
+    return base / "documents" / doc_folder / filename
+
+
+def build_contract_offer_path(
+    tenant_id: int,
+    contract_id: int,
+    offer_id: int,
+    original_filename: str | None,
+) -> Path:
+    ext = ".pdf"
+    if original_filename and "." in original_filename:
+        ext = f".{original_filename.rsplit('.', 1)[1].lower()}"
+    base = build_contract_base_path(tenant_id, contract_id)
+    return base / "offers" / f"offer_{offer_id}{ext}"
+
+
+def save_contract_offer_upload(
+    upload: UploadFile,
+    tenant_id: int,
+    contract_id: int,
+    offer_id: int,
+) -> Path:
+    target_path = build_contract_offer_path(
+        tenant_id=tenant_id,
+        contract_id=contract_id,
+        offer_id=offer_id,
+        original_filename=upload.filename,
+    )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with target_path.open("wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    return target_path
+
+
+def save_signed_contract_upload(
+    upload: UploadFile,
+    tenant_id: int,
+    contract_id: int,
+) -> Path:
+    base = build_contract_base_path(tenant_id, contract_id) / "signed"
+    base.mkdir(parents=True, exist_ok=True)
+    filename = upload.filename or "signed_contract.pdf"
+    path = base / filename
+
+    with path.open("wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+
+    return path

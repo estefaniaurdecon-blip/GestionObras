@@ -303,6 +303,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     >
                       Facturas
                     </Button>
+                    <Button
+                      as={Link}
+                      to="/erp/contracts"
+                      variant={isActive("/erp/contracts") ? "solid" : "ghost"}
+                      justifyContent="flex-start"
+                      size="sm"
+                    >
+                      Contratos
+                    </Button>
                   </VStack>
                 </AccordionPanel>
               </AccordionItem>

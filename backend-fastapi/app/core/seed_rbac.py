@@ -559,6 +559,80 @@ def _ensure_erp_permissions(session: Session) -> None:
 
     session.commit()
 
+
+def _ensure_contracts_permissions(session: Session) -> None:
+    """
+    Crea (si no existen) los permisos del módulo de contratos y roles asociados.
+    """
+
+    contract_permissions: Dict[str, str] = {
+        "contracts:create": "Crear contratos del tenant",
+        "contracts:read": "Ver contratos del tenant",
+        "contracts:edit": "Editar contratos en borrador",
+        "contracts:approve": "Aprobar contratos del tenant",
+        "contracts:reject": "Rechazar contratos del tenant",
+    }
+
+    existing_permissions = session.exec(select(Permission)).all()
+    perms_by_code: Dict[str, Permission] = {p.code: p for p in existing_permissions}
+
+    for code, description in contract_permissions.items():
+        perm = perms_by_code.get(code)
+        if perm is None:
+            perm = Permission(code=code, description=description)
+            session.add(perm)
+            session.commit()
+            session.refresh(perm)
+            perms_by_code[code] = perm
+
+    roles = {r.name: r for r in session.exec(select(Role)).all()}
+
+    required_roles = {
+        "jefe_obra": "Jefe de obra",
+        "gerencia": "Gerencia",
+        "administracion": "Administracion",
+        "compras": "Compras",
+        "juridico": "Juridico",
+    }
+    for role_name, desc in required_roles.items():
+        if role_name not in roles:
+            role = Role(name=role_name, description=f"Rol contratos: {desc}")
+            session.add(role)
+            session.commit()
+            session.refresh(role)
+            roles[role_name] = role
+
+    role_permission_map: Dict[str, Iterable[str]] = {
+        "super_admin": contract_permissions.keys(),
+        "tenant_admin": contract_permissions.keys(),
+        "jefe_obra": ("contracts:create", "contracts:read", "contracts:edit"),
+        "gerencia": ("contracts:read", "contracts:approve", "contracts:reject"),
+        "administracion": ("contracts:read", "contracts:approve", "contracts:reject"),
+        "compras": ("contracts:read", "contracts:approve", "contracts:reject"),
+        "juridico": ("contracts:read", "contracts:approve", "contracts:reject"),
+    }
+
+    for role_name, codes in role_permission_map.items():
+        role = roles.get(role_name)
+        if not role:
+            continue
+        existing_rps = session.exec(
+            select(RolePermission).where(RolePermission.role_id == role.id),
+        ).all()
+        existing_pairs = {
+            (rp.role_id, rp.permission_id): rp for rp in existing_rps
+        }
+        for code in codes:
+            perm = perms_by_code.get(code)
+            if not perm:
+                continue
+            key = (role.id, perm.id)
+            if key in existing_pairs:
+                continue
+            session.add(RolePermission(role_id=role.id, permission_id=perm.id))
+
+    session.commit()
+
 def run_seed() -> None:
     """
     Punto de entrada principal del proceso de seed RBAC.
@@ -574,6 +648,7 @@ def run_seed() -> None:
         _ensure_ticket_permissions(session)
         _ensure_hr_permissions(session)
         _ensure_erp_permissions(session)
+        _ensure_contracts_permissions(session)
 
 
 if __name__ == "__main__":

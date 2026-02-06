@@ -21,11 +21,13 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     # No exponer el puerto directamente; se accede solo via Cloudflare Tunnel.
     ports: []
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts
 
   frontend-react:
     # El frontend habla siempre con la API publica HTTPS.
@@ -39,9 +41,11 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts
 
   celery-beat:
     environment:
@@ -49,6 +53,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts

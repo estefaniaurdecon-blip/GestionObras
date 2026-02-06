@@ -1,0 +1,7 @@
+COMPARATIVO DE OFERTAS
+Contrato: 1
+Tipo: ContractType.SUBCONTRATACION
+Generado: 2026-02-06T10:10:21.520942
+
+Datos:
+{'notes': '', 'milestones': 'Tipo D: Mejora seguridad ante incendios. Fecha Fin: 08/08/2025\n- Colocación falsos techos. Fecha Fin : 15/08/2025', 'description': 'Contrato de subcontratación ', 'obra_number': '2512', 'units_description': 'lo ejecutado realmente'}
