@@ -768,9 +768,7 @@ def api_time_report(
     date_from: Optional[datetime] = Query(default=None),
     date_to: Optional[datetime] = Query(default=None),
     session: Session = Depends(get_session),
-    current_user: User = Depends(
-        require_permissions(["erp:read", "can_create_time_reports"])
-    ),
+    current_user: User = Depends(require_permissions(["erp:reports:read"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[TimeReportRow]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)

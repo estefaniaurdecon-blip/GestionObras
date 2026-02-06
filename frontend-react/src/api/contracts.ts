@@ -108,6 +108,15 @@ export interface ContractOfferCreatePayload {
   notes?: string | null;
 }
 
+export interface ContractApprovalPayload {
+  comment?: string | null;
+}
+
+export interface ContractRejectPayload {
+  reason: string;
+  back_to_status?: ContractStatus | null;
+}
+
 const buildTenantHeaders = (tenantId?: number) =>
   tenantId
     ? {
@@ -218,6 +227,32 @@ export async function submitContractGerencia(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/submit-gerencia`,
     {},
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function approveContract(
+  contractId: number,
+  payload: ContractApprovalPayload,
+  tenantId?: number,
+): Promise<Contract> {
+  const response = await apiClient.post<Contract>(
+    `/api/v1/contracts/${contractId}/approve`,
+    payload,
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function rejectContract(
+  contractId: number,
+  payload: ContractRejectPayload,
+  tenantId?: number,
+): Promise<Contract> {
+  const response = await apiClient.post<Contract>(
+    `/api/v1/contracts/${contractId}/reject`,
+    payload,
     buildTenantHeaders(tenantId),
   );
   return response.data;

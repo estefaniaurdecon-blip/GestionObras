@@ -20,7 +20,7 @@ class UserCreate(BaseModel):
     password: str
     tenant_id: int | None = None
     is_super_admin: bool = False
-    # Nombre de rol lógico (super_admin, tenant_admin, manager, user).
+    # Nombre de rol lógico (super_admin, tenant_admin, gerencia, user).
     role_name: str | None = None
 
 

@@ -16,9 +16,11 @@ Ejecución:
 
 from typing import Dict, Iterable, List
 
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.core.migrate_roles_to_official import migrate_roles
 from app.core.security import hash_password
 from app.db import session as db_session
 from app.models.permission import Permission
@@ -62,11 +64,9 @@ ROLE_PERMISSIONS: Dict[str, Iterable[str]] = {
         "tools:configure",
         "audit:read",
     },
-    # Manager: puede ver usuarios y lanzar herramientas, pero no crear ni configurar.
-    "manager": {
+    # Gerencia: acceso operativo del tenant (sin soporte, logs, herramientas ni ajustes de tenant).
+    "gerencia": {
         "users:read",
-        "tools:read",
-        "tools:launch",
     },
     # Usuario estándar: puede ver y lanzar herramientas asignadas.
     "user": {
@@ -406,7 +406,6 @@ def _ensure_ticket_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": ticket_permissions.keys(),
         "tenant_admin": ticket_permissions.keys(),
-        "manager": ("tickets:create", "tickets:read_tenant"),
         "user": ("tickets:create", "tickets:read_own"),
     }
 
@@ -458,24 +457,13 @@ def _ensure_hr_permissions(session: Session) -> None:
             session.refresh(perm)
             perms_by_code[code] = perm
 
-    # Aseguramos que existe el rol hr_manager.
     roles = {r.name: r for r in session.exec(select(Role)).all()}
-    hr_role = roles.get("hr_manager")
-    if hr_role is None:
-        hr_role = Role(
-            name="hr_manager",
-            description="Responsable de Recursos Humanos del tenant",
-        )
-        session.add(hr_role)
-        session.commit()
-        session.refresh(hr_role)
-        roles["hr_manager"] = hr_role
 
     # Asignamos permisos HR a roles base.
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": hr_permissions.keys(),
         "tenant_admin": hr_permissions.keys(),
-        "hr_manager": hr_permissions.keys(),
+        "gerencia": ("hr:read", "hr:reports"),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -512,6 +500,7 @@ def _ensure_erp_permissions(session: Session) -> None:
         "erp:read": "Ver proyectos, tareas e informes del ERP",
         "erp:track": "Iniciar/detener control de tiempo",
         "erp:manage": "Gestionar proyectos y tareas del ERP",
+        "erp:reports:read": "Ver informes del ERP",
         "can_create_time_reports": "Crear informes de horas",
     }
 
@@ -532,7 +521,7 @@ def _ensure_erp_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": erp_permissions.keys(),
         "tenant_admin": erp_permissions.keys(),
-        "manager": ("erp:read", "erp:track", "can_create_time_reports"),
+        "gerencia": ("erp:read", "erp:reports:read"),
         "user": ("erp:read", "erp:track"),
     }
 
@@ -588,11 +577,7 @@ def _ensure_contracts_permissions(session: Session) -> None:
     roles = {r.name: r for r in session.exec(select(Role)).all()}
 
     required_roles = {
-        "jefe_obra": "Jefe de obra",
         "gerencia": "Gerencia",
-        "administracion": "Administracion",
-        "compras": "Compras",
-        "juridico": "Juridico",
     }
     for role_name, desc in required_roles.items():
         if role_name not in roles:
@@ -605,11 +590,8 @@ def _ensure_contracts_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": contract_permissions.keys(),
         "tenant_admin": contract_permissions.keys(),
-        "jefe_obra": ("contracts:create", "contracts:read", "contracts:edit"),
         "gerencia": ("contracts:read", "contracts:approve", "contracts:reject"),
-        "administracion": ("contracts:read", "contracts:approve", "contracts:reject"),
-        "compras": ("contracts:read", "contracts:approve", "contracts:reject"),
-        "juridico": ("contracts:read", "contracts:approve", "contracts:reject"),
+        "user": ("contracts:read",),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -633,6 +615,40 @@ def _ensure_contracts_permissions(session: Session) -> None:
 
     session.commit()
 
+
+def _prune_gerencia_permissions(session: Session) -> None:
+    """
+    El rol Gerencia no debe tener permisos de soporte, logs, herramientas ni ajustes de tenant.
+    """
+
+    role = session.exec(select(Role).where(Role.name == "gerencia")).one_or_none()
+    if not role:
+        return
+
+    perms = session.exec(
+        select(Permission).where(
+            (Permission.code.like("tickets:%"))
+            | (Permission.code.like("tools:%"))
+            | (Permission.code.like("tenants:%"))
+            | (Permission.code == "audit:read")
+            | (Permission.code == "branding:manage")
+            | (Permission.code == "users:create")
+            | (Permission.code == "users:update")
+            | (Permission.code == "users:delete")
+        )
+    ).all()
+    disallowed_ids = {perm.id for perm in perms}
+    if not disallowed_ids:
+        return
+
+    session.exec(
+        delete(RolePermission).where(
+            RolePermission.role_id == role.id,
+            RolePermission.permission_id.in_(disallowed_ids),
+        )
+    )
+    session.commit()
+
 def run_seed() -> None:
     """
     Punto de entrada principal del proceso de seed RBAC.
@@ -649,6 +665,8 @@ def run_seed() -> None:
         _ensure_hr_permissions(session)
         _ensure_erp_permissions(session)
         _ensure_contracts_permissions(session)
+        _prune_gerencia_permissions(session)
+        migrate_roles(session, apply_changes=True)
 
 
 if __name__ == "__main__":

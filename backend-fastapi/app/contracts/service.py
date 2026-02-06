@@ -595,6 +595,7 @@ def approve_contract(
         send_contract_notification.delay(
             event=ContractNotificationEvent.GERENCIA_APPROVED,
             contract_id=contract.id,
+            department_label="Gerencia",
         )
         return contract
 
@@ -641,6 +642,12 @@ def approve_contract(
             session.add(contract)
             session.commit()
             session.refresh(contract)
+
+        send_contract_notification.delay(
+            event=ContractNotificationEvent.DEPT_APPROVED,
+            contract_id=contract.id,
+            department_label=dept.value,
+        )
         return contract
 
     raise HTTPException(

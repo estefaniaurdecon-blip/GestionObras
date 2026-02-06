@@ -57,7 +57,12 @@ def build_signature_url(token: str) -> str:
     return f"/public/sign/{token}"
 
 
-def build_email_payload(event: ContractNotificationEvent, contract: Contract) -> tuple[str, str]:
+def build_email_payload(
+    event: ContractNotificationEvent,
+    contract: Contract,
+    *,
+    department_label: Optional[str] = None,
+) -> tuple[str, str]:
     subject = "Contrato"
     body = ""
     if event == ContractNotificationEvent.DOCS_GENERATED:
@@ -70,11 +75,13 @@ def build_email_payload(event: ContractNotificationEvent, contract: Contract) ->
         subject = "Contrato pendiente de aprobacion (Gerencia)"
         body = f"Contrato {contract.id} listo para revision de Gerencia."
     elif event == ContractNotificationEvent.GERENCIA_APPROVED:
-        subject = "Contrato aprobado por Gerencia"
-        body = f"Contrato {contract.id} aprobado por Gerencia."
+        dept_label = department_label or "Gerencia"
+        subject = f"Contrato aprobado por {dept_label}"
+        body = f"Contrato {contract.id} aprobado por {dept_label}."
     elif event == ContractNotificationEvent.DEPT_APPROVED:
-        subject = "Contrato aprobado por departamento"
-        body = f"Contrato {contract.id} ha recibido una aprobacion adicional."
+        dept_label = department_label or "un departamento"
+        subject = f"Contrato aprobado por {dept_label}"
+        body = f"Contrato {contract.id} aprobado por {dept_label}."
     elif event == ContractNotificationEvent.ALL_APPROVED:
         subject = "Contrato listo para firma"
         body = f"Contrato {contract.id} aprobado por todos los departamentos."
@@ -97,12 +104,13 @@ def send_contract_notification(
     contract: Contract,
     recipients: Iterable[str],
     signature_token: Optional[str] = None,
+    department_label: Optional[str] = None,
 ) -> int:
     recipients_list = _merge_recipients(recipients)
     if not recipients_list:
         return 0
 
-    subject, body = build_email_payload(event, contract)
+    subject, body = build_email_payload(event, contract, department_label=department_label)
     if event == ContractNotificationEvent.SIGNATURE_SENT and signature_token:
         body = body.replace("TOKEN", signature_token)
 

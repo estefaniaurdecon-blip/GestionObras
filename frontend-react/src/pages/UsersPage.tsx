@@ -75,13 +75,13 @@ async function fetchUsers(tenantId: number): Promise<User[]> {
 interface NewUserFormState {
   email: string;
   full_name: string;
-  role: "tenant_admin" | "user";
+  role: "tenant_admin" | "gerencia" | "user";
 }
 
 interface EditUserFormState {
   email: string;
   full_name: string;
-  role: "tenant_admin" | "user";
+  role: "tenant_admin" | "gerencia" | "user";
 }
 
 /**
@@ -137,7 +137,7 @@ export const UsersPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
-    "all" | "super_admin" | "tenant_admin" | "user"
+    "all" | "super_admin" | "tenant_admin" | "gerencia" | "user"
   >("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">(
     "all",
@@ -265,11 +265,17 @@ export const UsersPage: React.FC = () => {
   });
 
   const openEditUser = (user: User) => {
+    const role =
+      user.role_name === "tenant_admin"
+        ? "tenant_admin"
+        : user.role_name === "gerencia"
+          ? "gerencia"
+          : "user";
     setEditingUser(user);
     setEditForm({
       email: user.email,
       full_name: user.full_name ?? "",
-      role: user.role_name === "tenant_admin" ? "tenant_admin" : "user",
+      role,
     });
     setEditOpen(true);
   };
@@ -290,6 +296,7 @@ export const UsersPage: React.FC = () => {
   const getRoleLabel = (user: User): string => {
     if (user.is_super_admin) return t("users.roles.superAdmin");
     if (user.role_name === "tenant_admin") return t("users.roles.tenantAdmin");
+    if (user.role_name === "gerencia") return "Gerencia";
     return t("users.roles.standard");
   };
 
@@ -360,9 +367,13 @@ export const UsersPage: React.FC = () => {
         (roleFilter === "tenant_admin" &&
           user.role_name === "tenant_admin" &&
           !user.is_super_admin) ||
+        (roleFilter === "gerencia" &&
+          user.role_name === "gerencia" &&
+          !user.is_super_admin) ||
         (roleFilter === "user" &&
           !user.is_super_admin &&
-          user.role_name !== "tenant_admin");
+          user.role_name !== "tenant_admin" &&
+          user.role_name !== "gerencia");
 
       const matchesStatus =
         statusFilter === "all" ||
@@ -452,6 +463,7 @@ export const UsersPage: React.FC = () => {
                   <option value="all">{t("users.filters.all")}</option>
                   <option value="super_admin">{t("users.roles.superAdmin")}</option>
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="gerencia">Gerencia</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
               </FormControl>
@@ -573,6 +585,7 @@ export const UsersPage: React.FC = () => {
                 <FormLabel>{t("users.invite.role")}</FormLabel>
                 <Select name="role" value={form.role} onChange={handleChange}>
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="gerencia">Gerencia</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
               </FormControl>
@@ -622,6 +635,7 @@ export const UsersPage: React.FC = () => {
                 <FormLabel>{t("users.edit.role")}</FormLabel>
                 <Select name="role" value={editForm.role} onChange={handleEditChange}>
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
+                  <option value="gerencia">Gerencia</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
               </FormControl>

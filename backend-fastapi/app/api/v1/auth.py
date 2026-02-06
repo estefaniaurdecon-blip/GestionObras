@@ -2,19 +2,28 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.db.session import get_session
 from app.schemas.auth import LoginResponse, MFAVerifyRequest, MFAVerifyResponse
 from app.schemas.password import ChangePasswordRequest
-from app.services.auth_service import login_step1, login_step2_verify_mfa, change_password
+from app.services.auth_service import (
+    _build_mfa_trust_token,
+    change_password,
+    login_step1,
+    login_step2_verify_mfa,
+)
 from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.core.rate_limit import enforce_rate_limit
 
 
 router = APIRouter()
+
+
+def _get_user_by_email(session: Session, email: str) -> User | None:
+    return session.exec(select(User).where(User.email == email)).one_or_none()
 
 
 @router.post(
@@ -38,7 +47,13 @@ def login(
     enforce_rate_limit(request, key="auth_login", limit=20, window_seconds=60)
 
     try:
-        result = login_step1(session, email=form_data.username, password=form_data.password)
+        trust_cookie = request.cookies.get(settings.mfa_trust_cookie_name)
+        result = login_step1(
+            session,
+            email=form_data.username,
+            password=form_data.password,
+            mfa_trust_token=trust_cookie,
+        )
         if result.access_token:
             response.set_cookie(
                 settings.auth_cookie_name,
@@ -48,6 +63,16 @@ def login(
                 samesite=settings.auth_cookie_samesite,
                 max_age=settings.access_token_expire_minutes * 60,
             )
+            user = _get_user_by_email(session, form_data.username)
+            if user and not user.is_super_admin:
+                response.set_cookie(
+                    settings.mfa_trust_cookie_name,
+                    _build_mfa_trust_token(user),
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite=settings.auth_cookie_samesite,
+                    max_age=settings.mfa_trust_hours * 3600,
+                )
         return result
     except ValueError as exc:
         raise HTTPException(
@@ -90,6 +115,16 @@ def verify_mfa(
             samesite=settings.auth_cookie_samesite,
             max_age=settings.access_token_expire_minutes * 60,
         )
+        user = _get_user_by_email(session, body.username)
+        if user and not user.is_super_admin:
+            response.set_cookie(
+                settings.mfa_trust_cookie_name,
+                _build_mfa_trust_token(user),
+                httponly=True,
+                secure=settings.auth_cookie_secure,
+                samesite=settings.auth_cookie_samesite,
+                max_age=settings.mfa_trust_hours * 3600,
+            )
         return result
     except ValueError as exc:
         raise HTTPException(
@@ -129,6 +164,12 @@ def change_my_password(
 def logout(response: Response) -> None:
     response.delete_cookie(
         settings.auth_cookie_name,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite,
+    )
+    response.delete_cookie(
+        settings.mfa_trust_cookie_name,
         httponly=True,
         secure=settings.auth_cookie_secure,
         samesite=settings.auth_cookie_samesite,

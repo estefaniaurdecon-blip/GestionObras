@@ -35,9 +35,11 @@ import { AppShell } from "../components/layout/AppShell";
 import { ContractsFiltersCard, ContractsTableCard } from "../components/erp";
 import {
   addContractOffer,
+  approveContract,
   createContract,
   fetchContracts,
   generateContractDocs,
+  rejectContract,
   selectContractOffer,
   submitContractGerencia,
   updateContract,
@@ -206,6 +208,9 @@ export const ErpContractsPage: React.FC = () => {
   const [editSupplierBic, setEditSupplierBic] = useState<string>("");
   const [editTotalAmount, setEditTotalAmount] = useState<string>("");
   const [editCurrency, setEditCurrency] = useState<string>("EUR");
+  const [approvalComment, setApprovalComment] = useState<string>("");
+  const [rejectReason, setRejectReason] = useState<string>("");
+  const [rejectBackTo, setRejectBackTo] = useState<string>("");
 
   const openContractDetails = (contract: Contract) => {
     setSelectedContract(contract);
@@ -226,6 +231,9 @@ export const ErpContractsPage: React.FC = () => {
       contract.total_amount != null ? String(contract.total_amount) : ""
     );
     setEditCurrency(contract.currency ?? "EUR");
+    setApprovalComment("");
+    setRejectReason("");
+    setRejectBackTo("");
     contractDetailsDisclosure.onOpen();
   };
 
@@ -488,6 +496,65 @@ export const ErpContractsPage: React.FC = () => {
       toast({
         title: "Error al enviar",
         description: error?.message ?? "No se pudo enviar.",
+        status: "error",
+      });
+    },
+  });
+
+  const approveContractMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedContract) throw new Error("No hay contrato seleccionado.");
+      return approveContract(
+        selectedContract.id,
+        {
+          comment: approvalComment || null,
+        },
+        effectiveTenantId,
+      );
+    },
+    onSuccess: async (contract) => {
+      setSelectedContract(contract);
+      setApprovalComment("");
+      await queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      toast({ title: "Aprobado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al aprobar",
+        description:
+          error?.response?.data?.detail ?? error?.message ?? "No se pudo aprobar.",
+        status: "error",
+      });
+    },
+  });
+
+  const rejectContractMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedContract) throw new Error("No hay contrato seleccionado.");
+      if (!rejectReason.trim()) throw new Error("Indica el motivo del rechazo.");
+      return rejectContract(
+        selectedContract.id,
+        {
+          reason: rejectReason.trim(),
+          back_to_status: rejectBackTo
+            ? (rejectBackTo as Contract["status"])
+            : null,
+        },
+        effectiveTenantId,
+      );
+    },
+    onSuccess: async (contract) => {
+      setSelectedContract(contract);
+      setRejectReason("");
+      setRejectBackTo("");
+      await queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      toast({ title: "Rechazado", status: "success" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error al rechazar",
+        description:
+          error?.response?.data?.detail ?? error?.message ?? "No se pudo rechazar.",
         status: "error",
       });
     },
@@ -1172,6 +1239,7 @@ export const ErpContractsPage: React.FC = () => {
                 <FormControl>
                   <FormLabel>Titulo</FormLabel>
                   <Input
+                    isDisabled={selectedContract?.status !== "DRAFT"}
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                   />
@@ -1179,6 +1247,7 @@ export const ErpContractsPage: React.FC = () => {
                 <FormControl>
                   <FormLabel>Descripcion</FormLabel>
                   <Textarea
+                    isDisabled={selectedContract?.status !== "DRAFT"}
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
                   />
@@ -1189,6 +1258,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Empresa</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierName}
                       onChange={(e) => setEditSupplierName(e.target.value)}
                     />
@@ -1196,6 +1266,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>CIF/NIF</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierTaxId}
                       onChange={(e) => setEditSupplierTaxId(e.target.value)}
                     />
@@ -1203,6 +1274,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Contacto</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierContact}
                       onChange={(e) => setEditSupplierContact(e.target.value)}
                     />
@@ -1210,6 +1282,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Telefono</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierPhone}
                       onChange={(e) => setEditSupplierPhone(e.target.value)}
                     />
@@ -1217,6 +1290,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Email</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierEmail}
                       onChange={(e) => setEditSupplierEmail(e.target.value)}
                     />
@@ -1224,6 +1298,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Direccion</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierAddress}
                       onChange={(e) => setEditSupplierAddress(e.target.value)}
                     />
@@ -1231,6 +1306,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Ciudad</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierCity}
                       onChange={(e) => setEditSupplierCity(e.target.value)}
                     />
@@ -1238,6 +1314,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Codigo postal</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierPostalCode}
                       onChange={(e) => setEditSupplierPostalCode(e.target.value)}
                     />
@@ -1245,6 +1322,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Pais</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierCountry}
                       onChange={(e) => setEditSupplierCountry(e.target.value)}
                     />
@@ -1252,6 +1330,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>IBAN</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierIban}
                       onChange={(e) => setEditSupplierIban(e.target.value)}
                     />
@@ -1259,6 +1338,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>BIC</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editSupplierBic}
                       onChange={(e) => setEditSupplierBic(e.target.value)}
                     />
@@ -1269,6 +1349,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Importe total</FormLabel>
                     <Input
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editTotalAmount}
                       onChange={(e) => setEditTotalAmount(e.target.value)}
                     />
@@ -1276,6 +1357,7 @@ export const ErpContractsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel>Moneda</FormLabel>
                     <Select
+                      isDisabled={selectedContract?.status !== "DRAFT"}
                       value={editCurrency}
                       onChange={(e) => setEditCurrency(e.target.value)}
                     >
@@ -1287,31 +1369,89 @@ export const ErpContractsPage: React.FC = () => {
                 <Text fontSize="sm" color={subtleText}>
                   Estado actual: {selectedContract?.status ?? "-"}
                 </Text>
+
+                {selectedContract?.status?.startsWith("PENDING") && (
+                  <>
+                    <Divider />
+                    <Text fontWeight="semibold">Revision y aprobacion</Text>
+                    <FormControl>
+                      <FormLabel>Comentario</FormLabel>
+                      <Textarea
+                        value={approvalComment}
+                        onChange={(e) => setApprovalComment(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Motivo de rechazo</FormLabel>
+                      <Textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Volver a estado</FormLabel>
+                      <Select
+                        placeholder="Selecciona estado"
+                        value={rejectBackTo}
+                        onChange={(e) => setRejectBackTo(e.target.value)}
+                      >
+                        <option value="DRAFT">DRAFT</option>
+                        <option value="PENDING_JEFE_OBRA">PENDING_JEFE_OBRA</option>
+                        <option value="PENDING_GERENCIA">PENDING_GERENCIA</option>
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
               </Stack>
             </ModalBody>
             <ModalFooter>
               <HStack spacing={3} flexWrap="wrap">
-                <Button
-                  variant="outline"
-                  onClick={() => generateDocsSelectedMutation.mutate()}
-                  isLoading={generateDocsSelectedMutation.isPending}
-                >
-                  Generar docs (PENDING_JEFE_OBRA)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => submitGerenciaSelectedMutation.mutate()}
-                  isLoading={submitGerenciaSelectedMutation.isPending}
-                >
-                  Enviar a Gerencia
-                </Button>
-                <Button
-                  colorScheme="green"
-                  onClick={() => saveContractMutation.mutate()}
-                  isLoading={saveContractMutation.isPending}
-                >
-                  Guardar cambios
-                </Button>
+                {selectedContract?.status === "DRAFT" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => generateDocsSelectedMutation.mutate()}
+                      isLoading={generateDocsSelectedMutation.isPending}
+                    >
+                      Generar docs (PENDING_JEFE_OBRA)
+                    </Button>
+                    <Button
+                      colorScheme="green"
+                      onClick={() => saveContractMutation.mutate()}
+                      isLoading={saveContractMutation.isPending}
+                    >
+                      Guardar cambios
+                    </Button>
+                  </>
+                )}
+                {selectedContract?.status === "PENDING_JEFE_OBRA" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => submitGerenciaSelectedMutation.mutate()}
+                    isLoading={submitGerenciaSelectedMutation.isPending}
+                  >
+                    Enviar a Gerencia
+                  </Button>
+                )}
+                {selectedContract?.status?.startsWith("PENDING") && (
+                  <>
+                    <Button
+                      colorScheme="green"
+                      onClick={() => approveContractMutation.mutate()}
+                      isLoading={approveContractMutation.isPending}
+                    >
+                      Aprobar
+                    </Button>
+                    <Button
+                      colorScheme="red"
+                      variant="outline"
+                      onClick={() => rejectContractMutation.mutate()}
+                      isLoading={rejectContractMutation.isPending}
+                    >
+                      Rechazar
+                    </Button>
+                  </>
+                )}
               </HStack>
             </ModalFooter>
           </ModalContent>

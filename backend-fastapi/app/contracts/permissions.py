@@ -27,6 +27,7 @@ ROLE_BY_DEPARTMENT = {
 
 DEPARTMENT_NAME_MAP = {
     "gerencia": ContractDepartment.GERENCIA,
+    "gerente": ContractDepartment.GERENCIA,
     "administracion": ContractDepartment.ADMIN,
     "compras": ContractDepartment.COMPRAS,
     "juridico": ContractDepartment.JURIDICO,
@@ -88,7 +89,19 @@ def is_jefe_obra(session: Session, user: User) -> bool:
     role = _get_role_name(session, user)
     if role == ROLE_JEFE_OBRA:
         return True
-    return _user_in_department(session, user, "obra")
+    if user.tenant_id:
+        employee = session.exec(
+            select(EmployeeProfile).where(
+                EmployeeProfile.user_id == user.id,
+                EmployeeProfile.tenant_id == user.tenant_id,
+                EmployeeProfile.is_active.is_(True),
+            )
+        ).one_or_none()
+        if employee and employee.position:
+            position_key = employee.position.strip().lower()
+            if "jefe" in position_key and "obra" in position_key:
+                return True
+    return False
 
 
 def get_user_departments(session: Session, user: User) -> Set[ContractDepartment]:
@@ -110,6 +123,11 @@ def get_user_departments(session: Session, user: User) -> Set[ContractDepartment
             )
         ).one_or_none()
         if employee:
+            if employee.position:
+                position_key = employee.position.strip().lower()
+                for name, dept in DEPARTMENT_NAME_MAP.items():
+                    if name in position_key and isinstance(dept, ContractDepartment):
+                        departments.add(dept)
             statement = (
                 select(Department.name)
                 .join(EmployeeDepartment, EmployeeDepartment.department_id == Department.id)
@@ -143,7 +161,9 @@ def can_view_contract(session: Session, user: User) -> bool:
         return True
     if _user_has_permission(session, user, "contracts:read"):
         return True
-    return bool(get_user_departments(session, user)) or is_jefe_obra(session, user)
+    if is_jefe_obra(session, user):
+        return True
+    return bool(get_user_departments(session, user))
 
 
 def can_approve_contract(session: Session, user: User) -> bool:

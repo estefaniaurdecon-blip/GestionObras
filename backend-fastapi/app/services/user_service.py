@@ -10,12 +10,11 @@ from app.core.audit import log_action
 from app.core.config import settings
 from app.core.security import hash_password
 from app.core.email import send_tenant_admin_welcome_email
+from app.api.deps import _collect_user_permission_codes
 from app.models.hr import EmployeeProfile
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.role import Role
-from app.models.permission import Permission
-from app.models.role_permission import RolePermission
 from app.models.audit_log import AuditLog
 from app.schemas.user import (
     UserCreate,
@@ -24,6 +23,8 @@ from app.schemas.user import (
     UserUpdateMe,
     UserStatusUpdate,
 )
+
+OFFICIAL_NON_SUPERADMIN_ROLES = {"tenant_admin", "gerencia", "user"}
 
 
 def _resolve_avatar_url(avatar_url: str | None) -> str | None:
@@ -66,16 +67,11 @@ def get_user_me(session: Session, current_user: User) -> UserRead:
     """
 
     role_name: str | None = None
-    permissions: list[str] = []
-    if current_user.role_id:
-        role = session.get(Role, current_user.role_id)
-        role_name = role.name if role else None
-        statement = (
-            select(Permission.code)
-            .join(RolePermission, RolePermission.permission_id == Permission.id)
-            .where(RolePermission.role_id == current_user.role_id)
-        )
-        permissions = [row[0] for row in session.exec(statement).all()]
+    role = session.get(Role, current_user.role_id) if current_user.role_id else None
+    if role:
+        role_name = role.name
+
+    permissions = sorted(_collect_user_permission_codes(session, current_user))
 
     return _user_to_read(
         current_user,
@@ -292,9 +288,11 @@ def create_user(
         if user_in.role_name == "super_admin":
             raise PermissionError("No tienes permisos para asignar rol Super Admin")
 
-    allowed_roles = {"tenant_admin", "manager", "user", "hr_manager"}
-    if not current_user.is_super_admin and user_in.role_name:
-        if user_in.role_name not in allowed_roles:
+    if user_in.role_name:
+        if user_in.role_name == "super_admin":
+            if not current_user.is_super_admin or not user_in.is_super_admin:
+                raise ValueError("Rol no permitido para este usuario")
+        elif user_in.role_name not in OFFICIAL_NON_SUPERADMIN_ROLES:
             raise ValueError("Rol no permitido para este usuario")
 
     existing = session.exec(
