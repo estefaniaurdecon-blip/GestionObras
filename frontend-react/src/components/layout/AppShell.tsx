@@ -113,6 +113,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const isSuperAdmin = currentUser?.is_super_admin === true;
   const isTenantAdmin =
     !isSuperAdmin && currentUser?.role_name === "tenant_admin";
+  const isGerencia = !isSuperAdmin && currentUser?.role_name === "gerencia";
   const tenantId = currentUser?.tenant_id ?? null;
 
   const brandingQuery = useQuery({
@@ -326,7 +327,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               {t("layout.nav.workManagement")}
             </Button>
 
-            {(isSuperAdmin || isTenantAdmin) && (
+            {(isSuperAdmin || isTenantAdmin || isGerencia) && (
               <>
                 <Accordion
                   allowToggle
@@ -383,7 +384,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
           <Divider />
 
-          {(isSuperAdmin || isTenantAdmin) && (
+          {(isSuperAdmin || isTenantAdmin || isGerencia) && (
             <VStack align="stretch" spacing={2}>
               <Text
                 fontSize="xs"
@@ -400,13 +401,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 justifyContent="flex-start"
                 size="sm"
               >{t("layout.nav.users")}</Button>
-              <Button
-                as={Link}
-                to="/tools"
-                variant={isActivePrefix("/tools") ? "solid" : "ghost"}
-                justifyContent="flex-start"
-                size="sm"
-              >{t("layout.nav.tools")}</Button>
+              {(isSuperAdmin || isTenantAdmin) && (
+                <Button
+                  as={Link}
+                  to="/tools"
+                  variant={isActivePrefix("/tools") ? "solid" : "ghost"}
+                  justifyContent="flex-start"
+                  size="sm"
+                >{t("layout.nav.tools")}</Button>
+              )}
               {isSuperAdmin && (
                 <Button
                   as={Link}
@@ -418,61 +421,63 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   {t("layout.nav.tenantSettings")}
                 </Button>
               )}
-              <Accordion
-                allowToggle
-                index={settingsAccordionIndex}
-                onChange={(nextIndex) => {
-                  setSettingsAccordionIndex(
-                    typeof nextIndex === "number" ? nextIndex : nextIndex[0] ?? -1
-                  );
-                }}
-                borderWidth="1px"
-                borderRadius="md"
-              >
-                <AccordionItem border="none">
-                  <AccordionButton px={3} py={2}>
-                    <Box
-                      flex="1"
-                      textAlign="left"
-                      fontSize="sm"
-                      fontWeight="semibold"
-                    >
-                      {t("layout.nav.settings")}
-                    </Box>
-                    <AccordionIcon />
-                  </AccordionButton>
-                  <AccordionPanel px={2} pb={3}>
-                    <VStack align="stretch" spacing={1}>
-                      <Button
-                        as={Link}
-                        to="/tenant-branding"
-                        variant={
-                          isActivePrefix("/tenant-branding")
-                            ? "solid"
-                            : "ghost"
-                        }
-                        justifyContent="flex-start"
-                        size="sm"
+              {(isSuperAdmin || isTenantAdmin) && (
+                <Accordion
+                  allowToggle
+                  index={settingsAccordionIndex}
+                  onChange={(nextIndex) => {
+                    setSettingsAccordionIndex(
+                      typeof nextIndex === "number" ? nextIndex : nextIndex[0] ?? -1
+                    );
+                  }}
+                  borderWidth="1px"
+                  borderRadius="md"
+                >
+                  <AccordionItem border="none">
+                    <AccordionButton px={3} py={2}>
+                      <Box
+                        flex="1"
+                        textAlign="left"
+                        fontSize="sm"
+                        fontWeight="semibold"
                       >
-                        {t("layout.nav.branding")}
-                      </Button>
-                      <Button
-                        as={Link}
-                        to="/tenant-department-emails"
-                        variant={
-                          isActivePrefix("/tenant-department-emails")
-                            ? "solid"
-                            : "ghost"
-                        }
-                        justifyContent="flex-start"
-                        size="sm"
-                      >
-                        {t("layout.nav.departmentEmails")}
-                      </Button>
-                    </VStack>
-                  </AccordionPanel>
-                </AccordionItem>
-              </Accordion>
+                        {t("layout.nav.settings")}
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel px={2} pb={3}>
+                      <VStack align="stretch" spacing={1}>
+                        <Button
+                          as={Link}
+                          to="/tenant-branding"
+                          variant={
+                            isActivePrefix("/tenant-branding")
+                              ? "solid"
+                              : "ghost"
+                          }
+                          justifyContent="flex-start"
+                          size="sm"
+                        >
+                          {t("layout.nav.branding")}
+                        </Button>
+                        <Button
+                          as={Link}
+                          to="/tenant-department-emails"
+                          variant={
+                            isActivePrefix("/tenant-department-emails")
+                              ? "solid"
+                              : "ghost"
+                          }
+                          justifyContent="flex-start"
+                          size="sm"
+                        >
+                          {t("layout.nav.departmentEmails")}
+                        </Button>
+                      </VStack>
+                    </AccordionPanel>
+                  </AccordionItem>
+                </Accordion>
+              )}
               {isSuperAdmin && (
                 <Button
                   as={Link}
@@ -549,7 +554,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   </HStack>
                 </MenuButton>
                 <MenuList>
-                  <MenuItem onClick={goToUserSettings}>{t("layout.userMenu.settings")}</MenuItem>
+                  {!isGerencia && (
+                    <MenuItem onClick={goToUserSettings}>{t("layout.userMenu.settings")}</MenuItem>
+                  )}
                   <MenuItem onClick={handleLogout}>{t("layout.userMenu.logout")}</MenuItem>
                 </MenuList>
               </Menu>

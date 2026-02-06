@@ -118,17 +118,30 @@ export const DashboardPage: React.FC = () => {
   const { data: currentUser } = useCurrentUser();
   const tenantId = currentUser?.tenant_id ?? undefined;
   const isSuperAdmin = currentUser?.is_super_admin === true;
+  const permissionSet = useMemo(
+    () => new Set(currentUser?.permissions ?? []),
+    [currentUser?.permissions],
+  );
   const canCreateTimeReports =
     isSuperAdmin ||
-    (currentUser?.permissions?.includes("can_create_time_reports") ?? false);
+    permissionSet.has("can_create_time_reports");
   const roleName = currentUser?.role_name ?? null;
+  const canReadTimeReports =
+    isSuperAdmin || permissionSet.has("erp:reports:read");
+  const canAccessSupport =
+    isSuperAdmin ||
+    permissionSet.has("tickets:manage") ||
+    permissionSet.has("tickets:read_tenant") ||
+    permissionSet.has("tickets:read_own") ||
+    permissionSet.has("tickets:create");
+  const canAccessTools =
+    isSuperAdmin || permissionSet.has("tools:read");
   const hasHrPermission =
-    currentUser?.permissions?.includes("hr:read") ?? false;
+    permissionSet.has("hr:read");
   const canReadHr =
     isSuperAdmin ||
     hasHrPermission ||
-    roleName === "tenant_admin" ||
-    roleName === "hr_manager";
+    roleName === "tenant_admin";
   const effectiveTenantId = isSuperAdmin ? undefined : tenantId;
 
   const { data: summary } = useQuery<DashboardSummary>({
@@ -187,6 +200,7 @@ export const DashboardPage: React.FC = () => {
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
       }),
+    enabled: canReadTimeReports,
   });
 
   useEffect(() => {
@@ -224,7 +238,7 @@ export const DashboardPage: React.FC = () => {
   const { data: tools, isLoading } = useQuery<Tool[]>({
     queryKey: ["tenant-tools", tenantId],
     queryFn: () => fetchTenantTools(tenantId as number),
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && canAccessTools,
   });
 
   const hrEmployeesQuery = useQuery<EmployeeProfile[]>({
@@ -1126,24 +1140,28 @@ export const DashboardPage: React.FC = () => {
                 {t("dashboard.actions.viewTimeReport")}
               </Button>
             )}
-            <Button
-              as={Link}
-              to="/support"
-              size="sm"
-              colorScheme="green"
-              variant="outline"
-            >
-              {t("dashboard.actions.viewTickets")}
-            </Button>
-            <Button
-              as={Link}
-              to="/tools"
-              size="sm"
-              colorScheme="green"
-              variant="outline"
-            >
-              {t("dashboard.actions.viewTools")}
-            </Button>
+            {canAccessSupport && (
+              <Button
+                as={Link}
+                to="/support"
+                size="sm"
+                colorScheme="green"
+                variant="outline"
+              >
+                {t("dashboard.actions.viewTickets")}
+              </Button>
+            )}
+            {canAccessTools && (
+              <Button
+                as={Link}
+                to="/tools"
+                size="sm"
+                colorScheme="green"
+                variant="outline"
+              >
+                {t("dashboard.actions.viewTools")}
+              </Button>
+            )}
           </HStack>
         </HStack>
       </Box>
@@ -1276,49 +1294,53 @@ export const DashboardPage: React.FC = () => {
         </Table>
       </Box>
 
-      <Heading as="h2" size="md" mb={4}>
-        {t("dashboard.tools.title")}
-      </Heading>
-      <Text mb={4} fontSize="sm" color={subtleText}>
-        {t("dashboard.tools.subtitle")}
-      </Text>
+      {canAccessTools && (
+        <>
+          <Heading as="h2" size="md" mb={4}>
+            {t("dashboard.tools.title")}
+          </Heading>
+          <Text mb={4} fontSize="sm" color={subtleText}>
+            {t("dashboard.tools.subtitle")}
+          </Text>
 
-      {isLoading && <Text>{t("dashboard.tools.loading")}</Text>}
+          {isLoading && <Text>{t("dashboard.tools.loading")}</Text>}
 
-      {!isLoading && tools && <ToolGrid tools={tools} onLaunch={handleLaunch} />}
+          {!isLoading && tools && <ToolGrid tools={tools} onLaunch={handleLaunch} />}
 
-      {launchUrl && selectedTool && (
-        <Box
-          mt={8}
-          borderWidth="1px"
-          borderRadius="lg"
-          overflow="hidden"
-          bg={cardBg}
-        >
-          <Box px={4} py={2} borderBottomWidth="1px">
-            <Text fontWeight="semibold" fontSize="sm">
-              {selectedTool.name}
-            </Text>
-            <Text fontSize="xs" color={subtleText}>
-              {selectedTool.description ??
-                t("dashboard.tools.embeddedFallback")}
-            </Text>
-            {selectedTool.slug === "erp" && (
-              <Text fontSize="xs" color={subtleText} mt={1}>
-                {t("dashboard.tools.erpNote")}
-              </Text>
-            )}
-          </Box>
-          <Box h={{ base: "70vh", md: "75vh", lg: "80vh" }}>
-            <iframe
-              src={launchUrl}
-              width="100%"
-              height="100%"
-              style={{ border: "none" }}
-              title={selectedTool.name}
-            />
-          </Box>
-        </Box>
+          {launchUrl && selectedTool && (
+            <Box
+              mt={8}
+              borderWidth="1px"
+              borderRadius="lg"
+              overflow="hidden"
+              bg={cardBg}
+            >
+              <Box px={4} py={2} borderBottomWidth="1px">
+                <Text fontWeight="semibold" fontSize="sm">
+                  {selectedTool.name}
+                </Text>
+                <Text fontSize="xs" color={subtleText}>
+                  {selectedTool.description ??
+                    t("dashboard.tools.embeddedFallback")}
+                </Text>
+                {selectedTool.slug === "erp" && (
+                  <Text fontSize="xs" color={subtleText} mt={1}>
+                    {t("dashboard.tools.erpNote")}
+                  </Text>
+                )}
+              </Box>
+              <Box h={{ base: "70vh", md: "75vh", lg: "80vh" }}>
+                <iframe
+                  src={launchUrl}
+                  width="100%"
+                  height="100%"
+                  style={{ border: "none" }}
+                  title={selectedTool.name}
+                />
+              </Box>
+            </Box>
+          )}
+        </>
       )}
     </AppShell>
   );

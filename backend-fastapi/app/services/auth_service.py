@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 from app.core.audit import log_action
 from app.core.config import settings
 from app.core.email import send_mfa_email_code
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.models.mfa_email_code import MFAEmailCode
 from app.models.user import User
 from app.schemas.auth import LoginResponse, MFAVerifyResponse
@@ -29,7 +29,32 @@ def authenticate_user(session: Session, email: str, password: str) -> User:
     return user
 
 
-def login_step1(session: Session, email: str, password: str) -> LoginResponse:
+def _build_mfa_trust_token(user: User) -> str:
+    return create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(hours=settings.mfa_trust_hours),
+        token_type="mfa_trust",
+    )
+
+
+def _is_mfa_trusted_for_user(user: User, mfa_trust_token: str | None) -> bool:
+    if not mfa_trust_token:
+        return False
+    try:
+        payload = decode_token(mfa_trust_token)
+    except Exception:
+        return False
+    if payload.get("typ") != "mfa_trust":
+        return False
+    return payload.get("sub") == str(user.id)
+
+
+def login_step1(
+    session: Session,
+    email: str,
+    password: str,
+    mfa_trust_token: str | None = None,
+) -> LoginResponse:
     """
     Paso 1 de login:
     - Valida credenciales.
@@ -62,7 +87,27 @@ def login_step1(session: Session, email: str, password: str) -> LoginResponse:
             mfa_required=False,
         )
 
-    # Resto de usuarios: siempre MFA por email.
+    # Si el dispositivo ya fue marcado como confiable en las ultimas 24h,
+    # omitimos MFA y emitimos token de acceso directamente.
+    if _is_mfa_trusted_for_user(user, mfa_trust_token):
+        access_token = create_access_token(
+            subject=str(user.id),
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
+        )
+        log_action(
+            session,
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            action="login.mfa_trusted",
+            details="Login sin MFA por dispositivo confiable",
+        )
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            mfa_required=False,
+        )
+
+    # Resto de usuarios: MFA por email.
     code = f"{secrets.randbelow(1_000_000):06d}"
     code_hash = hash_password(code)
     expires_at = datetime.utcnow() + timedelta(hours=24)

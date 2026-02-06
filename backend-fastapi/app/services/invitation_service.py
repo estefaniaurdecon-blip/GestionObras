@@ -20,6 +20,8 @@ from app.schemas.user import UserCreate
 from app.services.external_account_service import sync_moodle_user
 from app.services.user_service import create_user
 
+INVITABLE_ROLES = {"tenant_admin", "gerencia", "user"}
+
 
 def _generate_token() -> str:
     return secrets.token_urlsafe(32)
@@ -55,6 +57,9 @@ def create_user_invitation(
         raise ValueError("Tenant no encontrado.")
 
     # Validar rol
+    if data.role_name not in INVITABLE_ROLES:
+        raise ValueError("Rol de invitacion no valido.")
+
     role = session.exec(select(Role).where(Role.name == data.role_name)).one_or_none()
     if not role:
         raise ValueError("Rol de invitación no válido.")

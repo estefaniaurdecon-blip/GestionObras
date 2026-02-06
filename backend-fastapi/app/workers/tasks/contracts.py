@@ -70,6 +70,7 @@ def send_contract_notification(
     event: ContractNotificationEvent,
     contract_id: int,
     signature_token: str | None = None,
+    department_label: str | None = None,
 ) -> None:
     with Session(engine) as session:
         if isinstance(event, str):
@@ -88,6 +89,11 @@ def send_contract_notification(
                 *dept_recipients.get("administracion", []),
                 *dept_recipients.get("compras", []),
                 *dept_recipients.get("juridico", []),
+            ]
+        elif event == ContractNotificationEvent.DEPT_APPROVED:
+            recipients = [
+                *dept_recipients.get("gerencia", []),
+                *dept_recipients.get("jefe_obra", []),
             ]
         elif event == ContractNotificationEvent.SIGNATURE_SENT:
             if contract.supplier_email:
@@ -123,6 +129,7 @@ def send_contract_notification(
             contract=contract,
             recipients=recipients,
             signature_token=signature_token,
+            department_label=department_label,
         )
 
 

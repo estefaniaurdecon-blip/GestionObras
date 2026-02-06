@@ -9,7 +9,7 @@ class UserInvitation(SQLModel, table=True):
     Invitación para crear un usuario por email.
 
     La invitación está ligada a un tenant y a un rol lógico
-    (por ejemplo: tenant_admin, user).
+    (por ejemplo: tenant_admin, gerencia, user).
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -19,7 +19,7 @@ class UserInvitation(SQLModel, table=True):
 
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
     role_name: str = Field(
-        description="Nombre lógico del rol (tenant_admin, user, etc.)",
+        description="Nombre lógico del rol (tenant_admin, gerencia, user, etc.)",
         max_length=50,
     )
 

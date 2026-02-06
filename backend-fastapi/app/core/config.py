@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     auth_cookie_name: str = "access_token"
     auth_cookie_secure: bool = False
     auth_cookie_samesite: str = "lax"
+    mfa_trust_cookie_name: str = "mfa_trust_token"
+    mfa_trust_hours: int = 24
     allow_bootstrap_superadmin: bool = False
     superadmin_email: str
     superadmin_password: str
