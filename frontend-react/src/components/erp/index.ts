@@ -5,3 +5,4 @@ export * from "./summary";
 export { SummarySection } from "./summary/SummarySection";
 export * from "./simulations";
 export * from "./invoices";
+export * from "./contracts";

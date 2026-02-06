@@ -1,0 +1,8 @@
+CONTRATO
+Contrato: 1
+Proveedor: PLAC JMG AISLAMIENTOS SL
+CIF/NIF: 43534534535345
+Generado: 2026-02-06T10:10:21.530030
+
+Datos:
+{'email': 'prueba@prueba.com', 'notas': '', 'portes': '', 'descarga': '', 'duracion': '', 'telefono': '673616383', 'fecha_fin': '2025-09-09', 'forma_pago': '', 'obra_number': '2512', 'fecha_inicio': '2025-07-29', 'fechas_hitos': 'Tipo D: Mejora seguridad ante incendios. Fecha Fin: 08/08/2025\n- Colocación falsos techos. Fecha Fin : 15/08/2025', 'precio_total': '28.705,35', 'trabajadores': '', 'precio_cerrado': '', 'forma_pago_utes': '', 'uds_contratadas': 'lo ejecutado realmente', 'empresa_contratada': 'PLAC JMG AISLAMIENTOS SL', 'forma_pago_pactada': '', 'retencion_garantia': 'NO', 'forma_pago_inferior_50k': 'Pagare 60 dias/ Pagare a 120 dias', 'forma_pago_superior_50k': 'Pagare 60 dias/ Pagare a 120 dias'}

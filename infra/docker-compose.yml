@@ -38,6 +38,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
@@ -46,6 +47,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts
       - ./data/logos:/app/data/logos
       - ./data/avatars:/app/data/avatars
       - ./data/project-docs:/app/data/project-docs
@@ -64,6 +66,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
@@ -78,6 +81,7 @@ services:
       ]
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts
 
   celery-beat:
     build:
@@ -93,6 +97,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://192.168.1.171:11434
       INVOICES_STORAGE_PATH: /data/invoices
+      CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
@@ -107,6 +112,7 @@ services:
       ]
     volumes:
       - ./data/invoices:/data/invoices
+      - ./data/contracts:/data/contracts
 
   frontend-react:
     build:

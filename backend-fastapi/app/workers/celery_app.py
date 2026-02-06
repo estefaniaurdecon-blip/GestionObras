@@ -42,5 +42,6 @@ celery_app.conf.update(
     include=[
         "app.workers.tasks.invoices",
         "app.workers.tasks.health",
+        "app.workers.tasks.contracts",
     ]
 )

@@ -11,6 +11,7 @@ from . import (
     hr,
     invitations,
     internal,
+    contracts,
     invoices,
     notifications,
     tenants,
@@ -57,6 +58,11 @@ api_router.include_router(
     invoices.router,
     prefix="/invoices",
     tags=["invoices"],
+)
+api_router.include_router(
+    contracts.router,
+    prefix="/contracts",
+    tags=["contracts"],
 )
 api_router.include_router(
     internal.router,
