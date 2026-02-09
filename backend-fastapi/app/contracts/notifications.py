@@ -40,6 +40,20 @@ def _get_role_emails(session: Session, tenant_id: int, role_name: str) -> list[s
     return [user.email for user in users if user.email]
 
 
+def _get_role_user_ids(session: Session, tenant_id: int, role_name: str) -> list[int]:
+    role = session.exec(select(Role).where(Role.name == role_name)).one_or_none()
+    if not role:
+        return []
+    users = session.exec(
+        select(User).where(
+            User.tenant_id == tenant_id,
+            User.role_id == role.id,
+            User.is_active.is_(True),
+        )
+    ).all()
+    return [user.id for user in users]
+
+
 def get_department_recipients(session: Session, tenant_id: int) -> dict[str, list[str]]:
     return {
         "gerencia": _get_role_emails(session, tenant_id, "gerencia"),
@@ -47,6 +61,16 @@ def get_department_recipients(session: Session, tenant_id: int) -> dict[str, lis
         "compras": _get_role_emails(session, tenant_id, "compras"),
         "juridico": _get_role_emails(session, tenant_id, "juridico"),
         "jefe_obra": _get_role_emails(session, tenant_id, "jefe_obra"),
+    }
+
+
+def get_department_user_ids(session: Session, tenant_id: int) -> dict[str, list[int]]:
+    return {
+        "gerencia": _get_role_user_ids(session, tenant_id, "gerencia"),
+        "administracion": _get_role_user_ids(session, tenant_id, "administracion"),
+        "compras": _get_role_user_ids(session, tenant_id, "compras"),
+        "juridico": _get_role_user_ids(session, tenant_id, "juridico"),
+        "jefe_obra": _get_role_user_ids(session, tenant_id, "jefe_obra"),
     }
 
 
@@ -69,8 +93,14 @@ def build_email_payload(
         subject = "Contrato: documentos generados"
         body = (
             f"Se han generado los documentos del contrato {contract.id}.\n"
-            "Estado: PENDING_JEFE_OBRA.\n"
+            f"Estado: {contract.status}.\n"
         )
+    elif event == ContractNotificationEvent.SUPPLIER_PENDING:
+        subject = "Contrato pendiente de proveedor"
+        body = f"Contrato {contract.id} pendiente de completar datos del proveedor."
+    elif event == ContractNotificationEvent.SUPPLIER_COMPLETED:
+        subject = "Proveedor completado"
+        body = f"Proveedor completado para el contrato {contract.id}."
     elif event == ContractNotificationEvent.GERENCIA_PENDING:
         subject = "Contrato pendiente de aprobacion (Gerencia)"
         body = f"Contrato {contract.id} listo para revision de Gerencia."
@@ -93,7 +123,10 @@ def build_email_payload(
         body = f"Contrato {contract.id} firmado por el proveedor."
     elif event == ContractNotificationEvent.REJECTED:
         subject = "Contrato rechazado"
+        reason = contract.rejected_reason or ""
         body = f"Contrato {contract.id} ha sido rechazado."
+        if reason:
+            body = f"{body}\nMotivo: {reason}"
     return subject, body
 
 

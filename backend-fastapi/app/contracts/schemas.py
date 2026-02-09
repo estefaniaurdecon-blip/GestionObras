@@ -11,6 +11,7 @@ from app.contracts.models import (
     ContractStatus,
     ContractType,
     SignatureStatus,
+    SupplierStatus,
 )
 
 
@@ -171,3 +172,48 @@ class SignatureRequestRead(BaseModel):
     status: SignatureStatus
     sent_at: datetime
     signed_at: Optional[datetime]
+
+
+class SupplierRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tenant_id: int
+    tax_id: str
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    address: Optional[str]
+    city: Optional[str]
+    postal_code: Optional[str]
+    country: Optional[str]
+    contact_name: Optional[str]
+    bank_iban: Optional[str]
+    bank_bic: Optional[str]
+    status: SupplierStatus
+
+
+class SupplierLookupResponse(BaseModel):
+    found: bool
+    supplier: Optional[SupplierRead] = None
+
+
+class SupplierOnboardingValidate(BaseModel):
+    token: str
+    supplier: SupplierRead
+    contract_id: Optional[int] = None
+    tenant_id: int
+
+
+class SupplierOnboardingSubmit(BaseModel):
+    token: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    contact_name: Optional[str] = None
+    bank_iban: Optional[str] = None
+    bank_bic: Optional[str] = None

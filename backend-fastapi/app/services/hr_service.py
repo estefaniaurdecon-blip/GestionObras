@@ -8,6 +8,7 @@ from app.core.audit import log_action
 from app.models.hr import Department, EmployeeProfile, EmployeeDepartment, EmployeeAllocation
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.models.role import Role
 from app.schemas.hr import (
     DepartmentCreate,
     DepartmentRead,
@@ -47,6 +48,48 @@ def _apply_department_hours(
     return (Decimal(available_hours) * pct_employee / Decimal(100)) * (
         pct_department / Decimal(100)
     )
+
+
+def _sync_gerencia_role(
+    session: Session,
+    *,
+    profile: EmployeeProfile,
+    primary_department_id: Optional[int],
+) -> None:
+    if not profile.user_id or not primary_department_id:
+        return
+
+    user = session.get(User, profile.user_id)
+    if not user or user.is_super_admin:
+        return
+
+    dept = session.get(Department, primary_department_id)
+    if not dept or not dept.name:
+        return
+
+    dept_key = dept.name.strip().lower()
+    is_gerencia = "gerencia" in dept_key
+
+    role = session.get(Role, user.role_id) if user.role_id else None
+    role_name = role.name if role else None
+    if role_name == "tenant_admin":
+        return
+
+    gerencia_role = session.exec(select(Role).where(Role.name == "gerencia")).one_or_none()
+    user_role = session.exec(select(Role).where(Role.name == "user")).one_or_none()
+    if not gerencia_role or not user_role:
+        return
+
+    if is_gerencia and role_name != "gerencia":
+        user.role_id = gerencia_role.id
+        session.add(user)
+        session.commit()
+        return
+
+    if not is_gerencia and role_name == "gerencia":
+        user.role_id = user_role.id
+        session.add(user)
+        session.commit()
 
 
 def create_department(
@@ -251,6 +294,11 @@ def create_employee_profile(
             ),
         )
         session.commit()
+        _sync_gerencia_role(
+            session,
+            profile=profile,
+            primary_department_id=data.primary_department_id,
+        )
 
     log_action(
         session,
@@ -624,6 +672,13 @@ def update_employee_profile(
         ).one_or_none()
         if link:
             primary_department_id = link.department_id
+
+    if primary_department_id is not None:
+        _sync_gerencia_role(
+            session,
+            profile=profile,
+            primary_department_id=primary_department_id,
+        )
 
     dept_percentage = None
     if primary_department_id is not None:

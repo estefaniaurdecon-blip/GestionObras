@@ -35,6 +35,7 @@ import { ErpSimulationsPage } from "./pages/ErpSimulationsPage";
 import { ErpInvoicesPage } from "./pages/ErpInvoicesPage";
 import { ErpContractsPage } from "./pages/ErpContractsPage";
 import { ErpWorkManagementPage } from "./pages/ErpWorkManagementPage";
+import { SupplierOnboardingPage } from "./pages/SupplierOnboardingPage";
 
 // Layout raíz muy simple: delega en cada página.
 const RootLayout: React.FC = () => <Outlet />;
@@ -61,6 +62,12 @@ const acceptInvitationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accept-invitation",
   component: AcceptInvitationPage,
+});
+
+const supplierOnboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/supplier-onboarding",
+  component: SupplierOnboardingPage,
 });
 
 const dashboardRoute = createRoute({
@@ -230,6 +237,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   mfaRoute,
   acceptInvitationRoute,
+  supplierOnboardingRoute,
   dashboardRoute,
   usersRoute,
   toolsRoute,

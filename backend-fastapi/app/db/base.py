@@ -52,4 +52,6 @@ from app.contracts.models import (  # noqa: F401
     SignatureRequest,
     ContractEvent,
     ContractNotificationLog,
+    Supplier,
+    SupplierInvitation,
 )

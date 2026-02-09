@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.api.deps import get_current_active_user
 from app.db.session import get_session
-from app.contracts.models import ContractStatus
+from app.contracts.models import ContractStatus, Supplier
 from app.contracts.schemas import (
     ApprovalDecision,
     ContractCreate,
@@ -16,6 +16,10 @@ from app.contracts.schemas import (
     RejectRequest,
     SelectOfferRequest,
     SignatureRequestRead,
+    SupplierLookupResponse,
+    SupplierOnboardingSubmit,
+    SupplierOnboardingValidate,
+    SupplierRead,
 )
 from app.contracts.service import (
     add_offer,
@@ -24,10 +28,13 @@ from app.contracts.service import (
     generate_docs,
     get_contract,
     list_contracts,
+    lookup_supplier,
     reject_contract,
     select_offer,
     sign_contract_by_token,
+    submit_supplier_onboarding,
     submit_gerencia,
+    validate_supplier_onboarding,
     update_contract,
 )
 from app.models.user import User
@@ -104,6 +111,20 @@ def get_contract_endpoint(
         user=current_user,
     )
     return ContractRead.model_validate(contract)
+
+
+@router.get("/suppliers/lookup", response_model=SupplierLookupResponse)
+def lookup_supplier_endpoint(
+    tax_id: str,
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+) -> SupplierLookupResponse:
+    tenant_id = _tenant_for_write(current_user, x_tenant_id)
+    supplier = lookup_supplier(session=session, tenant_id=tenant_id, tax_id=tax_id)
+    if not supplier:
+        return SupplierLookupResponse(found=False, supplier=None)
+    return SupplierLookupResponse(found=True, supplier=SupplierRead.model_validate(supplier))
 
 
 @router.patch("/{contract_id}", response_model=ContractRead)
@@ -267,3 +288,37 @@ def sign_contract_public(
         signer_ip=request.client.host if request.client else None,
     )
     return SignatureRequestRead.model_validate(signature)
+
+
+@public_router.get("/supplier-onboarding/{token}", response_model=SupplierOnboardingValidate)
+def supplier_onboarding_validate(
+    token: str,
+    session: Session = Depends(get_session),
+) -> SupplierOnboardingValidate:
+    invitation = validate_supplier_onboarding(session=session, token=token)
+    supplier = session.get(Supplier, invitation.supplier_id)
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proveedor no encontrado.",
+        )
+    return SupplierOnboardingValidate(
+        token=invitation.token,
+        supplier=SupplierRead.model_validate(supplier),
+        contract_id=invitation.contract_id,
+        tenant_id=invitation.tenant_id,
+    )
+
+
+@public_router.post("/supplier-onboarding/{token}", response_model=SupplierRead)
+def supplier_onboarding_submit(
+    token: str,
+    payload: SupplierOnboardingSubmit,
+    session: Session = Depends(get_session),
+) -> SupplierRead:
+    supplier = submit_supplier_onboarding(
+        session=session,
+        token=token,
+        payload=payload.model_dump(exclude={"token"}, exclude_unset=True),
+    )
+    return SupplierRead.model_validate(supplier)

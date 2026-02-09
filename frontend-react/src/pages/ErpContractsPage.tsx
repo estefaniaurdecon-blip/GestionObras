@@ -5,6 +5,7 @@ import {
   Button,
   Divider,
   FormControl,
+  FormHelperText,
   FormLabel,
   HStack,
   Input,
@@ -32,7 +33,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/layout/AppShell";
-import { ContractsFiltersCard, ContractsTableCard } from "../components/erp";
+import {
+  ContractsFiltersCard,
+  ContractsHero,
+  ContractsTableCard,
+} from "../components/erp";
 import {
   addContractOffer,
   approveContract,
@@ -43,6 +48,7 @@ import {
   selectContractOffer,
   submitContractGerencia,
   updateContract,
+  lookupSupplierByTaxId,
   type Contract,
   type ContractOffer,
   type ContractType,
@@ -84,6 +90,11 @@ export const ErpContractsPage: React.FC = () => {
   const [supplierContact, setSupplierContact] = useState<string>("");
   const [supplierIban, setSupplierIban] = useState<string>("");
   const [supplierBic, setSupplierBic] = useState<string>("");
+  const [supplierLookupStatus, setSupplierLookupStatus] = useState<
+    "idle" | "found" | "not_found"
+  >("idle");
+  const [isSupplierLookupLoading, setIsSupplierLookupLoading] =
+    useState<boolean>(false);
   const [contractAmount, setContractAmount] = useState<string>("");
   const [contractCurrency, setContractCurrency] = useState<string>("EUR");
 
@@ -150,6 +161,54 @@ export const ErpContractsPage: React.FC = () => {
     () => tenants.filter((tenant) => tenant.is_active !== false),
     [tenants],
   );
+
+  const handleSupplierTaxIdBlur = async () => {
+    const taxId = supplierTaxId.trim();
+    if (!taxId || !effectiveCreateTenantId) {
+      setSupplierLookupStatus("idle");
+      return;
+    }
+    try {
+      setIsSupplierLookupLoading(true);
+      const supplier = await lookupSupplierByTaxId(taxId, effectiveCreateTenantId);
+      if (supplier) {
+        if (!supplierName && supplier.name) setSupplierName(supplier.name);
+        if (!supplierEmail && supplier.email) setSupplierEmail(supplier.email);
+        if (!supplierPhone && supplier.phone) setSupplierPhone(supplier.phone);
+        if (!supplierAddress && supplier.address) setSupplierAddress(supplier.address);
+        if (!supplierCity && supplier.city) setSupplierCity(supplier.city);
+        if (!supplierPostalCode && supplier.postal_code) setSupplierPostalCode(supplier.postal_code);
+        if (!supplierCountry && supplier.country) setSupplierCountry(supplier.country);
+        if (!supplierContact && supplier.contact_name) setSupplierContact(supplier.contact_name);
+        if (!supplierIban && supplier.bank_iban) setSupplierIban(supplier.bank_iban);
+        if (!supplierBic && supplier.bank_bic) setSupplierBic(supplier.bank_bic);
+        setSupplierTaxId(supplier.tax_id || taxId);
+        setSupplierLookupStatus("found");
+      } else {
+        setSupplierLookupStatus("not_found");
+      }
+    } catch {
+      setSupplierLookupStatus("not_found");
+    } finally {
+      setIsSupplierLookupLoading(false);
+    }
+  };
+
+  const handleOfferTaxIdBlur = async () => {
+    const taxId = offerTaxId.trim();
+    if (!taxId || !effectiveCreateTenantId) return;
+    try {
+      const supplier = await lookupSupplierByTaxId(taxId, effectiveCreateTenantId);
+      if (supplier) {
+        if (!offerSupplier && supplier.name) setOfferSupplier(supplier.name);
+        if (!offerEmail && supplier.email) setOfferEmail(supplier.email);
+        if (!offerPhone && supplier.phone) setOfferPhone(supplier.phone);
+        setOfferTaxId(supplier.tax_id || taxId);
+      }
+    } catch {
+      // ignore lookup errors for offers
+    }
+  };
 
   const contractFilters = useMemo(
     () => ({
@@ -349,14 +408,37 @@ export const ErpContractsPage: React.FC = () => {
     onSuccess: (offer) => {
       setUploadedOffers((prev) => [offer, ...prev]);
       setOfferFile(null);
-      setOfferSupplier("");
-      setOfferTaxId("");
-      setOfferEmail("");
-      setOfferPhone("");
-      setOfferAmount("");
-      setOfferCurrency("EUR");
+      const hasOcrData =
+        Boolean(offer.supplier_name) ||
+        Boolean(offer.supplier_tax_id) ||
+        Boolean(offer.supplier_email) ||
+        Boolean(offer.supplier_phone) ||
+        offer.total_amount != null ||
+        Boolean(offer.currency);
+      if (hasOcrData) {
+        setOfferSupplier(offer.supplier_name ?? "");
+        setOfferTaxId(offer.supplier_tax_id ?? "");
+        setOfferEmail(offer.supplier_email ?? "");
+        setOfferPhone(offer.supplier_phone ?? "");
+        setOfferAmount(
+          offer.total_amount != null ? String(offer.total_amount) : "",
+        );
+        setOfferCurrency(offer.currency ?? "EUR");
+        toast({
+          title: "Oferta subida",
+          description: "Datos OCR detectados. Revisa la informacion.",
+          status: "success",
+        });
+      } else {
+        setOfferSupplier("");
+        setOfferTaxId("");
+        setOfferEmail("");
+        setOfferPhone("");
+        setOfferAmount("");
+        setOfferCurrency("EUR");
+        toast({ title: "Oferta subida", status: "success" });
+      }
       setOfferNotes("");
-      toast({ title: "Oferta subida", status: "success" });
     },
     onError: (error: any) => {
       toast({
@@ -563,6 +645,12 @@ export const ErpContractsPage: React.FC = () => {
   return (
     <AppShell>
       <Stack spacing={6}>
+        <ContractsHero
+          totalCount={filteredContracts.length}
+          pendingCount={pendingCount}
+          signedCount={signedCount}
+        />
+
         <Tabs variant="unstyled">
           <TabList
             gap={3}
@@ -717,8 +805,23 @@ export const ErpContractsPage: React.FC = () => {
                         <FormLabel>CIF/NIF</FormLabel>
                         <Input
                           value={supplierTaxId}
-                          onChange={(e) => setSupplierTaxId(e.target.value)}
+                          onChange={(e) => {
+                            setSupplierTaxId(e.target.value);
+                            setSupplierLookupStatus("idle");
+                          }}
+                          onBlur={handleSupplierTaxIdBlur}
                         />
+                        {isSupplierLookupLoading && (
+                          <FormHelperText>Buscando proveedor...</FormHelperText>
+                        )}
+                        {!isSupplierLookupLoading && supplierLookupStatus === "found" && (
+                          <FormHelperText>Proveedor encontrado y autocompletado.</FormHelperText>
+                        )}
+                        {!isSupplierLookupLoading && supplierLookupStatus === "not_found" && (
+                          <FormHelperText>
+                            Proveedor no encontrado. Se enviarÃ¡ invitaciÃ³n al generar documentos.
+                          </FormHelperText>
+                        )}
                       </FormControl>
                       <FormControl>
                         <FormLabel>Contacto</FormLabel>
@@ -1034,6 +1137,7 @@ export const ErpContractsPage: React.FC = () => {
                         <Input
                           value={offerTaxId}
                           onChange={(e) => setOfferTaxId(e.target.value)}
+                          onBlur={handleOfferTaxIdBlur}
                         />
                       </FormControl>
                       <FormControl>
@@ -1370,7 +1474,8 @@ export const ErpContractsPage: React.FC = () => {
                   Estado actual: {selectedContract?.status ?? "-"}
                 </Text>
 
-                {selectedContract?.status?.startsWith("PENDING") && (
+                {selectedContract?.status?.startsWith("PENDING") &&
+                  selectedContract?.status !== "PENDING_SUPPLIER" && (
                   <>
                     <Divider />
                     <Text fontWeight="semibold">Revision y aprobacion</Text>
@@ -1396,6 +1501,7 @@ export const ErpContractsPage: React.FC = () => {
                         onChange={(e) => setRejectBackTo(e.target.value)}
                       >
                         <option value="DRAFT">DRAFT</option>
+                        <option value="PENDING_SUPPLIER">PENDING_SUPPLIER</option>
                         <option value="PENDING_JEFE_OBRA">PENDING_JEFE_OBRA</option>
                         <option value="PENDING_GERENCIA">PENDING_GERENCIA</option>
                       </Select>
@@ -1413,7 +1519,7 @@ export const ErpContractsPage: React.FC = () => {
                       onClick={() => generateDocsSelectedMutation.mutate()}
                       isLoading={generateDocsSelectedMutation.isPending}
                     >
-                      Generar docs (PENDING_JEFE_OBRA)
+                      Generar documentos
                     </Button>
                     <Button
                       colorScheme="green"
@@ -1433,7 +1539,8 @@ export const ErpContractsPage: React.FC = () => {
                     Enviar a Gerencia
                   </Button>
                 )}
-                {selectedContract?.status?.startsWith("PENDING") && (
+                {selectedContract?.status?.startsWith("PENDING") &&
+                  selectedContract?.status !== "PENDING_SUPPLIER" && (
                   <>
                     <Button
                       colorScheme="green"

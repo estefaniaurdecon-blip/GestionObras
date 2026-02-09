@@ -75,13 +75,13 @@ async function fetchUsers(tenantId: number): Promise<User[]> {
 interface NewUserFormState {
   email: string;
   full_name: string;
-  role: "tenant_admin" | "gerencia" | "user";
+  role: "tenant_admin" | "user";
 }
 
 interface EditUserFormState {
   email: string;
   full_name: string;
-  role: "tenant_admin" | "gerencia" | "user";
+  role: "tenant_admin" | "user";
 }
 
 /**
@@ -129,6 +129,7 @@ export const UsersPage: React.FC = () => {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isGerenciaEditing, setIsGerenciaEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditUserFormState>({
     email: "",
     full_name: "",
@@ -224,7 +225,7 @@ export const UsersPage: React.FC = () => {
   };
 
   const updateUserMutation = useMutation({
-    mutationFn: async (payload: EditUserFormState & { id: number }) => {
+    mutationFn: async (payload: { id: number; email: string; full_name: string; role?: "tenant_admin" | "user" }) => {
       const { id, ...data } = payload;
       return apiClient.patch<User>(
         `/api/v1/users/${id}`,
@@ -268,15 +269,14 @@ export const UsersPage: React.FC = () => {
     const role =
       user.role_name === "tenant_admin"
         ? "tenant_admin"
-        : user.role_name === "gerencia"
-          ? "gerencia"
-          : "user";
+        : "user";
     setEditingUser(user);
     setEditForm({
       email: user.email,
       full_name: user.full_name ?? "",
       role,
     });
+    setIsGerenciaEditing(user.role_name === "gerencia");
     setEditOpen(true);
   };
 
@@ -290,6 +290,15 @@ export const UsersPage: React.FC = () => {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    if (isGerenciaEditing) {
+      updateUserMutation.mutate({
+        id: editingUser.id,
+        email: editForm.email,
+        full_name: editForm.full_name,
+        role: undefined,
+      });
+      return;
+    }
     updateUserMutation.mutate({ id: editingUser.id, ...editForm });
   };
 
@@ -585,7 +594,6 @@ export const UsersPage: React.FC = () => {
                 <FormLabel>{t("users.invite.role")}</FormLabel>
                 <Select name="role" value={form.role} onChange={handleChange}>
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
-                  <option value="gerencia">Gerencia</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
               </FormControl>
@@ -633,11 +641,20 @@ export const UsersPage: React.FC = () => {
               </FormControl>
               <FormControl>
                 <FormLabel>{t("users.edit.role")}</FormLabel>
-                <Select name="role" value={editForm.role} onChange={handleEditChange}>
+                <Select
+                  name="role"
+                  value={editForm.role}
+                  onChange={handleEditChange}
+                  isDisabled={isGerenciaEditing}
+                >
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
-                  <option value="gerencia">Gerencia</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
+                {isGerenciaEditing && (
+                  <Text fontSize="xs" color={subtleText}>
+                    El rol de Gerencia se asigna automÃ¡ticamente por departamento.
+                  </Text>
+                )}
               </FormControl>
             </VStack>
           </ModalBody>

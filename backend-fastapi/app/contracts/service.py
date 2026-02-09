@@ -1,11 +1,19 @@
 ﻿from __future__ import annotations
 
 from datetime import datetime, timedelta
+import io
+import re
+import secrets
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import text
 from sqlmodel import Session, select
+
+import pdfplumber
+from pdf2image import convert_from_path
+from PIL import Image
 
 from app.contracts.documents import generate_comparative, generate_contract, supplier_data_complete
 from app.contracts.models import (
@@ -19,9 +27,14 @@ from app.contracts.models import (
     ContractNotificationEvent,
     ContractOffer,
     ContractStatus,
+    Supplier,
+    SupplierInvitation,
+    SupplierStatus,
     SignatureRequest,
     SignatureStatus,
 )
+from app.ai.client import OllamaClient, build_extraction_meta, _looks_like_customer, _find_supplier_name_in_header
+from app.ai.errors import AIInvalidResponseError, AIUnavailableError
 from app.contracts.permissions import (
     can_approve_contract,
     can_create_contract,
@@ -34,6 +47,7 @@ from app.contracts.permissions import (
 )
 from app.contracts.workflows import next_pending_status, ensure_status
 from app.core.config import settings
+from app.core.email import _send_email
 from app.models.user import User
 from app.storage.local import save_contract_offer_upload, save_signed_contract_upload
 from app.workers.tasks.contracts import send_contract_notification
@@ -74,6 +88,157 @@ def _get_offer_or_404(session: Session, offer_id: int, tenant_id: int) -> Contra
             detail="Oferta no encontrada.",
         )
     return offer
+
+
+def _normalize_tax_id(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", value).upper()
+    return cleaned or None
+
+
+def _get_provider_by_tax_id(session: Session, *, tax_id: Optional[str]) -> Optional[dict]:
+    normalized = _normalize_tax_id(tax_id)
+    if not normalized:
+        return None
+    stmt = text(
+        """
+        SELECT
+            'subcontratacion' AS source,
+            razon_social,
+            empresa,
+            cif,
+            nombre_gerente,
+            direccion_empresa,
+            telefono_contacto,
+            email_contacto
+        FROM proveedores_subcontratacion
+        WHERE UPPER(cif) = :cif
+        UNION ALL
+        SELECT
+            'suministros' AS source,
+            razon_social,
+            empresa,
+            cif,
+            nombre_gerente,
+            direccion_empresa,
+            NULL AS telefono_contacto,
+            NULL AS email_contacto
+        FROM proveedores_suministros_servicios
+        WHERE UPPER(cif) = :cif
+        LIMIT 1
+        """
+    )
+    row = session.exec(stmt, {"cif": normalized}).first()
+    if not row:
+        return None
+    return dict(row._mapping)
+
+
+def _build_supplier_from_provider(*, tenant_id: int, provider: dict) -> Supplier:
+    return Supplier(
+        id=0,
+        tenant_id=tenant_id,
+        tax_id=provider.get("cif") or "",
+        name=provider.get("razon_social") or provider.get("empresa"),
+        email=provider.get("email_contacto"),
+        phone=provider.get("telefono_contacto"),
+        address=provider.get("direccion_empresa"),
+        contact_name=provider.get("nombre_gerente"),
+        status=SupplierStatus.ACTIVE,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
+def _get_supplier_by_tax_id(
+    session: Session, *, tenant_id: int, tax_id: Optional[str]
+) -> Optional[Supplier]:
+    normalized = _normalize_tax_id(tax_id)
+    if not normalized:
+        return None
+    return session.exec(
+        select(Supplier).where(
+            Supplier.tenant_id == tenant_id,
+            Supplier.tax_id == normalized,
+        )
+    ).one_or_none()
+
+
+def _sync_contract_from_supplier(contract: Contract, supplier: Supplier) -> None:
+    if supplier.name and not contract.supplier_name:
+        contract.supplier_name = supplier.name
+    if supplier.tax_id and not contract.supplier_tax_id:
+        contract.supplier_tax_id = supplier.tax_id
+    if supplier.email and not contract.supplier_email:
+        contract.supplier_email = supplier.email
+    if supplier.phone and not contract.supplier_phone:
+        contract.supplier_phone = supplier.phone
+    if supplier.address and not contract.supplier_address:
+        contract.supplier_address = supplier.address
+    if supplier.city and not contract.supplier_city:
+        contract.supplier_city = supplier.city
+    if supplier.postal_code and not contract.supplier_postal_code:
+        contract.supplier_postal_code = supplier.postal_code
+    if supplier.country and not contract.supplier_country:
+        contract.supplier_country = supplier.country
+    if supplier.contact_name and not contract.supplier_contact_name:
+        contract.supplier_contact_name = supplier.contact_name
+    if supplier.bank_iban and not contract.supplier_bank_iban:
+        contract.supplier_bank_iban = supplier.bank_iban
+    if supplier.bank_bic and not contract.supplier_bank_bic:
+        contract.supplier_bank_bic = supplier.bank_bic
+
+
+def _sync_contract_from_provider(contract: Contract, provider: dict) -> None:
+    if not contract.supplier_name:
+        contract.supplier_name = provider.get("razon_social") or provider.get("empresa")
+    if not contract.supplier_tax_id:
+        contract.supplier_tax_id = provider.get("cif")
+    if not contract.supplier_email:
+        contract.supplier_email = provider.get("email_contacto")
+    if not contract.supplier_phone:
+        contract.supplier_phone = provider.get("telefono_contacto")
+    if not contract.supplier_address:
+        contract.supplier_address = provider.get("direccion_empresa")
+    if not contract.supplier_contact_name:
+        contract.supplier_contact_name = provider.get("nombre_gerente")
+
+
+def _create_supplier_invitation(
+    session: Session,
+    *,
+    supplier: Supplier,
+    contract: Optional[Contract],
+    email: Optional[str],
+) -> Optional[SupplierInvitation]:
+    if not email:
+        return None
+    token = secrets.token_urlsafe(32)
+    now = datetime.utcnow()
+    invitation = SupplierInvitation(
+        tenant_id=supplier.tenant_id,
+        supplier_id=supplier.id,  # type: ignore[arg-type]
+        contract_id=contract.id if contract else None,
+        email=email,
+        token=token,
+        created_at=now,
+        expires_at=now + timedelta(days=14),
+    )
+    session.add(invitation)
+    session.commit()
+    session.refresh(invitation)
+
+    frontend_url = settings.frontend_base_url
+    if frontend_url:
+        onboarding_url = f"{frontend_url.rstrip('/')}/supplier-onboarding?token={token}"
+        body = (
+            "Por favor completa los datos del proveedor en el siguiente enlace:\n"
+            f"{onboarding_url}\n"
+        )
+        _send_email([email], "Completar datos de proveedor", body)
+
+    return invitation
 
 
 def _log_event(
@@ -119,6 +284,7 @@ def list_contracts(
                 Contract.created_by_id == current_user.id,
                 Contract.status.in_([
                     ContractStatus.DRAFT,
+                    ContractStatus.PENDING_SUPPLIER,
                     ContractStatus.PENDING_JEFE_OBRA,
                 ]),
             )
@@ -211,7 +377,51 @@ def update_contract(
         )
 
     for field, value in payload.items():
+        if field == "supplier_tax_id":
+            value = _normalize_tax_id(value)
         setattr(contract, field, value)
+
+    supplier = None
+    if "supplier_tax_id" in payload or contract.supplier_tax_id:
+        supplier = _get_supplier_by_tax_id(
+            session,
+            tenant_id=tenant_id,
+            tax_id=contract.supplier_tax_id,
+        )
+        if supplier:
+            contract.supplier_id = supplier.id
+            _sync_contract_from_supplier(contract, supplier)
+        elif contract.supplier_tax_id:
+            provider = _get_provider_by_tax_id(session, tax_id=contract.supplier_tax_id)
+            if provider:
+                _sync_contract_from_provider(contract, provider)
+            supplier = Supplier(
+                tenant_id=tenant_id,
+                created_by_id=user.id,
+                tax_id=contract.supplier_tax_id,
+                name=contract.supplier_name,
+                email=contract.supplier_email,
+                phone=contract.supplier_phone,
+                address=contract.supplier_address,
+                city=contract.supplier_city,
+                postal_code=contract.supplier_postal_code,
+                country=contract.supplier_country,
+                contact_name=contract.supplier_contact_name,
+                bank_iban=contract.supplier_bank_iban,
+                bank_bic=contract.supplier_bank_bic,
+                status=SupplierStatus.PENDING,
+                updated_at=datetime.utcnow(),
+            )
+            session.add(supplier)
+            session.commit()
+            session.refresh(supplier)
+            contract.supplier_id = supplier.id
+            _create_supplier_invitation(
+                session,
+                supplier=supplier,
+                contract=contract,
+                email=contract.supplier_email,
+            )
 
     contract.updated_at = datetime.utcnow()
     session.add(contract)
@@ -271,6 +481,8 @@ def add_offer(
     session.add(offer)
     session.commit()
     session.refresh(offer)
+
+    _extract_and_apply_offer_data(session=session, offer=offer)
 
     _log_event(
         session,
@@ -400,7 +612,11 @@ def generate_docs(
 
     create_documents_for_contract(session, contract=contract, created_by_id=user.id)
 
-    contract.status = ContractStatus.PENDING_JEFE_OBRA
+    contract.status = (
+        ContractStatus.PENDING_JEFE_OBRA
+        if supplier_data_complete(contract)
+        else ContractStatus.PENDING_SUPPLIER
+    )
     contract.updated_at = datetime.utcnow()
     session.add(contract)
     session.commit()
@@ -419,10 +635,47 @@ def generate_docs(
         event=ContractNotificationEvent.DOCS_GENERATED,
         contract_id=contract.id,
     )
-    send_contract_notification.delay(
-        event=ContractNotificationEvent.GERENCIA_PENDING,
-        contract_id=contract.id,
-    )
+    if contract.status == ContractStatus.PENDING_SUPPLIER:
+        supplier = None
+        if contract.supplier_id:
+            supplier = session.get(Supplier, contract.supplier_id)
+        if not supplier and contract.supplier_tax_id:
+            supplier = Supplier(
+                tenant_id=tenant_id,
+                created_by_id=user.id,
+                tax_id=contract.supplier_tax_id,
+                name=contract.supplier_name,
+                email=contract.supplier_email,
+                phone=contract.supplier_phone,
+                address=contract.supplier_address,
+                city=contract.supplier_city,
+                postal_code=contract.supplier_postal_code,
+                country=contract.supplier_country,
+                contact_name=contract.supplier_contact_name,
+                bank_iban=contract.supplier_bank_iban,
+                bank_bic=contract.supplier_bank_bic,
+                status=SupplierStatus.PENDING,
+                updated_at=datetime.utcnow(),
+            )
+            session.add(supplier)
+            session.commit()
+            session.refresh(supplier)
+            contract.supplier_id = supplier.id
+            session.add(contract)
+            session.commit()
+
+        supplier_email = contract.supplier_email or (supplier.email if supplier else None)
+        if supplier and supplier_email:
+            _create_supplier_invitation(
+                session,
+                supplier=supplier,
+                contract=contract,
+                email=supplier_email,
+            )
+        send_contract_notification.delay(
+            event=ContractNotificationEvent.SUPPLIER_PENDING,
+            contract_id=contract.id,
+        )
 
     return contract
 
@@ -688,7 +941,7 @@ def reject_contract(
         comment=reason,
     )
 
-    contract.status = ContractStatus.REJECTED
+    contract.status = back_to_status or ContractStatus.REJECTED
     contract.rejected_reason = reason
     contract.rejected_by_id = user.id
     contract.rejected_at = datetime.utcnow()
@@ -713,6 +966,220 @@ def reject_contract(
     )
 
     return contract
+
+
+def lookup_supplier(
+    session: Session,
+    *,
+    tenant_id: int,
+    tax_id: str,
+) -> Optional[Supplier]:
+    supplier = _get_supplier_by_tax_id(session, tenant_id=tenant_id, tax_id=tax_id)
+    if supplier:
+        return supplier
+    provider = _get_provider_by_tax_id(session, tax_id=tax_id)
+    if not provider:
+        return None
+    return _build_supplier_from_provider(tenant_id=tenant_id, provider=provider)
+
+
+def _image_bytes_from_pil(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _extract_text_from_pdf(path: str) -> str:
+    with pdfplumber.open(path) as pdf:
+        texts = [page.extract_text() or "" for page in pdf.pages]
+    return "\n".join(texts).strip()
+
+
+def _ocr_pdf(path: str, client: OllamaClient, dpi: int = 200) -> str:
+    pages = convert_from_path(path, dpi=dpi)
+    ocr_texts = []
+    for page in pages:
+        ocr_texts.append(client.ocr_image_to_text(_image_bytes_from_pil(page)))
+    return "\n".join(ocr_texts).strip()
+
+
+def _ocr_image(path: str, client: OllamaClient) -> str:
+    with Image.open(path) as img:
+        return client.ocr_image_to_text(_image_bytes_from_pil(img))
+
+
+def _find_first_email(text: str) -> Optional[str]:
+    match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+    return match.group(0) if match else None
+
+
+def _find_first_phone(text: str) -> Optional[str]:
+    match = re.search(r"(?:\+?\d{1,3}[\s.-]?)?(?:\d[\s.-]?){8,12}\d", text)
+    if not match:
+        return None
+    return re.sub(r"\s+", " ", match.group(0)).strip()
+
+
+def _extract_offer_from_file(path: str) -> dict:
+    client = OllamaClient()
+    path_lower = path.lower()
+    is_image = path_lower.endswith((".png", ".jpg", ".jpeg", ".tiff", ".bmp"))
+    if is_image:
+        text = _ocr_image(path, client)
+    else:
+        text = _extract_text_from_pdf(path)
+        if len(text) < 40:
+            text = _ocr_pdf(path, client)
+
+    raw_json = client.invoice_text_to_json(text)
+    normalized = raw_json
+
+    if not is_image and _looks_like_customer(normalized.get("supplier_name")):
+        header_guess = _find_supplier_name_in_header(text)
+        if header_guess:
+            normalized["supplier_name"] = header_guess
+
+    normalized["supplier_email"] = _find_first_email(text)
+    normalized["supplier_phone"] = _find_first_phone(text)
+
+    return {
+        "text": text,
+        "raw_json": raw_json,
+        "normalized": normalized,
+    }
+
+
+def _extract_and_apply_offer_data(*, session: Session, offer: ContractOffer) -> None:
+    if not offer.file_path:
+        return
+
+    try:
+        extraction = _extract_offer_from_file(offer.file_path)
+        normalized = extraction["normalized"] or {}
+        offer.extracted_text = extraction.get("text")
+        offer.extraction_raw_json = extraction.get("raw_json")
+        meta = build_extraction_meta()
+        meta["status"] = "success"
+        meta["finished_at"] = datetime.utcnow().isoformat()
+        offer.extraction_meta = meta
+
+        if not offer.supplier_name and normalized.get("supplier_name"):
+            offer.supplier_name = normalized.get("supplier_name")
+        if not offer.supplier_tax_id and normalized.get("supplier_tax_id"):
+            offer.supplier_tax_id = normalized.get("supplier_tax_id")
+        if not offer.supplier_email and normalized.get("supplier_email"):
+            offer.supplier_email = normalized.get("supplier_email")
+        if not offer.supplier_phone and normalized.get("supplier_phone"):
+            offer.supplier_phone = normalized.get("supplier_phone")
+        if not offer.total_amount and normalized.get("total_amount") is not None:
+            offer.total_amount = normalized.get("total_amount")
+        if not offer.currency and normalized.get("currency"):
+            offer.currency = normalized.get("currency")
+
+        if offer.supplier_tax_id:
+            provider = _get_provider_by_tax_id(session, tax_id=offer.supplier_tax_id)
+            if provider:
+                if not offer.supplier_name:
+                    offer.supplier_name = provider.get("razon_social") or provider.get("empresa")
+                if not offer.supplier_email:
+                    offer.supplier_email = provider.get("email_contacto")
+                if not offer.supplier_phone:
+                    offer.supplier_phone = provider.get("telefono_contacto")
+
+        session.add(offer)
+        session.commit()
+        session.refresh(offer)
+    except (AIUnavailableError, AIInvalidResponseError) as exc:
+        offer.extraction_meta = {
+            "status": "failed",
+            "reason": str(exc),
+            "finished_at": datetime.utcnow().isoformat(),
+        }
+        session.add(offer)
+        session.commit()
+    except Exception as exc:
+        offer.extraction_meta = {
+            "status": "failed",
+            "reason": str(exc),
+            "finished_at": datetime.utcnow().isoformat(),
+        }
+        session.add(offer)
+        session.commit()
+
+
+def validate_supplier_onboarding(
+    session: Session,
+    *,
+    token: str,
+) -> SupplierInvitation:
+    invitation = session.exec(
+        select(SupplierInvitation).where(SupplierInvitation.token == token),
+    ).one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token no valido.")
+    if invitation.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitacion ya utilizada.")
+    if invitation.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitacion caducada.")
+    return invitation
+
+
+def submit_supplier_onboarding(
+    session: Session,
+    *,
+    token: str,
+    payload: dict,
+) -> Supplier:
+    invitation = validate_supplier_onboarding(session, token=token)
+    supplier = session.get(Supplier, invitation.supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proveedor no encontrado.")
+
+    for key, value in payload.items():
+        if value is None:
+            continue
+        if hasattr(supplier, key):
+            setattr(supplier, key, value)
+
+    supplier.status = SupplierStatus.ACTIVE
+    supplier.updated_at = datetime.utcnow()
+    session.add(supplier)
+
+    invitation.used_at = datetime.utcnow()
+    session.add(invitation)
+    session.commit()
+    session.refresh(supplier)
+
+    if invitation.contract_id:
+        contract = session.get(Contract, invitation.contract_id)
+        if contract and contract.tenant_id == supplier.tenant_id:
+            contract.supplier_id = supplier.id
+            _sync_contract_from_supplier(contract, supplier)
+            if contract.status == ContractStatus.PENDING_SUPPLIER:
+                contract.status = ContractStatus.PENDING_JEFE_OBRA
+            contract.updated_at = datetime.utcnow()
+            session.add(contract)
+            session.commit()
+
+            create_documents_for_contract(
+                session,
+                contract=contract,
+                created_by_id=None,
+            )
+
+            _log_event(
+                session,
+                tenant_id=contract.tenant_id,
+                contract_id=contract.id,
+                user_id=None,
+                event_type="contract.supplier_completed",
+            )
+            send_contract_notification.delay(
+                event=ContractNotificationEvent.SUPPLIER_COMPLETED,
+                contract_id=contract.id,
+            )
+
+    return supplier
 
 
 def create_signature_request(session: Session, *, contract: Contract) -> SignatureRequest:

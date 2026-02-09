@@ -16,6 +16,7 @@ class ContractType(str, Enum):
 
 class ContractStatus(str, Enum):
     DRAFT = "DRAFT"
+    PENDING_SUPPLIER = "PENDING_SUPPLIER"
     PENDING_JEFE_OBRA = "PENDING_JEFE_OBRA"
     PENDING_GERENCIA = "PENDING_GERENCIA"
     PENDING_ADMIN = "PENDING_ADMIN"
@@ -54,6 +55,8 @@ class SignatureStatus(str, Enum):
 
 class ContractNotificationEvent(str, Enum):
     DOCS_GENERATED = "DOCS_GENERATED"
+    SUPPLIER_PENDING = "SUPPLIER_PENDING"
+    SUPPLIER_COMPLETED = "SUPPLIER_COMPLETED"
     GERENCIA_PENDING = "GERENCIA_PENDING"
     GERENCIA_APPROVED = "GERENCIA_APPROVED"
     DEPT_APPROVED = "DEPT_APPROVED"
@@ -90,6 +93,7 @@ class Contract(SQLModel, table=True):
     supplier_contact_name: Optional[str] = Field(default=None, max_length=255)
     supplier_bank_iban: Optional[str] = Field(default=None, max_length=64)
     supplier_bank_bic: Optional[str] = Field(default=None, max_length=32)
+    supplier_id: Optional[int] = Field(default=None, foreign_key="supplier.id", index=True)
 
     total_amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(14, 2)))
     currency: Optional[str] = Field(default=None, max_length=16)
@@ -237,3 +241,51 @@ class ContractNotificationLog(SQLModel, table=True):
             unique=True,
         ),
     )
+
+
+class SupplierStatus(str, Enum):
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+
+
+class Supplier(SQLModel, table=True):
+    __tablename__ = "supplier"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+
+    tax_id: str = Field(max_length=64, index=True)
+    name: Optional[str] = Field(default=None, max_length=255)
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=64)
+    address: Optional[str] = Field(default=None, max_length=255)
+    city: Optional[str] = Field(default=None, max_length=128)
+    postal_code: Optional[str] = Field(default=None, max_length=32)
+    country: Optional[str] = Field(default=None, max_length=64)
+    contact_name: Optional[str] = Field(default=None, max_length=255)
+    bank_iban: Optional[str] = Field(default=None, max_length=64)
+    bank_bic: Optional[str] = Field(default=None, max_length=32)
+
+    status: SupplierStatus = Field(default=SupplierStatus.PENDING, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    __table_args__ = (
+        Index("uq_supplier_tenant_tax_id", "tenant_id", "tax_id", unique=True),
+    )
+
+
+class SupplierInvitation(SQLModel, table=True):
+    __tablename__ = "supplier_invitation"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    supplier_id: int = Field(foreign_key="supplier.id", index=True)
+    contract_id: Optional[int] = Field(default=None, foreign_key="contract.id", index=True)
+
+    email: Optional[str] = Field(default=None, max_length=255)
+    token: str = Field(index=True, unique=True, max_length=128)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(index=True)
+    used_at: Optional[datetime] = Field(default=None)

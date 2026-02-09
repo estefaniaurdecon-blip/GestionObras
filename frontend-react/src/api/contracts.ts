@@ -2,6 +2,7 @@
 
 export type ContractStatus =
   | "DRAFT"
+  | "PENDING_SUPPLIER"
   | "PENDING_JEFE_OBRA"
   | "PENDING_GERENCIA"
   | "PENDING_ADMIN"
@@ -117,6 +118,35 @@ export interface ContractRejectPayload {
   back_to_status?: ContractStatus | null;
 }
 
+export interface Supplier {
+  id: number;
+  tenant_id: number;
+  tax_id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  contact_name?: string | null;
+  bank_iban?: string | null;
+  bank_bic?: string | null;
+  status: "PENDING" | "ACTIVE";
+}
+
+export interface SupplierLookupResponse {
+  found: boolean;
+  supplier?: Supplier | null;
+}
+
+export interface SupplierOnboardingValidateResponse {
+  token: string;
+  supplier: Supplier;
+  contract_id?: number | null;
+  tenant_id: number;
+}
+
 const buildTenantHeaders = (tenantId?: number) =>
   tenantId
     ? {
@@ -216,6 +246,40 @@ export async function generateContractDocs(
     `/api/v1/contracts/${contractId}/generate-docs`,
     {},
     buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function lookupSupplierByTaxId(
+  taxId: string,
+  tenantId?: number,
+): Promise<Supplier | null> {
+  const response = await apiClient.get<SupplierLookupResponse>(
+    "/api/v1/contracts/suppliers/lookup",
+    {
+      params: { tax_id: taxId },
+      ...(buildTenantHeaders(tenantId) ?? {}),
+    },
+  );
+  return response.data.found ? response.data.supplier ?? null : null;
+}
+
+export async function validateSupplierOnboarding(
+  token: string,
+): Promise<SupplierOnboardingValidateResponse> {
+  const response = await apiClient.get<SupplierOnboardingValidateResponse>(
+    `/public/supplier-onboarding/${token}`,
+  );
+  return response.data;
+}
+
+export async function submitSupplierOnboarding(
+  token: string,
+  payload: Partial<Omit<Supplier, "id" | "tenant_id" | "tax_id" | "status">>,
+): Promise<Supplier> {
+  const response = await apiClient.post<Supplier>(
+    `/public/supplier-onboarding/${token}`,
+    { token, ...payload },
   );
   return response.data;
 }

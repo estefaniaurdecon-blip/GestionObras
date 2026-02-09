@@ -179,6 +179,7 @@ export const ContractsFiltersCard: React.FC<ContractsFiltersCardProps> = ({
             >
               <option value="all">Todos</option>
               <option value="DRAFT">Borrador</option>
+              <option value="PENDING_SUPPLIER">Pendiente Proveedor</option>
               <option value="PENDING_JEFE_OBRA">Pendiente Jefe de Obra</option>
               <option value="PENDING_GERENCIA">Pendiente Gerencia</option>
               <option value="PENDING_ADMIN">Pendiente Administracion</option>

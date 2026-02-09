@@ -29,6 +29,7 @@ interface ContractsTableCardProps {
 
 const statusLabelMap: Record<string, string> = {
   DRAFT: "Borrador",
+  PENDING_SUPPLIER: "Pendiente Proveedor",
   PENDING_JEFE_OBRA: "Pendiente Jefe de Obra",
   PENDING_GERENCIA: "Pendiente Gerencia",
   PENDING_ADMIN: "Pendiente Administracion",
@@ -41,6 +42,7 @@ const statusLabelMap: Record<string, string> = {
 
 const statusColorMap: Record<string, string> = {
   DRAFT: "gray",
+  PENDING_SUPPLIER: "yellow",
   PENDING_JEFE_OBRA: "orange",
   PENDING_GERENCIA: "purple",
   PENDING_ADMIN: "orange",
