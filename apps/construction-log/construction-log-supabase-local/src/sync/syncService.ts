@@ -1,8 +1,25 @@
-import { apiFetchJson } from '@/integrations/api/client';
+﻿import { apiFetchJson } from '@/integrations/api/client';
 import { offlineDb } from '@/offline-db/db';
 import type { OutboxRow } from '@/offline-db/types';
+import {
+  buildDeterministicClientOpId,
+  decideConsolidatedAction,
+  getCompatRetryPayload,
+  shouldClearOutboxForAck,
+} from './syncRobustnessRules';
 
 const LAST_SYNC_KEY_PREFIX = 'work_reports_last_sync::';
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ALLOWED_SYNC_STATUSES = new Set([
+  'draft',
+  'pending',
+  'approved',
+  'completed',
+  'missing_data',
+  'missing_delivery_notes',
+  'closed',
+  'archived',
+]);
 
 type WorkReportSyncOperation = {
   client_op_id: string;
@@ -115,13 +132,6 @@ type SyncOptions = {
   tenantId?: string | null;
 };
 
-function generateClientOpId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `sync-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -166,7 +176,16 @@ function toTenantIdFromPayload(payload: Record<string, unknown>): string | null 
 
 function toSyncErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  return 'Error de sincronización';
+  return 'Error de sincronizaciÃ³n';
+}
+
+function shouldRetryLegacyDateValidation(errorMessage: string | null | undefined): boolean {
+  const message = (errorMessage ?? '').toLowerCase();
+  return (
+    message.includes('workreportupdate') &&
+    message.includes('date') &&
+    message.includes('none_required')
+  );
 }
 
 function shouldRetryServerChangesSerialization(error: unknown): boolean {
@@ -192,6 +211,86 @@ function normalizeLookupText(value: unknown): string | null {
   const base = asString(typeof value === 'number' ? String(value) : value);
   if (!base) return null;
   return base.toLowerCase();
+}
+
+function normalizeDateForSync(value: unknown): string | null {
+  const direct = asString(value);
+  if (direct && DATE_ONLY_PATTERN.test(direct)) return direct;
+
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      const y = parsed.getUTCFullYear();
+      const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  return null;
+}
+
+function normalizeStatusForSync(value: unknown, fallback: string = 'draft'): string {
+  const normalized = asString(value)?.toLowerCase();
+  if (normalized && ALLOWED_SYNC_STATUSES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function sanitizeUpdateOperationDataForTransport(data: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...data };
+  delete next.date;
+
+  if (isRecord(next.patch)) {
+    const patch: Record<string, unknown> = { ...next.patch };
+    delete patch.date;
+    next.patch = patch;
+  }
+
+  return next;
+}
+
+function sanitizeSyncRequestForTransport(requestPayload: WorkReportSyncRequest): WorkReportSyncRequest {
+  return {
+    ...requestPayload,
+    operations: requestPayload.operations.map((operation) => {
+      if (operation.op !== 'update' || !isRecord(operation.data)) {
+        return operation;
+      }
+
+      return {
+        ...operation,
+        data: sanitizeUpdateOperationDataForTransport(operation.data),
+      };
+    }),
+  };
+}
+
+function buildStrictUpdateDataForRetry(data: Record<string, unknown>): Record<string, unknown> {
+  const source = isRecord(data.patch) ? data.patch : data;
+  const next: Record<string, unknown> = {};
+  const allowedKeys = [
+    'project_id',
+    'projectId',
+    'title',
+    'status',
+    'is_closed',
+    'isClosed',
+    'report_identifier',
+    'reportIdentifier',
+    'external_id',
+    'externalId',
+    'payload',
+    'expected_updated_at',
+    'expectedUpdatedAt',
+  ] as const;
+
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+      next[key] = source[key];
+    }
+  }
+
+  return sanitizeUpdateOperationDataForTransport(next);
 }
 
 function getLastSyncMetaKey(tenantId: string): string {
@@ -371,11 +470,11 @@ async function buildCreateData(
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
   const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
   const date =
-    asString(snapshot.date) ??
-    asString(payload.date) ??
-    asString(payload.reportDate) ??
-    asString(payload.workDate);
-  const status = asString(snapshot.status) ?? asString(payload.status) ?? 'draft';
+    normalizeDateForSync(snapshot.date) ??
+    normalizeDateForSync(payload.date) ??
+    normalizeDateForSync(payload.reportDate) ??
+    normalizeDateForSync(payload.workDate);
+  const status = normalizeStatusForSync(snapshot.status ?? payload.status, 'draft');
   const reportIdentifier = asString(payload.reportIdentifier) ?? asString(payload.report_identifier);
   const isClosed = status.toLowerCase() === 'closed' || Boolean(payload.isClosed ?? payload.is_closed);
 
@@ -400,21 +499,14 @@ async function buildUpdateData(
 ): Promise<Record<string, unknown>> {
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
   const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
-  const date =
-    asString(snapshot.date) ??
-    asString(payload.date) ??
-    asString(payload.reportDate) ??
-    asString(payload.workDate);
-  const status = asString(snapshot.status) ?? asString(payload.status);
+  const status = normalizeStatusForSync(snapshot.status ?? payload.status, 'draft');
   const reportIdentifier = asString(payload.reportIdentifier) ?? asString(payload.report_identifier);
-  const isClosed =
-    (status !== null && status.toLowerCase() === 'closed') || Boolean(payload.isClosed ?? payload.is_closed);
+  const isClosed = status.toLowerCase() === 'closed' || Boolean(payload.isClosed ?? payload.is_closed);
 
   const operationData: Record<string, unknown> = { payload };
   if (projectId !== null) operationData.project_id = projectId;
-  if (date !== null) operationData.date = date;
   if (snapshot.title !== null) operationData.title = snapshot.title;
-  if (status !== null) operationData.status = status;
+  if (status) operationData.status = status;
   if (reportIdentifier !== null) operationData.report_identifier = reportIdentifier;
   if (isClosed) operationData.is_closed = true;
   return operationData;
@@ -426,42 +518,60 @@ async function buildSyncPlan(
   sourceEntries: PendingEntry[],
   projectCache: Map<string, Promise<ApiProjectLookup[]>>
 ): Promise<SyncPlan> {
-  const outboxIds = sourceEntries.map((entry) => entry.id);
+  const fallbackOutboxIds = sourceEntries.map((entry) => entry.id);
   const snapshot = await getWorkReportSnapshot(localReportId);
   if (!snapshot) {
     return {
       kind: 'error',
       tenantId,
       localReportId,
-      outboxIds,
-      message: 'Parte local no encontrado para consolidar sincronización.',
+      outboxIds: fallbackOutboxIds,
+      message: 'Parte local no encontrado para consolidar sincronizaciÃ³n.',
     };
   }
 
   const snapshotPayload = toJsonRecord(snapshot.payload_json);
   const serverReportId = resolveServerReportId(localReportId, snapshotPayload, sourceEntries);
-  const hasCreate = sourceEntries.some((entry) => entry.op === 'create');
-  const lastOp = sourceEntries[sourceEntries.length - 1]?.op;
+  const decision = decideConsolidatedAction({
+    localReportId,
+    entries: sourceEntries,
+    serverReportId,
+  }) as {
+    kind: 'create' | 'update' | 'delete' | 'noop' | 'error';
+    message?: string;
+    outboxIds: string[];
+  };
+  const outboxIds = decision.outboxIds.length > 0 ? decision.outboxIds : fallbackOutboxIds;
 
-  if (hasCreate && lastOp === 'delete' && serverReportId === null) {
+  if (decision.kind === 'error') {
+    return {
+      kind: 'error',
+      tenantId,
+      localReportId,
+      outboxIds,
+      message: decision.message ?? 'No se pudo consolidar el outbox del parte.',
+    };
+  }
+
+  if (decision.kind === 'noop') {
     return {
       kind: 'noop',
       tenantId,
       localReportId,
       outboxIds,
       serverReportId: null,
-      message: 'Create+delete local sin server_id: no se envía al backend.',
+      message: decision.message ?? 'No-op local.',
     };
   }
 
-  if (lastOp === 'delete') {
+  if (decision.kind === 'delete') {
     if (serverReportId === null) {
       return {
         kind: 'error',
         tenantId,
         localReportId,
         outboxIds,
-        message: 'Delete pendiente sin server_id. Sincroniza primero la creación.',
+        message: 'Delete pendiente sin server_id. Sincroniza primero la creaciÃ³n.',
       };
     }
 
@@ -472,7 +582,13 @@ async function buildSyncPlan(
       outboxIds,
       serverReportId,
       operation: {
-        client_op_id: generateClientOpId(),
+        client_op_id: buildDeterministicClientOpId({
+          tenantId,
+          localReportId,
+          op: 'delete',
+          serverReportId,
+          outboxIds,
+        }),
         op: 'delete',
         report_id: serverReportId,
         external_id: localReportId,
@@ -481,7 +597,7 @@ async function buildSyncPlan(
     };
   }
 
-  if (hasCreate || serverReportId === null) {
+  if (decision.kind === 'create') {
     const createData = await buildCreateData(snapshot, tenantId, projectCache);
     if (!createData) {
       return {
@@ -489,7 +605,7 @@ async function buildSyncPlan(
         tenantId,
         localReportId,
         outboxIds,
-        message: 'Create inválido: falta project_id o date en el parte local.',
+        message: 'Create invÃ¡lido: falta project_id o date en el parte local.',
       };
     }
 
@@ -500,7 +616,13 @@ async function buildSyncPlan(
       outboxIds,
       serverReportId: serverReportId ?? null,
       operation: {
-        client_op_id: generateClientOpId(),
+        client_op_id: buildDeterministicClientOpId({
+          tenantId,
+          localReportId,
+          op: 'create',
+          serverReportId: serverReportId ?? null,
+          outboxIds,
+        }),
         op: 'create',
         client_temp_id: localReportId,
         external_id: localReportId,
@@ -516,7 +638,13 @@ async function buildSyncPlan(
     outboxIds,
     serverReportId,
     operation: {
-      client_op_id: generateClientOpId(),
+      client_op_id: buildDeterministicClientOpId({
+        tenantId,
+        localReportId,
+        op: 'update',
+        serverReportId,
+        outboxIds,
+      }),
       op: 'update',
       report_id: serverReportId,
       external_id: localReportId,
@@ -663,6 +791,8 @@ async function sendSyncBatch(
   tenantId: string,
   requestPayload: WorkReportSyncRequest
 ): Promise<WorkReportSyncResponse> {
+  const sanitizedRequestPayload = sanitizeSyncRequestForTransport(requestPayload);
+
   const doRequest = async (payload: WorkReportSyncRequest): Promise<WorkReportSyncResponse> => {
     return apiFetchJson<WorkReportSyncResponse>('/api/v1/erp/work-reports/sync', {
       method: 'POST',
@@ -672,42 +802,48 @@ async function sendSyncBatch(
   };
 
   try {
-    return await doRequest(requestPayload);
+    return await doRequest(sanitizedRequestPayload);
   } catch (error) {
     if (!shouldRetryServerChangesSerialization(error)) {
       throw error;
     }
 
-    const retries: WorkReportSyncRequest[] = [
-      { ...requestPayload, since: null },
-      { ...requestPayload, since: '9999-12-31T23:59:59Z' },
-    ];
-
-    const tried = new Set<string>();
-    tried.add(JSON.stringify(requestPayload));
-
-    for (const retryPayload of retries) {
-      const retryKey = JSON.stringify(retryPayload);
-      if (tried.has(retryKey)) continue;
-      tried.add(retryKey);
-
-      console.warn('[Sync] Retry por server_changes no serializable.', {
-        tenantId,
-        retryPayload,
-        originalError: toSyncErrorMessage(error),
-      });
-
-      try {
-        return await doRequest(retryPayload);
-      } catch (retryError) {
-        if (!shouldRetryServerChangesSerialization(retryError)) {
-          throw retryError;
-        }
-      }
+    const compatRetryPayload = getCompatRetryPayload(sanitizedRequestPayload, true);
+    if (!compatRetryPayload) {
+      throw error;
     }
 
-    throw error;
+    console.warn('[Sync][compat-retry] Reintento único por bug backend en server_changes.', {
+      tenantId,
+      retryPayload: compatRetryPayload,
+      originalError: toSyncErrorMessage(error),
+      todo: 'Backend debe serializar server_changes con model_dump() y no ORM directo.',
+    });
+    return doRequest(compatRetryPayload);
   }
+}
+
+async function retryLegacyDateValidationUpdate(
+  tenantId: string,
+  operation: WorkReportSyncOperation
+): Promise<WorkReportSyncAck | null> {
+  if (operation.op !== 'update' || !isRecord(operation.data)) return null;
+
+  const retryOperation: WorkReportSyncOperation = {
+    ...operation,
+    client_op_id: `${operation.client_op_id}-datefix-${Date.now().toString(36)}`,
+    data: buildStrictUpdateDataForRetry(operation.data),
+  };
+
+  const retryPayload: WorkReportSyncRequest = {
+    since: null,
+    operations: [retryOperation],
+    include_deleted: true,
+    limit: 1,
+  };
+
+  const retryResponse = await sendSyncBatch(tenantId, retryPayload);
+  return retryResponse.ack?.[0] ?? null;
 }
 
 async function pullServerReports(
@@ -788,7 +924,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (entry.op !== 'create' && entry.op !== 'update' && entry.op !== 'delete') {
       failed += 1;
-      const message = `Operación no soportada en outbox: ${String(entry.op)}`;
+      const message = `OperaciÃ³n no soportada en outbox: ${String(entry.op)}`;
       if (!firstFailureReason) firstFailureReason = message;
       await markPlanError(
         {
@@ -805,7 +941,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (entry.entityId.trim().length === 0 || entry.entity !== 'work_report') {
       failed += 1;
-      const message = 'Entrada de outbox inválida para parte.';
+      const message = 'Entrada de outbox invÃ¡lida para parte.';
       if (!firstFailureReason) firstFailureReason = message;
       await markPlanError(
         {
@@ -836,14 +972,13 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
     const plans: Extract<SyncPlan, { kind: 'operation' }>[] = [];
 
     for (const [localReportId, reportEntries] of byReport.entries()) {
-      reportEntries.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
       const plan = await buildSyncPlan(tenantId, localReportId, reportEntries, projectCache);
 
       if (plan.kind === 'error') {
         failed += plan.outboxIds.length;
         if (!firstFailureReason) firstFailureReason = plan.message;
         await markPlanError(plan, plan.message);
-        console.warn('[Sync] Plan inválido', {
+        console.warn('[Sync] Plan invÃ¡lido', {
           tenantId,
           localReportId,
           outboxIds: plan.outboxIds,
@@ -870,7 +1005,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (plans.length > 0) {
       const requestPayload: WorkReportSyncRequest = {
-        // Enviado explícitamente para evitar defaults incompatibles de backend.
+        // Enviado explÃ­citamente para evitar defaults incompatibles de backend.
         since: sinceFromMeta ?? null,
         operations: plans.map((plan) => plan.operation),
         include_deleted: true,
@@ -889,12 +1024,12 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           ackMap.set(ack.client_op_id, ack);
         }
 
-        for (const plan of plans) {
-          const ack = ackMap.get(plan.operation.client_op_id);
-          if (ack?.ok) {
-            const mappedServerId = resolveMappedServerId(plan, ack, response);
-            synced += plan.outboxIds.length;
-            await markEntriesAsSynced(plan, mappedServerId);
+      for (const plan of plans) {
+        const ack = ackMap.get(plan.operation.client_op_id);
+        if (shouldClearOutboxForAck(ack)) {
+          const mappedServerId = resolveMappedServerId(plan, ack, response);
+          synced += plan.outboxIds.length;
+          await markEntriesAsSynced(plan, mappedServerId);
             console.debug('[Sync] Ack OK', {
               tenantId,
               clientOpId: plan.operation.client_op_id,
@@ -906,9 +1041,41 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           }
 
           failed += plan.outboxIds.length;
-          const errorMessage =
+          let errorMessage =
             asString(ack?.error) ??
-            (ack ? 'Error de sincronización en servidor.' : 'El servidor no devolvió confirmación para la operación.');
+            (ack ? 'Error de sincronizaciÃ³n en servidor.' : 'El servidor no devolviÃ³ confirmaciÃ³n para la operaciÃ³n.');
+
+          if (plan.operation.op === 'update' && shouldRetryLegacyDateValidation(errorMessage)) {
+            try {
+              const retryAck = await retryLegacyDateValidationUpdate(tenantId, plan.operation);
+              if (shouldClearOutboxForAck(retryAck)) {
+                const mappedServerId = resolveMappedServerId(plan, retryAck ?? undefined, response);
+                synced += plan.outboxIds.length;
+                failed -= plan.outboxIds.length;
+                await markEntriesAsSynced(plan, mappedServerId);
+                console.warn('[Sync][date-fallback] Reintento aplicado correctamente.', {
+                  tenantId,
+                  originalClientOpId: plan.operation.client_op_id,
+                  localReportId: plan.localReportId,
+                  mappedServerId,
+                  outboxIds: plan.outboxIds,
+                });
+                continue;
+              }
+              if (retryAck?.error) {
+                errorMessage = asString(retryAck.error) ?? errorMessage;
+              }
+            } catch (retryError) {
+              console.warn('[Sync][date-fallback] Reintento fallido.', {
+                tenantId,
+                originalClientOpId: plan.operation.client_op_id,
+                localReportId: plan.localReportId,
+                outboxIds: plan.outboxIds,
+                retryError: toSyncErrorMessage(retryError),
+              });
+            }
+          }
+
           if (!firstFailureReason) firstFailureReason = errorMessage;
           await markPlanError(plan, errorMessage);
           console.warn('[Sync] Ack FAIL', {
@@ -958,9 +1125,9 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
     pendingAfter,
     note:
       synced > 0
-        ? 'Sincronización completada.'
+        ? 'SincronizaciÃ³n completada.'
         : firstFailureReason
-          ? `No se pudo sincronizar ningún parte. ${firstFailureReason}`
-          : 'No se pudo sincronizar ningún parte.',
+          ? `No se pudo sincronizar ningÃºn parte. ${firstFailureReason}`
+          : 'No se pudo sincronizar ningÃºn parte.',
   };
 }
