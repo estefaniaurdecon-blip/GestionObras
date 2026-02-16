@@ -1,0 +1,85 @@
+project_id = "fcjmyylskklmfkogmmwt"
+
+# ✅ SEGURIDAD: check-updates debe ser público (llamado sin auth desde app)
+[functions.check-updates]
+verify_jwt = false
+
+# 🔒 CRÍTICO: Solo admins/masters pueden publicar actualizaciones
+[functions.publish-update]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden analizar facturas
+[functions.analyze-invoice]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden analizar inventario
+[functions.analyze-inventory]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden usar el chat
+[functions.construction-chat]
+verify_jwt = true
+
+# ✅ SEGURIDAD: Cron job debe ser público (llamado desde pg_cron)
+[functions.auto-duplicate-rental-machinery]
+verify_jwt = false
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden limpiar inventario
+[functions.clean-inventory]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden generar controles de acceso
+[functions.generate-access-control]
+verify_jwt = true
+
+# ✅ SEGURIDAD: Cron job debe ser público (llamado desde pg_cron)
+[functions.check-pending-work-reports]
+verify_jwt = false
+
+# ✅ SEGURIDAD: Cron job debe ser público (llamado desde pg_cron)
+[functions.send-daily-reminders]
+verify_jwt = false
+
+# ✅ SEGURIDAD: Cron job debe ser público (llamado desde pg_cron)
+[functions.check-calendar-tasks]
+verify_jwt = false
+
+# ✅ SEGURIDAD: Cron job debe ser público (llamado desde pg_cron)
+[functions.check-document-expiry]
+verify_jwt = false
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden poblar inventario
+[functions.populate-inventory-from-reports]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden analizar colores del logo
+[functions.analyze-logo-colors]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden analizar imágenes de partes
+[functions.analyze-work-image]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden usar voz
+[functions.voice-fill-sections]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden estandarizar empresas
+[functions.standardize-companies]
+verify_jwt = true
+
+# 🔒 SEGURIDAD: Solo admins/masters pueden crear usuarios
+[functions.create-admin-user]
+verify_jwt = true
+
+# ⚠️ TEMPORAL: Función para arreglar metadatos de usuarios corruptos
+[functions.fix-user-metadata]
+verify_jwt = false
+
+# ✅ SEGURIDAD: Cron job para detectar anomalías (llamado desde pg_cron)
+[functions.detect-work-anomalies]
+verify_jwt = false
+
+# 🔒 SEGURIDAD: Solo usuarios autenticados pueden generar informes resumen
+[functions.generate-summary-report]
+verify_jwt = true

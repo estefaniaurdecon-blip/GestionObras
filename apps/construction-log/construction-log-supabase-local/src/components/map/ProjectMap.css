@@ -1,0 +1,11 @@
+/* Desplazar controles de zoom para evitar superposición con la barra de navegación */
+.leaflet-control-zoom {
+  margin-top: 70px !important;
+}
+
+/* Ajuste para dispositivos móviles con barra más pequeña */
+@media (max-width: 640px) {
+  .leaflet-control-zoom {
+    margin-top: 60px !important;
+  }
+}

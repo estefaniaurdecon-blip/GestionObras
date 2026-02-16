@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Partes de Trabajo</string>
+    <string name="title_activity_main">Partes de Trabajo</string>
+    <string name="package_name">com.partesdetrabajo.app</string>
+    <string name="custom_url_scheme">com.partesdetrabajo.app</string>
+</resources>

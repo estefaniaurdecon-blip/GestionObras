@@ -1,0 +1,13 @@
+{
+  "name": "construction-log-wrapper",
+  "private": true,
+  "scripts": {
+    "install:app": "npm --prefix construction-log-supabase-local install",
+    "dev": "npm --prefix construction-log-supabase-local run dev",
+    "build": "npm --prefix construction-log-supabase-local run build",
+    "build:dev": "npm --prefix construction-log-supabase-local run build:dev",
+    "lint": "npm --prefix construction-log-supabase-local run lint",
+    "preview": "npm --prefix construction-log-supabase-local run preview",
+    "tsc": "npm --prefix construction-log-supabase-local exec -- tsc -p construction-log-supabase-local/tsconfig.json --noEmit"
+  }
+}

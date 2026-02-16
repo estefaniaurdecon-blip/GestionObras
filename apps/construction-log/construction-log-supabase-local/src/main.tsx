@@ -25,6 +25,32 @@ const logDebug = (msg: string) => {
   appendBootLog(`[AppBoot] ${msg}`);
 };
 
+const clearNativeBrowserCaches = async () => {
+  if (!("caches" in window)) return;
+  try {
+    const cacheKeys = await caches.keys();
+    await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+    logDebug(`Cache Storage limpiado en nativo (${cacheKeys.length} entradas)`);
+  } catch (error) {
+    logDebug(`Error limpiando Cache Storage en nativo: ${String(error)}`);
+  }
+};
+
+const unregisterAllNativeServiceWorkers = async () => {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    if ("getRegistrations" in navigator.serviceWorker) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      logDebug(`Service Workers desregistrados en nativo (${registrations.length})`);
+      return;
+    }
+    await unregisterServiceWorker();
+  } catch (error) {
+    logDebug(`Error desregistrando Service Workers en nativo: ${String(error)}`);
+  }
+};
+
 logDebug("Script main.tsx iniciando...");
 logDebug(`Plataforma: ${Capacitor.getPlatform()}, isNative: ${Capacitor.isNativePlatform()}`);
 
@@ -86,6 +112,13 @@ const initApp = async () => {
     // Clean any corrupted Electron storage before initializing
     logDebug("Limpiando storage de Electron...");
     cleanElectronStorage();
+
+    // Evitar que WebView nativa conserve bundles antiguos.
+    if (Capacitor.isNativePlatform()) {
+      logDebug("Modo nativo: limpiando Service Worker y cache web legado...");
+      await unregisterAllNativeServiceWorkers();
+      await clearNativeBrowserCaches();
+    }
 
     // La DB offline se inicializa de forma lazy con scope de tenant al cargar el usuario.
     logDebug("DB offline: inicialización diferida por tenant");

@@ -12,6 +12,14 @@ import axios from "axios";
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 const resolveApiBaseUrl = () => {
+  if (window?.location?.port === "5173") {
+    if (
+      rawBaseUrl &&
+      (rawBaseUrl.includes("localhost") || rawBaseUrl.includes("127.0.0.1"))
+    ) {
+      return "";
+    }
+  }
   if (!rawBaseUrl || rawBaseUrl === "relative" || rawBaseUrl === "/") {
     // Usa mismo origen (Vite proxy) si se pide modo relativo.
     return "";

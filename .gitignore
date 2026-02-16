@@ -41,3 +41,11 @@ pnpm-debug.log*
 *.local
 .terraform/
 .envrc
+
+# Local runtime artifacts (do not version)
+*.out
+*.err
+*.pid
+bugreport-*.zip
+repo_export_*.zip
+temp_remote_*.html

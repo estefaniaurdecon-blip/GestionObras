@@ -1,0 +1,1 @@
+DELETE FROM app_versions WHERE platform = 'android' AND version = '2.0.1'

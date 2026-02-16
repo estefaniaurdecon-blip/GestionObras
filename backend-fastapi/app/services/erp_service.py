@@ -1,13 +1,16 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
+from datetime import date
+from datetime import UTC
 from decimal import Decimal
 from math import ceil
-from typing import Optional
+from typing import Any, Optional
 
 from sqlmodel import Session, select
 from sqlalchemy import func
 
 from app.models.erp import (
     Activity,
+    AccessControlReport,
     BudgetLineMilestone,
     Deliverable,
     Milestone,
@@ -19,12 +22,17 @@ from app.models.erp import (
     TaskTemplate,
     TimeEntry,
     TimeSession,
+    RentalMachinery,
+    WorkReport,
+    WorkReportSyncLog,
 )
 from app.models.hr import Department, EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.erp import (
     ActivityCreate,
+    AccessControlReportCreate,
+    AccessControlReportUpdate,
     ActivityUpdate,
     DeliverableCreate,
     DeliverableUpdate,
@@ -38,16 +46,34 @@ from app.schemas.erp import (
     TaskTemplateCreate,
     TaskUpdate,
     BudgetLineMilestoneCreate,
-    BudgetLineMilestoneRead,
     ProjectBudgetMilestoneCreate,
-    ProjectBudgetMilestoneRead,
     ProjectBudgetMilestoneUpdate,
     ProjectBudgetLineCreate,
     ProjectBudgetLineUpdate,
+    RentalMachineryCreate,
+    RentalMachineryUpdate,
+    WorkReportCreate,
+    WorkReportSyncAck,
+    WorkReportSyncRequest,
+    WorkReportSyncResponse,
+    WorkReportUpdate,
 )
 from app.services.notification_service import create_notification
 
 TASK_STATUSES = {"pending", "in_progress", "done"}
+WORK_REPORT_ALLOWED_STATUSES = {
+    "draft",
+    "pending",
+    "approved",
+    "completed",
+    "missing_data",
+    "missing_delivery_notes",
+    "closed",
+    "archived",
+}
+WORK_REPORT_CLOSED_STATUSES = {"closed"}
+RENTAL_ALLOWED_STATUSES = {"active", "inactive", "archived"}
+RENTAL_PRICE_UNITS = {"day", "hour", "month"}
 
 # Valida que exista un tenant_id
 def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
@@ -1527,6 +1553,917 @@ def delete_time_session(
         session.delete(entry)
     session.delete(ts)
     session.commit()
+
+
+def _normalize_work_report_status(value: Optional[str]) -> str:
+    normalized = (value or "draft").strip().lower()
+    if normalized not in WORK_REPORT_ALLOWED_STATUSES:
+        raise ValueError("Estado de parte no valido.")
+    return normalized
+
+
+def _normalize_rental_status(value: Optional[str]) -> str:
+    normalized = (value or "active").strip().lower()
+    if normalized not in RENTAL_ALLOWED_STATUSES:
+        raise ValueError("Estado de maquinaria alquilada no valido.")
+    return normalized
+
+
+def _normalize_rental_price_unit(value: Optional[str]) -> str:
+    normalized = (value or "day").strip().lower()
+    if normalized not in RENTAL_PRICE_UNITS:
+        raise ValueError("Unidad de precio no valida.")
+    return normalized
+
+
+def _is_work_report_closed(report: WorkReport) -> bool:
+    return bool(report.is_closed or report.status in WORK_REPORT_CLOSED_STATUSES)
+
+
+def _validate_work_report_open(report: WorkReport) -> None:
+    if _is_work_report_closed(report):
+        raise ValueError("El parte esta cerrado y solo permite lectura.")
+
+
+def _normalize_dt_for_compare(value: datetime) -> datetime:
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
+def _get_work_report_or_404(
+    session: Session,
+    report_id: int,
+    tenant_id: int,
+    *,
+    include_deleted: bool = False,
+) -> WorkReport:
+    report = session.get(WorkReport, report_id)
+    if not report or report.tenant_id != tenant_id:
+        raise ValueError("Parte no encontrado.")
+    if not include_deleted and report.deleted_at is not None:
+        raise ValueError("Parte no encontrado.")
+    return report
+
+
+def _get_work_report_by_external_id(
+    session: Session,
+    tenant_id: int,
+    external_id: str,
+    *,
+    include_deleted: bool = False,
+) -> Optional[WorkReport]:
+    stmt = select(WorkReport).where(
+        WorkReport.tenant_id == tenant_id,
+        WorkReport.external_id == external_id,
+    )
+    if not include_deleted:
+        stmt = stmt.where(WorkReport.deleted_at.is_(None))
+    return session.exec(stmt).one_or_none()
+
+
+def list_work_reports(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    project_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    status: Optional[str] = None,
+    updated_since: Optional[datetime] = None,
+    include_deleted: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[WorkReport]:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    if project_id is not None:
+        _get_project_or_404(session, project_id, resolved_tenant_id)
+
+    stmt = select(WorkReport).where(WorkReport.tenant_id == resolved_tenant_id)
+    if not include_deleted:
+        stmt = stmt.where(WorkReport.deleted_at.is_(None))
+    if project_id is not None:
+        stmt = stmt.where(WorkReport.project_id == project_id)
+    if date_from is not None:
+        stmt = stmt.where(WorkReport.date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(WorkReport.date <= date_to)
+    if status is not None:
+        stmt = stmt.where(WorkReport.status == _normalize_work_report_status(status))
+    if updated_since is not None:
+        stmt = stmt.where(WorkReport.updated_at >= _normalize_dt_for_compare(updated_since))
+
+    stmt = stmt.order_by(WorkReport.date.desc(), WorkReport.updated_at.desc())
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    return session.exec(stmt).all()
+
+
+def get_work_report(session: Session, report_id: int, tenant_id: Optional[int]) -> WorkReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    return _get_work_report_or_404(session, report_id, resolved_tenant_id)
+
+
+def create_work_report(
+    session: Session,
+    payload: WorkReportCreate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+    idempotency_key: Optional[str] = None,
+) -> WorkReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+
+    normalized_idempotency = (idempotency_key or "").strip() or None
+    if normalized_idempotency:
+        existing_by_key = session.exec(
+            select(WorkReport).where(
+                WorkReport.tenant_id == resolved_tenant_id,
+                WorkReport.idempotency_key == normalized_idempotency,
+            )
+        ).one_or_none()
+        if existing_by_key and existing_by_key.deleted_at is None:
+            return existing_by_key
+
+    normalized_external_id = (payload.external_id or "").strip() or None
+    if normalized_external_id:
+        existing_by_external = _get_work_report_by_external_id(
+            session, resolved_tenant_id, normalized_external_id, include_deleted=True
+        )
+        if existing_by_external and existing_by_external.deleted_at is None:
+            return existing_by_external
+        if existing_by_external and existing_by_external.deleted_at is not None:
+            raise ValueError("Ya existe un parte eliminado con ese external_id.")
+
+    status = _normalize_work_report_status(payload.status)
+    is_closed = bool(payload.is_closed or status in WORK_REPORT_CLOSED_STATUSES)
+    if is_closed:
+        status = "closed"
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    report = WorkReport(
+        tenant_id=resolved_tenant_id,
+        project_id=payload.project_id,
+        external_id=normalized_external_id,
+        report_identifier=(payload.report_identifier or "").strip() or None,
+        idempotency_key=normalized_idempotency,
+        title=(payload.title or "").strip() or None,
+        date=payload.date,
+        status=status,
+        is_closed=is_closed,
+        payload=dict(payload.payload or {}),
+        created_by_id=current_user_id,
+        updated_by_id=current_user_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def update_work_report(
+    session: Session,
+    report_id: int,
+    payload: WorkReportUpdate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    report = _get_work_report_or_404(session, report_id, resolved_tenant_id)
+    _validate_work_report_open(report)
+
+    if payload.expected_updated_at is not None:
+        expected = _normalize_dt_for_compare(payload.expected_updated_at)
+        current = _normalize_dt_for_compare(report.updated_at)
+        if current != expected:
+            raise ValueError("Conflicto de concurrencia: el parte fue actualizado por otro proceso.")
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+        report.project_id = payload.project_id
+
+    if payload.external_id is not None:
+        normalized_external_id = payload.external_id.strip() or None
+        if normalized_external_id:
+            existing = _get_work_report_by_external_id(
+                session,
+                resolved_tenant_id,
+                normalized_external_id,
+                include_deleted=True,
+            )
+            if existing and existing.id != report.id:
+                raise ValueError("Ya existe otro parte con ese external_id.")
+        report.external_id = normalized_external_id
+
+    if payload.report_identifier is not None:
+        report.report_identifier = payload.report_identifier.strip() or None
+    if payload.title is not None:
+        report.title = payload.title.strip() or None
+    if payload.date is not None:
+        report.date = payload.date
+    if payload.status is not None:
+        next_status = _normalize_work_report_status(payload.status)
+        report.status = next_status
+        if next_status in WORK_REPORT_CLOSED_STATUSES:
+            report.is_closed = True
+    if payload.is_closed is True:
+        report.is_closed = True
+        report.status = "closed"
+    if payload.is_closed is False and report.is_closed:
+        raise ValueError("No se permite reabrir un parte cerrado.")
+    if payload.payload is not None:
+        report.payload = dict(payload.payload)
+
+    report.updated_by_id = current_user_id
+    report.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def delete_work_report(
+    session: Session,
+    report_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    report = _get_work_report_or_404(session, report_id, resolved_tenant_id)
+    _validate_work_report_open(report)
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    report.deleted_at = now
+    report.updated_at = now
+    report.updated_by_id = current_user_id
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def _coerce_date(value: Any, *, field_name: str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} debe tener formato YYYY-MM-DD.") from exc
+    raise ValueError(f"{field_name} es obligatorio.")
+
+
+def _coerce_datetime(value: Any, *, field_name: str) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        candidate = value.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} debe tener formato ISO 8601.") from exc
+    raise ValueError(f"{field_name} debe tener formato ISO 8601.")
+
+
+def _coerce_int(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} no valido.")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    raise ValueError(f"{field_name} no valido.")
+
+
+def _as_sync_payload_dict(raw_payload: Any) -> dict[str, Any]:
+    if raw_payload is None:
+        return {}
+    if isinstance(raw_payload, dict):
+        return raw_payload
+    return {"value": raw_payload}
+
+
+def _pick_value(data: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in data and data[key] is not None:
+            return data[key]
+    return None
+
+
+def _resolve_work_report_for_sync(
+    session: Session,
+    tenant_id: int,
+    *,
+    report_id: Optional[int],
+    external_id: Optional[str],
+    data: dict[str, Any],
+) -> WorkReport:
+    if report_id is not None:
+        return _get_work_report_or_404(session, report_id, tenant_id, include_deleted=True)
+
+    normalized_external_id = (external_id or "").strip()
+    if normalized_external_id:
+        report = _get_work_report_by_external_id(
+            session,
+            tenant_id,
+            normalized_external_id,
+            include_deleted=True,
+        )
+        if report:
+            return report
+
+    data_report_id = _pick_value(data, "report_id", "reportId", "id")
+    if data_report_id is not None:
+        if isinstance(data_report_id, int) or (
+            isinstance(data_report_id, str) and data_report_id.strip().isdigit()
+        ):
+            return _get_work_report_or_404(
+                session,
+                _coerce_int(data_report_id, field_name="report_id"),
+                tenant_id,
+                include_deleted=True,
+            )
+
+        report = _get_work_report_by_external_id(
+            session,
+            tenant_id,
+            str(data_report_id).strip(),
+            include_deleted=True,
+        )
+        if report:
+            return report
+
+    raise ValueError("Parte no encontrado.")
+
+
+def sync_work_reports(
+    session: Session,
+    tenant_id: Optional[int],
+    payload: WorkReportSyncRequest,
+    *,
+    current_user_id: Optional[int],
+) -> WorkReportSyncResponse:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    acknowledgements: list[WorkReportSyncAck] = []
+    id_map: dict[str, int] = {}
+
+    for operation in payload.operations:
+        existing_log = session.exec(
+            select(WorkReportSyncLog).where(
+                WorkReportSyncLog.tenant_id == resolved_tenant_id,
+                WorkReportSyncLog.client_op_id == operation.client_op_id,
+            )
+        ).one_or_none()
+
+        if existing_log:
+            cached_payload = existing_log.response_payload or {}
+            try:
+                ack = WorkReportSyncAck(**cached_payload)
+            except Exception:
+                ack = WorkReportSyncAck(
+                    client_op_id=operation.client_op_id,
+                    op=operation.op,
+                    ok=existing_log.status == "ok",
+                    report_id=existing_log.server_report_id,
+                    external_id=existing_log.external_id,
+                    error=existing_log.error,
+                )
+            acknowledgements.append(ack)
+            if ack.client_temp_id and ack.mapped_server_id is not None:
+                id_map[ack.client_temp_id] = ack.mapped_server_id
+            continue
+
+        op_data = _as_sync_payload_dict(operation.data)
+        report: Optional[WorkReport] = None
+        error: Optional[str] = None
+        client_temp_id = operation.client_temp_id or _pick_value(
+            op_data, "client_temp_id", "clientTempId", "id"
+        )
+        if client_temp_id is not None:
+            client_temp_id = str(client_temp_id)
+
+        try:
+            if operation.op == "create":
+                project_id = _coerce_int(
+                    _pick_value(op_data, "project_id", "projectId"),
+                    field_name="project_id",
+                )
+                report_date = _coerce_date(
+                    _pick_value(op_data, "date"),
+                    field_name="date",
+                )
+                report = create_work_report(
+                    session,
+                    WorkReportCreate(
+                        project_id=project_id,
+                        date=report_date,
+                        title=_pick_value(op_data, "title"),
+                        status=_pick_value(op_data, "status") or "draft",
+                        is_closed=bool(_pick_value(op_data, "is_closed", "isClosed") or False),
+                        report_identifier=_pick_value(
+                            op_data, "report_identifier", "reportIdentifier"
+                        ),
+                        external_id=operation.external_id
+                        or _pick_value(op_data, "external_id", "externalId", "id"),
+                        payload=_as_sync_payload_dict(_pick_value(op_data, "payload")),
+                    ),
+                    resolved_tenant_id,
+                    current_user_id=current_user_id,
+                    idempotency_key=operation.client_op_id,
+                )
+
+            elif operation.op == "update":
+                report = _resolve_work_report_for_sync(
+                    session,
+                    resolved_tenant_id,
+                    report_id=operation.report_id,
+                    external_id=operation.external_id,
+                    data=op_data,
+                )
+                patch_data = _as_sync_payload_dict(_pick_value(op_data, "patch")) or op_data
+                update_kwargs: dict[str, Any] = {}
+                if _pick_value(patch_data, "project_id", "projectId") is not None:
+                    update_kwargs["project_id"] = _coerce_int(
+                        _pick_value(patch_data, "project_id", "projectId"),
+                        field_name="project_id",
+                    )
+                if _pick_value(patch_data, "title") is not None:
+                    update_kwargs["title"] = str(_pick_value(patch_data, "title"))
+                if _pick_value(patch_data, "status") is not None:
+                    update_kwargs["status"] = str(_pick_value(patch_data, "status"))
+                if _pick_value(patch_data, "is_closed", "isClosed") is not None:
+                    update_kwargs["is_closed"] = bool(
+                        _pick_value(patch_data, "is_closed", "isClosed")
+                    )
+                if _pick_value(patch_data, "report_identifier", "reportIdentifier") is not None:
+                    update_kwargs["report_identifier"] = str(
+                        _pick_value(patch_data, "report_identifier", "reportIdentifier")
+                    )
+                if _pick_value(patch_data, "external_id", "externalId") is not None:
+                    update_kwargs["external_id"] = str(
+                        _pick_value(patch_data, "external_id", "externalId")
+                    )
+                if "payload" in patch_data:
+                    update_kwargs["payload"] = _as_sync_payload_dict(patch_data.get("payload"))
+                if _pick_value(
+                    patch_data, "expected_updated_at", "expectedUpdatedAt"
+                ) is not None:
+                    update_kwargs["expected_updated_at"] = _coerce_datetime(
+                        _pick_value(
+                            patch_data,
+                            "expected_updated_at",
+                            "expectedUpdatedAt",
+                        ),
+                        field_name="expected_updated_at",
+                    )
+
+                # Sync updates never modify the report date.
+                # This also protects against legacy clients sending `date`.
+                update_kwargs.pop("date", None)
+
+                report = update_work_report(
+                    session,
+                    report.id,
+                    WorkReportUpdate(**update_kwargs),
+                    resolved_tenant_id,
+                    current_user_id=current_user_id,
+                )
+
+            elif operation.op == "delete":
+                report = _resolve_work_report_for_sync(
+                    session,
+                    resolved_tenant_id,
+                    report_id=operation.report_id,
+                    external_id=operation.external_id,
+                    data=op_data,
+                )
+                report = delete_work_report(
+                    session,
+                    report.id,
+                    resolved_tenant_id,
+                    current_user_id=current_user_id,
+                )
+            else:
+                raise ValueError("Operacion de sync no soportada.")
+
+        except ValueError as exc:
+            error = str(exc)
+
+        ack = WorkReportSyncAck(
+            client_op_id=operation.client_op_id,
+            op=operation.op,
+            ok=error is None,
+            report_id=report.id if report else None,
+            external_id=report.external_id if report else operation.external_id,
+            client_temp_id=client_temp_id,
+            mapped_server_id=report.id if report and client_temp_id else None,
+            server_updated_at=report.updated_at if report else None,
+            error=error,
+        )
+        acknowledgements.append(ack)
+        if ack.client_temp_id and ack.mapped_server_id is not None:
+            id_map[ack.client_temp_id] = ack.mapped_server_id
+
+        session.add(
+            WorkReportSyncLog(
+                tenant_id=resolved_tenant_id,
+                client_op_id=operation.client_op_id,
+                op=operation.op,
+                status="ok" if ack.ok else "error",
+                server_report_id=ack.report_id,
+                external_id=ack.external_id,
+                error=ack.error,
+                response_payload=ack.model_dump(mode="json"),
+                processed_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+        )
+        session.commit()
+
+    server_changes: list[WorkReport] = []
+    if payload.since is not None:
+        server_changes = list_work_reports(
+            session,
+            resolved_tenant_id,
+            updated_since=payload.since,
+            include_deleted=True,
+            limit=payload.limit,
+            offset=0,
+        )
+
+    return WorkReportSyncResponse(
+        ack=acknowledgements,
+        id_map=id_map,
+        server_changes=server_changes,
+    )
+
+
+def _get_access_control_or_404(
+    session: Session,
+    report_id: int,
+    tenant_id: int,
+    *,
+    include_deleted: bool = False,
+) -> AccessControlReport:
+    report = session.get(AccessControlReport, report_id)
+    if not report or report.tenant_id != tenant_id:
+        raise ValueError("Control de accesos no encontrado.")
+    if not include_deleted and report.deleted_at is not None:
+        raise ValueError("Control de accesos no encontrado.")
+    return report
+
+
+def _get_access_control_by_external_id(
+    session: Session,
+    tenant_id: int,
+    external_id: str,
+    *,
+    include_deleted: bool = False,
+) -> Optional[AccessControlReport]:
+    stmt = select(AccessControlReport).where(
+        AccessControlReport.tenant_id == tenant_id,
+        AccessControlReport.external_id == external_id,
+    )
+    if not include_deleted:
+        stmt = stmt.where(AccessControlReport.deleted_at.is_(None))
+    return session.exec(stmt).one_or_none()
+
+
+def list_access_control_reports(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    project_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    updated_since: Optional[datetime] = None,
+    include_deleted: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[AccessControlReport]:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    if project_id is not None:
+        _get_project_or_404(session, project_id, resolved_tenant_id)
+
+    stmt = select(AccessControlReport).where(AccessControlReport.tenant_id == resolved_tenant_id)
+    if not include_deleted:
+        stmt = stmt.where(AccessControlReport.deleted_at.is_(None))
+    if project_id is not None:
+        stmt = stmt.where(AccessControlReport.project_id == project_id)
+    if date_from is not None:
+        stmt = stmt.where(AccessControlReport.date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(AccessControlReport.date <= date_to)
+    if updated_since is not None:
+        stmt = stmt.where(AccessControlReport.updated_at >= _normalize_dt_for_compare(updated_since))
+
+    stmt = stmt.order_by(AccessControlReport.date.desc(), AccessControlReport.updated_at.desc())
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    return session.exec(stmt).all()
+
+
+def get_access_control_report(
+    session: Session,
+    report_id: int,
+    tenant_id: Optional[int],
+) -> AccessControlReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    return _get_access_control_or_404(session, report_id, resolved_tenant_id)
+
+
+def create_access_control_report(
+    session: Session,
+    payload: AccessControlReportCreate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> AccessControlReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+
+    normalized_external_id = (payload.external_id or "").strip() or None
+    if normalized_external_id:
+        existing_by_external = _get_access_control_by_external_id(
+            session, resolved_tenant_id, normalized_external_id, include_deleted=True
+        )
+        if existing_by_external and existing_by_external.deleted_at is None:
+            return existing_by_external
+        if existing_by_external and existing_by_external.deleted_at is not None:
+            raise ValueError("Ya existe un control de accesos eliminado con ese external_id.")
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    report = AccessControlReport(
+        tenant_id=resolved_tenant_id,
+        project_id=payload.project_id,
+        external_id=normalized_external_id,
+        date=payload.date,
+        site_name=(payload.site_name or "").strip(),
+        responsible=(payload.responsible or "").strip(),
+        responsible_entry_time=(payload.responsible_entry_time or "").strip() or None,
+        responsible_exit_time=(payload.responsible_exit_time or "").strip() or None,
+        observations=payload.observations or "",
+        personal_entries=list(payload.personal_entries or []),
+        machinery_entries=list(payload.machinery_entries or []),
+        additional_tasks=(payload.additional_tasks or "").strip() or None,
+        created_by_id=current_user_id,
+        updated_by_id=current_user_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def update_access_control_report(
+    session: Session,
+    report_id: int,
+    payload: AccessControlReportUpdate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> AccessControlReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    report = _get_access_control_or_404(session, report_id, resolved_tenant_id)
+
+    if payload.expected_updated_at is not None:
+        expected = _normalize_dt_for_compare(payload.expected_updated_at)
+        current = _normalize_dt_for_compare(report.updated_at)
+        if current != expected:
+            raise ValueError("Conflicto de concurrencia: el control de accesos fue actualizado por otro proceso.")
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+        report.project_id = payload.project_id
+
+    if payload.external_id is not None:
+        normalized_external_id = payload.external_id.strip() or None
+        if normalized_external_id:
+            existing = _get_access_control_by_external_id(
+                session,
+                resolved_tenant_id,
+                normalized_external_id,
+                include_deleted=True,
+            )
+            if existing and existing.id != report.id:
+                raise ValueError("Ya existe otro control de accesos con ese external_id.")
+        report.external_id = normalized_external_id
+
+    if payload.date is not None:
+        report.date = payload.date
+    if payload.site_name is not None:
+        report.site_name = payload.site_name.strip()
+    if payload.responsible is not None:
+        report.responsible = payload.responsible.strip()
+    if payload.responsible_entry_time is not None:
+        report.responsible_entry_time = payload.responsible_entry_time.strip() or None
+    if payload.responsible_exit_time is not None:
+        report.responsible_exit_time = payload.responsible_exit_time.strip() or None
+    if payload.observations is not None:
+        report.observations = payload.observations
+    if payload.personal_entries is not None:
+        report.personal_entries = list(payload.personal_entries)
+    if payload.machinery_entries is not None:
+        report.machinery_entries = list(payload.machinery_entries)
+    if payload.additional_tasks is not None:
+        report.additional_tasks = payload.additional_tasks.strip() or None
+
+    report.updated_by_id = current_user_id
+    report.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def delete_access_control_report(
+    session: Session,
+    report_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> AccessControlReport:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    report = _get_access_control_or_404(session, report_id, resolved_tenant_id)
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    report.deleted_at = now
+    report.updated_at = now
+    report.updated_by_id = current_user_id
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+    return report
+
+
+def _validate_rental_date_range(start_date: date, end_date: Optional[date]) -> None:
+    if end_date is not None and end_date < start_date:
+        raise ValueError("La fecha de fin debe ser posterior o igual a la fecha de inicio.")
+
+
+def _get_rental_machinery_or_404(
+    session: Session,
+    machinery_id: int,
+    tenant_id: int,
+    *,
+    include_deleted: bool = False,
+) -> RentalMachinery:
+    machinery = session.get(RentalMachinery, machinery_id)
+    if not machinery or machinery.tenant_id != tenant_id:
+        raise ValueError("Maquinaria alquilada no encontrada.")
+    if not include_deleted and machinery.deleted_at is not None:
+        raise ValueError("Maquinaria alquilada no encontrada.")
+    return machinery
+
+
+def list_rental_machinery(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    project_id: Optional[int] = None,
+    active_on: Optional[date] = None,
+    status: Optional[str] = None,
+    include_deleted: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[RentalMachinery]:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    if project_id is not None:
+        _get_project_or_404(session, project_id, resolved_tenant_id)
+
+    stmt = select(RentalMachinery).where(
+        RentalMachinery.tenant_id == resolved_tenant_id,
+        RentalMachinery.is_rental.is_(True),
+    )
+    if not include_deleted:
+        stmt = stmt.where(RentalMachinery.deleted_at.is_(None))
+    if project_id is not None:
+        stmt = stmt.where(RentalMachinery.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(RentalMachinery.status == _normalize_rental_status(status))
+    if active_on is not None:
+        stmt = stmt.where(RentalMachinery.start_date <= active_on)
+        stmt = stmt.where(
+            (RentalMachinery.end_date.is_(None)) | (RentalMachinery.end_date >= active_on)
+        )
+        if status is None:
+            stmt = stmt.where(RentalMachinery.status == "active")
+
+    stmt = stmt.order_by(RentalMachinery.start_date.desc(), RentalMachinery.updated_at.desc())
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    return session.exec(stmt).all()
+
+
+def create_rental_machinery(
+    session: Session,
+    payload: RentalMachineryCreate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> RentalMachinery:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+    _validate_rental_date_range(payload.start_date, payload.end_date)
+    cleaned_name = payload.name.strip()
+    if not cleaned_name:
+        raise ValueError("El nombre de la maquinaria es obligatorio.")
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    machinery = RentalMachinery(
+        tenant_id=resolved_tenant_id,
+        project_id=payload.project_id,
+        is_rental=bool(payload.is_rental),
+        name=cleaned_name,
+        description=(payload.description or "").strip() or None,
+        provider=(payload.provider or "").strip() or None,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        price=payload.price,
+        price_unit=_normalize_rental_price_unit(payload.price_unit),
+        status=_normalize_rental_status(payload.status),
+        created_by_id=current_user_id,
+        updated_by_id=current_user_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(machinery)
+    session.commit()
+    session.refresh(machinery)
+    return machinery
+
+
+def update_rental_machinery(
+    session: Session,
+    machinery_id: int,
+    payload: RentalMachineryUpdate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> RentalMachinery:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    machinery = _get_rental_machinery_or_404(session, machinery_id, resolved_tenant_id)
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+        machinery.project_id = payload.project_id
+    if payload.is_rental is not None:
+        machinery.is_rental = bool(payload.is_rental)
+    if payload.name is not None:
+        cleaned_name = payload.name.strip()
+        if not cleaned_name:
+            raise ValueError("El nombre de la maquinaria es obligatorio.")
+        machinery.name = cleaned_name
+    if payload.description is not None:
+        machinery.description = payload.description.strip() or None
+    if payload.provider is not None:
+        machinery.provider = payload.provider.strip() or None
+
+    next_start_date = payload.start_date if payload.start_date is not None else machinery.start_date
+    next_end_date = payload.end_date if payload.end_date is not None else machinery.end_date
+    _validate_rental_date_range(next_start_date, next_end_date)
+    machinery.start_date = next_start_date
+    machinery.end_date = next_end_date
+
+    if payload.price is not None:
+        machinery.price = payload.price
+    if payload.price_unit is not None:
+        machinery.price_unit = _normalize_rental_price_unit(payload.price_unit)
+    if payload.status is not None:
+        machinery.status = _normalize_rental_status(payload.status)
+
+    machinery.updated_by_id = current_user_id
+    machinery.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    session.add(machinery)
+    session.commit()
+    session.refresh(machinery)
+    return machinery
+
+
+def delete_rental_machinery(
+    session: Session,
+    machinery_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> RentalMachinery:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    machinery = _get_rental_machinery_or_404(session, machinery_id, resolved_tenant_id)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    machinery.deleted_at = now
+    machinery.updated_at = now
+    machinery.updated_by_id = current_user_id
+    session.add(machinery)
+    session.commit()
+    session.refresh(machinery)
+    return machinery
 
 
 

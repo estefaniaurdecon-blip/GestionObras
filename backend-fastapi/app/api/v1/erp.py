@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
@@ -11,7 +11,9 @@ from app.schemas.erp import (
     ActivityCreate,
     ActivityRead,
     ActivityUpdate,
-    BudgetLineMilestoneCreate,
+    AccessControlReportCreate,
+    AccessControlReportRead,
+    AccessControlReportUpdate,
     BudgetLineMilestoneRead,
     DeliverableCreate,
     DeliverableRead,
@@ -42,9 +44,18 @@ from app.schemas.erp import (
     TimeSessionRead,
     TimeSessionUpdate,
     TimeTrackingStart,
+    WorkReportCreate,
+    WorkReportRead,
+    WorkReportSyncRequest,
+    WorkReportSyncResponse,
+    WorkReportUpdate,
+    RentalMachineryCreate,
+    RentalMachineryRead,
+    RentalMachineryUpdate,
 )
 from app.services.erp_service import (
     create_activity,
+    create_access_control_report,
     create_deliverable,
     create_milestone,
     create_project,
@@ -55,6 +66,7 @@ from app.services.erp_service import (
     create_task_template,
     create_manual_time_session,
     delete_project,
+    delete_access_control_report,
     delete_task,
     delete_time_session,
     delete_project_budget_line,
@@ -63,6 +75,7 @@ from app.services.erp_service import (
     get_project,
     get_time_report,
     list_activities,
+    list_access_control_reports,
     list_deliverables,
     list_milestones,
     list_projects,
@@ -72,6 +85,18 @@ from app.services.erp_service import (
     list_tasks,
     list_task_templates,
     list_time_sessions,
+    list_work_reports,
+    get_work_report,
+    get_access_control_report,
+    create_work_report,
+    update_work_report,
+    update_access_control_report,
+    delete_work_report,
+    sync_work_reports,
+    list_rental_machinery,
+    create_rental_machinery,
+    update_rental_machinery,
+    delete_rental_machinery,
     start_time_session,
     stop_time_session,
     update_activity,
@@ -135,6 +160,25 @@ def _tenant_for_write(
         )
         #solo escribir en su propio tenant
     return current_user.tenant_id
+
+
+def _require_tenant_scope(
+    current_user: User,
+    x_tenant_id: Optional[int],
+    *,
+    for_write: bool,
+) -> int:
+    tenant_id = (
+        _tenant_for_write(current_user, x_tenant_id, require_header=True)
+        if for_write
+        else _tenant_for_read(current_user, x_tenant_id)
+    )
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Tenant-Id requerido.",
+        )
+    return tenant_id
 
 
 @router.get("/projects", response_model=list[ProjectRead])
@@ -861,3 +905,341 @@ def api_delete_time_session(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+def _map_work_report_error(detail: str) -> int:
+    lower = detail.lower()
+    if "no encontrado" in lower:
+        return status.HTTP_404_NOT_FOUND
+    if "cerrado" in lower or "concurrencia" in lower:
+        return status.HTTP_409_CONFLICT
+    return status.HTTP_400_BAD_REQUEST
+
+
+def _map_access_control_error(detail: str) -> int:
+    lower = detail.lower()
+    if "no encontrado" in lower:
+        return status.HTTP_404_NOT_FOUND
+    if "concurrencia" in lower:
+        return status.HTTP_409_CONFLICT
+    return status.HTTP_400_BAD_REQUEST
+
+
+@router.get("/work-reports", response_model=list[WorkReportRead])
+def api_list_work_reports(
+    project_id: Optional[int] = Query(default=None),
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    updated_since: Optional[datetime] = Query(default=None),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[WorkReportRead]:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return list_work_reports(
+            session,
+            tenant_id,
+            project_id=project_id,
+            date_from=date_from,
+            date_to=date_to,
+            status=status_filter,
+            updated_since=updated_since,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/work-reports/{report_id}", response_model=WorkReportRead)
+def api_get_work_report(
+    report_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return get_work_report(session, report_id, tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_work_report_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.post("/work-reports", response_model=WorkReportRead, status_code=status.HTTP_201_CREATED)
+def api_create_work_report(
+    payload: WorkReportCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+) -> WorkReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return create_work_report(
+            session,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_work_report_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.patch("/work-reports/{report_id}", response_model=WorkReportRead)
+def api_update_work_report(
+    report_id: int,
+    payload: WorkReportUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return update_work_report(
+            session,
+            report_id,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_work_report_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.delete("/work-reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_work_report(
+    report_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        delete_work_report(
+            session,
+            report_id,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_work_report_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.post("/work-reports/sync", response_model=WorkReportSyncResponse)
+def api_sync_work_reports(
+    payload: WorkReportSyncRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkReportSyncResponse:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return sync_work_reports(
+            session,
+            tenant_id,
+            payload,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_work_report_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.get("/access-control-reports", response_model=list[AccessControlReportRead])
+def api_list_access_control_reports(
+    project_id: Optional[int] = Query(default=None),
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+    updated_since: Optional[datetime] = Query(default=None),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[AccessControlReportRead]:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return list_access_control_reports(
+            session,
+            tenant_id,
+            project_id=project_id,
+            date_from=date_from,
+            date_to=date_to,
+            updated_since=updated_since,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.get("/access-control-reports/{report_id}", response_model=AccessControlReportRead)
+def api_get_access_control_report(
+    report_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> AccessControlReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return get_access_control_report(session, report_id, tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.post("/access-control-reports", response_model=AccessControlReportRead, status_code=status.HTTP_201_CREATED)
+def api_create_access_control_report(
+    payload: AccessControlReportCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> AccessControlReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return create_access_control_report(
+            session,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.patch("/access-control-reports/{report_id}", response_model=AccessControlReportRead)
+def api_update_access_control_report(
+    report_id: int,
+    payload: AccessControlReportUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permissions(["erp:manage", "erp:track"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> AccessControlReportRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return update_access_control_report(
+            session,
+            report_id,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.delete("/access-control-reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_access_control_report(
+    report_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        delete_access_control_report(
+            session,
+            report_id,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
+
+
+@router.get("/rental-machinery", response_model=list[RentalMachineryRead])
+def api_list_rental_machinery(
+    project_id: Optional[int] = Query(default=None),
+    active_on: Optional[date] = Query(default=None),
+    date_filter: Optional[date] = Query(default=None, alias="date"),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[RentalMachineryRead]:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        effective_active_on = active_on or date_filter
+        return list_rental_machinery(
+            session,
+            tenant_id,
+            project_id=project_id,
+            active_on=effective_active_on,
+            status=status_filter,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/rental-machinery", response_model=RentalMachineryRead, status_code=status.HTTP_201_CREATED)
+def api_create_rental_machinery(
+    payload: RentalMachineryCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> RentalMachineryRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return create_rental_machinery(
+            session,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/rental-machinery/{machinery_id}", response_model=RentalMachineryRead)
+def api_update_rental_machinery(
+    machinery_id: int,
+    payload: RentalMachineryUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> RentalMachineryRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return update_rental_machinery(
+            session,
+            machinery_id,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrada" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.delete("/rental-machinery/{machinery_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_rental_machinery(
+    machinery_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        delete_rental_machinery(
+            session,
+            machinery_id,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrada" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="180dp"
+    android:viewportWidth="180"
+    android:viewportHeight="180">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#F97316"
+        android:pathData="M90,90m-80,0a80,80 0,1 1,160 0a80,80 0,1 1,-160 0"/>
+    
+    <!-- Building icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M90,35 L130,55 L130,135 L50,135 L50,55 Z"/>
+    
+    <!-- Windows -->
+    <path
+        android:fillColor="#1e3a5f"
+        android:pathData="M60,65 L75,65 L75,80 L60,80 Z"/>
+    <path
+        android:fillColor="#1e3a5f"
+        android:pathData="M105,65 L120,65 L120,80 L105,80 Z"/>
+    <path
+        android:fillColor="#1e3a5f"
+        android:pathData="M60,90 L75,90 L75,105 L60,105 Z"/>
+    <path
+        android:fillColor="#1e3a5f"
+        android:pathData="M105,90 L120,90 L120,105 L105,105 Z"/>
+    
+    <!-- Door -->
+    <path
+        android:fillColor="#1e3a5f"
+        android:pathData="M80,110 L100,110 L100,135 L80,135 Z"/>
+    
+    <!-- Roof detail -->
+    <path
+        android:fillColor="#ea580c"
+        android:pathData="M90,30 L135,52 L130,55 L90,38 L50,55 L45,52 Z"/>
+        
+</vector>

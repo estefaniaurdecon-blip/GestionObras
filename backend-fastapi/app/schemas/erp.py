@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+DateType = date
 
 
 class ProjectRead(BaseModel):
@@ -373,3 +375,193 @@ class ProjectDocumentRead(BaseModel):
     size_bytes: int
     uploaded_at: datetime
     url: str
+
+
+WorkReportStatus = Literal[
+    "draft",
+    "pending",
+    "approved",
+    "completed",
+    "missing_data",
+    "missing_delivery_notes",
+    "closed",
+    "archived",
+]
+
+
+class WorkReportRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tenant_id: int
+    project_id: int
+    external_id: Optional[str] = None
+    report_identifier: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    title: Optional[str] = None
+    date: date
+    status: str
+    is_closed: bool
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class WorkReportCreate(BaseModel):
+    project_id: int
+    date: date
+    title: Optional[str] = None
+    status: WorkReportStatus = "draft"
+    is_closed: bool = False
+    report_identifier: Optional[str] = None
+    external_id: Optional[str] = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkReportUpdate(BaseModel):
+    project_id: Optional[int] = None
+    date: Optional[DateType] = None
+    title: Optional[str] = None
+    status: Optional[WorkReportStatus] = None
+    is_closed: Optional[bool] = None
+    report_identifier: Optional[str] = None
+    external_id: Optional[str] = None
+    payload: Optional[dict[str, Any]] = None
+    expected_updated_at: Optional[datetime] = None
+
+
+class WorkReportSyncOperation(BaseModel):
+    client_op_id: str
+    op: Literal["create", "update", "delete"]
+    report_id: Optional[int] = None
+    external_id: Optional[str] = None
+    client_temp_id: Optional[str] = None
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkReportSyncRequest(BaseModel):
+    operations: list[WorkReportSyncOperation] = Field(default_factory=list)
+    since: Optional[datetime] = None
+    include_deleted: bool = True
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class WorkReportSyncAck(BaseModel):
+    client_op_id: str
+    op: str
+    ok: bool
+    report_id: Optional[int] = None
+    external_id: Optional[str] = None
+    client_temp_id: Optional[str] = None
+    mapped_server_id: Optional[int] = None
+    server_updated_at: Optional[datetime] = None
+    error: Optional[str] = None
+
+
+class WorkReportSyncResponse(BaseModel):
+    ack: list[WorkReportSyncAck] = Field(default_factory=list)
+    id_map: dict[str, int] = Field(default_factory=dict)
+    server_changes: list[WorkReportRead] = Field(default_factory=list)
+
+
+class AccessControlReportRead(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: Optional[int] = None
+    external_id: Optional[str] = None
+    date: date
+    site_name: str
+    responsible: str
+    responsible_entry_time: Optional[str] = None
+    responsible_exit_time: Optional[str] = None
+    observations: str = ""
+    personal_entries: list[dict[str, Any]] = Field(default_factory=list)
+    machinery_entries: list[dict[str, Any]] = Field(default_factory=list)
+    additional_tasks: Optional[str] = None
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class AccessControlReportCreate(BaseModel):
+    date: date
+    site_name: str
+    responsible: str
+    project_id: Optional[int] = None
+    external_id: Optional[str] = None
+    responsible_entry_time: Optional[str] = None
+    responsible_exit_time: Optional[str] = None
+    observations: str = ""
+    personal_entries: list[dict[str, Any]] = Field(default_factory=list)
+    machinery_entries: list[dict[str, Any]] = Field(default_factory=list)
+    additional_tasks: Optional[str] = None
+
+
+class AccessControlReportUpdate(BaseModel):
+    date: Optional[DateType] = None
+    site_name: Optional[str] = None
+    responsible: Optional[str] = None
+    project_id: Optional[int] = None
+    external_id: Optional[str] = None
+    responsible_entry_time: Optional[str] = None
+    responsible_exit_time: Optional[str] = None
+    observations: Optional[str] = None
+    personal_entries: Optional[list[dict[str, Any]]] = None
+    machinery_entries: Optional[list[dict[str, Any]]] = None
+    additional_tasks: Optional[str] = None
+    expected_updated_at: Optional[datetime] = None
+
+
+RentalMachineryStatus = Literal["active", "inactive", "archived"]
+RentalMachineryPriceUnit = Literal["day", "hour", "month"]
+
+
+class RentalMachineryRead(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int
+    is_rental: bool
+    name: str
+    description: Optional[str] = None
+    provider: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+    price: Optional[Decimal] = None
+    price_unit: str
+    status: str
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class RentalMachineryCreate(BaseModel):
+    project_id: int
+    is_rental: bool = True
+    name: str
+    description: Optional[str] = None
+    provider: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
+    price: Optional[Decimal] = None
+    price_unit: RentalMachineryPriceUnit = "day"
+    status: RentalMachineryStatus = "active"
+
+
+class RentalMachineryUpdate(BaseModel):
+    project_id: Optional[int] = None
+    is_rental: Optional[bool] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    provider: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    price: Optional[Decimal] = None
+    price_unit: Optional[RentalMachineryPriceUnit] = None
+    status: Optional[RentalMachineryStatus] = None

@@ -12,6 +12,12 @@ export type ContractStatus =
   | "SIGNED"
   | "REJECTED";
 
+export type ComparativeStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED";
+
 export type ContractType = "SUMINISTRO" | "SERVICIO" | "SUBCONTRATACION";
 
 export interface Contract {
@@ -21,6 +27,7 @@ export interface Contract {
   project_id?: number | null;
   type: ContractType;
   status: ContractStatus;
+  comparative_status?: ComparativeStatus;
   title?: string | null;
   description?: string | null;
   selected_offer_id?: number | null;
@@ -291,6 +298,44 @@ export async function submitContractGerencia(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/submit-gerencia`,
     {},
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function submitComparative(
+  contractId: number,
+  tenantId?: number,
+): Promise<Contract> {
+  const response = await apiClient.post<Contract>(
+    `/api/v1/contracts/${contractId}/submit-comparative`,
+    {},
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function approveComparative(
+  contractId: number,
+  payload: ContractApprovalPayload,
+  tenantId?: number,
+): Promise<Contract> {
+  const response = await apiClient.post<Contract>(
+    `/api/v1/contracts/${contractId}/approve-comparative`,
+    payload,
+    buildTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function rejectComparative(
+  contractId: number,
+  payload: { reason: string },
+  tenantId?: number,
+): Promise<Contract> {
+  const response = await apiClient.post<Contract>(
+    `/api/v1/contracts/${contractId}/reject-comparative`,
+    payload,
     buildTenantHeaders(tenantId),
   );
   return response.data;
