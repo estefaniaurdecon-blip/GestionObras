@@ -6,18 +6,25 @@ import {
   getCurrentUser, 
   logout as apiLogout,
   getToken,
+  isTokenExpired,
   setToken,
   clearToken,
   ApiUser 
 } from '@/integrations/api/client';
 import { cleanOrphanSession } from '@/utils/cleanOrphanSession';
 import { clearActiveTenantId } from '@/offline-db/tenantScope';
+import { storage } from '@/utils/storage';
+import {
+  normalizeCredentialEmail,
+  saveOfflineCredential,
+  verifyOfflineCredential,
+} from '@/integrations/api/offlineCredentials';
 
 interface AuthContextType {
   user: ApiUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ success: boolean; mfaRequired?: boolean; tempToken?: string; email?: string }>;
-  verifyMFA: (email: string, code: string) => Promise<boolean>;
+  verifyMFA: (email: string, code: string, password?: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -43,6 +50,106 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const LEGACY_CACHED_USER_KEY = 'api_cached_user_v1';
+  const CACHED_USERS_KEY = 'api_cached_users_v1';
+
+  const isBrowserOffline = () =>
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  const isNetworkError = (error: any): boolean => {
+    if (!error) return false;
+    if (error instanceof TypeError) return true;
+    if (typeof error?.status === 'number') {
+      if (error.status === 0) return true;
+      return false;
+    }
+    const message = [
+      String(error?.message || ''),
+      String(error?.detail || ''),
+      String(error?.data?.detail || ''),
+      String(error?.cause?.message || ''),
+      String(error),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return (
+      message.includes('failed to fetch') ||
+      message.includes('networkerror') ||
+      message.includes('network request failed') ||
+      message.includes('load failed') ||
+      message.includes('fetch failed') ||
+      message.includes('err_internet_disconnected') ||
+      message.includes('err_network_changed')
+    );
+  };
+
+  const isApiUserCandidate = (value: unknown): value is ApiUser => {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Record<string, unknown>;
+    return typeof candidate.id === 'number' && typeof candidate.email === 'string';
+  };
+
+  const readCachedUsersStore = async (): Promise<Record<string, ApiUser>> => {
+    try {
+      const raw = await storage.getItem(CACHED_USERS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+
+      const store: Record<string, ApiUser> = {};
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!isApiUserCandidate(value)) continue;
+        store[normalizeCredentialEmail(key)] = value;
+      }
+      return store;
+    } catch {
+      return {};
+    }
+  };
+
+  const readCachedUser = async (email?: string): Promise<ApiUser | null> => {
+    const normalizedEmail = email ? normalizeCredentialEmail(email) : '';
+    try {
+      const store = await readCachedUsersStore();
+      if (normalizedEmail && store[normalizedEmail]) {
+        return store[normalizedEmail];
+      }
+
+      const storeValues = Object.values(store);
+      if (!normalizedEmail && storeValues.length > 0) {
+        return storeValues[storeValues.length - 1];
+      }
+    } catch {
+      // Continue with legacy fallback below
+    }
+
+    // Backward compatibility with older single-user cache key
+    try {
+      const rawLegacy = await storage.getItem(LEGACY_CACHED_USER_KEY);
+      if (!rawLegacy) return null;
+      const parsedLegacy = JSON.parse(rawLegacy);
+      if (!isApiUserCandidate(parsedLegacy)) return null;
+      if (!normalizedEmail) return parsedLegacy;
+      return normalizeCredentialEmail(parsedLegacy.email) === normalizedEmail ? parsedLegacy : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeCachedUser = async (userData: ApiUser): Promise<void> => {
+    try {
+      const normalizedEmail = normalizeCredentialEmail(userData.email || '');
+      if (!normalizedEmail) return;
+
+      const store = await readCachedUsersStore();
+      store[normalizedEmail] = userData;
+
+      await storage.setItem(CACHED_USERS_KEY, JSON.stringify(store));
+      await storage.setItem(LEGACY_CACHED_USER_KEY, JSON.stringify(userData));
+    } catch (error) {
+      console.warn('[Auth] Could not cache user for offline mode:', error);
+    }
+  };
 
   const redirectToAuth = () => {
     const currentHashPath = window.location.hash.replace(/^#/, '');
@@ -71,10 +178,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         const token = await getToken();
         const hadStoredToken = Boolean(token?.access_token);
+        const expiredToken = isTokenExpired(token);
+        if (hadStoredToken && expiredToken) {
+          await clearToken();
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
 
         // Try to resolve current user from token OR cookie session.
         try {
           const userData = await getCurrentUser();
+          await writeCachedUser(userData);
           if (isMounted) {
             setUser(userData);
             setLoading(false);
@@ -91,6 +208,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               redirectToAuth();
             }
             return;
+          }
+
+          if (hadStoredToken && !expiredToken) {
+            const cachedUser = await readCachedUser();
+            if (cachedUser) {
+              console.log('[Auth] Offline session restored from cached user');
+              if (isMounted) {
+                setUser(cachedUser);
+                setLoading(false);
+              }
+              return;
+            }
           }
 
           console.log('[Auth] No valid session found:', error.message);
@@ -120,16 +249,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
    * Returns { success: true } on success, { success: false, mfaRequired: true } if MFA is needed
    */
   const signIn = async (email: string, password: string): Promise<{ success: boolean; mfaRequired?: boolean; tempToken?: string; email?: string }> => {
+    const loginEmail = email.trim();
+    const normalizedEmail = normalizeCredentialEmail(loginEmail);
+
+    const signInOffline = async (): Promise<{ success: boolean }> => {
+      const isValidOfflineCredential = await verifyOfflineCredential(normalizedEmail, password);
+      if (!isValidOfflineCredential) {
+        throw new Error('Credenciales offline incorrectas.');
+      }
+
+      const cachedUser = await readCachedUser(normalizedEmail);
+      if (!cachedUser) {
+        throw new Error('Necesitas iniciar sesion online al menos una vez para habilitar modo offline.');
+      }
+
+      await clearToken();
+      setUser(cachedUser);
+      return { success: true };
+    };
+
+    if (isBrowserOffline()) {
+      return signInOffline();
+    }
+
     try {
-      const response = await apiLogin({ username: email, password });
+      const response = await apiLogin({ username: loginEmail, password });
       
       // MFA required - don't store token yet
       if (response.mfa_required) {
+        if (response.user) {
+          await writeCachedUser(response.user);
+        }
+        try {
+          await saveOfflineCredential(normalizedEmail, password);
+        } catch (offlineCredentialError) {
+          console.warn('[Auth] No se pudo guardar credencial offline tras login paso 1:', offlineCredentialError);
+        }
         return { 
           success: false, 
           mfaRequired: true, 
           tempToken: response.temp_token,
-          email 
+          email: loginEmail,
         };
       }
       
@@ -144,6 +304,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Session must be usable immediately after login (token-based or cookie-based).
       try {
         const userData = await getCurrentUser();
+        await writeCachedUser(userData);
+        try {
+          await saveOfflineCredential(normalizedEmail, password);
+        } catch (offlineCredentialError) {
+          console.warn('[Auth] No se pudo guardar credencial offline tras login:', offlineCredentialError);
+        }
         setUser(userData);
         return { success: true };
       } catch (refreshError: any) {
@@ -157,15 +323,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw refreshError;
       }
     } catch (error: any) {
+      if (
+        isBrowserOffline() ||
+        isNetworkError(error) ||
+        typeof error?.status !== 'number' ||
+        error?.status === 0
+      ) {
+        try {
+          return await signInOffline();
+        } catch (offlineError: any) {
+          throw offlineError;
+        }
+      }
       console.error('Login error:', error);
       throw error;
     }
   };
 
-  /**
+   /**
    * Verify MFA code and complete login
    */
-  const verifyMFA = async (email: string, code: string): Promise<boolean> => {
+  const verifyMFA = async (email: string, code: string, password?: string): Promise<boolean> => {
     try {
       const response = await apiVerifyMFA({ username: email, mfa_code: code });
       
@@ -179,6 +357,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Always confirm session by reading /users/me right after MFA.
       try {
         const userData = await getCurrentUser();
+        await writeCachedUser(userData);
+        if (password) {
+          try {
+            await saveOfflineCredential(email, password);
+          } catch (offlineCredentialError) {
+            console.warn('[Auth] No se pudo guardar credencial offline tras MFA:', offlineCredentialError);
+          }
+        }
         setUser(userData);
         return true;
       } catch (refreshError: any) {

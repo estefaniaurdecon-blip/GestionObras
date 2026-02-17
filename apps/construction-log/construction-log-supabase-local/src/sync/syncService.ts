@@ -1,6 +1,7 @@
 ﻿import { apiFetchJson } from '@/integrations/api/client';
 import { offlineDb } from '@/offline-db/db';
 import type { OutboxRow } from '@/offline-db/types';
+import { getToken, isTokenExpired } from '@/integrations/api/storage';
 import {
   buildDeterministicClientOpId,
   decideConsolidatedAction,
@@ -132,6 +133,25 @@ type SyncOptions = {
   tenantId?: string | null;
 };
 
+export class SyncAuthRequiredError extends Error {
+  reason: 'no_token' | 'token_expired' | 'session_invalid';
+
+  constructor(reason: 'no_token' | 'token_expired' | 'session_invalid') {
+    const messageByReason: Record<typeof reason, string> = {
+      no_token: 'No hay sesion activa para sincronizar.',
+      token_expired: 'La sesion ha caducado y se requiere volver a iniciar sesion.',
+      session_invalid: 'La sesion no es valida en servidor. Inicia sesion de nuevo con MFA.',
+    };
+    super(messageByReason[reason]);
+    this.name = 'SyncAuthRequiredError';
+    this.reason = reason;
+  }
+}
+
+export function isSyncAuthRequiredError(error: unknown): error is SyncAuthRequiredError {
+  return error instanceof SyncAuthRequiredError;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -177,6 +197,14 @@ function toTenantIdFromPayload(payload: Record<string, unknown>): string | null 
 function toSyncErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return 'Error de sincronizaciÃ³n';
+}
+
+function isAuthApiError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { status?: number; message?: string };
+  if (candidate.status === 401) return true;
+  const message = String(candidate.message ?? '').toLowerCase();
+  return message.includes('sesion') || message.includes('session') || message.includes('unauthorized');
 }
 
 function shouldRetryLegacyDateValidation(errorMessage: string | null | undefined): boolean {
@@ -868,6 +896,14 @@ async function pullServerReports(
 export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
   await offlineDb.init();
 
+  const tokenData = await getToken();
+  if (!tokenData?.access_token) {
+    throw new SyncAuthRequiredError('no_token');
+  }
+  if (isTokenExpired(tokenData)) {
+    throw new SyncAuthRequiredError('token_expired');
+  }
+
   const limit = Math.max(1, Math.min(options.limit ?? 50, 500));
   const batch = await offlineDb.query<OutboxRow>(
     `SELECT
@@ -1087,6 +1123,9 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           });
         }
       } catch (error) {
+        if (isAuthApiError(error)) {
+          throw new SyncAuthRequiredError('session_invalid');
+        }
         const errorMessage = toSyncErrorMessage(error);
         if (!firstFailureReason) firstFailureReason = errorMessage;
         for (const plan of plans) {
@@ -1107,6 +1146,9 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
         applied,
       });
     } catch (pullError) {
+      if (isAuthApiError(pullError)) {
+        throw new SyncAuthRequiredError('session_invalid');
+      }
       const pullMessage = `Error en pull incremental: ${toSyncErrorMessage(pullError)}`;
       if (!firstFailureReason) firstFailureReason = pullMessage;
       console.error('[Sync] Pull error', { tenantId, pullMessage, pullError });

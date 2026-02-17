@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +8,15 @@ import { PartsTabContent, ToolsPanelContent } from '@/components/DashboardToolsT
 import { GenerateWorkReportPanel, type GenerateWorkReportDraft } from '@/components/GenerateWorkReportPanel';
 import { HistoryReportsPanel, type HistoryReportsPanelProps } from '@/components/HistoryReportsPanel';
 import { TenantPicker } from '@/components/TenantPicker';
+import { apiFetch } from '@/integrations/api/client';
 import type { ApiTenant } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
 import {
   CheckCircle2,
   Clock3,
-  CloudUpload,
   ShieldCheck,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
 type WorkReportsSummary = {
@@ -98,6 +100,8 @@ type WorkReportsActionsConfig = {
   handlePending: (featureName: string) => void;
   openCloneFromHistoryDialog: (report: WorkReport) => void;
   openExistingReport: (report: WorkReport) => void;
+  // Optional for backwards compatibility with old Index action wiring.
+  setHistoryOpen?: Dispatch<SetStateAction<boolean>>;
 };
 
 type WorkReportsHistoryConfig = HistoryReportsPanelProps;
@@ -108,10 +112,17 @@ type WorkReportsTabProps = {
   tenant: WorkReportsTenantConfig;
   reports: WorkReportsListConfig;
   actions: WorkReportsActionsConfig;
-  history: WorkReportsHistoryConfig;
+  history?: WorkReportsHistoryConfig;
 };
 
-export const WorkReportsTab = ({ panel, summary, tenant, reports, actions, history }: WorkReportsTabProps) => {
+export const WorkReportsTab = ({
+  panel,
+  summary,
+  tenant,
+  reports,
+  actions,
+  history,
+}: WorkReportsTabProps) => {
   const {
     open: generatePanelOpen,
     date: generatePanelDate,
@@ -131,11 +142,7 @@ export const WorkReportsTab = ({ panel, summary, tenant, reports, actions, histo
     syncSummary,
     hasSyncPendingValidation,
     syncPanelClass,
-    syncTitleClass,
     syncHeadlineClass,
-    syncBadgeClass,
-    syncIconBubbleClass,
-    syncStatusBadgeLabel,
   } = summary;
   const {
     tenantResolving,
@@ -169,6 +176,65 @@ export const WorkReportsTab = ({ panel, summary, tenant, reports, actions, histo
     openExistingReport,
   } = actions;
   const [activeToolsTab, setActiveToolsTab] = useState<DashboardToolsTab>('parts');
+  const [isSyncOnline, setIsSyncOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const checkSyncConnectivity = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (!disposed) setIsSyncOnline(false);
+        return;
+      }
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 4000);
+        const response = await apiFetch('/api/v1/health', {
+          method: 'GET',
+          skipAuth: true,
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
+        if (!disposed) setIsSyncOnline(response.ok);
+      } catch {
+        if (!disposed) setIsSyncOnline(false);
+      }
+    };
+
+    const handleOnline = () => {
+      void checkSyncConnectivity();
+    };
+    const handleOffline = () => {
+      setIsSyncOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    void checkSyncConnectivity();
+    const intervalId = window.setInterval(() => {
+      void checkSyncConnectivity();
+    }, 10000);
+
+    return () => {
+      disposed = true;
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const connectionPanelClass = isSyncOnline
+    ? 'border-emerald-200 bg-emerald-50/60'
+    : 'border-rose-200 bg-rose-50/60';
+  const connectionTitleClass = isSyncOnline ? 'text-emerald-800' : 'text-rose-800';
+  const connectionBadgeClass = isSyncOnline
+    ? 'border-emerald-300 bg-emerald-100 text-[15px] sm:text-[16px] text-emerald-700'
+    : 'border-rose-300 bg-rose-100 text-[15px] sm:text-[16px] text-rose-700';
+  const connectionIconBubbleClass = isSyncOnline
+    ? 'bg-emerald-100 text-emerald-600'
+    : 'bg-rose-100 text-rose-600';
+  const connectionStatusLabel = isSyncOnline ? 'Online' : 'Offline';
 
   return (
     <TabsContent value="work-reports" className="m-0 space-y-5">
@@ -191,86 +257,78 @@ export const WorkReportsTab = ({ panel, summary, tenant, reports, actions, histo
         <>
           <div className="text-center space-y-1">
             <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900">Partes de Trabajo</h2>
-            <p className="text-sm text-muted-foreground">Gestiona tus partes diarios</p>
+            <p className="text-[15px] text-muted-foreground">Gestiona tus partes diarios</p>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Card className="border-emerald-200 bg-emerald-50/60">
               <CardContent className="p-3">
-                <div className="flex min-h-[88px] items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm text-emerald-800">Completados</div>
-                    <div className="text-2xl font-semibold text-emerald-700">{workReportsSummary.completed}</div>
-                    <Badge
-                      variant="outline"
-                      className="border-emerald-300 bg-emerald-100 text-emerald-700"
-                    >
-                      {workReportsSummary.completedPctTotal}% Total
-                    </Badge>
-                  </div>
+                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
                   <div className="rounded-full bg-emerald-100 p-2 text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
+                  <div className="text-[17px] sm:text-[18px] font-medium text-emerald-800">Completados</div>
+                  <div className="text-2xl font-semibold text-emerald-700">{workReportsSummary.completed}</div>
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-300 bg-emerald-100 text-[15px] sm:text-[16px] text-emerald-700"
+                  >
+                    {workReportsSummary.completedPctTotal}% Total
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-amber-200 bg-amber-50/60">
               <CardContent className="p-3">
-                <div className="flex min-h-[88px] items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm text-amber-800">Pendientes</div>
-                    <div className="text-2xl font-semibold text-amber-700">{workReportsSummary.pending}</div>
-                    <Badge
-                      variant="outline"
-                      className="border-amber-300 bg-amber-100 text-amber-700"
-                    >
-                      {workReportsSummary.pending > 0 ? 'Por completar' : 'Sin pendientes'}
-                    </Badge>
-                  </div>
+                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
                   <div className="rounded-full bg-amber-100 p-2 text-amber-600">
                     <Clock3 className="h-4 w-4" />
                   </div>
+                  <div className="text-[17px] sm:text-[18px] font-medium text-amber-800">Pendientes</div>
+                  <div className="text-2xl font-semibold text-amber-700">{workReportsSummary.pending}</div>
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 bg-amber-100 text-[15px] sm:text-[16px] text-amber-700"
+                  >
+                    {workReportsSummary.pending > 0 ? 'Por completar' : 'Sin pendientes'}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-blue-200 bg-blue-50/60">
               <CardContent className="p-3">
-                <div className="flex min-h-[88px] items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm text-blue-800">Aprobados</div>
-                    <div className="text-2xl font-semibold text-blue-700">{workReportsSummary.approved}</div>
-                    <Badge
-                      variant="outline"
-                      className="border-blue-300 bg-blue-100 text-blue-700"
-                    >
-                      {workReportsSummary.approvedPctCompleted}% de completados
-                    </Badge>
-                  </div>
+                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
                   <div className="rounded-full bg-blue-100 p-2 text-blue-600">
                     <ShieldCheck className="h-4 w-4" />
                   </div>
+                  <div className="text-[17px] sm:text-[18px] font-medium text-blue-800">Aprobados</div>
+                  <div className="text-2xl font-semibold text-blue-700">{workReportsSummary.approved}</div>
+                  <Badge
+                    variant="outline"
+                    className="border-blue-300 bg-blue-100 text-[15px] sm:text-[16px] text-blue-700"
+                  >
+                    {workReportsSummary.approvedPctCompleted}% de completados
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className={syncPanelClass}>
+            <Card className={connectionPanelClass}>
               <CardContent className="p-3">
-                <div className="flex min-h-[88px] items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className={`text-sm ${syncTitleClass}`}>
-                      Estado de sincronización
-                    </div>
-                    <div aria-hidden className="invisible select-none text-2xl font-semibold leading-tight">
-                      0
-                    </div>
-                    <Badge variant="outline" className={syncBadgeClass}>
-                      {syncStatusBadgeLabel}
-                    </Badge>
+                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
+                  <div className={`rounded-full p-2 ${connectionIconBubbleClass}`}>
+                    {isSyncOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
                   </div>
-                  <div className={`rounded-full p-2 ${syncIconBubbleClass}`}>
-                    <CloudUpload className="h-4 w-4" />
+                  <div className={`text-[17px] sm:text-[18px] font-medium ${connectionTitleClass}`}>
+                    Estado de conexion
                   </div>
+                  <div aria-hidden className="invisible select-none text-2xl font-semibold leading-tight">
+                    0
+                  </div>
+                  <Badge variant="outline" className={connectionBadgeClass}>
+                    {connectionStatusLabel}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
@@ -303,16 +361,25 @@ export const WorkReportsTab = ({ panel, summary, tenant, reports, actions, histo
 
           <div className="w-full">
             <div className="mx-auto w-full max-w-6xl space-y-2">
-              <DashboardToolsTabs value={activeToolsTab} onValueChange={setActiveToolsTab} />
+              <DashboardToolsTabs
+                value={activeToolsTab}
+                onValueChange={setActiveToolsTab}
+              />
 
               {activeToolsTab === 'history' ? (
                 <Card className="bg-white">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Historial de partes</CardTitle>
+                  <CardHeader className="pb-3 text-center">
+                    <CardTitle>Historial de partes</CardTitle>
                     <CardDescription>Busqueda y filtros de partes guardados.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <HistoryReportsPanel {...history} />
+                    {history ? (
+                      <HistoryReportsPanel {...history} />
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Historial no disponible en esta vista.
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : activeToolsTab !== 'parts' ? (

@@ -7,7 +7,7 @@ import {
 } from '@/offline-db/tenantScope';
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
 import type { WorkReport } from '@/offline-db/types';
-import { syncNow } from '@/sync/syncService';
+import { isSyncAuthRequiredError, syncNow } from '@/sync/syncService';
 import {
   AUTO_CLONE_CHECK_INTERVAL_MS,
   WORK_REPORT_HISTORY_LIMIT,
@@ -42,7 +42,7 @@ type UseWorkReportsLifecycleParams = {
 
 type UseWorkReportsLifecycleResult = {
   loadWorkReports: () => Promise<void>;
-  handleSyncNow: () => Promise<void>;
+  handleSyncNow: (options?: { silent?: boolean }) => Promise<void>;
   processScheduledAutoClones: (
     tenantId: string,
     options?: { notify?: boolean },
@@ -254,8 +254,10 @@ export const useWorkReportsLifecycle = ({
     user,
   ]);
 
-  const handleSyncNow = useCallback(async () => {
+  const handleSyncNow = useCallback(async (options: { silent?: boolean } = {}) => {
+    const silent = options.silent === true;
     if (tenantUnavailable) {
+      if (silent) return;
       toast({
         title: 'Sincronización bloqueada',
         description: tenantErrorMessage,
@@ -287,7 +289,31 @@ export const useWorkReportsLifecycle = ({
         });
       }
     } catch (error) {
+      if (isSyncAuthRequiredError(error)) {
+        if (silent) return;
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        if (isOffline) {
+          toast({
+            title: 'Conexion requerida para sincronizar',
+            description: 'Debes estar online para sincronizar.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        const description =
+          error.reason === 'no_token'
+            ? 'No hay sesion activa. Inicia sesion online con MFA antes de sincronizar.'
+            : 'Necesitas volver a iniciar sesion (con MFA) para enviar los datos al servidor.';
+        toast({
+          title: 'Sesion requerida para sincronizar',
+          description,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       if (isTenantResolutionError(error)) {
+        if (silent) return;
         toast({
           title: 'Sincronización bloqueada',
           description: tenantErrorMessage,
@@ -297,6 +323,7 @@ export const useWorkReportsLifecycle = ({
       }
 
       console.error('[Sync] Error running sync:', error);
+      if (silent) return;
       toast({
         title: 'Error sincronizando',
         description: 'No se pudo enviar los partes pendientes.',
@@ -325,7 +352,7 @@ export const useWorkReportsLifecycle = ({
     if (bootstrapSyncAttemptedRef.current[resolvedTenantId]) return;
 
     bootstrapSyncAttemptedRef.current[resolvedTenantId] = true;
-    void handleSyncNow();
+    void handleSyncNow({ silent: true });
   }, [
     handleSyncNow,
     resolvedTenantId,
@@ -379,3 +406,5 @@ export const useWorkReportsLifecycle = ({
     processScheduledAutoClones,
   };
 };
+
+

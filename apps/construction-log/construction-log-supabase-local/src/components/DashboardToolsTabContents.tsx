@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { DashboardToolsTab } from '@/components/DashboardToolsTabs';
 import type { WorkReport } from '@/offline-db/types';
 import { payloadBoolean, payloadNumber, payloadText } from '@/pages/indexHelpers';
 import {
@@ -30,7 +30,7 @@ type SyncSummary = {
   pendingTotal: number;
 };
 
-type ToolsActionTab = Exclude<DashboardToolsTab, 'parts' | 'history'>;
+type ToolsActionTab = 'bulk-export' | 'data-management' | 'summary-report';
 
 const TOOLS_LABELS: Record<ToolsActionTab, string> = {
   'bulk-export': 'Exportacion masiva',
@@ -97,7 +97,7 @@ const ToolsOptionButton = ({ icon, label, disabled, onClick }: ToolsOptionButton
     className="h-28 w-[150px] shrink-0 flex-col justify-center gap-2 rounded-2xl border-slate-300 bg-white px-3 text-slate-700 shadow-sm hover:bg-slate-50 [&_svg]:h-9 [&_svg]:w-9 md:h-32 md:w-[170px] md:[&_svg]:h-10 md:[&_svg]:w-10 lg:h-28 lg:w-[170px]"
   >
     {icon}
-    <span className="max-w-full whitespace-normal break-words text-center text-sm font-medium leading-snug">
+    <span className="max-w-full whitespace-normal break-words text-center text-[15px] font-medium leading-snug sm:text-base">
       {label}
     </span>
   </Button>
@@ -185,12 +185,12 @@ export const ToolsPanelContent = ({
 }: ToolsPanelContentProps) => {
   return (
     <Card className="bg-white">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{TOOLS_LABELS[activeToolsTab]}</CardTitle>
-        <CardDescription>Selecciona una accion para continuar.</CardDescription>
+      <CardHeader className="pb-3 text-center">
+        <CardTitle className="text-xl sm:text-2xl">{TOOLS_LABELS[activeToolsTab]}</CardTitle>
+        <CardDescription className="text-sm sm:text-[15px]">Selecciona una accion para continuar.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <ToolActions
             activeToolsTab={activeToolsTab}
             tenantUnavailable={tenantUnavailable}
@@ -224,6 +224,17 @@ export const PartsTabContent = ({
   onCloneFromHistoryDialog,
   onOpenExistingReport,
 }: PartsTabContentProps) => {
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+  const generatePartButtonClass = isAndroidPlatform
+    ? 'h-11 w-[160px] justify-center bg-blue-600 text-[16px] text-white hover:bg-blue-700'
+    : 'h-10 w-[140px] justify-center bg-blue-600 text-white hover:bg-blue-700';
+  const reportNameClass = isAndroidPlatform
+    ? 'text-[19px] font-semibold text-slate-900 truncate leading-snug'
+    : 'text-[17px] font-medium text-slate-900 truncate';
+  const reportDetailClass = isAndroidPlatform
+    ? 'text-[16px] text-muted-foreground leading-snug'
+    : 'text-[15px] text-muted-foreground';
+
   return (
     <div className="space-y-2">
       <Card className="bg-white">
@@ -231,18 +242,18 @@ export const PartsTabContent = ({
           <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[auto_1fr_auto] sm:items-center">
             <div className="flex items-center justify-start sm:justify-self-start">
               <Button
-                className="h-10 w-[140px] justify-center bg-blue-600 text-white hover:bg-blue-700"
+                className={generatePartButtonClass}
                 disabled={!canCreateWorkReport}
                 onClick={onGenerateWorkReport}
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className={`mr-2 ${isAndroidPlatform ? 'h-5 w-5' : 'h-4 w-4'}`} />
                 Generar parte
               </Button>
             </div>
 
             <div className="text-center sm:col-start-2">
               <CardTitle>Partes recientes</CardTitle>
-              <CardDescription>
+              <CardDescription className="text-[15px] sm:text-base">
                 {tenantResolving
                   ? 'Resolviendo tenant...'
                   : tenantNeedsPicker
@@ -263,7 +274,7 @@ export const PartsTabContent = ({
         {workReports.length === 0 ? (
           <CardContent className="py-10 flex flex-col items-center gap-4">
             <ClipboardList className="h-12 w-12 text-slate-400" />
-            <p className="text-sm text-muted-foreground text-center max-w-md">
+            <p className="text-[15px] sm:text-base text-muted-foreground text-center max-w-md">
               No hay partes creados en los ultimos {workReportVisibleDays} dias. Puedes crear uno nuevo o sincronizar.
             </p>
             <Button variant="outline" disabled={syncing || tenantUnavailable} onClick={() => void onSyncNow()}>
@@ -271,11 +282,11 @@ export const PartsTabContent = ({
               Sincronizar
             </Button>
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className={`${isAndroidPlatform ? 'text-[16px]' : ''} bg-blue-600 hover:bg-blue-700 text-white`}
               disabled={!canCreateWorkReport}
               onClick={onGenerateWorkReport}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className={`${isAndroidPlatform ? 'h-5 w-5' : 'h-4 w-4'} mr-2`} />
               Generar Primer Parte
             </Button>
           </CardContent>
@@ -284,10 +295,10 @@ export const PartsTabContent = ({
             <div className={`rounded-md border p-3 ${syncPanelClass}`}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  <div className={`text-sm font-medium ${syncHeadlineClass}`}>
+                  <div className={`text-[17px] font-medium ${syncHeadlineClass}`}>
                     {hasSyncPendingValidation ? 'Partes pendientes de sincronizar' : 'Todos los partes estan sincronizados'}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-[15px] text-muted-foreground">
                     {hasSyncPendingValidation
                       ? `Pendientes de validacion: ${syncSummary.pendingTotal}`
                       : `Sincronizados: ${syncSummary.synced}/${syncSummary.total}`}
@@ -295,7 +306,13 @@ export const PartsTabContent = ({
                     {syncSummary.errorSync > 0 ? ` · Con error: ${syncSummary.errorSync}` : ''}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => void onSyncNow()} disabled={syncing || tenantUnavailable}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[15px]"
+                  onClick={() => void onSyncNow()}
+                  disabled={syncing || tenantUnavailable}
+                >
                   <CloudUpload className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
                   Sincronizar
                 </Button>
@@ -313,11 +330,11 @@ export const PartsTabContent = ({
                 return (
                   <div key={report.id} className="p-3 flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
-                      <div className="text-sm font-medium text-slate-900 truncate">{reportName}</div>
-                      <div className="text-xs text-muted-foreground">Identificador: {reportIdentifier}</div>
-                      <div className="text-xs text-muted-foreground">Fecha: {report.date}</div>
-                      <div className="text-xs text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
-                      <div className="text-xs text-muted-foreground">Horas totales: {totalHoursLabel}</div>
+                      <div className={reportNameClass}>{reportName}</div>
+                      <div className={reportDetailClass}>Identificador: {reportIdentifier}</div>
+                      <div className={reportDetailClass}>Fecha: {report.date}</div>
+                      <div className={reportDetailClass}>Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
+                      <div className={reportDetailClass}>Horas totales: {totalHoursLabel}</div>
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                       <div className="flex items-center gap-0.5 px-1 py-1">
@@ -383,7 +400,10 @@ export const PartsTabContent = ({
                         </Button>
                       </div>
                       {!isClosed ? (
-                        <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-700">
+                        <Badge
+                          variant="outline"
+                          className="border-amber-400 bg-amber-50 text-[13px] sm:text-sm text-amber-700"
+                        >
                           Por completar
                         </Badge>
                       ) : null}
@@ -391,10 +411,10 @@ export const PartsTabContent = ({
                         variant="outline"
                         className={
                           report.syncStatus === 'synced'
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                            ? 'border-emerald-300 bg-emerald-50 text-[13px] sm:text-sm text-emerald-700'
                             : report.syncStatus === 'error'
-                              ? 'border-rose-500 bg-rose-100 text-rose-800'
-                              : 'border-red-300 bg-red-50 text-red-700'
+                              ? 'border-rose-500 bg-rose-100 text-[13px] sm:text-sm text-rose-800'
+                              : 'border-red-300 bg-red-50 text-[13px] sm:text-sm text-red-700'
                         }
                       >
                         {report.syncStatus === 'synced'
@@ -410,7 +430,7 @@ export const PartsTabContent = ({
             </div>
 
             {workReports.length > 20 ? (
-              <div className="text-xs text-muted-foreground text-center">Mostrando 20 de {workReports.length}.</div>
+              <div className="text-[15px] text-muted-foreground text-center">Mostrando 20 de {workReports.length}.</div>
             ) : null}
           </CardContent>
         )}

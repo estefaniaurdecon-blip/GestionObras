@@ -15,7 +15,8 @@ type IndexSecondaryTabsProps = {
   sortedWorks: WorkItem[];
   worksLoading: boolean;
   showUserManagementTab: boolean;
-  showUpdatesTab: boolean;
+  // Optional for backwards compatibility with old Index prop wiring.
+  showUpdatesTab?: boolean;
   userTenantId?: number;
   isSuperAdmin: boolean;
   onOpenProjects: () => void;
@@ -26,7 +27,7 @@ export const IndexSecondaryTabs = ({
   sortedWorks,
   worksLoading,
   showUserManagementTab,
-  showUpdatesTab,
+  showUpdatesTab: _showUpdatesTab,
   userTenantId,
   isSuperAdmin,
   onOpenProjects,
@@ -91,20 +92,6 @@ export const IndexSecondaryTabs = ({
             </CardHeader>
           </Card>
           <UsersAdminPanel tenantId={userTenantId} isSuperAdmin={isSuperAdmin} />
-        </TabsContent>
-      ) : null}
-
-      {showUpdatesTab ? (
-        <TabsContent value="updates" className="m-0 space-y-4">
-          <Card className="bg-white">
-            <CardHeader>
-              <CardTitle>Actualizaciones</CardTitle>
-              <CardDescription>Seccion visible sin depender de Supabase.</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Modulo de actualizaciones en revision. Por ahora, usa la app desktop para instalar nuevas versiones.
-            </CardContent>
-          </Card>
         </TabsContent>
       ) : null}
 

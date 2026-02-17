@@ -4,6 +4,7 @@ import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppIcon } from '@/components/AppIcon';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { NetworkStatusIcon } from '@/components/NetworkStatusIcon';
+import { Capacitor } from '@capacitor/core';
 import { CloudUpload, LogOut, RefreshCw, Settings } from 'lucide-react';
 
 type IndexHeaderProps = {
@@ -15,7 +16,9 @@ type IndexHeaderProps = {
   tenantUnavailable: boolean;
   tenantErrorMessage: string;
   showUserManagementTab: boolean;
-  showUpdatesTab: boolean;
+  // Optional for backwards compatibility with old Index prop wiring.
+  showUpdatesTab?: boolean;
+  hasPendingUpdate?: boolean;
   onReloadWorks: () => void;
   onSyncNow: () => Promise<void>;
   onOpenSettings: () => void;
@@ -31,16 +34,28 @@ export const IndexHeader = ({
   tenantUnavailable,
   tenantErrorMessage,
   showUserManagementTab,
-  showUpdatesTab,
+  showUpdatesTab: _showUpdatesTab,
+  hasPendingUpdate = false,
   onReloadWorks,
   onSyncNow,
   onOpenSettings,
   onSignOut,
 }: IndexHeaderProps) => {
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+
   return (
     <>
       <header className="bg-blue-700 text-white shadow-sm sticky top-0 z-50">
-        <div className="w-full px-2 sm:px-4 lg:px-6 py-2 sm:py-3">
+        <div
+          className="w-full px-2 sm:px-4 lg:px-6 py-2 sm:py-3"
+          style={
+            isAndroidPlatform
+              ? {
+                  paddingTop: 'max(1rem, env(safe-area-inset-top))',
+                }
+              : undefined
+          }
+        >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               <AppIcon size={34} className="flex-shrink-0" />
@@ -91,10 +106,16 @@ export const IndexHeader = ({
                 variant="ghost"
                 size="icon"
                 onClick={onOpenSettings}
-                className="h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
+                className="relative h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
                 title="Ajustes"
               >
                 <Settings className="h-4 w-4" />
+                {hasPendingUpdate ? (
+                  <span
+                    className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-orange-400 ring-2 ring-blue-700"
+                    aria-label="Actualizaciones disponibles"
+                  />
+                ) : null}
               </Button>
 
               <Button
@@ -112,55 +133,41 @@ export const IndexHeader = ({
       </header>
 
       <div className="w-full px-2 sm:px-4 lg:px-6 py-3 border-b bg-slate-100">
-        <div className="overflow-x-auto">
-          <div className="mx-auto w-fit min-w-max">
-            <TabsList className="w-max bg-slate-200/90 p-1 rounded-xl justify-center gap-1">
+        <div className="overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
+          <div className="flex w-max min-w-full justify-start md:justify-center">
+            <TabsList className="h-auto w-max min-w-max flex-nowrap bg-slate-200/90 p-1 rounded-xl justify-center gap-1">
               <TabsTrigger
                 value="work-reports"
-                className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
               >
                 Partes de Trabajo
               </TabsTrigger>
               <TabsTrigger
                 value="access-control"
-                className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
               >
                 Control de Accesos
               </TabsTrigger>
               <TabsTrigger
                 value="works"
-                className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
               >
                 Obras
               </TabsTrigger>
               <TabsTrigger
                 value="economics"
-                className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
               >
                 Analisis Economico
               </TabsTrigger>
               {showUserManagementTab ? (
                 <TabsTrigger
                   value="users"
-                  className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
                 >
                   Gestion de Usuarios
                 </TabsTrigger>
               ) : null}
-              {showUpdatesTab ? (
-                <TabsTrigger
-                  value="updates"
-                  className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                >
-                  Actualizaciones
-                </TabsTrigger>
-              ) : null}
-              <TabsTrigger
-                value="help"
-                className="rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Ayuda
-              </TabsTrigger>
             </TabsList>
           </div>
         </div>

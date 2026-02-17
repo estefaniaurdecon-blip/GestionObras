@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+﻿import type { Dispatch, SetStateAction } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -84,9 +84,9 @@ export const HistoryReportsPanel = ({
 }: HistoryReportsPanelProps) => {
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+      <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
         <div className="flex items-start gap-2">
-          <Search className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <Search className="mt-0.5 h-4 w-4 shrink-0" />
           <span>Activa uno o varios filtros. Los que no esten seleccionados no se aplican.</span>
         </div>
       </div>
@@ -102,7 +102,7 @@ export const HistoryReportsPanel = ({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={`h-9 rounded-md px-3 text-xs sm:text-sm ${
+                  className={`h-9 rounded-md px-3 text-sm sm:text-[15px] ${
                     isEnabled
                       ? 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
                       : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
@@ -117,15 +117,11 @@ export const HistoryReportsPanel = ({
         </div>
       </div>
 
-      {historySelectedFiltersCount === 0 ? (
-        <div className="rounded-md border border-dashed bg-slate-50 px-3 py-2 text-xs text-muted-foreground">
-          Selecciona uno o varios filtros de la fila superior para personalizar la busqueda.
-        </div>
-      ) : (
+      {historySelectedFiltersCount === 0 ? null : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {historyEnabledFilters.includes('foreman') ? (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700" htmlFor="history-foreman">
+              <label className="text-sm font-medium text-slate-700" htmlFor="history-foreman">
                 Encargado (opcional)
               </label>
               <Input
@@ -139,7 +135,7 @@ export const HistoryReportsPanel = ({
 
           {historyEnabledFilters.includes('weeks') ? (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700" htmlFor="history-week">
+              <label className="text-sm font-medium text-slate-700" htmlFor="history-week">
                 Semana (opcional)
               </label>
               <Input
@@ -153,7 +149,7 @@ export const HistoryReportsPanel = ({
 
           {historyEnabledFilters.includes('months') ? (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700" htmlFor="history-month">
+              <label className="text-sm font-medium text-slate-700" htmlFor="history-month">
                 Mes (opcional)
               </label>
               <Input
@@ -167,7 +163,7 @@ export const HistoryReportsPanel = ({
 
           {historyEnabledFilters.includes('workName') ? (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700" htmlFor="history-work-name">
+              <label className="text-sm font-medium text-slate-700" htmlFor="history-work-name">
                 Nombre de obra (opcional)
               </label>
               <Input
@@ -181,7 +177,7 @@ export const HistoryReportsPanel = ({
 
           {historyEnabledFilters.includes('date') ? (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700" htmlFor="history-date">
+              <label className="text-sm font-medium text-slate-700" htmlFor="history-date">
                 Fecha (opcional)
               </label>
               <Popover open={historyDatePickerOpen} onOpenChange={setHistoryDatePickerOpen}>
@@ -222,7 +218,7 @@ export const HistoryReportsPanel = ({
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           Total guardados: <span className="font-medium">{allWorkReports.length}</span>. Mostrando:{' '}
           <span className="font-medium">{filteredHistoryReports.length}</span>. Filtros seleccionados:{' '}
           <span className="font-medium">{historySelectedFiltersCount}</span>/{HISTORY_FILTER_OPTIONS.length}. Aplicados:{' '}
@@ -256,13 +252,13 @@ export const HistoryReportsPanel = ({
             return (
               <div key={report.id} className="p-3 flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <div className="text-sm font-medium text-slate-900 truncate">{reportName}</div>
-                  <div className="text-xs text-muted-foreground">Nº obra: {workNumber}</div>
-                  <div className="text-xs text-muted-foreground">Identificador: {reportIdentifier}</div>
-                  <div className="text-xs text-muted-foreground">Fecha parte: {report.date}</div>
-                  <div className="text-xs text-muted-foreground">Creado: {formatCreationDateTime(report.createdAt)}</div>
-                  <div className="text-xs text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
-                  <div className="text-xs text-muted-foreground">Horas totales: {totalHoursLabel}</div>
+                  <div className="text-base font-medium text-slate-900 truncate">{reportName}</div>
+                  <div className="text-sm text-muted-foreground">Nº obra: {workNumber}</div>
+                  <div className="text-sm text-muted-foreground">Identificador: {reportIdentifier}</div>
+                  <div className="text-sm text-muted-foreground">Fecha parte: {report.date}</div>
+                  <div className="text-sm text-muted-foreground">Creado: {formatCreationDateTime(report.createdAt)}</div>
+                  <div className="text-sm text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
+                  <div className="text-sm text-muted-foreground">Horas totales: {totalHoursLabel}</div>
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <div className="flex items-center gap-0.5 px-1 py-1">
@@ -352,3 +348,4 @@ export const HistoryReportsPanel = ({
     </div>
   );
 };
+

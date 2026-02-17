@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   changePassword,
+  getApiBaseUrl,
   updateCurrentUserProfile,
   type ApiUser,
 } from '@/integrations/api/client';
+import { saveOfflineCredential } from '@/integrations/api/offlineCredentials';
 import { toast } from '@/hooks/use-toast';
 
 interface ProfileSettingsPanelProps {
@@ -24,6 +26,31 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+
+  const canReachApi = async (): Promise<boolean> => {
+    try {
+      const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+      const healthUrl =
+        baseUrl === '/api' || baseUrl.endsWith('/api')
+          ? `${baseUrl}/v1/health`
+          : `${baseUrl}/api/v1/health`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      // Reachable API even if endpoint returns auth-related status.
+      return response.ok || response.status === 401 || response.status === 403;
+    } catch {
+      return false;
+    }
+  };
 
   const languageOptions = useMemo(
     () => [
@@ -63,10 +90,30 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
 
   const handlePasswordSave = async (event: FormEvent) => {
     event.preventDefault();
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast({
+        title: 'Conexion requerida',
+        description: 'Para cambiar la contraseña debes estar online y sincronizar con el servidor.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (newPassword !== newPasswordConfirm) {
       toast({
-        title: 'Passwords diferentes',
-        description: 'La nueva password y la confirmacion no coinciden',
+        title: 'Contraseñas diferentes',
+        description: 'Las nuevas contraseñas no coinciden',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const apiReachable = await canReachApi();
+    if (!apiReachable) {
+      toast({
+        title: 'Conexion requerida',
+        description: 'La password solo puede modificarse cuando el dispositivo este online.',
         variant: 'destructive',
       });
       return;
@@ -82,14 +129,54 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
       setCurrentPassword('');
       setNewPassword('');
       setNewPasswordConfirm('');
+      try {
+        await saveOfflineCredential(user.email, newPassword);
+      } catch (offlineCredentialError) {
+        console.warn('[Profile] No se pudo actualizar credencial offline tras cambiar contraseña:', offlineCredentialError);
+      }
       toast({
-        title: 'Password actualizada',
-        description: 'La password se ha cambiado correctamente',
+        title: 'contraseña actualizada',
+        description: 'La contraseña se ha cambiado correctamente',
       });
     } catch (passwordError: any) {
+      const rawMessage = [
+        String(passwordError?.message || ''),
+        String(passwordError?.detail || ''),
+        String(passwordError?.data?.detail || ''),
+        String(passwordError?.cause?.message || ''),
+        String(passwordError),
+      ]
+        .join(' ')
+        .toLowerCase();
+      const hasHttpStatus =
+        typeof passwordError?.status === 'number' ||
+        typeof passwordError?.data?.status === 'number';
+      const hasZeroStatus =
+        passwordError?.status === 0 || passwordError?.data?.status === 0;
+      const isOfflineFailure =
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        hasZeroStatus ||
+        !hasHttpStatus ||
+        passwordError instanceof TypeError ||
+        rawMessage.includes('failed to fetch') ||
+        rawMessage.includes('network request failed') ||
+        rawMessage.includes('fetch failed') ||
+        rawMessage.includes('networkerror') ||
+        rawMessage.includes('load failed') ||
+        rawMessage.includes('err_internet_disconnected');
+
+      if (isOfflineFailure) {
+        toast({
+          title: 'Conexion requerida',
+          description: 'La contraseña solo puede modificarse cuando el dispositivo este online.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       toast({
-        title: 'No se pudo cambiar la password',
-        description: passwordError?.message || 'Error desconocido',
+        title: 'No se pudo cambiar la contraseña',
+        description: (typeof passwordError?.data?.detail === 'string' && passwordError.data.detail) || 'No se pudo cambiar la contrase\u00f1a. Intenta de nuevo.',
         variant: 'destructive',
       });
     } finally {
@@ -190,7 +277,7 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
 
             <div className="md:col-span-3">
               <Button type="submit" variant="outline" disabled={savingPassword}>
-                {savingPassword ? 'Actualizando...' : 'Actualizar password'}
+                {savingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
               </Button>
             </div>
           </form>

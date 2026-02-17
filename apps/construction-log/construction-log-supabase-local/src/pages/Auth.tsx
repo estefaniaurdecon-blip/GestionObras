@@ -117,9 +117,32 @@ export default function Auth() {
       navigate('/');
     } catch (error: any) {
       console.error('Login error:', error);
+      const explicitOfflineReason =
+        typeof error?.message === 'string' &&
+        (error.message.toLowerCase().includes('credenciales offline incorrectas') ||
+          error.message.toLowerCase().includes('necesitas iniciar sesion online al menos una vez'));
+      const rawMessage = [
+        String(error?.message || ''),
+        String(error?.detail || ''),
+        String(error?.data?.detail || ''),
+        String(error),
+      ]
+        .join(' ')
+        .toLowerCase();
+      const isNetworkFailure =
+        rawMessage.includes('failed to fetch') ||
+        rawMessage.includes('network request failed') ||
+        rawMessage.includes('fetch failed') ||
+        rawMessage.includes('networkerror') ||
+        rawMessage.includes('err_internet_disconnected');
+
       toast({
         title: 'Error al iniciar sesion',
-        description: error.message || 'Email o contrasena incorrectos',
+        description: explicitOfflineReason
+          ? error.message
+          : isNetworkFailure
+          ? 'Sin conexion con el servidor. Para entrar offline, este usuario debe haber iniciado sesion online en este dispositivo al menos una vez.'
+          : error.message || 'Email o contrasena incorrectos',
         variant: 'destructive',
       });
       setLoading(false);
@@ -142,7 +165,7 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      const success = await verifyMFA(mfaEmail, mfaCode);
+      const success = await verifyMFA(mfaEmail, mfaCode, loginPassword);
 
       if (!success) {
         setMfaError('Codigo MFA incorrecto');

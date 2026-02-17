@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+﻿import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tabs } from '@/components/ui/tabs';
 import { AccessControlTab } from '@/components/AccessControlTab';
@@ -17,6 +17,8 @@ import { useWorkReportsLifecycle } from '@/hooks/useWorkReportsLifecycle';
 import { useWorkReportMutations } from '@/hooks/useWorkReportMutations';
 import { useWorkReportsSummary } from '@/hooks/useWorkReportsSummary';
 import { useWorks } from '@/hooks/useWorks';
+import { useAppUpdates } from '@/hooks/useAppUpdates';
+import { useToast } from '@/hooks/use-toast';
 import {
   PENDING_MIGRATION_MESSAGE,
   WORK_REPORT_VISIBLE_DAYS,
@@ -27,6 +29,7 @@ import {
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { user, loading: authLoading, signOut, refreshUser } = useAuth();
   const { works, loading: worksLoading, loadWorks } = useWorks();
   const {
@@ -142,6 +145,8 @@ const Index = () => {
     syncIconBubbleClass,
     syncStatusBadgeLabel,
   } = useWorkReportsSummary(workReports);
+  const { updateInfo } = useAppUpdates();
+  const hasPendingUpdate = showUpdatesTab && Boolean(updateInfo?.updateAvailable);
 
   const { panelReadOnly, panelReportIdentifier, panelInitialDraft } = useActiveReportPanelData(
     activeReport,
@@ -262,7 +267,7 @@ const Index = () => {
           tenantUnavailable={tenantUnavailable}
           tenantErrorMessage={tenantErrorMessage}
           showUserManagementTab={showUserManagementTab}
-          showUpdatesTab={showUpdatesTab}
+          hasPendingUpdate={hasPendingUpdate}
           onReloadWorks={loadWorks}
           onSyncNow={handleSyncNow}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -383,7 +388,6 @@ const Index = () => {
             sortedWorks={sortedWorks}
             worksLoading={worksLoading}
             showUserManagementTab={showUserManagementTab}
-            showUpdatesTab={showUpdatesTab}
             userTenantId={user.tenant_id}
             isSuperAdmin={Boolean(user.is_super_admin)}
             onOpenProjects={() => navigate('/projects')}
@@ -396,6 +400,8 @@ const Index = () => {
             setOpen: setSettingsOpen,
             user,
             onProfileUpdated: refreshUser,
+            showUpdatesTab,
+            hasPendingUpdate,
           }}
           metrics={{
             open: metricsOpen,

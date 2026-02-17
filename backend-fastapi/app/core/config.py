@@ -2,8 +2,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import List
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     Todos los parámetros importantes se leen desde variables de entorno,
     lo que permite tener entornos local/staging/production sin cambiar código.
     """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     env: str = "local"
     debug: bool = False
@@ -93,20 +98,15 @@ class Settings(BaseSettings):
     project_docs_storage_path: str = str(BASE_DIR / "data" / "project-docs")
     default_brand_accent_color: str = "#00662b"
 
-    # IntegraciÑn con Moodle (Web Services)
+    # Integracion con Moodle (Web Services)
     moodle_base_url: str | None = None
     moodle_token: str | None = None
 
     # Clave interna para crear notificaciones desde ERP
     saas_internal_api_key: str | None = None
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
-    @field_validator("debug", mode="before")
-    @classmethod
-    def parse_debug(cls, value):
+    @staticmethod
+    def _coerce_bool_like(value):
         if isinstance(value, bool):
             return value
         if value is None:
@@ -118,6 +118,22 @@ class Settings(BaseSettings):
             if lowered in {"0", "false", "no", "n", "off", "warn", "warning", "info", "error", "critical"}:
                 return False
         return bool(value)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_bool_like_fields(cls, data):
+        if not isinstance(data, dict):
+            return data
+
+        for field_name in ("debug", "auth_cookie_secure", "smtp_use_tls", "allow_bootstrap_superadmin"):
+            if field_name in data:
+                data[field_name] = cls._coerce_bool_like(data[field_name])
+        return data
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value):
+        return cls._coerce_bool_like(value)
 
 
 @lru_cache

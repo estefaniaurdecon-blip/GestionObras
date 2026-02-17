@@ -16,11 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessPersonalDialog, type AccessPersonalForm } from '@/components/AccessPersonalDialog';
 import { CloneOptionsDialog, type CloneOptions } from '@/components/CloneOptionsDialog';
 import { DashboardSummaryPanel } from '@/components/api/DashboardSummaryPanel';
 import { ProfileSettingsPanel } from '@/components/api/ProfileSettingsPanel';
 import { ToolsSettingsPanel } from '@/components/api/ToolsSettingsPanel';
+import { UpdatesViewer } from '@/components/UpdatesViewer';
 import { HistoryReportsDialog } from '@/components/HistoryReportsDialog';
 import { toast } from '@/hooks/use-toast';
 import type { ApiUser } from '@/integrations/api/client';
@@ -33,6 +35,8 @@ type SettingsDialogConfig = {
   setOpen: Dispatch<SetStateAction<boolean>>;
   user: ApiUser;
   onProfileUpdated: () => Promise<void>;
+  showUpdatesTab?: boolean;
+  hasPendingUpdate?: boolean;
 };
 
 type MetricsDialogConfig = {
@@ -123,18 +127,64 @@ export const IndexDialogs = ({
       />
 
       <Dialog open={settings.open} onOpenChange={settings.setOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Ajustes</DialogTitle>
-            <DialogDescription>Perfil y herramientas (API propia).</DialogDescription>
+            <DialogDescription>Perfil, herramientas, actualizaciones y ayuda.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <ProfileSettingsPanel user={settings.user} onProfileUpdated={settings.onProfileUpdated} />
-            <ToolsSettingsPanel
-              tenantId={settings.user.tenant_id}
-              isSuperAdmin={Boolean(settings.user.is_super_admin)}
-            />
-          </div>
+          <Tabs defaultValue="profile" className="w-full">
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
+              <TabsTrigger value="profile" className="text-sm sm:text-[15px]">
+                Perfil
+              </TabsTrigger>
+              <TabsTrigger value="tools" className="text-sm sm:text-[15px]">
+                Herramientas
+              </TabsTrigger>
+              {settings.showUpdatesTab ? (
+                <TabsTrigger value="updates" className="relative text-sm sm:text-[15px]">
+                  Actualizaciones
+                  {settings.hasPendingUpdate ? (
+                    <span
+                      className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-orange-400"
+                      aria-label="Actualizaciones disponibles"
+                    />
+                  ) : null}
+                </TabsTrigger>
+              ) : null}
+              <TabsTrigger value="help" className="text-sm sm:text-[15px]">
+                Ayuda
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="profile" className="mt-4 max-h-[70vh] overflow-y-auto">
+              <ProfileSettingsPanel user={settings.user} onProfileUpdated={settings.onProfileUpdated} />
+            </TabsContent>
+
+            <TabsContent value="tools" className="mt-4 max-h-[70vh] overflow-y-auto">
+              <ToolsSettingsPanel
+                tenantId={settings.user.tenant_id}
+                isSuperAdmin={Boolean(settings.user.is_super_admin)}
+              />
+            </TabsContent>
+
+            {settings.showUpdatesTab ? (
+              <TabsContent value="updates" className="mt-4 max-h-[70vh] overflow-y-auto">
+                <UpdatesViewer />
+              </TabsContent>
+            ) : null}
+
+            <TabsContent value="help" className="mt-4 max-h-[70vh] overflow-y-auto">
+              <div className="rounded-lg border bg-white p-6">
+                <h3 className="text-lg sm:text-xl font-semibold text-slate-900">Centro de ayuda</h3>
+                <p className="mt-2 text-sm sm:text-[15px] text-muted-foreground">
+                  Esta seccion se esta preparando. En el siguiente paso completamos FAQs, contacto y guias.
+                </p>
+                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm sm:text-[15px] text-slate-700">
+                  Proximamente: manual rapido, preguntas frecuentes y soporte directo.
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 

@@ -15,6 +15,7 @@ import {
   normalizeNoteCategory,
   type NoteCategory,
 } from '@/components/ObservacionesIncidenciasSection';
+import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -762,6 +763,26 @@ export const GenerateWorkReportPanel = ({
   const [saveStatusSelection, setSaveStatusSelection] = useState<SaveStatusOption[]>(['completed']);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+
+  const isAndroidPlatform = useMemo(() => Capacitor.getPlatform() === 'android', []);
+  const androidTypographyClass = isAndroidPlatform
+    ? [
+        '[&]:text-[16px]',
+        '[&_.text-xs]:text-[14px]',
+        '[&_.text-sm]:text-[16px]',
+        '[&_.text-base]:text-[18px]',
+        '[&_.text-lg]:text-[21px]',
+        '[&_.text-xl]:text-[23px]',
+        '[&_label]:text-[16px]',
+        '[&_input]:text-[16px]',
+        '[&_textarea]:text-[16px]',
+        '[&_[role=combobox]]:text-[16px]',
+        '[&_button]:text-[16px]',
+      ].join(' ')
+    : '';
+  const sectionTriggerClass = isAndroidPlatform
+    ? 'text-[19px] leading-tight font-semibold [&>svg]:h-5 [&>svg]:w-5'
+    : 'text-[15px] sm:text-base font-semibold';
 
   const totalWorkforceHours = useMemo(
     () =>
@@ -1774,7 +1795,7 @@ export const GenerateWorkReportPanel = ({
   );
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 text-[15px] ${androidTypographyClass}`}>
       <div className="rounded-xl border bg-white p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -1794,7 +1815,7 @@ export const GenerateWorkReportPanel = ({
           </div>
           <h2 className="text-lg font-semibold">{panelTitle}</h2>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
           {reportIdentifier ? <span className="rounded-md border px-2 py-1">ID: {reportIdentifier}</span> : null}
           {readOnly ? <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1">Parte cerrado: solo visualización</span> : null}
         </div>
@@ -1802,7 +1823,7 @@ export const GenerateWorkReportPanel = ({
         {isClonedReport ? (
           <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
             <div className="text-sm font-medium">Parte clonado - Revisión necesaria</div>
-            <div className="text-xs text-amber-800">
+            <div className="text-sm text-amber-800">
               Este parte se ha clonado. Revisa y actualiza los datos antes de guardar.
               {cloneSourceLabel ? ` Origen: ${cloneSourceLabel}.` : ''}
             </div>
@@ -1868,8 +1889,8 @@ export const GenerateWorkReportPanel = ({
       <div className={readOnly ? 'pointer-events-none select-none opacity-95' : ''}>
       <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="space-y-3">
         <AccordionItem value="workforce" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Mano de obra</AccordionTrigger>
-          <AccordionContent className="space-y-4">
+          <AccordionTrigger className={sectionTriggerClass}>Mano de obra</AccordionTrigger>
+          <AccordionContent className="space-y-4 text-[15px]">
             <label className="inline-flex items-center gap-2 rounded-md border border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm">
               <Checkbox
                 className="h-3 w-3 shrink-0"
@@ -1965,7 +1986,7 @@ export const GenerateWorkReportPanel = ({
                       </div>
 
                       <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-700 md:grid">
+                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
                           <div className="col-span-5">Nombre</div>
                           <div className="col-span-4">Actividad</div>
                           <div className="col-span-2">Horas</div>
@@ -1976,7 +1997,7 @@ export const GenerateWorkReportPanel = ({
                             <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
                               <div className="grid grid-cols-12 gap-2">
                                 <div className="col-span-12 space-y-1 md:col-span-5 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     Nombre
                                   </p>
                                   <Input
@@ -1986,7 +2007,7 @@ export const GenerateWorkReportPanel = ({
                                   />
                                 </div>
                                 <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     Actividad
                                   </p>
                                   <Input
@@ -1996,7 +2017,7 @@ export const GenerateWorkReportPanel = ({
                                   />
                                 </div>
                                 <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     Horas
                                   </p>
                                   <Input
@@ -2030,7 +2051,7 @@ export const GenerateWorkReportPanel = ({
                         </div>
                       </div>
 
-                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm text-slate-500">
                         Grupo {groupIndex + 1}
                       </div>
                     </div>
@@ -2047,8 +2068,8 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="machinery" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Maquinaria subcontratas</AccordionTrigger>
-          <AccordionContent className="space-y-4">
+          <AccordionTrigger className={sectionTriggerClass}>Maquinaria subcontratas</AccordionTrigger>
+          <AccordionContent className="space-y-4 text-[15px]">
             <div className="rounded-md border border-[#d9e1ea] bg-white">
               <div className="border-b border-[#d9e1ea] p-4 text-center">
                 <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Maquinaria</p>
@@ -2154,7 +2175,7 @@ export const GenerateWorkReportPanel = ({
                       </div>
 
                       <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-700 md:grid">
+                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
                           <div className="col-span-4">Tipo máquina</div>
                           <div className="col-span-5">Actividad</div>
                           <div className="col-span-2">H/Cant.</div>
@@ -2165,7 +2186,7 @@ export const GenerateWorkReportPanel = ({
                             <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
                               <div className="grid grid-cols-12 gap-2">
                                 <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     Tipo máquina
                                   </p>
                                   <Input
@@ -2177,7 +2198,7 @@ export const GenerateWorkReportPanel = ({
                                   />
                                 </div>
                                 <div className="col-span-12 space-y-1 md:col-span-5 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     Actividad
                                   </p>
                                   <Input
@@ -2189,7 +2210,7 @@ export const GenerateWorkReportPanel = ({
                                   />
                                 </div>
                                 <div className="col-span-10 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                     H/Cant.
                                   </p>
                                   <Input
@@ -2231,8 +2252,8 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Materiales</AccordionTrigger>
-          <AccordionContent className="space-y-4">
+          <AccordionTrigger className={sectionTriggerClass}>Materiales</AccordionTrigger>
+          <AccordionContent className="space-y-4 text-[15px]">
             <div className="rounded-md border border-[#d9e1ea] bg-white">
               <div className="border-b border-[#d9e1ea] p-4 text-center">
                 <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Materiales</p>
@@ -2305,20 +2326,20 @@ export const GenerateWorkReportPanel = ({
                           </div>
                         </div>
                         <div className="rounded-md border border-[#d9e1ea]">
-                          <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-700 md:grid">
-                            <div className="col-span-4">Material</div>
+                          <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
+                            <div className="col-span-3">Material</div>
                             <div className="col-span-2">Cantidad</div>
                             <div className="col-span-2">Unidad</div>
                             <div className="col-span-2">Precio/Ud</div>
-                            <div className="col-span-1">Coste (€)</div>
+                            <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
                             <div className="col-span-1"></div>
                           </div>
                           <div className="space-y-2 p-3">
                             {group.rows.map((row) => (
                               <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
                                 <div className="grid grid-cols-12 gap-2">
-                                  <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Material
                                     </p>
                                     <Input
@@ -2328,7 +2349,7 @@ export const GenerateWorkReportPanel = ({
                                     />
                                   </div>
                                   <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Cantidad
                                     </p>
                                     <Input
@@ -2342,7 +2363,7 @@ export const GenerateWorkReportPanel = ({
                                     />
                                   </div>
                                   <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Unidad
                                     </p>
                                     <Select
@@ -2362,7 +2383,7 @@ export const GenerateWorkReportPanel = ({
                                     </Select>
                                   </div>
                                   <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Precio/Ud
                                     </p>
                                     <Input
@@ -2375,8 +2396,8 @@ export const GenerateWorkReportPanel = ({
                                       }
                                     />
                                   </div>
-                                  <div className="col-span-9 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Coste (€)
                                     </p>
                                     <Input
@@ -2416,8 +2437,8 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="subcontracts" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Subcontratas</AccordionTrigger>
-          <AccordionContent className="space-y-4">
+          <AccordionTrigger className={sectionTriggerClass}>Subcontratas</AccordionTrigger>
+          <AccordionContent className="space-y-4 text-[15px]">
             <div className="rounded-md border border-[#d9e1ea] bg-white">
               <div className="border-b border-[#d9e1ea] p-4 text-center">
                 <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Subcontratas</p>
@@ -2527,26 +2548,26 @@ export const GenerateWorkReportPanel = ({
                         </div>
 
                         {autoWorkersEnabled ? (
-                          <p className="text-xs text-slate-500">
+                          <p className="text-sm text-slate-500">
                             Nº Trab en modo automático: se calcula por trabajadores únicos con horas &gt; 0 dentro del grupo.
                           </p>
                         ) : null}
 
                         {groupTotals.hasMixedUnits ? (
-                          <p className="text-xs text-slate-500">
+                          <p className="text-sm text-slate-500">
                             Producción por unidad: {unitBreakdown || '0'}
                           </p>
                         ) : null}
                       </div>
 
                       <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-700 md:grid">
-                          <div className="col-span-2">Partida</div>
-                          <div className="col-span-2">Actividad</div>
-                          <div className="col-span-2">Unidad</div>
-                          <div className="col-span-2">Cant./Trab.</div>
+                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
+                          <div className="col-span-4">Partida</div>
+                          <div className="col-span-3">Actividad</div>
+                          <div className="col-span-1 whitespace-nowrap">Unidad</div>
+                          <div className="col-span-1 whitespace-nowrap text-[11px]">Cant./Trab.</div>
                           <div className="col-span-1">Trab.</div>
-                          <div className="col-span-2">Horas</div>
+                          <div className="col-span-1">Horas</div>
                           <div className="col-span-1"></div>
                         </div>
 
@@ -2560,8 +2581,8 @@ export const GenerateWorkReportPanel = ({
                             return (
                               <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2">
                                 <div className="grid grid-cols-12 gap-2">
-                                  <div className="col-span-12 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Partida
                                     </p>
                                     <Input
@@ -2572,8 +2593,8 @@ export const GenerateWorkReportPanel = ({
                                       }
                                     />
                                   </div>
-                                  <div className="col-span-12 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Actividad
                                     </p>
                                     <Input
@@ -2584,8 +2605,8 @@ export const GenerateWorkReportPanel = ({
                                       }
                                     />
                                   </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Unidad
                                     </p>
                                     <Select
@@ -2606,8 +2627,8 @@ export const GenerateWorkReportPanel = ({
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Cant./Trab.
                                     </p>
                                     <Input
@@ -2623,7 +2644,7 @@ export const GenerateWorkReportPanel = ({
                                     />
                                   </div>
                                   <div className="col-span-4 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Trab.
                                     </p>
                                     <Input
@@ -2633,8 +2654,8 @@ export const GenerateWorkReportPanel = ({
                                       title="Número de trabajadores efectivo para el cálculo"
                                     />
                                   </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
+                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
                                       Horas
                                     </p>
                                     <Input
@@ -2686,7 +2707,7 @@ export const GenerateWorkReportPanel = ({
                                     <Plus className="mr-2 h-4 w-4" />
                                     Añadir
                                   </Button>
-                                  <span className="text-xs text-slate-500">
+                                  <span className="text-sm text-slate-500">
                                     HH: {rowTotals.horasHombre.toFixed(2)} | Prod: {rowTotals.produccion.toFixed(2)} {unitLabel(rowTotals.unit)}
                                     {rowTotals.hasAssignedWorkers ? ' | Horas auto' : ''}
                                   </span>
@@ -2695,7 +2716,7 @@ export const GenerateWorkReportPanel = ({
                                 <Collapsible open={rowWorkersOpen} onOpenChange={(isOpen) => setSubcontractWorkersOpen(row.id, isOpen)}>
                                   <CollapsibleContent className="pt-2">
                                     {row.workersAssigned.length === 0 ? (
-                                      <div className="rounded-md border border-dashed p-3 text-xs text-slate-500">
+                                      <div className="rounded-md border border-dashed p-3 text-sm text-slate-500">
                                         Sin trabajadores asignados en esta fila.
                                       </div>
                                     ) : (
@@ -2748,7 +2769,7 @@ export const GenerateWorkReportPanel = ({
                         </div>
                       </div>
 
-                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm text-slate-500">
                         Grupo {groupIndex + 1}
                       </div>
                     </div>
@@ -2759,7 +2780,7 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="rental" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Maquinaria alquilada</AccordionTrigger>
+          <AccordionTrigger className={sectionTriggerClass}>Maquinaria alquilada</AccordionTrigger>
           <AccordionContent className="space-y-3">
             <div className="rounded-md border border-[#d9e1ea] bg-white">
               <div className="border-b border-[#d9e1ea] px-3 py-2 text-sm font-semibold text-slate-700">
@@ -2782,24 +2803,24 @@ export const GenerateWorkReportPanel = ({
                       <div key={machine.id} className="rounded-md border border-[#d9e1ea] bg-slate-50 p-3">
                         <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-5">
                           <div>
-                            <div className="text-xs text-slate-500">Maquinaria</div>
+                            <div className="text-sm text-slate-500">Maquinaria</div>
                             <div className="font-medium text-slate-800">{machine.name}</div>
                             {machine.description ? (
-                              <div className="text-xs text-slate-500">{machine.description}</div>
+                              <div className="text-sm text-slate-500">{machine.description}</div>
                             ) : null}
                           </div>
                           <div>
-                            <div className="text-xs text-slate-500">Proveedor</div>
+                            <div className="text-sm text-slate-500">Proveedor</div>
                             <div className="text-slate-800">{machine.provider || '-'}</div>
                           </div>
                           <div>
-                            <div className="text-xs text-slate-500">Fechas</div>
+                            <div className="text-sm text-slate-500">Fechas</div>
                             <div className="text-slate-800">
                               {normalizeDate(machine.startDate)} - {machine.endDate ? normalizeDate(machine.endDate) : 'Abierta'}
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-slate-500">Precio</div>
+                            <div className="text-sm text-slate-500">Precio</div>
                             <div className="text-slate-800">
                               {typeof machine.price === 'number'
                                 ? `${machine.price.toFixed(2)} €/` + machine.priceUnit
@@ -2807,7 +2828,7 @@ export const GenerateWorkReportPanel = ({
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-slate-500">Estado</div>
+                            <div className="text-sm text-slate-500">Estado</div>
                             <div className="text-emerald-700 font-medium">{machine.status}</div>
                           </div>
                         </div>
@@ -2820,7 +2841,7 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="waste" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Gestión de residuos</AccordionTrigger>
+          <AccordionTrigger className={sectionTriggerClass}>Gestión de residuos</AccordionTrigger>
           <AccordionContent>
             {renderRowsSection(wasteRows, setWasteRows, {
               sectionName: 'residuos',
@@ -2843,7 +2864,7 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="observations" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Observaciones e incidencias</AccordionTrigger>
+          <AccordionTrigger className={sectionTriggerClass}>Observaciones e incidencias</AccordionTrigger>
           <AccordionContent className="pt-2">
             <ObservacionesIncidenciasSection
               showHeader={false}
@@ -2864,7 +2885,7 @@ export const GenerateWorkReportPanel = ({
           </AccordionContent>
         </AccordionItem>
         <AccordionItem value="gallery" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className="text-sm font-semibold">Galería de imágenes</AccordionTrigger>
+          <AccordionTrigger className={sectionTriggerClass}>Galería de imágenes</AccordionTrigger>
           <AccordionContent className="space-y-3 pt-2">
             <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50">
               <Camera className="mr-2 h-4 w-4" />
@@ -2879,7 +2900,7 @@ export const GenerateWorkReportPanel = ({
                   <div key={image.id} className="rounded-md border bg-white p-2">
                     <img src={image.dataUrl} alt={image.name} className="h-24 w-full rounded object-cover" />
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs">{image.name}</span>
+                      <span className="truncate text-sm">{image.name}</span>
                       <Button variant="ghost" size="icon" onClick={() => setGalleryImages(galleryImages.filter((item) => item.id !== image.id))}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -2915,13 +2936,13 @@ export const GenerateWorkReportPanel = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 text-[15px]">
           <div className="space-y-3 rounded-md border border-[#d9e1ea] p-2">
             {foremanResources.map((entry) => (
               <div key={entry.id} className="rounded-md border border-[#d9e1ea] p-2">
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
                   <div className="md:col-span-3">
-                    <Label className="mb-1 block text-xs font-medium text-slate-600">Rol</Label>
+                    <Label className="mb-1 block text-sm font-medium text-slate-600">Rol</Label>
                     <Select
                       value={entry.role}
                       disabled={readOnly}
@@ -2943,7 +2964,7 @@ export const GenerateWorkReportPanel = ({
                   </div>
 
                   <div className="md:col-span-6">
-                    <Label className="mb-1 block text-xs font-medium text-slate-600">Nombre</Label>
+                    <Label className="mb-1 block text-sm font-medium text-slate-600">Nombre</Label>
                     <Input
                       placeholder="Nombre del encargado"
                       disabled={readOnly}
@@ -2957,7 +2978,7 @@ export const GenerateWorkReportPanel = ({
                   </div>
 
                   <div className="md:col-span-2">
-                    <Label className="mb-1 block text-xs font-medium text-slate-600">Horas</Label>
+                    <Label className="mb-1 block text-sm font-medium text-slate-600">Horas</Label>
                     <Input
                       type="number"
                       min={0}
@@ -2993,7 +3014,7 @@ export const GenerateWorkReportPanel = ({
 
           <div className="grid grid-cols-1 divide-y divide-[#d9e1ea] rounded-md border border-[#d9e1ea] md:grid-cols-3 md:divide-x md:divide-y-0">
             <div className="p-3">
-              <Label htmlFor="main-foreman" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <Label htmlFor="main-foreman" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                 Encargado principal:
               </Label>
               <Input
@@ -3005,7 +3026,7 @@ export const GenerateWorkReportPanel = ({
               />
             </div>
             <div className="p-3">
-              <Label htmlFor="main-foreman-hours" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <Label htmlFor="main-foreman-hours" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                 Horas encargado principal:
               </Label>
               <Input
@@ -3020,7 +3041,7 @@ export const GenerateWorkReportPanel = ({
               />
             </div>
             <div className="p-3">
-              <Label htmlFor="site-manager" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <Label htmlFor="site-manager" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                 Jefe de obra:
               </Label>
               <Input
@@ -3048,7 +3069,7 @@ export const GenerateWorkReportPanel = ({
             />
             <div>
               <p className="font-medium">Clonar automáticamente mañana a las 06:00</p>
-              <p className="text-xs text-slate-600">Si activas esta opción, este parte se clona para el siguiente día laborable.</p>
+              <p className="text-sm text-slate-600">Si activas esta opción, este parte se clona para el siguiente día laborable.</p>
             </div>
           </label>
         </CardContent>
@@ -3192,4 +3213,6 @@ export const GenerateWorkReportPanel = ({
     </div>
   );
 };
+
+
 
