@@ -184,7 +184,7 @@ def update_user_avatar(
     max_bytes = 5 * 1024 * 1024  # 5MB
     content = upload.file.read()
     if len(content) > max_bytes:
-        raise ValueError("La imagen supera el tama??o m??ximo de 5MB")
+        raise ValueError("La imagen supera el tamaño máximo de 5MB")
 
     encoded = base64.b64encode(content).decode("ascii")
     current_user.avatar_data = f"data:{content_type};base64,{encoded}"
@@ -198,7 +198,7 @@ def update_user_avatar(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         action="user.update_avatar",
-        details="ActualizaciÃ³n de foto de perfil",
+        details="Actualización de foto de perfil",
     )
 
     return _user_to_read(current_user)
@@ -211,7 +211,7 @@ def update_user_admin(
     data: UserUpdateAdmin,
 ) -> UserRead:
     """
-    Actualiza datos bÃ¡sicos de un usuario (admin).
+    Actualiza datos básicos de un usuario (admin).
     """
 
     user = session.get(User, user_id)
@@ -227,7 +227,7 @@ def update_user_admin(
     if data.email is not None:
         email = data.email.strip().lower()
         if not email:
-            raise ValueError("Email no vÃ¡lido")
+            raise ValueError("Email no válido")
         existing = session.exec(select(User).where(User.email == email)).one_or_none()
         if existing and existing.id != user.id:
             raise ValueError("Ya existe un usuario con ese email")
@@ -245,7 +245,7 @@ def update_user_admin(
             select(Role).where(Role.name == data.role_name),
         ).one_or_none()
         if not role:
-            raise ValueError("Rol no vÃ¡lido")
+            raise ValueError("Rol no válido")
         user.role_id = role.id
 
     session.add(user)
@@ -257,7 +257,7 @@ def update_user_admin(
         user_id=current_user.id,
         tenant_id=user.tenant_id,
         action="user.update",
-        details=f"ActualizaciÃ³n de usuario_id={user.id}",
+        details=f"Actualización de usuario_id={user.id}",
     )
 
     role_name = None

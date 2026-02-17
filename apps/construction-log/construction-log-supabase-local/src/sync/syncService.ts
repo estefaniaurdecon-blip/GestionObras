@@ -196,7 +196,7 @@ function toTenantIdFromPayload(payload: Record<string, unknown>): string | null 
 
 function toSyncErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  return 'Error de sincronizaciÃ³n';
+  return 'Error de sincronización';
 }
 
 function isAuthApiError(error: unknown): boolean {
@@ -554,7 +554,7 @@ async function buildSyncPlan(
       tenantId,
       localReportId,
       outboxIds: fallbackOutboxIds,
-      message: 'Parte local no encontrado para consolidar sincronizaciÃ³n.',
+      message: 'Parte local no encontrado para consolidar sincronización.',
     };
   }
 
@@ -599,7 +599,7 @@ async function buildSyncPlan(
         tenantId,
         localReportId,
         outboxIds,
-        message: 'Delete pendiente sin server_id. Sincroniza primero la creaciÃ³n.',
+        message: 'Delete pendiente sin server_id. Sincroniza primero la creación.',
       };
     }
 
@@ -633,7 +633,7 @@ async function buildSyncPlan(
         tenantId,
         localReportId,
         outboxIds,
-        message: 'Create invÃ¡lido: falta project_id o date en el parte local.',
+        message: 'Create inválido: falta project_id o date en el parte local.',
       };
     }
 
@@ -960,7 +960,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (entry.op !== 'create' && entry.op !== 'update' && entry.op !== 'delete') {
       failed += 1;
-      const message = `OperaciÃ³n no soportada en outbox: ${String(entry.op)}`;
+      const message = `Operación no soportada en outbox: ${String(entry.op)}`;
       if (!firstFailureReason) firstFailureReason = message;
       await markPlanError(
         {
@@ -977,7 +977,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (entry.entityId.trim().length === 0 || entry.entity !== 'work_report') {
       failed += 1;
-      const message = 'Entrada de outbox invÃ¡lida para parte.';
+      const message = 'Entrada de outbox inválida para parte.';
       if (!firstFailureReason) firstFailureReason = message;
       await markPlanError(
         {
@@ -1014,7 +1014,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
         failed += plan.outboxIds.length;
         if (!firstFailureReason) firstFailureReason = plan.message;
         await markPlanError(plan, plan.message);
-        console.warn('[Sync] Plan invÃ¡lido', {
+        console.warn('[Sync] Plan inválido', {
           tenantId,
           localReportId,
           outboxIds: plan.outboxIds,
@@ -1041,7 +1041,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
 
     if (plans.length > 0) {
       const requestPayload: WorkReportSyncRequest = {
-        // Enviado explÃ­citamente para evitar defaults incompatibles de backend.
+        // Enviado explícitamente para evitar defaults incompatibles de backend.
         since: sinceFromMeta ?? null,
         operations: plans.map((plan) => plan.operation),
         include_deleted: true,
@@ -1079,7 +1079,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           failed += plan.outboxIds.length;
           let errorMessage =
             asString(ack?.error) ??
-            (ack ? 'Error de sincronizaciÃ³n en servidor.' : 'El servidor no devolviÃ³ confirmaciÃ³n para la operaciÃ³n.');
+            (ack ? 'Error de sincronización en servidor.' : 'El servidor no devolvió confirmación para la operación.');
 
           if (plan.operation.op === 'update' && shouldRetryLegacyDateValidation(errorMessage)) {
             try {
@@ -1167,9 +1167,9 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
     pendingAfter,
     note:
       synced > 0
-        ? 'SincronizaciÃ³n completada.'
+        ? 'Sincronización completada.'
         : firstFailureReason
-          ? `No se pudo sincronizar ningÃºn parte. ${firstFailureReason}`
-          : 'No se pudo sincronizar ningÃºn parte.',
+          ? `No se pudo sincronizar ningún parte. ${firstFailureReason}`
+          : 'No se pudo sincronizar ningún parte.',
   };
 }

@@ -27,7 +27,7 @@ class TenantRead(TenantBase):
 
 class TenantUpdate(BaseModel):
     """
-    Esquema de actualizaciÃ³n de tenant (parcial).
+    Esquema de actualización de tenant (parcial).
     """
 
     name: Optional[str] = None

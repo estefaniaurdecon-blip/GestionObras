@@ -19,6 +19,8 @@ interface ObservacionesIncidenciasSectionProps {
   onChange: (next: ObservacionesIncidenciasValue) => void;
   onDictate?: () => void;
   dictationActive?: boolean;
+  dictationInterimText?: string;
+  dictationError?: string | null;
   disabled?: boolean;
   showHeader?: boolean;
   className?: string;
@@ -70,6 +72,8 @@ export const ObservacionesIncidenciasSection = ({
   onChange,
   onDictate,
   dictationActive = false,
+  dictationInterimText = '',
+  dictationError = null,
   disabled = false,
   showHeader = true,
   className,
@@ -112,11 +116,6 @@ export const ObservacionesIncidenciasSection = ({
           />
           <span>Sección completada</span>
         </label>
-
-        <Button type="button" variant={dictationActive ? 'default' : 'outline'} onClick={() => onDictate?.()} disabled={disabled}>
-          <Mic className="mr-2 h-4 w-4" />
-          Dictar Observaciones
-        </Button>
       </div>
 
       <div className="space-y-2">
@@ -146,7 +145,30 @@ export const ObservacionesIncidenciasSection = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={textareaId}>Observaciones</Label>
+        <div className="flex w-full flex-wrap items-center justify-start gap-2">
+          <Label htmlFor={textareaId}>Observaciones</Label>
+          <Button
+            type="button"
+            size="sm"
+            variant={dictationActive ? 'default' : 'outline'}
+            className={cn(
+              'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+              dictationActive ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700' : '',
+            )}
+            onClick={() => onDictate?.()}
+            disabled={disabled}
+          >
+            <Mic className={cn('mr-2 h-4 w-4 text-blue-600', dictationActive ? 'text-white' : '')} />
+            {dictationActive ? 'Escuchando...' : 'Dictar Observaciones'}
+          </Button>
+        </div>
+        {(dictationActive || dictationInterimText || dictationError) && (
+          <div className="space-y-1 text-xs">
+            {dictationActive ? <p className="text-emerald-700">Escuchando…</p> : null}
+            {dictationInterimText ? <p className="text-slate-600">Texto: {dictationInterimText}</p> : null}
+            {dictationError ? <p className="text-red-600">{dictationError}</p> : null}
+          </div>
+        )}
         <Textarea
           id={textareaId}
           rows={4}

@@ -72,7 +72,7 @@ class UserUpdateMe(BaseModel):
 
 class UserUpdateAdmin(BaseModel):
     """
-    Esquema para editar usuarios desde administraciÃ³n.
+    Esquema para editar usuarios desde administración.
     """
 
     email: EmailStr | None = None

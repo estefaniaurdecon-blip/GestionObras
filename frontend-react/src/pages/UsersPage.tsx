@@ -110,7 +110,7 @@ export const UsersPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
   const isSuperAdmin = currentUser?.is_super_admin === true;
-  const currentTenantId = currentUser?.tenant_id ?? null;
+  const currentTenantId = currentUser?.tenant_id ? null;
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
 
@@ -196,8 +196,8 @@ export const UsersPage: React.FC = () => {
     },
     onError: (error: any) => {
       const detail =
-        error?.response?.data?.detail ??
-        error?.message ??
+        error?.response?.data?.detail ?
+        error?.message ?
         t("users.messages.inviteErrorFallback");
       toast({
         title: t("users.messages.inviteErrorTitle"),
@@ -236,7 +236,7 @@ export const UsersPage: React.FC = () => {
         },
         {
           headers: {
-            "X-Tenant-Id": (selectedTenantId ?? "").toString(),
+            "X-Tenant-Id": (selectedTenantId ? "").toString(),
           },
         },
       );
@@ -255,7 +255,7 @@ export const UsersPage: React.FC = () => {
     },
     onError: (error: any) => {
       const detail =
-        error?.response?.data?.detail ??
+        error?.response?.data?.detail ?
         t("users.messages.updateErrorFallback");
       toast({
         title: t("users.messages.updateErrorTitle"),
@@ -273,7 +273,7 @@ export const UsersPage: React.FC = () => {
     setEditingUser(user);
     setEditForm({
       email: user.email,
-      full_name: user.full_name ?? "",
+      full_name: user.full_name ? "",
       role,
     });
     setIsGerenciaEditing(user.role_name === "gerencia");
@@ -324,7 +324,7 @@ export const UsersPage: React.FC = () => {
       })
       .catch((error: any) => {
         const detail =
-          error?.response?.data?.detail ??
+          error?.response?.data?.detail ?
           t("users.messages.deleteErrorFallback");
         toast({
           title: t("users.messages.deleteErrorTitle"),
@@ -341,7 +341,7 @@ export const UsersPage: React.FC = () => {
         { is_active: !user.is_active },
         {
           headers: {
-            "X-Tenant-Id": (selectedTenantId ?? "").toString(),
+            "X-Tenant-Id": (selectedTenantId ? "").toString(),
           },
         },
       )
@@ -352,7 +352,7 @@ export const UsersPage: React.FC = () => {
       })
       .catch((error: any) => {
         const detail =
-          error?.response?.data?.detail ??
+          error?.response?.data?.detail ?
           t("users.messages.statusErrorFallback");
         toast({
           title: t("users.messages.statusErrorTitle"),
@@ -368,7 +368,7 @@ export const UsersPage: React.FC = () => {
       const matchesSearch =
         !searchTerm ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.full_name ?? "").toLowerCase().includes(searchTerm.toLowerCase());
+        (user.full_name ? "").toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesRole =
         roleFilter === "all" ||
@@ -414,11 +414,11 @@ export const UsersPage: React.FC = () => {
                   ? t("users.tenant.loading")
                   : t("users.tenant.placeholder")
               }
-              value={selectedTenantId ?? ""}
+              value={selectedTenantId ? ""}
               onChange={handleTenantChange}
               isDisabled={isLoadingTenants || isErrorTenants}
             >
-              {(tenants ?? []).map((tenant) => (
+              {(tenants ? []).map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
                   {tenant.name} ({tenant.subdomain})
                 </option>
@@ -516,7 +516,7 @@ export const UsersPage: React.FC = () => {
                 ) : (
                   filteredUsers.map((user) => (
                     <Tr key={user.id}>
-                      <Td>{user.full_name ?? "-"}</Td>
+                      <Td>{user.full_name ? "-"}</Td>
                       <Td>{user.email}</Td>
                       <Td>{getRoleLabel(user)}</Td>
                       <Td>
@@ -652,7 +652,7 @@ export const UsersPage: React.FC = () => {
                 </Select>
                 {isGerenciaEditing && (
                   <Text fontSize="xs" color={subtleText}>
-                    El rol de Gerencia se asigna automÃ¡ticamente por departamento.
+                    El rol de Gerencia se asigna automáticamente por departamento.
                   </Text>
                 )}
               </FormControl>

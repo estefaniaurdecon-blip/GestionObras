@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -15,6 +15,9 @@ import {
   normalizeNoteCategory,
   type NoteCategory,
 } from '@/components/ObservacionesIncidenciasSection';
+import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
+import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
+import { type ParsedAlbaranItem, type ParsedAlbaranResult } from '@/plugins/albaranScanner';
 import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -39,6 +42,7 @@ import {
   FileWarning,
   FileSpreadsheet,
   Mic,
+  Loader2,
   Plus,
   Save,
   Trash2,
@@ -95,13 +99,32 @@ type MaterialRow = {
   unit: string;
   unitPrice: number;
   total: number;
+  costDocValue?: number | null;
+  costWarningDelta?: number | null;
 };
 
 type MaterialGroup = {
   id: string;
   supplier: string;
   invoiceNumber: string;
+  isScanned?: boolean;
   rows: MaterialRow[];
+};
+
+type MaterialCostDifference = {
+  groupId: string;
+  rowId: string;
+  material: string;
+  costDoc: number;
+  costCalc: number;
+  difference: number;
+};
+
+type DuplicateScanResolution = {
+  parsed: ParsedAlbaranResult;
+  targetGroupId: string;
+  duplicateGroupId: string;
+  duplicateLabel: string;
 };
 
 type SubcontractUnit = 'hora' | 'm2' | 'ml' | 'ud' | 'kg' | 'm3';
@@ -295,12 +318,15 @@ const createMaterialRow = (): MaterialRow => ({
   unit: '',
   unitPrice: 0,
   total: 0,
+  costDocValue: null,
+  costWarningDelta: null,
 });
 
 const createMaterialGroup = (): MaterialGroup => ({
   id: crypto.randomUUID(),
   supplier: '',
   invoiceNumber: '',
+  isScanned: false,
   rows: [createMaterialRow()],
 });
 
@@ -321,6 +347,8 @@ const MATERIAL_UNIT_OPTIONS = [
   { value: 'ud', label: 'ud' },
   { value: 'l', label: 'l' },
 ];
+
+const COST_DIFF_THRESHOLD = 0.02;
 
 const nonNegative = (value: number): number => {
   if (!Number.isFinite(value)) return 0;
@@ -495,6 +523,62 @@ const editableNumericValue = (value: number): string | number => {
   return value;
 };
 
+const normalizeMaterialUnitFromScan = (rawUnit: string | null | undefined): string => {
+  const normalized = (rawUnit || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'm2' || normalized === 'm²') return 'm2';
+  if (normalized === 'm3' || normalized === 'm³') return 'm3';
+  if (normalized === 'ud' || normalized === 'uds' || normalized === 'un' || normalized === 'unidad') return 'ud';
+  if (normalized === 'lt' || normalized === 'l') return 'l';
+  if (normalized === 'ml') return 'ml';
+  if (normalized === 'kg') return 'kg';
+  return normalized;
+};
+
+const isMaterialRowBlank = (row: MaterialRow): boolean => {
+  return (
+    !row.name.trim() &&
+    nonNegative(row.quantity) === 0 &&
+    !row.unit.trim() &&
+    nonNegative(row.unitPrice) === 0 &&
+    nonNegative(row.total) === 0
+  );
+};
+
+const createParsedAlbaranReviewItem = (): ParsedAlbaranItem => ({
+  material: '',
+  quantity: null,
+  unit: null,
+  unitPrice: null,
+  costDoc: null,
+  costCalc: null,
+  difference: null,
+  rowText: '',
+  missingCritical: true,
+});
+
+const normalizeDeliveryNoteKeyPart = (value: string | null | undefined): string => {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+};
+
+const buildDeliveryNoteKey = (supplier: string | null | undefined, invoiceNumber: string | null | undefined): string | null => {
+  const normalizedSupplier = normalizeDeliveryNoteKeyPart(supplier);
+  const normalizedInvoice = normalizeDeliveryNoteKeyPart(invoiceNumber);
+  if (!normalizedSupplier || !normalizedInvoice) return null;
+  return `${normalizedSupplier}::${normalizedInvoice}`;
+};
+
+const hasMaterialGroupSignificantData = (group: MaterialGroup): boolean => {
+  if (group.isScanned) return true;
+  if (group.supplier.trim() || group.invoiceNumber.trim()) return true;
+  return group.rows.some((row) => !isMaterialRowBlank(row));
+};
+
 const mapSubcontractUnitToReportUnit = (unit: SubcontractUnit): 'hora' | 'm3' | 'm2' | 'ml' | 'unidad' => {
   if (unit === 'hora') return 'hora';
   if (unit === 'm3') return 'm3';
@@ -550,7 +634,13 @@ const normalizeMaterialGroups = (groups: MaterialGroup[] | undefined): MaterialG
         ? group.rows.map((row) => {
             const quantity = Number.isFinite(row.quantity) ? row.quantity : 0;
             const unitPrice = Number.isFinite(row.unitPrice) ? row.unitPrice : 0;
-            const total = quantity * unitPrice;
+            const total = Number.isFinite(row.total) ? row.total : quantity * unitPrice;
+            const costDocValue =
+              typeof row.costDocValue === 'number' && Number.isFinite(row.costDocValue) ? row.costDocValue : null;
+            const costWarningDelta =
+              typeof row.costWarningDelta === 'number' && Number.isFinite(row.costWarningDelta)
+                ? row.costWarningDelta
+                : null;
             return {
               id: row.id || crypto.randomUUID(),
               name: row.name ?? '',
@@ -558,6 +648,8 @@ const normalizeMaterialGroups = (groups: MaterialGroup[] | undefined): MaterialG
               unit: row.unit ?? '',
               unitPrice,
               total,
+              costDocValue,
+              costWarningDelta,
             };
           })
         : [createMaterialRow()];
@@ -565,6 +657,7 @@ const normalizeMaterialGroups = (groups: MaterialGroup[] | undefined): MaterialG
       id: group.id || crypto.randomUUID(),
       supplier: group.supplier ?? '',
       invoiceNumber: group.invoiceNumber ?? '',
+      isScanned: Boolean(group.isScanned),
       rows: normalizedRows,
     };
   });
@@ -599,6 +692,7 @@ const migrateLegacyMaterialRows = (rows: EditableRow[] | undefined): MaterialGro
       id: crypto.randomUUID(),
       supplier: '',
       invoiceNumber: '',
+      isScanned: false,
       rows: rows.map((row) => {
         const quantity = Number.isFinite(row.value) ? row.value : 0;
         return {
@@ -737,6 +831,7 @@ export const GenerateWorkReportPanel = ({
   ]);
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([createMaterialGroup()]);
   const [openMaterialGroups, setOpenMaterialGroups] = useState<Record<string, boolean>>({});
+  const [activeMaterialGroupId, setActiveMaterialGroupId] = useState<string | null>(null);
   const [subcontractGroups, setSubcontractGroups] = useState<SubcontractGroup[]>([createSubcontractGroup()]);
   const [openSubcontractWorkers, setOpenSubcontractWorkers] = useState<Record<string, boolean>>({});
   const [rentalMachines, setRentalMachines] = useState<RentalMachine[]>([]);
@@ -747,7 +842,57 @@ export const GenerateWorkReportPanel = ({
   const [observationsCompleted, setObservationsCompleted] = useState(false);
   const [observationsCategory, setObservationsCategory] = useState<NoteCategory>(null);
   const [observationsText, setObservationsText] = useState('');
-  const [dictationEnabled, setDictationEnabled] = useState(false);
+
+  const appendObservacionesText = useCallback((recognizedText: string) => {
+    const normalized = recognizedText.trim();
+    if (!normalized) return;
+
+    setObservationsText((previous) => {
+      const currentText = previous || '';
+      if (!currentText) return normalized;
+      const needsSpace = !/\s$/.test(currentText);
+      return `${currentText}${needsSpace ? ' ' : ''}${normalized}`;
+    });
+  }, []);
+
+  const {
+    start: startObservacionesDictation,
+    stop: stopObservacionesDictation,
+    isListening: observacionesDictationActive,
+    interimText: observacionesInterimText,
+    error: observacionesDictationError,
+  } = useObservacionesDictation({
+    onFinal: appendObservacionesText,
+    language: 'es-ES',
+  });
+
+  useEffect(() => {
+    if (!readOnly || !observacionesDictationActive) return;
+    void stopObservacionesDictation();
+  }, [observacionesDictationActive, readOnly, stopObservacionesDictation]);
+
+  const {
+    startScan: startAlbaranScan,
+    isProcessing: isAlbaranProcessing,
+    error: albaranScanError,
+    clearError: clearAlbaranScanError,
+  } = useAlbaranScanController();
+
+  const [scanReviewDialogOpen, setScanReviewDialogOpen] = useState(false);
+  const [scanReviewReason, setScanReviewReason] = useState<string | null>(null);
+  const [scanReviewSupplier, setScanReviewSupplier] = useState('');
+  const [scanReviewInvoiceNumber, setScanReviewInvoiceNumber] = useState('');
+  const [scanReviewItems, setScanReviewItems] = useState<ParsedAlbaranItem[]>([]);
+  const [scanReviewImageUris, setScanReviewImageUris] = useState<string[]>([]);
+  const [scanReviewTargetGroupId, setScanReviewTargetGroupId] = useState<string | null>(null);
+  const [scanInFlightTargetGroupId, setScanInFlightTargetGroupId] = useState<string | null>(null);
+  const [rescanConfirmDialogOpen, setRescanConfirmDialogOpen] = useState(false);
+  const [pendingRescanTargetGroupId, setPendingRescanTargetGroupId] = useState<string | null>(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [pendingDuplicateResolution, setPendingDuplicateResolution] = useState<DuplicateScanResolution | null>(null);
+
+  const [costDifferenceDialogOpen, setCostDifferenceDialogOpen] = useState(false);
+  const [pendingCostDifferences, setPendingCostDifferences] = useState<MaterialCostDifference[]>([]);
 
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
 
@@ -925,6 +1070,7 @@ export const GenerateWorkReportPanel = ({
       setOpenMaterialGroups(
         Object.fromEntries(nextMaterialGroups.map((group) => [group.id, true])),
       );
+      setActiveMaterialGroupId(nextMaterialGroups[0]?.id ?? null);
       setSubcontractGroups(nextSubcontractGroups);
       setOpenSubcontractWorkers({});
       setRentalMachines([]);
@@ -969,6 +1115,7 @@ export const GenerateWorkReportPanel = ({
     setSubcontractedMachineryGroups([defaultMachineryGroup]);
     setMaterialGroups([defaultMaterialGroup]);
     setOpenMaterialGroups({ [defaultMaterialGroup.id]: true });
+    setActiveMaterialGroupId(defaultMaterialGroup.id);
     setSubcontractGroups([defaultSubcontractGroup]);
     setOpenSubcontractWorkers({});
     setRentalMachines([]);
@@ -987,6 +1134,14 @@ export const GenerateWorkReportPanel = ({
     setSiteManagerSignature('');
     setSaveStatusSelection(['completed']);
   }, [initialDate, initialDraft]);
+
+  useEffect(() => {
+    setActiveMaterialGroupId((current) => {
+      if (materialGroups.length === 0) return null;
+      if (current && materialGroups.some((group) => group.id === current)) return current;
+      return materialGroups[materialGroups.length - 1]?.id ?? materialGroups[0].id;
+    });
+  }, [materialGroups]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1199,6 +1354,348 @@ export const GenerateWorkReportPanel = ({
     event.target.value = '';
   };
 
+  const scrollToMaterialGroup = useCallback((groupId: string) => {
+    if (typeof document === 'undefined') return;
+    window.setTimeout(() => {
+      document.getElementById(`material-group-${groupId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }, 90);
+  }, []);
+
+  const buildMaterialRowFromParsedItem = useCallback((item: ParsedAlbaranItem): MaterialRow => {
+    const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : 0;
+    const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? nonNegative(item.unitPrice) : 0;
+    const costCalc = quantity * unitPrice;
+    const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? nonNegative(item.costDoc) : null;
+    const difference = costDoc !== null ? Math.abs(costDoc - costCalc) : null;
+
+    return {
+      ...createMaterialRow(),
+      name: (item.material || '').trim(),
+      quantity,
+      unit: normalizeMaterialUnitFromScan(item.unit),
+      unitPrice,
+      total: costDoc ?? costCalc,
+      costDocValue: costDoc,
+      costWarningDelta: difference !== null && difference > COST_DIFF_THRESHOLD ? difference : null,
+    };
+  }, []);
+
+  const applyParsedAlbaranToMaterials = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
+      if (!targetGroup) {
+        toast({
+          title: 'Albaran no encontrado',
+          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const parsedRows = parsed.items
+        .map(buildMaterialRowFromParsedItem)
+        .filter((row) => !isMaterialRowBlank(row));
+
+      if (!parsedRows.length) {
+        toast({
+          title: 'Sin lineas detectadas',
+          description: 'No se han detectado materiales utiles en el albaran.',
+        });
+        return;
+      }
+
+      const supplier = (parsed.supplier || '').trim();
+      const invoiceNumber = (parsed.invoiceNumber || '').trim();
+
+      setMaterialGroups((current) =>
+        current.map((group) =>
+          group.id === targetGroupId
+            ? {
+                ...group,
+                supplier: supplier || group.supplier,
+                invoiceNumber: invoiceNumber || group.invoiceNumber,
+                isScanned: true,
+                rows: parsedRows,
+              }
+            : group,
+        ),
+      );
+
+      const differences: MaterialCostDifference[] = parsedRows.flatMap((row) => {
+        if (row.costWarningDelta === null || row.costWarningDelta === undefined || row.costDocValue === null || row.costDocValue === undefined) {
+          return [];
+        }
+        return [
+          {
+            groupId: targetGroupId,
+            rowId: row.id,
+            material: row.name || 'Material',
+            costDoc: row.costDocValue,
+            costCalc: nonNegative(row.quantity) * nonNegative(row.unitPrice),
+            difference: row.costWarningDelta,
+          },
+        ];
+      });
+
+      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
+      setActiveMaterialGroupId(targetGroupId);
+      setPendingCostDifferences(differences);
+      setCostDifferenceDialogOpen(differences.length > 0);
+
+      const rowLabel = parsedRows.length === 1 ? 'fila' : 'filas';
+      toast({
+        title: 'Albaran procesado',
+        description: `Se han cargado ${parsedRows.length} ${rowLabel} en el albaran seleccionado.`,
+      });
+    },
+    [buildMaterialRowFromParsedItem, materialGroups],
+  );
+
+  const resolveDuplicateForScan = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      const parsedKey = buildDeliveryNoteKey(parsed.supplier, parsed.invoiceNumber);
+      if (parsedKey) {
+        const duplicateGroup = materialGroups.find((group) => {
+          if (group.id === targetGroupId) return false;
+          return buildDeliveryNoteKey(group.supplier, group.invoiceNumber) === parsedKey;
+        });
+
+        if (duplicateGroup) {
+          setPendingDuplicateResolution({
+            parsed,
+            targetGroupId,
+            duplicateGroupId: duplicateGroup.id,
+            duplicateLabel: `${duplicateGroup.supplier || 'Sin proveedor'} - ${duplicateGroup.invoiceNumber || 'Sin nº albarán'}`,
+          });
+          setDuplicateDialogOpen(true);
+          return;
+        }
+      }
+
+      applyParsedAlbaranToMaterials(targetGroupId, parsed);
+    },
+    [applyParsedAlbaranToMaterials, materialGroups],
+  );
+
+  const openScanReview = useCallback((parsed: ParsedAlbaranResult, targetGroupId: string) => {
+    setScanReviewReason(parsed.reviewReason || 'No se detecto la tabla con suficiente precision.');
+    setScanReviewSupplier(parsed.supplier || '');
+    setScanReviewInvoiceNumber(parsed.invoiceNumber || '');
+    setScanReviewItems(parsed.items.length > 0 ? parsed.items.map((item) => ({ ...item })) : [createParsedAlbaranReviewItem()]);
+    setScanReviewImageUris(parsed.imageUris || []);
+    setScanReviewTargetGroupId(targetGroupId);
+    setScanReviewDialogOpen(true);
+  }, []);
+
+  const executeScanForMaterialGroup = useCallback(
+    async (targetGroupId: string) => {
+      if (readOnly || isAlbaranProcessing) return;
+
+      clearAlbaranScanError();
+      setScanInFlightTargetGroupId(targetGroupId);
+
+      try {
+        const parsed = await startAlbaranScan();
+        if (!parsed) return;
+
+        if (parsed.requiresReview) {
+          openScanReview(parsed, targetGroupId);
+          return;
+        }
+
+        if (!parsed.items.length) {
+          toast({
+            title: 'Sin resultados',
+            description: 'No se detectaron materiales en el albaran escaneado.',
+          });
+          return;
+        }
+
+        resolveDuplicateForScan(targetGroupId, parsed);
+      } finally {
+        setScanInFlightTargetGroupId(null);
+      }
+    },
+    [
+      clearAlbaranScanError,
+      isAlbaranProcessing,
+      openScanReview,
+      readOnly,
+      resolveDuplicateForScan,
+      startAlbaranScan,
+    ],
+  );
+
+  const handleScanMaterialsForGroup = useCallback(
+    (targetGroupId: string) => {
+      if (readOnly || isAlbaranProcessing) return;
+
+      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
+      if (!targetGroup) return;
+
+      setActiveMaterialGroupId(targetGroupId);
+
+      if (hasMaterialGroupSignificantData(targetGroup)) {
+        setPendingRescanTargetGroupId(targetGroupId);
+        setRescanConfirmDialogOpen(true);
+        return;
+      }
+
+      void executeScanForMaterialGroup(targetGroupId);
+    },
+    [executeScanForMaterialGroup, isAlbaranProcessing, materialGroups, readOnly],
+  );
+
+  const continueRescanForMaterialGroup = useCallback(() => {
+    const targetGroupId = pendingRescanTargetGroupId;
+    setRescanConfirmDialogOpen(false);
+    setPendingRescanTargetGroupId(null);
+    if (!targetGroupId) return;
+    void executeScanForMaterialGroup(targetGroupId);
+  }, [executeScanForMaterialGroup, pendingRescanTargetGroupId]);
+
+  const updateScanReviewItem = useCallback((index: number, patch: Partial<ParsedAlbaranItem>) => {
+    setScanReviewItems((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              ...patch,
+            }
+          : item,
+      ),
+    );
+  }, []);
+
+  const addScanReviewItem = useCallback(() => {
+    setScanReviewItems((current) => [...current, createParsedAlbaranReviewItem()]);
+  }, []);
+
+  const applyScanReview = useCallback(() => {
+    const reviewedItems = scanReviewItems.map((item) => {
+      const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : null;
+      const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? item.unitPrice : null;
+      const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? item.costDoc : null;
+      const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
+      const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
+      const normalizedUnit = item.unit ? normalizeMaterialUnitFromScan(item.unit) : '';
+
+      return {
+        ...item,
+        material: item.material.trim(),
+        quantity,
+        unitPrice,
+        costDoc,
+        costCalc,
+        difference,
+        unit: normalizedUnit || null,
+        missingCritical: !item.material.trim() || quantity === null || !normalizedUnit,
+      };
+    });
+
+    const reviewedResult: ParsedAlbaranResult = {
+      supplier: scanReviewSupplier.trim() || null,
+      invoiceNumber: scanReviewInvoiceNumber.trim() || null,
+      requiresReview: false,
+      reviewReason: null,
+      headerDetected: true,
+      items: reviewedItems,
+      imageUris: [],
+    };
+
+    if (!scanReviewTargetGroupId) {
+      setScanReviewDialogOpen(false);
+      return;
+    }
+
+    const targetGroupId = scanReviewTargetGroupId;
+    setScanReviewTargetGroupId(null);
+    setScanReviewDialogOpen(false);
+    resolveDuplicateForScan(targetGroupId, reviewedResult);
+  }, [resolveDuplicateForScan, scanReviewInvoiceNumber, scanReviewItems, scanReviewSupplier, scanReviewTargetGroupId]);
+
+  const applyDuplicateToTargetGroup = useCallback(() => {
+    if (!pendingDuplicateResolution) return;
+    const resolution = pendingDuplicateResolution;
+    setDuplicateDialogOpen(false);
+    setPendingDuplicateResolution(null);
+    applyParsedAlbaranToMaterials(resolution.targetGroupId, resolution.parsed);
+  }, [applyParsedAlbaranToMaterials, pendingDuplicateResolution]);
+
+  const overwriteExistingDuplicateGroup = useCallback(() => {
+    if (!pendingDuplicateResolution) return;
+    const resolution = pendingDuplicateResolution;
+    setDuplicateDialogOpen(false);
+    setPendingDuplicateResolution(null);
+    applyParsedAlbaranToMaterials(resolution.duplicateGroupId, resolution.parsed);
+  }, [applyParsedAlbaranToMaterials, pendingDuplicateResolution]);
+
+  const cancelDuplicateResolution = useCallback(() => {
+    setDuplicateDialogOpen(false);
+    setPendingDuplicateResolution(null);
+  }, []);
+
+  const openCostDifferenceDialogForRow = useCallback((groupId: string, row: MaterialRow) => {
+    if (row.costDocValue === null || row.costDocValue === undefined) return;
+    if (row.costWarningDelta === null || row.costWarningDelta === undefined) return;
+
+    setPendingCostDifferences([
+      {
+        groupId,
+        rowId: row.id,
+        material: row.name || 'Material',
+        costDoc: row.costDocValue,
+        costCalc: nonNegative(row.quantity) * nonNegative(row.unitPrice),
+        difference: row.costWarningDelta,
+      },
+    ]);
+    setCostDifferenceDialogOpen(true);
+  }, []);
+
+  const keepDocumentCostDifferences = useCallback(() => {
+    setCostDifferenceDialogOpen(false);
+    setPendingCostDifferences([]);
+  }, []);
+
+  const overwriteCostDifferencesWithCalculated = useCallback(() => {
+    if (pendingCostDifferences.length === 0) {
+      setCostDifferenceDialogOpen(false);
+      return;
+    }
+
+    const rowsByGroup = pendingCostDifferences.reduce<Record<string, Set<string>>>((acc, diff) => {
+      if (!acc[diff.groupId]) acc[diff.groupId] = new Set<string>();
+      acc[diff.groupId].add(diff.rowId);
+      return acc;
+    }, {});
+
+    setMaterialGroups((current) =>
+      current.map((group) => {
+        const rowIds = rowsByGroup[group.id];
+        if (!rowIds) return group;
+
+        return {
+          ...group,
+          rows: group.rows.map((row) => {
+            if (!rowIds.has(row.id)) return row;
+            const recalculated = nonNegative(row.quantity) * nonNegative(row.unitPrice);
+            return {
+              ...row,
+              total: recalculated,
+              costWarningDelta: null,
+            };
+          }),
+        };
+      }),
+    );
+
+    setCostDifferenceDialogOpen(false);
+    setPendingCostDifferences([]);
+  }, [pendingCostDifferences]);
+
   const updateMaterialGroup = (groupId: string, patch: Partial<MaterialGroup>) => {
     setMaterialGroups((current) => current.map((group) => (group.id === groupId ? { ...group, ...patch } : group)));
   };
@@ -1211,13 +1708,16 @@ export const GenerateWorkReportPanel = ({
           if (row.id !== rowId) return row;
           const nextQuantity = patch.quantity ?? row.quantity;
           const nextUnitPrice = patch.unitPrice ?? row.unitPrice;
-          const nextTotal = nextQuantity * nextUnitPrice;
+          const nextTotal = typeof patch.total === 'number' ? patch.total : nextQuantity * nextUnitPrice;
+          const hasCostInputsChanged = patch.quantity !== undefined || patch.unitPrice !== undefined;
           return {
             ...row,
             ...patch,
             quantity: nextQuantity,
             unitPrice: nextUnitPrice,
             total: nextTotal,
+            costWarningDelta: hasCostInputsChanged ? null : (patch.costWarningDelta ?? row.costWarningDelta),
+            costDocValue: patch.costDocValue !== undefined ? patch.costDocValue : row.costDocValue,
           };
         });
         return { ...group, rows };
@@ -1229,6 +1729,8 @@ export const GenerateWorkReportPanel = ({
     const newGroup = createMaterialGroup();
     setMaterialGroups((current) => [...current, newGroup]);
     setOpenMaterialGroups((current) => ({ ...current, [newGroup.id]: true }));
+    setActiveMaterialGroupId(newGroup.id);
+    scrollToMaterialGroup(newGroup.id);
   };
 
   const removeMaterialGroup = (groupId: string) => {
@@ -1241,6 +1743,7 @@ export const GenerateWorkReportPanel = ({
       delete next[groupId];
       return next;
     });
+    setActiveMaterialGroupId((current) => (current === groupId ? null : current));
   };
 
   const addMaterialRow = (groupId: string) => {
@@ -1263,6 +1766,7 @@ export const GenerateWorkReportPanel = ({
 
   const setMaterialGroupOpen = (groupId: string, isOpen: boolean) => {
     setOpenMaterialGroups((current) => ({ ...current, [groupId]: isOpen }));
+    setActiveMaterialGroupId(groupId);
   };
 
   const updateSubcontractGroup = (groupId: string, patch: Partial<SubcontractGroup>) => {
@@ -1447,7 +1951,7 @@ export const GenerateWorkReportPanel = ({
     return true;
   };
 
-  const resolveSelectedSaveStatus = (): { status: WorkReportStatus; isClosed: boolean; missingDeliveryNotes: boolean } => {
+  const resolveSelectedSaveStatus = (): { status: NonNullable<WorkReport['status']>; isClosed: boolean; missingDeliveryNotes: boolean } => {
     if (saveStatusSelection.includes('completed')) {
       return {
         status: 'completed',
@@ -2258,180 +2762,231 @@ export const GenerateWorkReportPanel = ({
               <div className="border-b border-[#d9e1ea] p-4 text-center">
                 <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Materiales</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    variant="default"
-                    onClick={() =>
-                      toast({
-                        title: 'Escaneo IA en preparación',
-                        description: 'El escaneo de albaranes se conectará en la siguiente fase.',
-                      })
-                    }
-                  >
-                    Escanear IA
-                  </Button>
-                  <Button variant="outline" onClick={addMaterialGroup}>
+                  <Button variant="outline" onClick={addMaterialGroup} disabled={readOnly || isAlbaranProcessing}>
                     <Plus className="mr-2 h-4 w-4" />
                     Albarán
                   </Button>
                 </div>
+                {albaranScanError ? (
+                  <p className="mt-2 text-sm text-red-600">{albaranScanError}</p>
+                ) : null}
               </div>
               <div className="space-y-4 p-3">
-                {materialGroups.map((group) => (
-                  <Collapsible
-                    key={group.id}
-                    open={openMaterialGroups[group.id] ?? true}
-                    onOpenChange={(isOpen) => setMaterialGroupOpen(group.id, isOpen)}
-                    className="rounded-md border border-[#d9e1ea] bg-white"
-                  >
-                    <div className="flex items-center gap-2 border-b border-[#d9e1ea] bg-slate-50 px-3 py-2">
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          <ChevronDown className={`h-4 w-4 transition-transform ${(openMaterialGroups[group.id] ?? true) ? '' : '-rotate-90'}`} />
-                        </Button>
-                      </CollapsibleTrigger>
-                      <div className="flex-1 text-sm font-medium">
-                        {(group.supplier || 'Sin proveedor')} - {(group.invoiceNumber || 'Sin nº albarán')}
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-red-600"
-                        onClick={() => removeMaterialGroup(group.id)}
-                        disabled={materialGroups.length === 1}
-                        title="Eliminar albarán"
+                {materialGroups.map((group) => {
+                  const isActiveMaterialGroup = activeMaterialGroupId === group.id;
+                  const isScanningThisGroup = isAlbaranProcessing && scanInFlightTargetGroupId === group.id;
+
+                  return (
+                    <Collapsible
+                      id={`material-group-${group.id}`}
+                      key={group.id}
+                      open={openMaterialGroups[group.id] ?? true}
+                      onOpenChange={(isOpen) => setMaterialGroupOpen(group.id, isOpen)}
+                      onFocusCapture={() => setActiveMaterialGroupId(group.id)}
+                      onClick={() => setActiveMaterialGroupId(group.id)}
+                      className={`rounded-md border bg-white transition-all ${
+                        isActiveMaterialGroup
+                          ? 'border-blue-500 bg-blue-50/30 shadow-md ring-1 ring-blue-200'
+                          : 'border-slate-300 bg-slate-50/40 shadow-sm'
+                      }`}
+                    >
+                      <div
+                        className={`flex items-center gap-2 border-b px-3 py-2 ${
+                          isActiveMaterialGroup ? 'border-blue-200 bg-blue-100/70' : 'border-slate-300 bg-slate-100'
+                        }`}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <CollapsibleContent>
-                      <div className="space-y-4 p-3">
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div>
-                            <Label>Proveedor:</Label>
-                            <Input
-                              className="mt-2"
-                              placeholder="Nombre del proveedor"
-                              value={group.supplier}
-                              onChange={(event) => updateMaterialGroup(group.id, { supplier: event.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <Label>Nº Albarán:</Label>
-                            <Input
-                              className="mt-2"
-                              placeholder="Número de albarán"
-                              value={group.invoiceNumber}
-                              onChange={(event) => updateMaterialGroup(group.id, { invoiceNumber: event.target.value })}
-                            />
-                          </div>
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setActiveMaterialGroupId(group.id)}
+                          >
+                            <ChevronDown className={`h-4 w-4 transition-transform ${(openMaterialGroups[group.id] ?? true) ? '' : '-rotate-90'}`} />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <div className="flex-1 text-sm font-medium">
+                          <div>{(group.supplier || 'Sin proveedor')} - {(group.invoiceNumber || 'Sin nº albarán')}</div>
+                          {isActiveMaterialGroup ? (
+                            <div className="text-xs font-semibold text-blue-700">Editando este albarán</div>
+                          ) : null}
                         </div>
-                        <div className="rounded-md border border-[#d9e1ea]">
-                          <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                            <div className="col-span-3">Material</div>
-                            <div className="col-span-2">Cantidad</div>
-                            <div className="col-span-2">Unidad</div>
-                            <div className="col-span-2">Precio/Ud</div>
-                            <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
-                            <div className="col-span-1"></div>
+                        <Button
+                          size="sm"
+                          variant={isActiveMaterialGroup ? 'default' : 'outline'}
+                          className="h-8"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleScanMaterialsForGroup(group.id);
+                          }}
+                          disabled={readOnly || isAlbaranProcessing}
+                        >
+                          {isScanningThisGroup ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Procesando...
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="mr-2 h-4 w-4" />
+                              Escanear IA
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-red-600"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeMaterialGroup(group.id);
+                          }}
+                          disabled={materialGroups.length === 1}
+                          title="Eliminar albarán"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <CollapsibleContent>
+                        <div className="space-y-4 p-3">
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                              <Label>Proveedor:</Label>
+                              <Input
+                                className="mt-2"
+                                placeholder="Nombre del proveedor"
+                                value={group.supplier}
+                                onChange={(event) => updateMaterialGroup(group.id, { supplier: event.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <Label>Nº Albarán:</Label>
+                              <Input
+                                className="mt-2"
+                                placeholder="Número de albarán"
+                                value={group.invoiceNumber}
+                                onChange={(event) => updateMaterialGroup(group.id, { invoiceNumber: event.target.value })}
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-2 p-3">
-                            {group.rows.map((row) => (
-                              <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
-                                <div className="grid grid-cols-12 gap-2">
-                                  <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Material
-                                    </p>
-                                    <Input
-                                      placeholder="Nombre del material"
-                                      value={row.name}
-                                      onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
-                                    />
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Cantidad
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.01}
-                                      value={editableNumericValue(row.quantity)}
-                                      onChange={(event) =>
-                                        updateMaterialRow(group.id, row.id, { quantity: parseNumeric(event.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Unidad
-                                    </p>
-                                    <Select
-                                      value={row.unit || undefined}
-                                      onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Unidad" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {MATERIAL_UNIT_OPTIONS.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Precio/Ud
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.01}
-                                      value={editableNumericValue(row.unitPrice)}
-                                      onChange={(event) =>
-                                        updateMaterialRow(group.id, row.id, { unitPrice: parseNumeric(event.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Coste (€)
-                                    </p>
-                                    <Input
-                                      type="text"
-                                      value={row.total.toFixed(2)}
-                                      title="Coste calculado automáticamente (cantidad × precio/ud)"
-                                      readOnly
-                                    />
-                                  </div>
-                                  <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
-                                    <Button
-                                      className="h-9 w-full md:h-10 md:w-10"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => removeMaterialRow(group.id, row.id)}
-                                      disabled={group.rows.length === 1}
-                                      title="Eliminar fila"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-600" />
-                                    </Button>
+                          <div className="rounded-md border border-[#d9e1ea]">
+                            <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
+                              <div className="col-span-3">Material</div>
+                              <div className="col-span-2">Cantidad</div>
+                              <div className="col-span-2">Unidad</div>
+                              <div className="col-span-2">Precio/Ud</div>
+                              <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
+                              <div className="col-span-1"></div>
+                            </div>
+                            <div className="space-y-2 p-3">
+                              {group.rows.map((row) => (
+                                <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
+                                  <div className="grid grid-cols-12 gap-2">
+                                    <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
+                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                        Material
+                                      </p>
+                                      <Input
+                                        placeholder="Nombre del material"
+                                        value={row.name}
+                                        onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
+                                      />
+                                    </div>
+                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                        Cantidad
+                                      </p>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        value={editableNumericValue(row.quantity)}
+                                        onChange={(event) =>
+                                          updateMaterialRow(group.id, row.id, { quantity: parseNumeric(event.target.value) })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                        Unidad
+                                      </p>
+                                      <Select
+                                        value={row.unit || undefined}
+                                        onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Unidad" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {MATERIAL_UNIT_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                              {option.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                        Precio/Ud
+                                      </p>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        value={editableNumericValue(row.unitPrice)}
+                                        onChange={(event) =>
+                                          updateMaterialRow(group.id, row.id, { unitPrice: parseNumeric(event.target.value) })
+                                        }
+                                      />
+                                    </div>
+                                    <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
+                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                        Coste (€)
+                                      </p>
+                                      <Input
+                                        type="text"
+                                        value={row.total.toFixed(2)}
+                                        title="Coste calculado automáticamente (cantidad × precio/ud)"
+                                        className={row.costWarningDelta ? 'border-amber-400 text-amber-700' : undefined}
+                                        readOnly
+                                      />
+                                      {row.costWarningDelta ? (
+                                        <button
+                                          type="button"
+                                          className="mt-1 text-left text-xs font-medium text-amber-700 hover:text-amber-800"
+                                          onClick={() => openCostDifferenceDialogForRow(group.id, row)}
+                                        >
+                                          Diferencia detectada: {row.costWarningDelta.toFixed(2)} €
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                    <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
+                                      <Button
+                                        className="h-9 w-full md:h-10 md:w-10"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => removeMaterialRow(group.id, row.id)}
+                                        disabled={group.rows.length === 1}
+                                        title="Eliminar fila"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-red-600" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
-                            <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
-                              <Plus className="mr-2 h-4 w-4" />
-                              Añadir Fila
-                            </Button>
+                              ))}
+                              <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Añadir Fila
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
               </div>
             </div>
           </AccordionContent>
@@ -2869,8 +3424,16 @@ export const GenerateWorkReportPanel = ({
             <ObservacionesIncidenciasSection
               showHeader={false}
               disabled={readOnly}
-              dictationActive={dictationEnabled}
-              onDictate={() => setDictationEnabled((current) => !current)}
+              dictationActive={observacionesDictationActive}
+              dictationInterimText={observacionesInterimText}
+              dictationError={observacionesDictationError}
+              onDictate={() => {
+                if (observacionesDictationActive) {
+                  void stopObservacionesDictation();
+                  return;
+                }
+                void startObservacionesDictation();
+              }}
               value={{
                 isCompleted: observationsCompleted,
                 category: observationsCategory,
@@ -3118,6 +3681,274 @@ export const GenerateWorkReportPanel = ({
         </div>
       </div>
 
+      <Dialog
+        open={scanReviewDialogOpen}
+        onOpenChange={(open) => {
+          setScanReviewDialogOpen(open);
+          if (!open) {
+            setScanReviewTargetGroupId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Revision de albaran escaneado</DialogTitle>
+            <DialogDescription>
+              Ajusta los datos detectados antes de aplicarlos al bloque de materiales.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {scanReviewReason ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {scanReviewReason}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <Label>Proveedor</Label>
+                <Input
+                  className="mt-1"
+                  value={scanReviewSupplier}
+                  onChange={(event) => setScanReviewSupplier(event.target.value)}
+                  placeholder="Proveedor"
+                />
+              </div>
+              <div>
+                <Label>Nº Albarán</Label>
+                <Input
+                  className="mt-1"
+                  value={scanReviewInvoiceNumber}
+                  onChange={(event) => setScanReviewInvoiceNumber(event.target.value)}
+                  placeholder="Numero de albaran"
+                />
+              </div>
+            </div>
+
+            {scanReviewImageUris.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Imagen escaneada</Label>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {scanReviewImageUris.slice(0, 2).map((uri) => (
+                    <img
+                      key={uri}
+                      src={Capacitor.convertFileSrc(uri)}
+                      alt="Albaran escaneado"
+                      className="max-h-64 w-full rounded-md border border-[#d9e1ea] object-contain bg-slate-50"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="max-h-[46vh] space-y-2 overflow-y-auto rounded-md border border-[#d9e1ea] p-2">
+              {scanReviewItems.map((item, index) => (
+                <div key={`scan-review-${index}`} className="rounded-md border border-[#d9e1ea] p-2">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+                    <div className="md:col-span-2">
+                      <Label className="text-xs text-slate-600">Material</Label>
+                      <Input
+                        className="mt-1"
+                        value={item.material}
+                        onChange={(event) => updateScanReviewItem(index, { material: event.target.value })}
+                        placeholder="Material"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-600">Cantidad</Label>
+                      <Input
+                        className="mt-1"
+                        type="number"
+                        step={0.01}
+                        value={item.quantity ?? ''}
+                        onChange={(event) =>
+                          updateScanReviewItem(index, {
+                            quantity: event.target.value === '' ? null : parseNumeric(event.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-600">Unidad</Label>
+                      <Input
+                        className="mt-1"
+                        value={item.unit ?? ''}
+                        onChange={(event) => updateScanReviewItem(index, { unit: event.target.value || null })}
+                        placeholder="ud, m2, kg..."
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-600">Precio/Ud</Label>
+                      <Input
+                        className="mt-1"
+                        type="number"
+                        step={0.01}
+                        value={item.unitPrice ?? ''}
+                        onChange={(event) =>
+                          updateScanReviewItem(index, {
+                            unitPrice: event.target.value === '' ? null : parseNumeric(event.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                    <div>
+                      <Label className="text-xs text-slate-600">Coste documento</Label>
+                      <Input
+                        className="mt-1"
+                        type="number"
+                        step={0.01}
+                        value={item.costDoc ?? ''}
+                        onChange={(event) =>
+                          updateScanReviewItem(index, {
+                            costDoc: event.target.value === '' ? null : parseNumeric(event.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-xs text-slate-600">Texto OCR</Label>
+                      <Input className="mt-1" value={item.rowText || ''} readOnly />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button variant="outline" onClick={addScanReviewItem}>
+                <Plus className="mr-2 h-4 w-4" />
+                Añadir fila
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setScanReviewDialogOpen(false);
+                    setScanReviewTargetGroupId(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={applyScanReview}>Aplicar</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={rescanConfirmDialogOpen}
+        onOpenChange={(open) => {
+          setRescanConfirmDialogOpen(open);
+          if (!open) {
+            setPendingRescanTargetGroupId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Re-escanear albarán</DialogTitle>
+            <DialogDescription>
+              Este albarán ya contiene datos. Si escaneas de nuevo, se sobrescribirán. ¿Quieres continuar?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRescanConfirmDialogOpen(false);
+                setPendingRescanTargetGroupId(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={continueRescanForMaterialGroup}>
+              Continuar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={duplicateDialogOpen}
+        onOpenChange={(open) => {
+          setDuplicateDialogOpen(open);
+          if (!open) {
+            setPendingDuplicateResolution(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Albarán duplicado detectado</DialogTitle>
+            <DialogDescription>
+              Ya existe un albarán con este Proveedor y Nº. ¿Qué quieres hacer?
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingDuplicateResolution ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              Coincide con: {pendingDuplicateResolution.duplicateLabel}
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button onClick={applyDuplicateToTargetGroup}>
+              Aplicar a este albarán
+            </Button>
+            <Button variant="outline" onClick={overwriteExistingDuplicateGroup}>
+              Sobrescribir albarán existente
+            </Button>
+            <Button variant="ghost" onClick={cancelDuplicateResolution}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={costDifferenceDialogOpen}
+        onOpenChange={(open) => {
+          setCostDifferenceDialogOpen(open);
+          if (!open) {
+            setPendingCostDifferences([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Diferencia de coste detectada</DialogTitle>
+            <DialogDescription>
+              El coste del documento no coincide con el calculado (cantidad × precio/ud).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[45vh] space-y-2 overflow-y-auto">
+            {pendingCostDifferences.map((difference, index) => (
+              <div key={`${difference.groupId}-${difference.rowId}-${index}`} className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm">
+                <div className="font-medium text-amber-900">{difference.material}</div>
+                <div className="text-amber-800">
+                  Doc: {difference.costDoc.toFixed(2)} € | Calculado: {difference.costCalc.toFixed(2)} € | Delta: {difference.difference.toFixed(2)} €
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={keepDocumentCostDifferences}>
+              Mantener
+            </Button>
+            <Button onClick={overwriteCostDifferencesWithCalculated}>
+              Sobrescribir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={saveStatusDialogOpen} onOpenChange={setSaveStatusDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -3213,6 +4044,7 @@ export const GenerateWorkReportPanel = ({
     </div>
   );
 };
+
 
 
 

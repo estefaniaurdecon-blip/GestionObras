@@ -216,7 +216,7 @@ def extract_invoice(self: BaseInvoiceTask, invoice_id: int) -> None:
                 raw_json=raw_json,
                 meta=meta,
             )
-            # Enviar correo de "factura registrada" cuando ya tenemos datos extraÃ­dos.
+            # Enviar correo de "factura registrada" cuando ya tenemos datos extraídos.
             send_invoice_created_notification(invoice.id)
         except AIUnavailableError:
             _set_ai_down(client)

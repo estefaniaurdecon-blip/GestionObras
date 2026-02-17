@@ -201,7 +201,7 @@ def update_user_endpoint(
     current_user: User = Depends(require_permissions(["users:update"])),
 ) -> UserRead:
     """
-    Actualiza datos bÃ¡sicos de un usuario (admin).
+    Actualiza datos básicos de un usuario (admin).
     """
 
     try:

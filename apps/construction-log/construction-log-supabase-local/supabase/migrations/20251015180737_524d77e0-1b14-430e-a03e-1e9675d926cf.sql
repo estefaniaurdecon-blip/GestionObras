@@ -4,7 +4,7 @@ DECLARE
   new_org_id UUID;
 BEGIN
   IF EXISTS (SELECT 1 FROM auth.users WHERE id = '588512f1-45b1-4d7b-a2f3-184b00a650e6') THEN
-    -- Crear nueva organizaciÃ³n para "Patatas fritas"
+    -- Crear nueva organización para "Patatas fritas"
     INSERT INTO public.organizations (name, subscription_status, trial_end_date)
     VALUES ('Patatas fritas', 'trial', now() + interval '7 days')
     RETURNING id INTO new_org_id;
@@ -44,7 +44,7 @@ DO $$
 DECLARE
   urdecon_org_id UUID;
 BEGIN
-  -- Buscar organizaciÃ³n Urdecon
+  -- Buscar organización Urdecon
   SELECT id INTO urdecon_org_id
   FROM public.organizations
   WHERE name = 'Urdecon'
@@ -52,7 +52,7 @@ BEGIN
   
   IF urdecon_org_id IS NOT NULL
      AND EXISTS (SELECT 1 FROM auth.users WHERE id = 'ec2b92ea-6171-40fa-bf7f-e5e662621121') THEN
-    -- Crear perfil para Alejandro (pendiente de aprobaciÃ³n porque se une a org existente)
+    -- Crear perfil para Alejandro (pendiente de aprobación porque se une a org existente)
     INSERT INTO public.profiles (
       id,
       full_name,
@@ -65,7 +65,7 @@ BEGIN
       'ec2b92ea-6171-40fa-bf7f-e5e662621121',
       'Alejandro Benito',
       urdecon_org_id,
-      false,  -- Pendiente de aprobaciÃ³n
+      false,  -- Pendiente de aprobación
       'abenito@urdecon.es',
       now()
     )

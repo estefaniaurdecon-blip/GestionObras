@@ -118,6 +118,12 @@ const ToolActions = ({
     return (
       <>
         <ToolsOptionButton
+          icon={<CalendarNumberIcon value="1" />}
+          label="Exportar día"
+          disabled={tenantUnavailable}
+          onClick={() => onPending('Exportacion diaria')}
+        />
+        <ToolsOptionButton
           icon={<CalendarNumberIcon value="7" />}
           label="Exportar semanal"
           disabled={tenantUnavailable}
@@ -183,11 +189,16 @@ export const ToolsPanelContent = ({
   onOpenMetrics,
   onPending,
 }: ToolsPanelContentProps) => {
+  const subtitle =
+    activeToolsTab === 'bulk-export'
+      ? 'Genera un archivo ZIP con múltiples partes de trabajo.'
+      : 'Selecciona una accion para continuar.';
+
   return (
     <Card className="bg-white">
       <CardHeader className="pb-3 text-center">
         <CardTitle className="text-xl sm:text-2xl">{TOOLS_LABELS[activeToolsTab]}</CardTitle>
-        <CardDescription className="text-sm sm:text-[15px]">Selecciona una accion para continuar.</CardDescription>
+        <CardDescription className="text-sm sm:text-[15px]">{subtitle}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-center justify-center gap-3">

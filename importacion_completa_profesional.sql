@@ -1,5 +1,5 @@
 -- =====================================================
--- IMPORTACI?N PROFESIONAL / IDEMPOTENTE (PostgreSQL)
+-- IMPORTACIÓN PROFESIONAL / IDEMPOTENTE (PostgreSQL)
 -- =====================================================
 SET client_encoding = 'UTF8';
 BEGIN;
@@ -103,7 +103,7 @@ BEGIN
 END $$;
 
 -- =====================================================
--- 3) ?NDICES
+-- 3) ÍNDICES
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_contratos_num_obra ON contratos(num_obra);
 CREATE INDEX IF NOT EXISTS idx_contratos_empresa ON contratos(empresa);
@@ -122,10 +122,10 @@ CREATE INDEX IF NOT EXISTS idx_prov_sum_cif ON proveedores_suministros_servicios
 -- =====================================================
 -- 4) COMENTARIOS
 -- =====================================================
-COMMENT ON TABLE obras IS 'Informaci?n de obras y proyectos';
-COMMENT ON TABLE proveedores_subcontratacion IS 'Proveedores de subcontrataci?n con informaci?n legal completa';
+COMMENT ON TABLE obras IS 'Información de obras y proyectos';
+COMMENT ON TABLE proveedores_subcontratacion IS 'Proveedores de subcontratación con información legal completa';
 COMMENT ON TABLE proveedores_suministros_servicios IS 'Proveedores de suministros y servicios';
-COMMENT ON TABLE contratos IS 'Contratos firmados con proveedores para obras espec?ficas';
+COMMENT ON TABLE contratos IS 'Contratos firmados con proveedores para obras específicas';
 
 -- =====================================================
 -- 5) DATOS (UPSERT)

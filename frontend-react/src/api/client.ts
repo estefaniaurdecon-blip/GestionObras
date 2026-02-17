@@ -25,8 +25,8 @@ const resolveApiBaseUrl = () => {
     return "";
   }
 
-  // Si estamos accediendo desde otra mÃ¡quina y el base apunta a localhost,
-  // sustituimos por el hostname actual para evitar errores de conexiÃ³n.
+  // Si estamos accediendo desde otra máquina y el base apunta a localhost,
+  // sustituimos por el hostname actual para evitar errores de conexión.
   if (
     rawBaseUrl.includes("localhost") &&
     !["localhost", "127.0.0.1"].includes(window.location.hostname)
@@ -61,7 +61,7 @@ apiClient.interceptors.request.use((config) => {
   }
   const existingTenantHeader =
     config.headers &&
-    (config.headers["X-Tenant-Id"] ?? (config.headers as any)["x-tenant-id"]);
+    (config.headers["X-Tenant-Id"] ? (config.headers as any)["x-tenant-id"]);
   config.headers = {
     ...config.headers,
     ...(existingTenantHeader ? {} : {}),

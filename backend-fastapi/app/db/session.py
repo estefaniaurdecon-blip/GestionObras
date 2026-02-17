@@ -20,7 +20,7 @@ def init_db() -> None:
     Crea todas las tablas definidas en los modelos SQLModel.
 
     Nota: en un entorno real se recomienda usar Alembic para migraciones,
-    pero esto permite levantar el entorno local rÃ¡pidamente.
+    pero esto permite levantar el entorno local rápidamente.
     """
 
     from app.db import base  # noqa: F401  Import para registrar modelos
@@ -526,8 +526,8 @@ def get_session() -> Iterator[Session]:
     """
     Proveedor de sesiones de base de datos para FastAPI.
 
-    FastAPI reconoce esta funciÃ³n generadora y se encarga
-    de abrir y cerrar la sesiÃ³n alrededor de cada peticiÃ³n.
+    FastAPI reconoce esta función generadora y se encarga
+    de abrir y cerrar la sesión alrededor de cada petición.
     """
 
     with Session(engine) as session:

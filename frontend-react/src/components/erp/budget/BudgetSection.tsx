@@ -161,7 +161,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
 }) => {
   const selectedProject =
     selectedBudgetProjectId != null
-      ? projects.find((project) => project.id === selectedBudgetProjectId) ?? null
+      ? projects.find((project) => project.id === selectedBudgetProjectId) ? null
       : null;
   const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
 
@@ -191,8 +191,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     return Math.max(1, Math.ceil(totalDays / 30));
   })();
   const durationMonths =
-    selectedProject?.duration_months ?? fallbackDurationMonths ?? null;
-  const subsidyPercent = selectedProject?.subsidy_percent ?? 0;
+    selectedProject?.duration_months ? fallbackDurationMonths ? null;
+  const subsidyPercent = selectedProject?.subsidy_percent ? 0;
   const durationLabel =
     durationMonths != null ? `${durationMonths} meses` : "Sin fechas";
   const projectDateRange = React.useMemo(() => {
@@ -220,8 +220,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     if (yearOptions.includes(currentYear)) return currentYear;
     return yearOptions[0];
   }, [selectedYear, yearOptions]);
-  const baseTotalsApproved = Number(budgetsTabTotals.approved ?? 0);
-  const baseTotalsForecasted = Number(budgetsTabTotals.gasto ?? 0);
+  const baseTotalsApproved = Number(budgetsTabTotals.approved ? 0);
+  const baseTotalsForecasted = Number(budgetsTabTotals.gasto ? 0);
 
   const milestonesToRender =
     budgetMilestones.length > 0
@@ -244,16 +244,16 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     );
     if (draft) {
       return field === "amount"
-        ? Number(draft.amount ?? 0)
-        : Number(draft.justified ?? 0);
+        ? Number(draft.amount ? 0)
+        : Number(draft.justified ? 0);
     }
     const stored = budget.milestones?.find(
       (m) => m.milestone_id === milestoneId,
     );
     if (stored) {
       return field === "amount"
-        ? Number(stored.amount ?? 0)
-        : Number(stored.justified ?? 0);
+        ? Number(stored.amount ? 0)
+        : Number(stored.justified ? 0);
     }
     if (index === 0) {
       return field === "amount" ? fallback.h1 : fallback.j1;
@@ -286,10 +286,10 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         justified: Array(milestoneColumnsCount).fill(0),
       };
     }
-    const h1 = Number(row.hito1_budget ?? 0);
-    const h2 = Number(row.hito2_budget ?? 0);
-    const j1 = Number(row.justified_hito1 ?? 0);
-    const j2 = Number(row.justified_hito2 ?? 0);
+    const h1 = Number(row.hito1_budget ? 0);
+    const h2 = Number(row.hito2_budget ? 0);
+    const j1 = Number(row.justified_hito1 ? 0);
+    const j2 = Number(row.justified_hito2 ? 0);
     const fallback = { h1, h2, j1, j2 };
     milestonesToRender.forEach((milestone, idx) => {
       const amountValue = resolveMilestoneValue(
@@ -324,28 +324,28 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
     const isParentRow = parentKeys.has(rowKey);
     const isGeneralExpenses = isGeneralExpensesConcept(row.concept);
     if (!isParentRow && !isGeneralExpenses) return;
-    const h1 = Number(row.hito1_budget ?? 0);
-    const h2 = Number(row.hito2_budget ?? 0);
-    const j1 = Number(row.justified_hito1 ?? 0);
-    const j2 = Number(row.justified_hito2 ?? 0);
+    const h1 = Number(row.hito1_budget ? 0);
+    const h2 = Number(row.hito2_budget ? 0);
+    const j1 = Number(row.justified_hito1 ? 0);
+    const j2 = Number(row.justified_hito2 ? 0);
     const fallback = { h1, h2, j1, j2 };
     let rowApproved = 0;
     milestonesToRender.forEach((milestone, idx) => {
       const useParentTotals = isParentRow && hasDynamicMilestones && !isGeneralExpenses;
       const amountValue =
         useParentTotals
-          ? parentMilestoneTotals[rowKey]?.amount[idx] ?? 0
+          ? parentMilestoneTotals[rowKey]?.amount[idx] ? 0
           : resolveMilestoneValue(row, milestone.id, idx, "amount", fallback);
       const justifiedValue =
         useParentTotals
-          ? parentMilestoneTotals[rowKey]?.justified[idx] ?? 0
+          ? parentMilestoneTotals[rowKey]?.justified[idx] ? 0
           : resolveMilestoneValue(row, milestone.id, idx, "justified", fallback);
       totalsByMilestone[idx].amount += Number(amountValue || 0);
       totalsByMilestone[idx].justified += Number(justifiedValue || 0);
       rowApproved += Number(amountValue || 0);
     });
     totalApproved += rowApproved;
-    totalForecasted += Number(row.forecasted_spent ?? 0);
+    totalForecasted += Number(row.forecasted_spent ? 0);
   });
   const totalJustified = totalsByMilestone.reduce(
     (sum, item) => sum + item.justified,
@@ -420,11 +420,11 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
         <HStack spacing={2} mt={2} align="center">
           <FormControl maxW="160px">
             <FormLabel fontSize="xs" mb={1}>
-              Anualizar por aÃ±o
+              Anualizar por año
             </FormLabel>
             <Select
               size="sm"
-              value={resolvedSelectedYear ?? ""}
+              value={resolvedSelectedYear ? ""}
               onChange={(e) =>
                 setSelectedYear(e.target.value ? Number(e.target.value) : null)
               }
@@ -625,40 +625,40 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                 </Tr>
               ) : (
                 groupedBudgetRows.map((budget) => {
-                  const h1 = Number(budget.hito1_budget ?? 0);
-                  const h2 = Number(budget.hito2_budget ?? 0);
-                  const j1 = Number(budget.justified_hito1 ?? 0);
-                  const j2 = Number(budget.justified_hito2 ?? 0);
+                  const h1 = Number(budget.hito1_budget ? 0);
+                  const h2 = Number(budget.hito2_budget ? 0);
+                  const j1 = Number(budget.justified_hito1 ? 0);
+                  const j2 = Number(budget.justified_hito2 ? 0);
                   const draftConcept =
-                    (budgetDrafts[budget.id]?.concept as string) ??
-                    budget.concept ??
+                    (budgetDrafts[budget.id]?.concept as string) ?
+                    budget.concept ?
                     "";
                   const isGeneralExpenses =
                     isGeneralExpensesConcept(draftConcept);
                   const isExternalCollab =
                     isExternalCollaborationConcept(draftConcept);
                   const generalPercent =
-                    parsePercentFromConcept(draftConcept) ??
+                    parsePercentFromConcept(draftConcept) ?
                     DEFAULT_GENERAL_EXPENSES_PERCENT;
                   const externalCollabDetails =
                     parseExternalCollaborationDetails(draftConcept);
-                  const externalCollabName = externalCollabDetails?.name ?? "";
-                  const externalCollabType = externalCollabDetails?.type ?? "";
+                  const externalCollabName = externalCollabDetails?.name ? "";
+                  const externalCollabType = externalCollabDetails?.type ? "";
                   const resolvedExternalType =
                     externalCollabType ||
                     (externalCollabName
                       ? externalCollaborations.find(
                           (item) => item.name === externalCollabName,
-                        )?.collaboration_type ?? ""
+                        )?.collaboration_type ? ""
                       : "");
                   const generalMode =
-                    generalExpensesMode[budget.id] ??
+                    generalExpensesMode[budget.id] ?
                     (draftConcept.toLowerCase().includes("(importe)")
                       ? "amount"
                       : "percent");
                   const canEditRow = hasRealBudgets && budgetsEditMode;
                   const baseKey = getBudgetParentKey(budget.concept || "");
-                  let rowBg = CATEGORY_COLOR_MAP[baseKey] ?? undefined;
+                  let rowBg = CATEGORY_COLOR_MAP[baseKey] ? undefined;
                   const isParentRow =
                     isAllCapsConcept(budget.concept) &&
                     budgetParentMap[baseKey] !== undefined &&
@@ -669,8 +669,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                   const fallbackValues = {
                     h1,
                     h2,
-                    j1: parentTotalsForRow?.j1 ?? j1,
-                    j2: parentTotalsForRow?.j2 ?? j2,
+                    j1: parentTotalsForRow?.j1 ? j1,
+                    j2: parentTotalsForRow?.j2 ? j2,
                   };
                   const milestoneAmounts = milestonesToRender.map(
                     (milestone, idx) => {
@@ -680,7 +680,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                       // que ignoramos parentMilestoneTotals.
                       if (isParentRow && hasDynamicMilestones && !isGeneralExpenses) {
                         return (
-                          parentMilestoneTotals[baseKey]?.amount[idx] ?? 0
+                          parentMilestoneTotals[baseKey]?.amount[idx] ? 0
                         );
                       }
                       return resolveMilestoneValue(
@@ -696,7 +696,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                     (milestone, idx) => {
                       if (isParentRow && hasDynamicMilestones && !isGeneralExpenses) {
                         return (
-                          parentMilestoneTotals[baseKey]?.justified[idx] ?? 0
+                          parentMilestoneTotals[baseKey]?.justified[idx] ? 0
                         );
                       }
                       return resolveMilestoneValue(
@@ -715,9 +715,9 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                   // El presupuesto aprobado lo introduce el usuario; usamos el
                   // valor guardado o, en su defecto, la suma de hitos.
                   const approved = (
-                    budgetDrafts[budget.id]?.approved_budget ??
-                    Number(budget.approved_budget ?? 0) ??
-                    approvedFromMilestones ??
+                    budgetDrafts[budget.id]?.approved_budget ?
+                    Number(budget.approved_budget ? 0) ?
+                    approvedFromMilestones ?
                     h1 + h2
                   );
                   const totalJustified = milestoneJustified.reduce(
@@ -795,7 +795,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                                     pattern="[0-9.,]*"
                                     defaultValue={formatEuroValue(
                                       budgetDrafts[budget.id]
-                                        ?.approved_budget ?? approved,
+                                        ?.approved_budget ? approved,
                                     )}
                                     onBlur={(e) =>
                                       onGeneralExpensesAmount(
@@ -834,7 +834,7 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                                   <Select
                                     size="sm"
                                     maxW="240px"
-                                    value={externalCollabSelections[budget.id] ?? ""}
+                                    value={externalCollabSelections[budget.id] ? ""}
                                     onChange={(e) =>
                                       onExternalCollabSelectionChange(
                                         budget.id,
@@ -902,8 +902,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                         )}
                       </Td>
                       {milestonesToRender.map((milestone, idx) => {
-                        const amountValue = milestoneAmounts[idx] ?? 0;
-                        const justifiedValue = milestoneJustified[idx] ?? 0;
+                        const amountValue = milestoneAmounts[idx] ? 0;
+                        const justifiedValue = milestoneJustified[idx] ? 0;
                         const canEditMilestone =
                           canEditRow &&
                           // Permitimos editar hitos en filas normales y,
@@ -978,8 +978,8 @@ export const BudgetSection: React.FC<BudgetSectionProps> = ({
                       <Td textAlign="center">
                         <BudgetNumberCell
                           value={
-                            budgetDrafts[budget.id]?.forecasted_spent ??
-                            budget.forecasted_spent ??
+                            budgetDrafts[budget.id]?.forecasted_spent ?
+                            budget.forecasted_spent ?
                             0
                           }
                           isEditing={canEditRow}
