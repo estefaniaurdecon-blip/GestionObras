@@ -32,7 +32,7 @@ export interface SubcontractWorker {
   id: string;
   name: string; // Nombre y apellidos
   dni: string;
-  category: string; // Cargo/Categoría
+  category: string; // Cargo/Categoria
   hours?: number;
 }
 
@@ -79,7 +79,16 @@ export interface MaterialGroup {
   invoiceNumber: string;
   items: MaterialItem[];
   documentImage?: string;
-  extractedDate?: string; // Fecha extraída del albarán por IA
+  extractedDate?: string; // Fecha extraida del albaran por IA
+  docType?: 'MATERIALS_TABLE' | 'SERVICE_MACHINERY' | 'UNKNOWN' | null;
+  serviceLines?: Array<{
+    id: string;
+    description: string;
+    hours?: number | null;
+    trips?: number | null;
+    tons?: number | null;
+    m3?: number | null;
+  }>;
 }
 
 // Entrada de encargado/capataz/recurso preventivo con horas
@@ -107,7 +116,7 @@ export interface WorkReport {
   workId?: string; // UUID de la obra asignada
   foreman: string;
   foremanHours: number;
-  foremanEntries?: ForemanEntry[]; // Múltiples encargados/capataces con horas
+  foremanEntries?: ForemanEntry[]; // Multiples encargados/capataces con horas
   foremanSignature?: string;
   siteManager: string;
   siteManagerSignature?: string;
@@ -123,8 +132,8 @@ export interface WorkReport {
   approved?: boolean;
   approvedBy?: string;
   approvedAt?: string;
-  lastEditedBy?: string; // Jefe de obra que editó el parte
-  lastEditedAt?: string; // Fecha y hora de la última edición
+  lastEditedBy?: string; // Jefe de obra que edito el parte
+  lastEditedAt?: string; // Fecha y hora de la ultima edicion
   status?: 'completed' | 'missing_data' | 'missing_delivery_notes';
   missingDeliveryNotes?: boolean;
   autoCloneNextDay?: boolean;

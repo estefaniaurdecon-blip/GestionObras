@@ -1,27 +1,23 @@
-﻿import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SignaturePad } from '@/components/SignaturePad';
-import {
-  ObservacionesIncidenciasSection,
-  normalizeNoteCategory,
-  type NoteCategory,
-} from '@/components/ObservacionesIncidenciasSection';
+﻿import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { Accordion } from '@/components/ui/accordion';
+import { normalizeNoteCategory, type NoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
 import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
-import { type ParsedAlbaranItem, type ParsedAlbaranResult } from '@/plugins/albaranScanner';
+import {
+  improveScanWithOllama,
+  isOllamaScanEnabled,
+  shouldOfferOllamaImprove,
+  type OllamaScanItem,
+} from '@/api/ollamaAlbaran';
+import {
+  type ParsedAlbaranItem,
+  type ParsedAlbaranResult,
+  type ParsedFieldConfidence,
+  type ParsedFieldWarnings,
+} from '@/plugins/albaranScanner';
 import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import {
   filterActiveMachines,
   getRentalMachinesByWorksite,
@@ -29,214 +25,102 @@ import {
   type RentalMachine,
   type RentalMachinesResult,
 } from '@/services/rentalMachinerySource';
-import {
-  ArrowLeft,
-  CalendarDays,
-  Camera,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  FileBadge2,
-  FileWarning,
-  FileSpreadsheet,
-  Mic,
-  Loader2,
-  Plus,
-  Save,
-  Trash2,
-  Upload,
-  Users,
-} from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import type { WorkReportStatus } from '@/offline-db/types';
 import type { WorkReport } from '@/types/workReport';
+import { AlbaranDocumentViewerModal } from '@/components/work-report/shared/AlbaranDocumentViewerModal';
+import { WorkReportHeaderCard } from '@/components/work-report/shared/WorkReportHeaderCard';
+import { ForemanResourcesCard } from '@/components/work-report/shared/ForemanResourcesCard';
+import { AutoCloneSettingsCard } from '@/components/work-report/shared/AutoCloneSettingsCard';
+import { SignaturesCard } from '@/components/work-report/shared/SignaturesCard';
+import { SaveActionsBar } from '@/components/work-report/shared/SaveActionsBar';
+import { WorkforceSection } from '@/components/work-report/sections/WorkforceSection';
+import { MachinerySection } from '@/components/work-report/sections/MachinerySection';
+import { MaterialsSection } from '@/components/work-report/sections/MaterialsSection';
+import { SubcontractsSection } from '@/components/work-report/sections/SubcontractsSection';
+import { RentalSection } from '@/components/work-report/sections/RentalSection';
+import { WasteSection } from '@/components/work-report/sections/WasteSection';
+import { ObservationsSection } from '@/components/work-report/sections/ObservationsSection';
+import { GallerySection } from '@/components/work-report/sections/GallerySection';
+import { ScanReviewDialog } from '@/components/work-report/dialogs/ScanReviewDialog';
+import { ServiceScanDialog } from '@/components/work-report/dialogs/ServiceScanDialog';
+import { NoPriceScanDialog } from '@/components/work-report/dialogs/NoPriceScanDialog';
+import { RescanConfirmDialog } from '@/components/work-report/dialogs/RescanConfirmDialog';
+import { DuplicateDialog } from '@/components/work-report/dialogs/DuplicateDialog';
+import { CostDifferenceDialog } from '@/components/work-report/dialogs/CostDifferenceDialog';
+import { SaveStatusDialog } from '@/components/work-report/dialogs/SaveStatusDialog';
+import {
+  ALL_SECTION_IDS,
+  COST_DIFF_THRESHOLD,
+  MATERIAL_UNIT_OPTIONS,
+  SUBCONTRACT_UNIT_OPTIONS,
+  buildDeliveryNoteKey,
+  computeGroupTotals,
+  computeRowTotals,
+  createForemanResource,
+  createMaterialGroup,
+  createMaterialRow,
+  createParsedAlbaranReviewItem,
+  createServiceLine,
+  createRow,
+  createSubcontractAssignedWorker,
+  createSubcontractGroup,
+  createSubcontractRow,
+  createSubcontractedMachineryGroup,
+  createSubcontractedMachineryRow,
+  createWorkforceGroup,
+  createWorkforceRow,
+  editableNumericValue,
+  extractNoPriceDescription,
+  hasMaterialGroupSignificantData,
+  hasNoPriceColumnsWarning,
+  isMaterialRowBlank,
+  mapForemanRoleForReport,
+  mapRentalMachinesToLegacyRows,
+  mapSubcontractGroupsToLegacyRows,
+  mapSubcontractUnitToReportUnit,
+  migrateLegacyMaterialRows,
+  migrateLegacySubcontractRows,
+  migrateLegacySubcontractedMachineryRows,
+  nonNegative,
+  nonNegativeInt,
+  normalizeMaterialGroups,
+  normalizeMaterialUnitFromScan,
+  normalizeServiceUnitFromScan,
+  normalizeSubcontractGroups,
+  normalizeSubcontractUnit,
+  normalizeSubcontractedMachineryGroups,
+  parseDateInputValue,
+  parseNumeric,
+  resolveScanImageUris,
+  sanitizeText,
+  todayDate,
+  unitLabel,
+} from '@/components/work-report/helpers';
+import type {
+  EditableRow,
+  ForemanResource,
+  GalleryImage,
+  GenerateWorkReportDraft,
+  MaterialCostDifference,
+  MaterialGroup,
+  MaterialRow,
+  NoPriceScanResolution,
+  SaveStatusOption,
+  ServiceLine,
+  ServiceScanResolution,
+  SubcontractAssignedWorker,
+  SubcontractGroup,
+  SubcontractGroupTotals,
+  SubcontractRow,
+  SubcontractRowTotals,
+  SubcontractUnit,
+  SubcontractedMachineryGroup,
+  SubcontractedMachineryRow,
+  WorkforceGroup,
+  WorkforceRow,
+  DuplicateScanResolution,
+} from '@/components/work-report/types';
 
-type EditableRow = {
-  id: string;
-  name: string;
-  detail: string;
-  value: number;
-  unit?: string;
-};
-
-type WorkforceRow = {
-  id: string;
-  workerName: string;
-  activity: string;
-  hours: number;
-  total: number;
-};
-
-type WorkforceGroup = {
-  id: string;
-  companyName: string;
-  isOwnCompany: boolean;
-  rows: WorkforceRow[];
-};
-
-type SubcontractedMachineryRow = {
-  id: string;
-  machineType: string;
-  activity: string;
-  hours: number;
-  total: number;
-};
-
-type SubcontractedMachineryGroup = {
-  id: string;
-  companyName: string;
-  isOwnCompany: boolean;
-  rows: SubcontractedMachineryRow[];
-  documentImage?: string;
-};
-
-type MaterialRow = {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  total: number;
-  costDocValue?: number | null;
-  costWarningDelta?: number | null;
-};
-
-type MaterialGroup = {
-  id: string;
-  supplier: string;
-  invoiceNumber: string;
-  isScanned?: boolean;
-  rows: MaterialRow[];
-};
-
-type MaterialCostDifference = {
-  groupId: string;
-  rowId: string;
-  material: string;
-  costDoc: number;
-  costCalc: number;
-  difference: number;
-};
-
-type DuplicateScanResolution = {
-  parsed: ParsedAlbaranResult;
-  targetGroupId: string;
-  duplicateGroupId: string;
-  duplicateLabel: string;
-};
-
-type SubcontractUnit = 'hora' | 'm2' | 'ml' | 'ud' | 'kg' | 'm3';
-
-type SubcontractAssignedWorker = {
-  id: string;
-  name: string;
-  hours: number;
-  quantity?: number;
-};
-
-type SubcontractRow = {
-  id: string;
-  partida: string;
-  partidaId?: string | null;
-  activity: string;
-  unit: SubcontractUnit;
-  cantPerWorker: number;
-  hours: number;
-  workersAssigned: SubcontractAssignedWorker[];
-  unitPrice?: number | null;
-};
-
-type SubcontractGroup = {
-  id: string;
-  companyName: string;
-  numWorkersManual: number;
-  rows: SubcontractRow[];
-  documentImage?: string;
-};
-
-type SubcontractGroupContext = {
-  numWorkersEffective: number;
-};
-
-type SubcontractRowTotals = {
-  horasHombre: number;
-  produccion: number;
-  importe: number;
-  unit: SubcontractUnit;
-  numTrabEfectivo: number;
-  hasAssignedWorkers: boolean;
-};
-
-type SubcontractGroupTotals = {
-  rowTotalsById: Record<string, SubcontractRowTotals>;
-  totalHorasHombre: number;
-  totalsByUnit: Record<string, number>;
-  totalImporte: number;
-  numWorkersEffective: number;
-  uniqueWorkersWithHours: number;
-  hasMixedUnits: boolean;
-  displayTotal: number;
-  displayUnitLabel: string;
-};
-
-type SubcontractPriceResolver = (row: SubcontractRow, group: SubcontractGroup) => number | null | undefined;
-
-type ForemanResource = {
-  id: string;
-  name: string;
-  role: string;
-  hours: number;
-};
-
-type GalleryImage = {
-  id: string;
-  name: string;
-  dataUrl: string;
-};
-
-export type GenerateWorkReportDraft = {
-  workId?: string | null;
-  workNumber: string;
-  workName: string;
-  date: string;
-  totalHours: number;
-  isClosed: boolean;
-  workforceSectionCompleted: boolean;
-  workforceGroups: WorkforceGroup[];
-  subcontractedMachineryGroups: SubcontractedMachineryGroup[];
-  materialGroups: MaterialGroup[];
-  subcontractGroups: SubcontractGroup[];
-  subcontractedMachineryRows?: EditableRow[];
-  materialRows?: EditableRow[];
-  subcontractRows?: EditableRow[];
-  rentalMachineryRows?: EditableRow[];
-  rentalMachinesSnapshot?: RentalMachine[];
-  wasteRows: EditableRow[];
-  observationsCompleted: boolean;
-  observationsCategory: NoteCategory;
-  observationsText: string;
-  galleryImages: GalleryImage[];
-  foremanResources: ForemanResource[];
-  mainForeman: string;
-  mainForemanHours: number;
-  siteManager: string;
-  autoCloneNextDay: boolean;
-  foremanSignature: string;
-  siteManagerSignature: string;
-  workReportStatus?: WorkReportStatus;
-  missingDeliveryNotes?: boolean;
-  cloneSourceReportId?: string;
-  cloneSourceReportIdentifier?: string;
-  cloneSourceWorkName?: string;
-  cloneRequiresReview?: boolean;
-  cloneCreatedAt?: string;
-  cloneIncludedImages?: boolean;
-  cloneIncludedSignatures?: boolean;
-  cloneIncludedMaterials?: boolean;
-  cloneIncludedWaste?: boolean;
-};
+export type { GenerateWorkReportDraft } from '@/components/work-report/types';
 
 interface GenerateWorkReportPanelProps {
   onBack: () => void;
@@ -248,564 +132,6 @@ interface GenerateWorkReportPanelProps {
   saving?: boolean;
   works?: Array<{ id: string; number?: string | null; name?: string | null }>;
 }
-
-const ALL_SECTION_IDS = ['workforce', 'machinery', 'materials', 'subcontracts', 'rental', 'waste', 'observations', 'gallery'];
-
-const todayDate = () => new Date().toISOString().split('T')[0];
-
-const parseDateInputValue = (value: string): Date | undefined => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec((value ?? '').trim());
-  if (!match) return undefined;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-  if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== month - 1 ||
-    parsed.getDate() !== day
-  ) {
-    return undefined;
-  }
-
-  return parsed;
-};
-
-const createRow = (unit?: string): EditableRow => ({
-  id: crypto.randomUUID(),
-  name: '',
-  detail: '',
-  value: 0,
-  unit,
-});
-
-const createWorkforceRow = (): WorkforceRow => ({
-  id: crypto.randomUUID(),
-  workerName: '',
-  activity: '',
-  hours: 0,
-  total: 0,
-});
-
-const createWorkforceGroup = (): WorkforceGroup => ({
-  id: crypto.randomUUID(),
-  companyName: '',
-  isOwnCompany: false,
-  rows: [createWorkforceRow()],
-});
-
-const createSubcontractedMachineryRow = (): SubcontractedMachineryRow => ({
-  id: crypto.randomUUID(),
-  machineType: '',
-  activity: '',
-  hours: 0,
-  total: 0,
-});
-
-const createSubcontractedMachineryGroup = (): SubcontractedMachineryGroup => ({
-  id: crypto.randomUUID(),
-  companyName: '',
-  isOwnCompany: false,
-  rows: [createSubcontractedMachineryRow()],
-});
-
-const createMaterialRow = (): MaterialRow => ({
-  id: crypto.randomUUID(),
-  name: '',
-  quantity: 0,
-  unit: '',
-  unitPrice: 0,
-  total: 0,
-  costDocValue: null,
-  costWarningDelta: null,
-});
-
-const createMaterialGroup = (): MaterialGroup => ({
-  id: crypto.randomUUID(),
-  supplier: '',
-  invoiceNumber: '',
-  isScanned: false,
-  rows: [createMaterialRow()],
-});
-
-const SUBCONTRACT_UNIT_OPTIONS: Array<{ value: SubcontractUnit; label: string }> = [
-  { value: 'hora', label: 'Hora' },
-  { value: 'm2', label: 'm²' },
-  { value: 'ml', label: 'ml' },
-  { value: 'ud', label: 'ud' },
-  { value: 'kg', label: 'kg' },
-  { value: 'm3', label: 'm³' },
-];
-
-const MATERIAL_UNIT_OPTIONS = [
-  { value: 'm2', label: 'm²' },
-  { value: 'm3', label: 'm³' },
-  { value: 'ml', label: 'ml' },
-  { value: 'kg', label: 'kg' },
-  { value: 'ud', label: 'ud' },
-  { value: 'l', label: 'l' },
-];
-
-const COST_DIFF_THRESHOLD = 0.02;
-
-const nonNegative = (value: number): number => {
-  if (!Number.isFinite(value)) return 0;
-  return value > 0 ? value : 0;
-};
-
-const nonNegativeInt = (value: number): number => Math.trunc(nonNegative(value));
-
-const normalizeSubcontractUnit = (unit: string | undefined): SubcontractUnit => {
-  const normalized = (unit || '').trim().toLowerCase();
-  if (normalized === 'hora' || normalized === 'h' || normalized === 'hour' || normalized === 'hours') return 'hora';
-  if (normalized === 'm2' || normalized === 'm²') return 'm2';
-  if (normalized === 'ml') return 'ml';
-  if (normalized === 'ud' || normalized === 'unidad' || normalized === 'unidades') return 'ud';
-  if (normalized === 'kg' || normalized === 'kilo' || normalized === 'kilos') return 'kg';
-  if (normalized === 'm3' || normalized === 'm³') return 'm3';
-  return 'hora';
-};
-
-const isHourUnit = (unit: string | undefined): boolean => normalizeSubcontractUnit(unit) === 'hora';
-
-const unitLabel = (unit: string): string => {
-  const normalized = normalizeSubcontractUnit(unit);
-  const found = SUBCONTRACT_UNIT_OPTIONS.find((option) => option.value === normalized);
-  return found?.label || normalized;
-};
-
-const createSubcontractAssignedWorker = (): SubcontractAssignedWorker => ({
-  id: crypto.randomUUID(),
-  name: '',
-  hours: 0,
-});
-
-const createSubcontractRow = (): SubcontractRow => ({
-  id: crypto.randomUUID(),
-  partida: '',
-  activity: '',
-  unit: 'hora',
-  cantPerWorker: 0,
-  hours: 0,
-  workersAssigned: [],
-});
-
-const createSubcontractGroup = (): SubcontractGroup => ({
-  id: crypto.randomUUID(),
-  companyName: '',
-  numWorkersManual: 0,
-  rows: [createSubcontractRow()],
-});
-
-const workerKey = (worker: SubcontractAssignedWorker): string => {
-  const normalizedName = worker.name.trim().toLowerCase();
-  return normalizedName || worker.id;
-};
-
-const uniqueWorkersWithHoursInGroup = (group: SubcontractGroup): number => {
-  const unique = new Set<string>();
-  group.rows.forEach((row) => {
-    row.workersAssigned.forEach((worker) => {
-      if (nonNegative(worker.hours) <= 0) return;
-      unique.add(workerKey(worker));
-    });
-  });
-  return unique.size;
-};
-
-export const computeRowTotals = (
-  row: SubcontractRow,
-  groupContext: SubcontractGroupContext,
-  options?: { group?: SubcontractGroup; priceUnitResolver?: SubcontractPriceResolver },
-): SubcontractRowTotals => {
-  const assignedWithHours = row.workersAssigned.filter((worker) => nonNegative(worker.hours) > 0);
-  const hasAssignedWorkers = assignedWithHours.length > 0;
-
-  const horasFromWorkers = assignedWithHours.reduce((sum, worker) => sum + nonNegative(worker.hours), 0);
-  const horasFallback = nonNegativeInt(groupContext.numWorkersEffective) * nonNegative(row.hours);
-  const horasHombre = hasAssignedWorkers ? horasFromWorkers : horasFallback;
-
-  const numTrabEfectivo = hasAssignedWorkers
-    ? assignedWithHours.length
-    : nonNegativeInt(groupContext.numWorkersEffective);
-
-  const normalizedUnit = normalizeSubcontractUnit(row.unit);
-  const produccion = isHourUnit(normalizedUnit)
-    ? horasHombre
-    : nonNegative(row.cantPerWorker) * numTrabEfectivo;
-
-  const unitPriceFromRow = typeof row.unitPrice === 'number' ? nonNegative(row.unitPrice) : null;
-  const unitPriceFromDb =
-    unitPriceFromRow === null && options?.group && options.priceUnitResolver
-      ? options.priceUnitResolver(row, options.group)
-      : null;
-  const unitPrice = unitPriceFromRow ?? (typeof unitPriceFromDb === 'number' ? nonNegative(unitPriceFromDb) : null);
-  const importe = unitPrice === null ? 0 : produccion * unitPrice;
-
-  return {
-    horasHombre,
-    produccion,
-    importe,
-    unit: normalizedUnit,
-    numTrabEfectivo,
-    hasAssignedWorkers,
-  };
-};
-
-export const computeGroupTotals = (
-  group: SubcontractGroup,
-  options?: { priceUnitResolver?: SubcontractPriceResolver },
-): SubcontractGroupTotals => {
-  const uniqueWorkersWithHours = uniqueWorkersWithHoursInGroup(group);
-  const numWorkersEffective =
-    uniqueWorkersWithHours > 0 ? uniqueWorkersWithHours : nonNegativeInt(group.numWorkersManual);
-
-  const rowTotalsById: Record<string, SubcontractRowTotals> = {};
-  const totalsByUnit: Record<string, number> = {};
-  let totalHorasHombre = 0;
-  let totalImporte = 0;
-
-  group.rows.forEach((row) => {
-    const rowTotals = computeRowTotals(row, { numWorkersEffective }, { group, priceUnitResolver: options?.priceUnitResolver });
-    rowTotalsById[row.id] = rowTotals;
-
-    totalHorasHombre += rowTotals.horasHombre;
-    totalImporte += rowTotals.importe;
-    totalsByUnit[rowTotals.unit] = (totalsByUnit[rowTotals.unit] || 0) + rowTotals.produccion;
-  });
-
-  const nonZeroUnits = Object.entries(totalsByUnit).filter(([, value]) => value > 0);
-  const hasMixedUnits = nonZeroUnits.length > 1;
-
-  let displayTotal = 0;
-  let displayUnitLabel = 'h';
-
-  if (nonZeroUnits.length === 1) {
-    displayTotal = nonZeroUnits[0][1];
-    displayUnitLabel = unitLabel(nonZeroUnits[0][0]);
-  } else if (nonZeroUnits.length > 1) {
-    displayTotal = totalHorasHombre;
-    displayUnitLabel = 'h';
-  } else {
-    displayTotal = totalHorasHombre;
-    displayUnitLabel = 'h';
-  }
-
-  return {
-    rowTotalsById,
-    totalHorasHombre,
-    totalsByUnit,
-    totalImporte,
-    numWorkersEffective,
-    uniqueWorkersWithHours,
-    hasMixedUnits,
-    displayTotal,
-    displayUnitLabel,
-  };
-};
-
-const createForemanResource = (): ForemanResource => ({
-  id: crypto.randomUUID(),
-  name: '',
-  role: 'encargado',
-  hours: 0,
-});
-
-const parseNumeric = (value: string): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const editableNumericValue = (value: number): string | number => {
-  if (!Number.isFinite(value) || value === 0) return '';
-  return value;
-};
-
-const normalizeMaterialUnitFromScan = (rawUnit: string | null | undefined): string => {
-  const normalized = (rawUnit || '').trim().toLowerCase();
-  if (!normalized) return '';
-  if (normalized === 'm2' || normalized === 'm²') return 'm2';
-  if (normalized === 'm3' || normalized === 'm³') return 'm3';
-  if (normalized === 'ud' || normalized === 'uds' || normalized === 'un' || normalized === 'unidad') return 'ud';
-  if (normalized === 'lt' || normalized === 'l') return 'l';
-  if (normalized === 'ml') return 'ml';
-  if (normalized === 'kg') return 'kg';
-  return normalized;
-};
-
-const isMaterialRowBlank = (row: MaterialRow): boolean => {
-  return (
-    !row.name.trim() &&
-    nonNegative(row.quantity) === 0 &&
-    !row.unit.trim() &&
-    nonNegative(row.unitPrice) === 0 &&
-    nonNegative(row.total) === 0
-  );
-};
-
-const createParsedAlbaranReviewItem = (): ParsedAlbaranItem => ({
-  material: '',
-  quantity: null,
-  unit: null,
-  unitPrice: null,
-  costDoc: null,
-  costCalc: null,
-  difference: null,
-  rowText: '',
-  missingCritical: true,
-});
-
-const normalizeDeliveryNoteKeyPart = (value: string | null | undefined): string => {
-  return (value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
-};
-
-const buildDeliveryNoteKey = (supplier: string | null | undefined, invoiceNumber: string | null | undefined): string | null => {
-  const normalizedSupplier = normalizeDeliveryNoteKeyPart(supplier);
-  const normalizedInvoice = normalizeDeliveryNoteKeyPart(invoiceNumber);
-  if (!normalizedSupplier || !normalizedInvoice) return null;
-  return `${normalizedSupplier}::${normalizedInvoice}`;
-};
-
-const hasMaterialGroupSignificantData = (group: MaterialGroup): boolean => {
-  if (group.isScanned) return true;
-  if (group.supplier.trim() || group.invoiceNumber.trim()) return true;
-  return group.rows.some((row) => !isMaterialRowBlank(row));
-};
-
-const mapSubcontractUnitToReportUnit = (unit: SubcontractUnit): 'hora' | 'm3' | 'm2' | 'ml' | 'unidad' => {
-  if (unit === 'hora') return 'hora';
-  if (unit === 'm3') return 'm3';
-  if (unit === 'm2') return 'm2';
-  if (unit === 'ml') return 'ml';
-  return 'unidad';
-};
-
-const mapForemanRoleForReport = (role: string): 'encargado' | 'capataz' | 'recurso_preventivo' => {
-  const normalized = role.trim().toLowerCase();
-  if (normalized === 'capataz') return 'capataz';
-  if (normalized === 'preventivo' || normalized === 'recurso_preventivo') return 'recurso_preventivo';
-  return 'encargado';
-};
-
-const normalizeSubcontractedMachineryGroups = (
-  groups: SubcontractedMachineryGroup[] | undefined,
-): SubcontractedMachineryGroup[] => {
-  if (!groups?.length) {
-    return [createSubcontractedMachineryGroup()];
-  }
-  return groups.map((group) => {
-    const normalizedRows =
-      group.rows?.length > 0
-        ? group.rows.map((row) => {
-            const hours = Number.isFinite(row.hours) ? row.hours : 0;
-            return {
-              id: row.id || crypto.randomUUID(),
-              machineType: row.machineType ?? '',
-              activity: row.activity ?? '',
-              hours,
-              total: Number.isFinite(row.total) ? row.total : hours,
-            };
-          })
-        : [createSubcontractedMachineryRow()];
-    return {
-      id: group.id || crypto.randomUUID(),
-      companyName: group.companyName ?? '',
-      isOwnCompany: Boolean(group.isOwnCompany),
-      documentImage: group.documentImage,
-      rows: normalizedRows,
-    };
-  });
-};
-
-const normalizeMaterialGroups = (groups: MaterialGroup[] | undefined): MaterialGroup[] => {
-  if (!groups?.length) {
-    return [createMaterialGroup()];
-  }
-  return groups.map((group) => {
-    const normalizedRows =
-      group.rows?.length > 0
-        ? group.rows.map((row) => {
-            const quantity = Number.isFinite(row.quantity) ? row.quantity : 0;
-            const unitPrice = Number.isFinite(row.unitPrice) ? row.unitPrice : 0;
-            const total = Number.isFinite(row.total) ? row.total : quantity * unitPrice;
-            const costDocValue =
-              typeof row.costDocValue === 'number' && Number.isFinite(row.costDocValue) ? row.costDocValue : null;
-            const costWarningDelta =
-              typeof row.costWarningDelta === 'number' && Number.isFinite(row.costWarningDelta)
-                ? row.costWarningDelta
-                : null;
-            return {
-              id: row.id || crypto.randomUUID(),
-              name: row.name ?? '',
-              quantity,
-              unit: row.unit ?? '',
-              unitPrice,
-              total,
-              costDocValue,
-              costWarningDelta,
-            };
-          })
-        : [createMaterialRow()];
-    return {
-      id: group.id || crypto.randomUUID(),
-      supplier: group.supplier ?? '',
-      invoiceNumber: group.invoiceNumber ?? '',
-      isScanned: Boolean(group.isScanned),
-      rows: normalizedRows,
-    };
-  });
-};
-
-const migrateLegacySubcontractedMachineryRows = (rows: EditableRow[] | undefined): SubcontractedMachineryGroup[] => {
-  if (!rows?.length) {
-    return [createSubcontractedMachineryGroup()];
-  }
-  return [
-    {
-      id: crypto.randomUUID(),
-      companyName: '',
-      isOwnCompany: false,
-      rows: rows.map((row) => ({
-        id: row.id || crypto.randomUUID(),
-        machineType: row.name ?? '',
-        activity: row.detail ?? '',
-        hours: Number.isFinite(row.value) ? row.value : 0,
-        total: Number.isFinite(row.value) ? row.value : 0,
-      })),
-    },
-  ];
-};
-
-const migrateLegacyMaterialRows = (rows: EditableRow[] | undefined): MaterialGroup[] => {
-  if (!rows?.length) {
-    return [createMaterialGroup()];
-  }
-  return [
-    {
-      id: crypto.randomUUID(),
-      supplier: '',
-      invoiceNumber: '',
-      isScanned: false,
-      rows: rows.map((row) => {
-        const quantity = Number.isFinite(row.value) ? row.value : 0;
-        return {
-          id: row.id || crypto.randomUUID(),
-          name: row.name || row.detail || '',
-          quantity,
-          unit: row.unit ?? '',
-          unitPrice: 0,
-          total: 0,
-        };
-      }),
-    },
-  ];
-};
-
-const normalizeSubcontractGroups = (groups: SubcontractGroup[] | undefined): SubcontractGroup[] => {
-  if (!groups?.length) {
-    return [createSubcontractGroup()];
-  }
-
-  return groups.map((group) => {
-    const normalizedRows =
-      group.rows?.length > 0
-        ? group.rows.map((row) => ({
-            id: row.id || crypto.randomUUID(),
-            partida: row.partida ?? '',
-            partidaId: row.partidaId ?? null,
-            activity: row.activity ?? '',
-            unit: normalizeSubcontractUnit(row.unit),
-            cantPerWorker: nonNegative(row.cantPerWorker),
-            hours: nonNegative(row.hours),
-            unitPrice: typeof row.unitPrice === 'number' ? nonNegative(row.unitPrice) : null,
-            workersAssigned:
-              row.workersAssigned?.map((worker) => ({
-                id: worker.id || crypto.randomUUID(),
-                name: worker.name ?? '',
-                hours: nonNegative(worker.hours),
-                quantity:
-                  typeof worker.quantity === 'number' ? nonNegative(worker.quantity) : undefined,
-              })) ?? [],
-          }))
-        : [createSubcontractRow()];
-
-    return {
-      id: group.id || crypto.randomUUID(),
-      companyName: group.companyName ?? '',
-      numWorkersManual: nonNegativeInt(group.numWorkersManual),
-      documentImage: group.documentImage,
-      rows: normalizedRows,
-    };
-  });
-};
-
-const migrateLegacySubcontractRows = (rows: EditableRow[] | undefined): SubcontractGroup[] => {
-  if (!rows?.length) {
-    return [createSubcontractGroup()];
-  }
-
-  return [
-    {
-      id: crypto.randomUUID(),
-      companyName: '',
-      numWorkersManual: 1,
-      rows: rows.map((row) => ({
-        id: row.id || crypto.randomUUID(),
-        partida: row.name ?? '',
-        activity: row.detail ?? '',
-        unit: normalizeSubcontractUnit(row.unit),
-        cantPerWorker: 0,
-        hours: nonNegative(row.value),
-        workersAssigned: [],
-      })),
-    },
-  ];
-};
-
-const mapSubcontractGroupsToLegacyRows = (groups: SubcontractGroup[]): EditableRow[] => {
-  const mapped = groups.flatMap((group) =>
-    group.rows.map((row) => ({
-      id: row.id || crypto.randomUUID(),
-      name: row.partida || '',
-      detail: row.activity || '',
-      value: nonNegative(row.hours),
-      unit: row.unit,
-    })),
-  );
-
-  return mapped.length > 0 ? mapped : [createRow()];
-};
-
-const mapRentalMachinesToLegacyRows = (machines: RentalMachine[]): EditableRow[] => {
-  if (machines.length === 0) return [createRow()];
-
-  return machines.map((machine) => ({
-    id: machine.id,
-    name: machine.name,
-    detail: machine.provider || machine.description || '',
-    value: typeof machine.price === 'number' ? machine.price : 0,
-    unit: machine.priceUnit,
-  }));
-};
-
-type RowsSectionOptions = {
-  sectionName: string;
-  firstPlaceholder: string;
-  secondPlaceholder: string;
-  secondOptions?: Array<{ value: string; label: string }>;
-  valueLabel: string;
-  useUnit?: boolean;
-  unitOptions?: Array<{ value: string; label: string }>;
-};
-
-type SaveStatusOption = 'completed' | 'missing_data' | 'missing_delivery_notes';
 
 export const GenerateWorkReportPanel = ({
   onBack,
@@ -882,14 +208,39 @@ export const GenerateWorkReportPanel = ({
   const [scanReviewReason, setScanReviewReason] = useState<string | null>(null);
   const [scanReviewSupplier, setScanReviewSupplier] = useState('');
   const [scanReviewInvoiceNumber, setScanReviewInvoiceNumber] = useState('');
+  const [scanReviewDocumentDate, setScanReviewDocumentDate] = useState('');
+  const [scanReviewDocType, setScanReviewDocType] = useState<ParsedAlbaranResult['docType']>('UNKNOWN');
+  const [scanReviewDocSubtype, setScanReviewDocSubtype] = useState<ParsedAlbaranResult['docSubtype']>(null);
+  const [scanReviewServiceDescription, setScanReviewServiceDescription] = useState('');
+  const [scanReviewConfidence, setScanReviewConfidence] = useState<ParsedAlbaranResult['confidence']>('medium');
+  const [scanReviewWarnings, setScanReviewWarnings] = useState<string[]>([]);
+  const [scanReviewFieldConfidence, setScanReviewFieldConfidence] = useState<ParsedFieldConfidence | null>(null);
+  const [scanReviewFieldWarnings, setScanReviewFieldWarnings] = useState<ParsedFieldWarnings | null>(null);
+  const [scanReviewFieldMeta, setScanReviewFieldMeta] = useState<ParsedAlbaranResult['fieldMeta']>(null);
+  const [scanReviewTemplateData, setScanReviewTemplateData] = useState<ParsedAlbaranResult['templateData']>(null);
+  const [scanReviewProfileUsed, setScanReviewProfileUsed] = useState<ParsedAlbaranResult['profileUsed']>('ORIGINAL');
+  const [scanReviewScore, setScanReviewScore] = useState(0);
   const [scanReviewItems, setScanReviewItems] = useState<ParsedAlbaranItem[]>([]);
+  const [scanReviewServiceLines, setScanReviewServiceLines] = useState<ServiceLine[]>([]);
   const [scanReviewImageUris, setScanReviewImageUris] = useState<string[]>([]);
+  const [scanReviewRawText, setScanReviewRawText] = useState('');
   const [scanReviewTargetGroupId, setScanReviewTargetGroupId] = useState<string | null>(null);
+  const [scanReviewOllamaLoading, setScanReviewOllamaLoading] = useState(false);
+  const [scanReviewOllamaError, setScanReviewOllamaError] = useState<string | null>(null);
+  const [scanReviewOllamaProposal, setScanReviewOllamaProposal] = useState<ParsedAlbaranResult | null>(null);
   const [scanInFlightTargetGroupId, setScanInFlightTargetGroupId] = useState<string | null>(null);
   const [rescanConfirmDialogOpen, setRescanConfirmDialogOpen] = useState(false);
   const [pendingRescanTargetGroupId, setPendingRescanTargetGroupId] = useState<string | null>(null);
+  const [serviceScanDialogOpen, setServiceScanDialogOpen] = useState(false);
+  const [pendingServiceScanResolution, setPendingServiceScanResolution] = useState<ServiceScanResolution | null>(null);
+  const [noPriceScanDialogOpen, setNoPriceScanDialogOpen] = useState(false);
+  const [pendingNoPriceScanResolution, setPendingNoPriceScanResolution] = useState<NoPriceScanResolution | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [pendingDuplicateResolution, setPendingDuplicateResolution] = useState<DuplicateScanResolution | null>(null);
+  const [albaranViewerOpen, setAlbaranViewerOpen] = useState(false);
+  const [albaranViewerImageUris, setAlbaranViewerImageUris] = useState<string[]>([]);
+  const [albaranViewerInitialIndex, setAlbaranViewerInitialIndex] = useState(0);
+  const [albaranViewerTitle, setAlbaranViewerTitle] = useState('Adjuntos del albaran');
 
   const [costDifferenceDialogOpen, setCostDifferenceDialogOpen] = useState(false);
   const [pendingCostDifferences, setPendingCostDifferences] = useState<MaterialCostDifference[]>([]);
@@ -909,6 +260,7 @@ export const GenerateWorkReportPanel = ({
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
+  const ollamaFeatureEnabled = useMemo(() => isOllamaScanEnabled(), []);
   const isAndroidPlatform = useMemo(() => Capacitor.getPlatform() === 'android', []);
   const androidTypographyClass = isAndroidPlatform
     ? [
@@ -1213,15 +565,6 @@ export const GenerateWorkReportPanel = ({
 
   const panelTitle = readOnly ? 'Parte (solo lectura)' : initialDraft ? 'Editar Parte' : 'Nuevo Parte';
 
-  const updateRows = (
-    rows: EditableRow[],
-    setRows: Dispatch<SetStateAction<EditableRow[]>>,
-    rowId: string,
-    patch: Partial<EditableRow>,
-  ) => {
-    setRows(rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
-  };
-
   const handleGalleryUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     files.forEach((file) => {
@@ -1364,6 +707,21 @@ export const GenerateWorkReportPanel = ({
     }, 90);
   }, []);
 
+  const openAlbaranViewer = useCallback((imageUris: string[], title = 'Adjuntos del albaran', initialIndex = 0) => {
+    if (!Array.isArray(imageUris) || imageUris.length === 0) return;
+    const sanitized = imageUris.filter((uri) => typeof uri === 'string' && uri.trim().length > 0);
+    if (sanitized.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(initialIndex, sanitized.length - 1));
+    setAlbaranViewerImageUris(sanitized);
+    setAlbaranViewerTitle(title);
+    setAlbaranViewerInitialIndex(safeIndex);
+    setAlbaranViewerOpen(true);
+  }, []);
+
+  const closeAlbaranViewer = useCallback(() => {
+    setAlbaranViewerOpen(false);
+  }, []);
+
   const buildMaterialRowFromParsedItem = useCallback((item: ParsedAlbaranItem): MaterialRow => {
     const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : 0;
     const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? nonNegative(item.unitPrice) : 0;
@@ -1373,7 +731,7 @@ export const GenerateWorkReportPanel = ({
 
     return {
       ...createMaterialRow(),
-      name: (item.material || '').trim(),
+      name: sanitizeText(item.material),
       quantity,
       unit: normalizeMaterialUnitFromScan(item.unit),
       unitPrice,
@@ -1382,6 +740,268 @@ export const GenerateWorkReportPanel = ({
       costWarningDelta: difference !== null && difference > COST_DIFF_THRESHOLD ? difference : null,
     };
   }, []);
+
+  const buildServiceLinesFromParsedResult = useCallback((parsed: ParsedAlbaranResult): ServiceLine[] => {
+    const grouped = new Map<string, ServiceLine>();
+
+    parsed.items.forEach((item, index) => {
+      const description = sanitizeText(item.material);
+      const quantity =
+        typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : null;
+      const hintedText = sanitizeText(`${item.unit ?? ''} ${item.rowText ?? ''} ${description}`).toLowerCase();
+      let unit = normalizeServiceUnitFromScan(item.unit);
+      if (!unit) {
+        if (hintedText.includes('hora') || /\bh\b/.test(hintedText)) unit = 'h';
+        else if (hintedText.includes('viaj')) unit = 'viaje';
+        else if (hintedText.includes('tonel') || /\btn\b/.test(hintedText) || /\bt\b/.test(hintedText)) unit = 't';
+        else if (hintedText.includes('m3') || hintedText.includes('m³')) unit = 'm3';
+      }
+
+      if (!description && quantity === null && !unit) return;
+
+      const key = description ? description.toLowerCase() : `__empty_${index}`;
+      const current = grouped.get(key) ?? {
+        ...createServiceLine(),
+        description,
+      };
+
+      if (quantity !== null && unit) {
+        if (unit === 'h') current.hours = nonNegative(current.hours ?? 0) + quantity;
+        if (unit === 'viaje') current.trips = nonNegative(current.trips ?? 0) + quantity;
+        if (unit === 't') current.tons = nonNegative(current.tons ?? 0) + quantity;
+        if (unit === 'm3') current.m3 = nonNegative(current.m3 ?? 0) + quantity;
+      }
+
+      grouped.set(key, current);
+    });
+
+    const lines = Array.from(grouped.values()).filter((line) => {
+      const hasDescription = sanitizeText(line.description).length > 0;
+      const hasValues =
+        nonNegative(line.hours ?? 0) > 0 ||
+        nonNegative(line.trips ?? 0) > 0 ||
+        nonNegative(line.tons ?? 0) > 0 ||
+        nonNegative(line.m3 ?? 0) > 0;
+      return hasDescription || hasValues;
+    });
+
+    if (lines.length > 0) return lines;
+
+    const fallbackDescription = sanitizeText(parsed.serviceDescription);
+    if (!fallbackDescription) return [];
+
+    return [
+      {
+        ...createServiceLine(),
+        description: fallbackDescription,
+      },
+    ];
+  }, []);
+
+  const buildParsedItemsFromServiceLines = useCallback((lines: ServiceLine[]): ParsedAlbaranItem[] => {
+    const items: ParsedAlbaranItem[] = [];
+
+    lines.forEach((line) => {
+      const description = sanitizeText(line.description);
+      const quantities: Array<{ unit: 'h' | 'viaje' | 't' | 'm3'; value: number | null | undefined }> = [
+        { unit: 'h', value: line.hours },
+        { unit: 'viaje', value: line.trips },
+        { unit: 't', value: line.tons },
+        { unit: 'm3', value: line.m3 },
+      ];
+
+      let hasMetric = false;
+      quantities.forEach(({ unit, value }) => {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return;
+        hasMetric = true;
+        items.push({
+          ...createParsedAlbaranReviewItem(),
+          material: description,
+          quantity: nonNegative(value),
+          unit,
+          unitPrice: null,
+          costDoc: null,
+          costCalc: null,
+          difference: null,
+          rowText: 'SERVICE_LINE',
+          missingCritical: false,
+        });
+      });
+
+      if (!hasMetric && description) {
+        items.push({
+          ...createParsedAlbaranReviewItem(),
+          material: description,
+          quantity: null,
+          unit: null,
+          unitPrice: null,
+          costDoc: null,
+          costCalc: null,
+          difference: null,
+          rowText: 'SERVICE_LINE',
+          missingCritical: false,
+        });
+      }
+    });
+
+    return items;
+  }, []);
+
+  const buildOthersRowFromParsedResult = useCallback((parsed: ParsedAlbaranResult): MaterialRow => {
+    const description = extractNoPriceDescription(parsed);
+    const materialName = description ? `OTROS - ${description}` : 'OTROS';
+
+    return {
+      ...createMaterialRow(),
+      name: materialName,
+      quantity: 1,
+      unit: 'ud',
+      unitPrice: 0,
+      total: 0,
+      costDocValue: null,
+      costWarningDelta: null,
+    };
+  }, []);
+
+  const applyParsedScanMetadataOnly = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
+      if (!targetGroup) {
+        toast({
+          title: 'Albaran no encontrado',
+          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const supplier = sanitizeText(parsed.supplier);
+      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
+      const docType = parsed.docType === 'MATERIALS_TABLE' || parsed.docType === 'SERVICE_MACHINERY' ? parsed.docType : 'UNKNOWN';
+
+      setMaterialGroups((current) =>
+        current.map((group) =>
+          group.id === targetGroupId
+            ? {
+                ...group,
+                supplier: supplier || group.supplier,
+                invoiceNumber: invoiceNumber || group.invoiceNumber,
+                docType,
+                isScanned: true,
+                imageUris: resolveScanImageUris(group, parsed),
+              }
+            : group,
+        ),
+      );
+
+      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
+      setActiveMaterialGroupId(targetGroupId);
+      setPendingCostDifferences([]);
+      setCostDifferenceDialogOpen(false);
+
+      toast({
+        title: 'Documento aplicado sin líneas automáticas',
+        description: 'Se guardaron cabecera y adjuntos. Añade filas manuales si las necesitas.',
+      });
+    },
+    [materialGroups],
+  );
+
+  const applyParsedServiceToGroup = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
+      if (!targetGroup) {
+        toast({
+          title: 'Albaran no encontrado',
+          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const supplier = sanitizeText(parsed.supplier);
+      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
+      const serviceLines = buildServiceLinesFromParsedResult(parsed);
+
+      setMaterialGroups((current) =>
+        current.map((group) =>
+          group.id === targetGroupId
+            ? {
+                ...group,
+                supplier: supplier || group.supplier,
+                invoiceNumber: invoiceNumber || group.invoiceNumber,
+                docType: 'SERVICE_MACHINERY',
+                isScanned: true,
+                imageUris: resolveScanImageUris(group, parsed),
+                rows: [createMaterialRow()],
+                serviceLines,
+              }
+            : group,
+        ),
+      );
+
+      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
+      setActiveMaterialGroupId(targetGroupId);
+      setPendingCostDifferences([]);
+      setCostDifferenceDialogOpen(false);
+
+      const lineLabel = serviceLines.length === 1 ? 'fila' : 'filas';
+      toast({
+        title: 'Albaran de servicio procesado',
+        description:
+          serviceLines.length > 0
+            ? `Se han cargado ${serviceLines.length} ${lineLabel} en el detalle de servicio.`
+            : 'Se guardaron cabecera y adjuntos. Añade filas de servicio manualmente si las necesitas.',
+      });
+    },
+    [buildServiceLinesFromParsedResult, materialGroups],
+  );
+
+  const applyNoPriceScanToMaterials = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
+      if (!targetGroup) {
+        toast({
+          title: 'Albaran no encontrado',
+          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const supplier = sanitizeText(parsed.supplier);
+      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
+      const otherRow = buildOthersRowFromParsedResult(parsed);
+
+      setMaterialGroups((current) =>
+        current.map((group) =>
+          group.id === targetGroupId
+            ? {
+                ...group,
+                supplier: supplier || group.supplier,
+                invoiceNumber: invoiceNumber || group.invoiceNumber,
+                docType: 'MATERIALS_TABLE',
+                isScanned: true,
+                imageUris: resolveScanImageUris(group, parsed),
+                rows: [otherRow],
+                serviceLines: [],
+              }
+            : group,
+        ),
+      );
+
+      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
+      setActiveMaterialGroupId(targetGroupId);
+      setPendingCostDifferences([]);
+      setCostDifferenceDialogOpen(false);
+
+      toast({
+        title: 'Albaran sin precios/importes',
+        description: 'Se creó una línea OTROS para mantener el adjunto sin imputación económica automática.',
+      });
+    },
+    [buildOthersRowFromParsedResult, materialGroups],
+  );
 
   const applyParsedAlbaranToMaterials = useCallback(
     (targetGroupId: string, parsed: ParsedAlbaranResult) => {
@@ -1407,8 +1027,8 @@ export const GenerateWorkReportPanel = ({
         return;
       }
 
-      const supplier = (parsed.supplier || '').trim();
-      const invoiceNumber = (parsed.invoiceNumber || '').trim();
+      const supplier = sanitizeText(parsed.supplier);
+      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
 
       setMaterialGroups((current) =>
         current.map((group) =>
@@ -1417,8 +1037,11 @@ export const GenerateWorkReportPanel = ({
                 ...group,
                 supplier: supplier || group.supplier,
                 invoiceNumber: invoiceNumber || group.invoiceNumber,
+                docType: parsed.docType === 'MATERIALS_TABLE' ? 'MATERIALS_TABLE' : group.docType ?? 'MATERIALS_TABLE',
                 isScanned: true,
+                imageUris: resolveScanImageUris(group, parsed),
                 rows: parsedRows,
+                serviceLines: [],
               }
             : group,
         ),
@@ -1454,6 +1077,63 @@ export const GenerateWorkReportPanel = ({
     [buildMaterialRowFromParsedItem, materialGroups],
   );
 
+  const openScanReview = useCallback((parsed: ParsedAlbaranResult, targetGroupId: string) => {
+    setScanReviewReason(parsed.reviewReason || 'No se detecto la tabla con suficiente precision.');
+    setScanReviewSupplier(sanitizeText(parsed.supplier));
+    setScanReviewInvoiceNumber(sanitizeText(parsed.invoiceNumber));
+    setScanReviewDocumentDate(sanitizeText(parsed.documentDate));
+    setScanReviewDocType(parsed.docType || 'UNKNOWN');
+    setScanReviewDocSubtype(parsed.docSubtype ?? null);
+    setScanReviewServiceDescription(sanitizeText(parsed.serviceDescription));
+    setScanReviewConfidence(parsed.confidence || 'medium');
+    setScanReviewWarnings(parsed.warnings || []);
+    setScanReviewFieldConfidence(parsed.fieldConfidence ?? null);
+    setScanReviewFieldWarnings(parsed.fieldWarnings ?? null);
+    setScanReviewFieldMeta(parsed.fieldMeta ?? null);
+    setScanReviewTemplateData(parsed.templateData ?? null);
+    setScanReviewProfileUsed(parsed.profileUsed || 'ORIGINAL');
+    setScanReviewScore(typeof parsed.score === 'number' && Number.isFinite(parsed.score) ? parsed.score : 0);
+    setScanReviewItems(
+      parsed.items.map((item) => ({
+        ...item,
+        material: sanitizeText(item.material),
+        unit: item.unit ? sanitizeText(item.unit) : item.unit,
+        rowText: sanitizeText(item.rowText),
+      })),
+    );
+    setScanReviewServiceLines(buildServiceLinesFromParsedResult(parsed));
+    setScanReviewImageUris(parsed.imageUris || []);
+    setScanReviewRawText(sanitizeText(parsed.rawText));
+    setScanReviewTargetGroupId(targetGroupId);
+    setScanReviewOllamaLoading(false);
+    setScanReviewOllamaError(null);
+    setScanReviewOllamaProposal(null);
+    setScanReviewDialogOpen(true);
+  }, [buildServiceLinesFromParsedResult]);
+
+  const applyParsedScanResultToGroup = useCallback(
+    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
+      if (parsed.docType === 'SERVICE_MACHINERY') {
+        if (parsed.requiresReview || parsed.confidence === 'low') {
+          openScanReview(parsed, targetGroupId);
+          return;
+        }
+        applyParsedServiceToGroup(targetGroupId, parsed);
+        return;
+      }
+      if (hasNoPriceColumnsWarning(parsed)) {
+        if (parsed.items.length > 0) {
+          applyParsedAlbaranToMaterials(targetGroupId, parsed);
+          return;
+        }
+        applyParsedScanMetadataOnly(targetGroupId, parsed);
+        return;
+      }
+      applyParsedAlbaranToMaterials(targetGroupId, parsed);
+    },
+    [applyParsedAlbaranToMaterials, applyParsedScanMetadataOnly, applyParsedServiceToGroup, openScanReview],
+  );
+
   const resolveDuplicateForScan = useCallback(
     (targetGroupId: string, parsed: ParsedAlbaranResult) => {
       const parsedKey = buildDeliveryNoteKey(parsed.supplier, parsed.invoiceNumber);
@@ -1475,20 +1155,10 @@ export const GenerateWorkReportPanel = ({
         }
       }
 
-      applyParsedAlbaranToMaterials(targetGroupId, parsed);
+      applyParsedScanResultToGroup(targetGroupId, parsed);
     },
-    [applyParsedAlbaranToMaterials, materialGroups],
+    [applyParsedScanResultToGroup, materialGroups],
   );
-
-  const openScanReview = useCallback((parsed: ParsedAlbaranResult, targetGroupId: string) => {
-    setScanReviewReason(parsed.reviewReason || 'No se detecto la tabla con suficiente precision.');
-    setScanReviewSupplier(parsed.supplier || '');
-    setScanReviewInvoiceNumber(parsed.invoiceNumber || '');
-    setScanReviewItems(parsed.items.length > 0 ? parsed.items.map((item) => ({ ...item })) : [createParsedAlbaranReviewItem()]);
-    setScanReviewImageUris(parsed.imageUris || []);
-    setScanReviewTargetGroupId(targetGroupId);
-    setScanReviewDialogOpen(true);
-  }, []);
 
   const executeScanForMaterialGroup = useCallback(
     async (targetGroupId: string) => {
@@ -1501,8 +1171,20 @@ export const GenerateWorkReportPanel = ({
         const parsed = await startAlbaranScan();
         if (!parsed) return;
 
-        if (parsed.requiresReview) {
+        if (parsed.docType === 'SERVICE_MACHINERY') {
+          setPendingServiceScanResolution({ parsed, targetGroupId });
+          setServiceScanDialogOpen(true);
+          return;
+        }
+
+        if (parsed.requiresReview || parsed.confidence === 'low') {
           openScanReview(parsed, targetGroupId);
+          return;
+        }
+
+        if (hasNoPriceColumnsWarning(parsed)) {
+          setPendingNoPriceScanResolution({ parsed, targetGroupId });
+          setNoPriceScanDialogOpen(true);
           return;
         }
 
@@ -1557,13 +1239,44 @@ export const GenerateWorkReportPanel = ({
     void executeScanForMaterialGroup(targetGroupId);
   }, [executeScanForMaterialGroup, pendingRescanTargetGroupId]);
 
+  const cancelServiceScanResolution = useCallback(() => {
+    setServiceScanDialogOpen(false);
+    setPendingServiceScanResolution(null);
+  }, []);
+
+  const confirmServiceScanResolution = useCallback(() => {
+    const pending = pendingServiceScanResolution;
+    if (!pending) return;
+    setServiceScanDialogOpen(false);
+    setPendingServiceScanResolution(null);
+    resolveDuplicateForScan(pending.targetGroupId, pending.parsed);
+  }, [pendingServiceScanResolution, resolveDuplicateForScan]);
+
+  const cancelNoPriceScanResolution = useCallback(() => {
+    setNoPriceScanDialogOpen(false);
+    setPendingNoPriceScanResolution(null);
+  }, []);
+
+  const confirmNoPriceScanResolution = useCallback(() => {
+    const pending = pendingNoPriceScanResolution;
+    if (!pending) return;
+    setNoPriceScanDialogOpen(false);
+    setPendingNoPriceScanResolution(null);
+    resolveDuplicateForScan(pending.targetGroupId, pending.parsed);
+  }, [pendingNoPriceScanResolution, resolveDuplicateForScan]);
+
   const updateScanReviewItem = useCallback((index: number, patch: Partial<ParsedAlbaranItem>) => {
+    const normalizedPatch: Partial<ParsedAlbaranItem> = {
+      ...patch,
+      material: patch.material === undefined ? undefined : sanitizeText(patch.material),
+      unit: patch.unit === undefined ? undefined : patch.unit ? sanitizeText(patch.unit) : null,
+    };
     setScanReviewItems((current) =>
       current.map((item, itemIndex) =>
         itemIndex === index
           ? {
               ...item,
-              ...patch,
+              ...normalizedPatch,
             }
           : item,
       ),
@@ -1574,64 +1287,363 @@ export const GenerateWorkReportPanel = ({
     setScanReviewItems((current) => [...current, createParsedAlbaranReviewItem()]);
   }, []);
 
-  const applyScanReview = useCallback(() => {
-    const reviewedItems = scanReviewItems.map((item) => {
-      const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : null;
-      const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? item.unitPrice : null;
-      const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? item.costDoc : null;
-      const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
-      const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
-      const normalizedUnit = item.unit ? normalizeMaterialUnitFromScan(item.unit) : '';
+  const updateScanReviewServiceLine = useCallback((lineId: string, patch: Partial<ServiceLine>) => {
+    setScanReviewServiceLines((current) =>
+      current.map((line) => {
+        if (line.id !== lineId) return line;
+        return {
+          ...line,
+          ...patch,
+          description:
+            patch.description === undefined ? line.description : sanitizeText(patch.description),
+          hours:
+            patch.hours === undefined
+              ? line.hours
+              : typeof patch.hours === 'number' && Number.isFinite(patch.hours)
+                ? nonNegative(patch.hours)
+                : null,
+          trips:
+            patch.trips === undefined
+              ? line.trips
+              : typeof patch.trips === 'number' && Number.isFinite(patch.trips)
+                ? nonNegative(patch.trips)
+                : null,
+          tons:
+            patch.tons === undefined
+              ? line.tons
+              : typeof patch.tons === 'number' && Number.isFinite(patch.tons)
+                ? nonNegative(patch.tons)
+                : null,
+          m3:
+            patch.m3 === undefined
+              ? line.m3
+              : typeof patch.m3 === 'number' && Number.isFinite(patch.m3)
+                ? nonNegative(patch.m3)
+                : null,
+        };
+      }),
+    );
+  }, []);
 
-      return {
-        ...item,
-        material: item.material.trim(),
-        quantity,
-        unitPrice,
-        costDoc,
-        costCalc,
-        difference,
-        unit: normalizedUnit || null,
-        missingCritical: !item.material.trim() || quantity === null || !normalizedUnit,
-      };
+  const addScanReviewServiceLine = useCallback(() => {
+    setScanReviewServiceLines((current) => [...current, createServiceLine()]);
+  }, []);
+
+  const removeScanReviewServiceLine = useCallback((lineId: string) => {
+    setScanReviewServiceLines((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((line) => line.id !== lineId);
     });
+  }, []);
+
+  const createOtrosLineInScanReview = useCallback(() => {
+    setScanReviewItems((current) => {
+      const alreadyExists = current.some((item) => item.material.trim().toUpperCase().startsWith('OTROS'));
+      if (alreadyExists) return current;
+      const description = scanReviewServiceDescription.trim();
+      const material = description ? `OTROS - ${description}` : 'OTROS';
+      return [
+        ...current,
+        {
+          ...createParsedAlbaranReviewItem(),
+          material,
+          quantity: 1,
+          unit: 'ud',
+          rowText: material,
+          missingCritical: false,
+        },
+      ];
+    });
+  }, [scanReviewServiceDescription]);
+
+  const canImproveReviewWithOllama = useMemo(() => {
+    if (!ollamaFeatureEnabled) return false;
+    return shouldOfferOllamaImprove({
+      confidence: scanReviewConfidence,
+      docType: scanReviewDocType,
+      warnings: scanReviewWarnings,
+    });
+  }, [ollamaFeatureEnabled, scanReviewConfidence, scanReviewDocType, scanReviewWarnings]);
+
+  const mapOllamaItemToParsedItem = useCallback((item: OllamaScanItem): ParsedAlbaranItem => {
+    const quantity =
+      typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : null;
+    const unitPrice =
+      typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? nonNegative(item.unitPrice) : null;
+    const costDoc = typeof item.total === 'number' && Number.isFinite(item.total) ? nonNegative(item.total) : null;
+    const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
+    const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
+    const unit = item.unit ? normalizeMaterialUnitFromScan(item.unit) || sanitizeText(item.unit) : null;
+
+    return {
+      material: sanitizeText(item.name),
+      quantity,
+      unit,
+      unitPrice,
+      costDoc,
+      costCalc,
+      difference,
+      rowText: 'OLLAMA',
+      missingCritical: !(item.name || '').trim(),
+    };
+  }, []);
+
+  const improveScanReviewWithOllama = useCallback(async () => {
+    if (!canImproveReviewWithOllama || scanReviewOllamaLoading) return;
+
+    setScanReviewOllamaLoading(true);
+    setScanReviewOllamaError(null);
+    setScanReviewOllamaProposal(null);
+
+    try {
+      const response = await improveScanWithOllama({
+        imageUris: scanReviewImageUris,
+        offlineResult: {
+          supplier: scanReviewSupplier || null,
+          invoiceNumber: scanReviewInvoiceNumber || null,
+          documentDate: scanReviewDocumentDate || null,
+          docType: scanReviewDocType,
+          docSubtype: scanReviewDocSubtype ?? null,
+          serviceDescription: scanReviewServiceDescription || null,
+          confidence: scanReviewConfidence,
+          warnings: scanReviewWarnings,
+          profileUsed: scanReviewProfileUsed,
+          score: scanReviewScore,
+          fieldMeta: scanReviewFieldMeta ?? null,
+          templateData: scanReviewTemplateData ?? null,
+          items: scanReviewItems,
+          imageUris: scanReviewImageUris,
+          rawText: scanReviewRawText,
+        },
+      });
+
+      const proposalItems = response.items.map(mapOllamaItemToParsedItem);
+      const serviceDescription =
+        response.docType === 'SERVICE_MACHINERY' && proposalItems.length > 0
+          ? proposalItems[0].material
+          : scanReviewServiceDescription;
+
+      const proposal: ParsedAlbaranResult = {
+        supplier: response.supplier,
+        invoiceNumber: response.invoiceNumber,
+        documentDate: response.documentDate,
+        docType: response.docType,
+        docSubtype: null,
+        serviceDescription: serviceDescription || null,
+        confidence: response.confidence,
+        warnings: response.warnings,
+        score: scanReviewScore,
+        profileUsed: scanReviewProfileUsed,
+        fieldConfidence: undefined,
+        fieldWarnings: undefined,
+        fieldMeta: null,
+        templateData: null,
+        requiresReview: true,
+        reviewReason: 'Propuesta generada por IA (Ollama). Revisa y confirma antes de aplicar.',
+        headerDetected: true,
+        items: proposalItems,
+        imageUris: scanReviewImageUris,
+        rawText: scanReviewRawText,
+      };
+
+      setScanReviewOllamaProposal(proposal);
+      toast({
+        title: 'Propuesta IA disponible',
+        description: 'Revisa la propuesta de Ollama y decide si aplicarla.',
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'No se pudo mejorar el escaneo con IA en este momento.';
+      setScanReviewOllamaError(message);
+      toast({
+        title: 'No se pudo mejorar con IA',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setScanReviewOllamaLoading(false);
+    }
+  }, [
+    canImproveReviewWithOllama,
+    mapOllamaItemToParsedItem,
+    scanReviewConfidence,
+    scanReviewDocType,
+    scanReviewDocSubtype,
+    scanReviewDocumentDate,
+    scanReviewFieldMeta,
+    scanReviewImageUris,
+    scanReviewInvoiceNumber,
+    scanReviewItems,
+    scanReviewOllamaLoading,
+    scanReviewProfileUsed,
+    scanReviewRawText,
+    scanReviewScore,
+    scanReviewServiceDescription,
+    scanReviewSupplier,
+    scanReviewTemplateData,
+    scanReviewWarnings,
+  ]);
+
+  const applyOllamaProposalToReview = useCallback(() => {
+    if (!scanReviewOllamaProposal) return;
+    setScanReviewSupplier(sanitizeText(scanReviewOllamaProposal.supplier));
+    setScanReviewInvoiceNumber(sanitizeText(scanReviewOllamaProposal.invoiceNumber));
+    setScanReviewDocumentDate(sanitizeText(scanReviewOllamaProposal.documentDate));
+    setScanReviewDocType(scanReviewOllamaProposal.docType || 'UNKNOWN');
+    setScanReviewDocSubtype(scanReviewOllamaProposal.docSubtype ?? null);
+    setScanReviewServiceDescription(sanitizeText(scanReviewOllamaProposal.serviceDescription));
+    setScanReviewConfidence(scanReviewOllamaProposal.confidence || 'medium');
+    setScanReviewWarnings(scanReviewOllamaProposal.warnings || []);
+    setScanReviewItems(
+      scanReviewOllamaProposal.items.map((item) => ({
+        ...item,
+        material: sanitizeText(item.material),
+        unit: item.unit ? sanitizeText(item.unit) : item.unit,
+        rowText: sanitizeText(item.rowText),
+      })),
+    );
+    setScanReviewServiceLines(buildServiceLinesFromParsedResult(scanReviewOllamaProposal));
+    setScanReviewReason(scanReviewOllamaProposal.reviewReason || null);
+    setScanReviewFieldConfidence(null);
+    setScanReviewFieldWarnings(null);
+    setScanReviewFieldMeta(scanReviewOllamaProposal.fieldMeta ?? null);
+    setScanReviewTemplateData(scanReviewOllamaProposal.templateData ?? null);
+    setScanReviewOllamaError(null);
+    setScanReviewOllamaProposal(null);
+  }, [buildServiceLinesFromParsedResult, scanReviewOllamaProposal]);
+
+  const keepOfflineScanReview = useCallback(() => {
+    setScanReviewOllamaProposal(null);
+    setScanReviewOllamaError(null);
+  }, []);
+
+  const applyScanReview = useCallback(() => {
+    const normalizedServiceLines = scanReviewServiceLines
+      .map((line) => ({
+        ...line,
+        description: sanitizeText(line.description),
+        hours:
+          typeof line.hours === 'number' && Number.isFinite(line.hours) ? nonNegative(line.hours) : null,
+        trips:
+          typeof line.trips === 'number' && Number.isFinite(line.trips) ? nonNegative(line.trips) : null,
+        tons:
+          typeof line.tons === 'number' && Number.isFinite(line.tons) ? nonNegative(line.tons) : null,
+        m3: typeof line.m3 === 'number' && Number.isFinite(line.m3) ? nonNegative(line.m3) : null,
+      }))
+      .filter((line) => {
+        const hasDescription = line.description.length > 0;
+        const hasValues =
+          nonNegative(line.hours ?? 0) > 0 ||
+          nonNegative(line.trips ?? 0) > 0 ||
+          nonNegative(line.tons ?? 0) > 0 ||
+          nonNegative(line.m3 ?? 0) > 0;
+        return hasDescription || hasValues;
+      });
+
+    const reviewedItems =
+      scanReviewDocType === 'SERVICE_MACHINERY'
+        ? buildParsedItemsFromServiceLines(normalizedServiceLines)
+        : scanReviewItems.map((item) => {
+            const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : null;
+            const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? item.unitPrice : null;
+            const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? item.costDoc : null;
+            const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
+            const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
+            const normalizedUnit = item.unit ? normalizeMaterialUnitFromScan(item.unit) : '';
+
+            return {
+              ...item,
+              material: sanitizeText(item.material),
+              quantity,
+              unitPrice,
+              costDoc,
+              costCalc,
+              difference,
+              unit: normalizedUnit || null,
+              missingCritical: !sanitizeText(item.material) || quantity === null || !normalizedUnit,
+            };
+          });
 
     const reviewedResult: ParsedAlbaranResult = {
-      supplier: scanReviewSupplier.trim() || null,
-      invoiceNumber: scanReviewInvoiceNumber.trim() || null,
+      supplier: sanitizeText(scanReviewSupplier) || null,
+      invoiceNumber: sanitizeText(scanReviewInvoiceNumber) || null,
+      documentDate: sanitizeText(scanReviewDocumentDate) || null,
+      docType: scanReviewDocType,
+      docSubtype: scanReviewDocSubtype ?? null,
+      serviceDescription:
+        sanitizeText(scanReviewServiceDescription) ||
+        (scanReviewDocType === 'SERVICE_MACHINERY' ? normalizedServiceLines[0]?.description ?? null : null),
+      confidence: 'medium',
+      warnings: scanReviewWarnings,
+      score: scanReviewScore,
+      profileUsed: scanReviewProfileUsed,
+      fieldConfidence: scanReviewFieldConfidence ?? undefined,
+      fieldWarnings: scanReviewFieldWarnings ?? undefined,
+      fieldMeta: scanReviewFieldMeta ?? null,
+      templateData: scanReviewTemplateData ?? null,
       requiresReview: false,
       reviewReason: null,
       headerDetected: true,
       items: reviewedItems,
-      imageUris: [],
+      imageUris: scanReviewImageUris,
+      rawText: scanReviewRawText,
     };
 
     if (!scanReviewTargetGroupId) {
       setScanReviewDialogOpen(false);
+      setScanReviewOllamaProposal(null);
+      setScanReviewOllamaError(null);
+      setScanReviewServiceLines([]);
       return;
     }
 
     const targetGroupId = scanReviewTargetGroupId;
     setScanReviewTargetGroupId(null);
     setScanReviewDialogOpen(false);
+    setScanReviewOllamaProposal(null);
+    setScanReviewOllamaError(null);
+    setScanReviewServiceLines([]);
     resolveDuplicateForScan(targetGroupId, reviewedResult);
-  }, [resolveDuplicateForScan, scanReviewInvoiceNumber, scanReviewItems, scanReviewSupplier, scanReviewTargetGroupId]);
+  }, [
+    buildParsedItemsFromServiceLines,
+    resolveDuplicateForScan,
+    scanReviewDocumentDate,
+    scanReviewDocType,
+    scanReviewDocSubtype,
+    scanReviewFieldConfidence,
+    scanReviewFieldMeta,
+    scanReviewFieldWarnings,
+    scanReviewInvoiceNumber,
+    scanReviewItems,
+    scanReviewImageUris,
+    scanReviewProfileUsed,
+    scanReviewRawText,
+    scanReviewScore,
+    scanReviewServiceLines,
+    scanReviewServiceDescription,
+    scanReviewSupplier,
+    scanReviewTemplateData,
+    scanReviewTargetGroupId,
+    scanReviewWarnings,
+  ]);
 
   const applyDuplicateToTargetGroup = useCallback(() => {
     if (!pendingDuplicateResolution) return;
     const resolution = pendingDuplicateResolution;
     setDuplicateDialogOpen(false);
     setPendingDuplicateResolution(null);
-    applyParsedAlbaranToMaterials(resolution.targetGroupId, resolution.parsed);
-  }, [applyParsedAlbaranToMaterials, pendingDuplicateResolution]);
+    applyParsedScanResultToGroup(resolution.targetGroupId, resolution.parsed);
+  }, [applyParsedScanResultToGroup, pendingDuplicateResolution]);
 
   const overwriteExistingDuplicateGroup = useCallback(() => {
     if (!pendingDuplicateResolution) return;
     const resolution = pendingDuplicateResolution;
     setDuplicateDialogOpen(false);
     setPendingDuplicateResolution(null);
-    applyParsedAlbaranToMaterials(resolution.duplicateGroupId, resolution.parsed);
-  }, [applyParsedAlbaranToMaterials, pendingDuplicateResolution]);
+    applyParsedScanResultToGroup(resolution.duplicateGroupId, resolution.parsed);
+  }, [applyParsedScanResultToGroup, pendingDuplicateResolution]);
 
   const cancelDuplicateResolution = useCallback(() => {
     setDuplicateDialogOpen(false);
@@ -1697,7 +1709,18 @@ export const GenerateWorkReportPanel = ({
   }, [pendingCostDifferences]);
 
   const updateMaterialGroup = (groupId: string, patch: Partial<MaterialGroup>) => {
-    setMaterialGroups((current) => current.map((group) => (group.id === groupId ? { ...group, ...patch } : group)));
+    const normalizedPatch: Partial<MaterialGroup> = {
+      ...patch,
+    };
+    if (patch.supplier !== undefined) {
+      normalizedPatch.supplier = sanitizeText(patch.supplier);
+    }
+    if (patch.invoiceNumber !== undefined) {
+      normalizedPatch.invoiceNumber = sanitizeText(patch.invoiceNumber);
+    }
+    setMaterialGroups((current) =>
+      current.map((group) => (group.id === groupId ? { ...group, ...normalizedPatch } : group)),
+    );
   };
 
   const updateMaterialRow = (groupId: string, rowId: string, patch: Partial<MaterialRow>) => {
@@ -1721,6 +1744,48 @@ export const GenerateWorkReportPanel = ({
           };
         });
         return { ...group, rows };
+      }),
+    );
+  };
+
+  const updateServiceLine = (groupId: string, lineId: string, patch: Partial<ServiceLine>) => {
+    setMaterialGroups((current) =>
+      current.map((group) => {
+        if (group.id !== groupId) return group;
+        const serviceLines = (group.serviceLines || []).map((line) => {
+          if (line.id !== lineId) return line;
+          return {
+            ...line,
+            ...patch,
+            description:
+              patch.description === undefined ? line.description : sanitizeText(patch.description),
+            hours:
+              patch.hours === undefined
+                ? line.hours
+                : typeof patch.hours === 'number' && Number.isFinite(patch.hours)
+                  ? nonNegative(patch.hours)
+                  : null,
+            trips:
+              patch.trips === undefined
+                ? line.trips
+                : typeof patch.trips === 'number' && Number.isFinite(patch.trips)
+                  ? nonNegative(patch.trips)
+                  : null,
+            tons:
+              patch.tons === undefined
+                ? line.tons
+                : typeof patch.tons === 'number' && Number.isFinite(patch.tons)
+                  ? nonNegative(patch.tons)
+                  : null,
+            m3:
+              patch.m3 === undefined
+                ? line.m3
+                : typeof patch.m3 === 'number' && Number.isFinite(patch.m3)
+                  ? nonNegative(patch.m3)
+                  : null,
+          };
+        });
+        return { ...group, serviceLines };
       }),
     );
   };
@@ -1754,12 +1819,33 @@ export const GenerateWorkReportPanel = ({
     );
   };
 
+  const addServiceLine = (groupId: string) => {
+    setMaterialGroups((current) =>
+      current.map((group) =>
+        group.id === groupId
+          ? { ...group, serviceLines: [...(group.serviceLines || []), createServiceLine()] }
+          : group,
+      ),
+    );
+  };
+
   const removeMaterialRow = (groupId: string, rowId: string) => {
     setMaterialGroups((current) =>
       current.map((group) => {
         if (group.id !== groupId) return group;
         if (group.rows.length === 1) return group;
         return { ...group, rows: group.rows.filter((row) => row.id !== rowId) };
+      }),
+    );
+  };
+
+  const removeServiceLine = (groupId: string, lineId: string) => {
+    setMaterialGroups((current) =>
+      current.map((group) => {
+        if (group.id !== groupId) return group;
+        const serviceLines = group.serviceLines || [];
+        if (serviceLines.length <= 1) return group;
+        return { ...group, serviceLines: serviceLines.filter((line) => line.id !== lineId) };
       }),
     );
   };
@@ -2090,8 +2176,27 @@ export const GenerateWorkReportPanel = ({
     const reportMaterialGroups = materialGroups
       .map((group) => ({
         id: group.id,
-        supplier: group.supplier.trim(),
-        invoiceNumber: group.invoiceNumber.trim(),
+        supplier: sanitizeText(group.supplier),
+        invoiceNumber: sanitizeText(group.invoiceNumber),
+        docType: group.docType ?? null,
+        serviceLines: (group.serviceLines || [])
+          .map((line) => ({
+            id: line.id,
+            description: sanitizeText(line.description),
+            hours: typeof line.hours === 'number' && Number.isFinite(line.hours) ? nonNegative(line.hours) : null,
+            trips: typeof line.trips === 'number' && Number.isFinite(line.trips) ? nonNegative(line.trips) : null,
+            tons: typeof line.tons === 'number' && Number.isFinite(line.tons) ? nonNegative(line.tons) : null,
+            m3: typeof line.m3 === 'number' && Number.isFinite(line.m3) ? nonNegative(line.m3) : null,
+          }))
+          .filter((line) => {
+            const hasDescription = line.description.length > 0;
+            const hasValues =
+              nonNegative(line.hours ?? 0) > 0 ||
+              nonNegative(line.trips ?? 0) > 0 ||
+              nonNegative(line.tons ?? 0) > 0 ||
+              nonNegative(line.m3 ?? 0) > 0;
+            return hasDescription || hasValues;
+          }),
         items: group.rows
           .filter(
             (row) =>
@@ -2109,7 +2214,13 @@ export const GenerateWorkReportPanel = ({
             total: nonNegative(row.total ?? row.quantity * row.unitPrice),
           })),
       }))
-      .filter((group) => group.supplier.length > 0 || group.invoiceNumber.length > 0 || group.items.length > 0);
+      .filter(
+        (group) =>
+          group.supplier.length > 0 ||
+          group.invoiceNumber.length > 0 ||
+          group.items.length > 0 ||
+          (group.serviceLines?.length ?? 0) > 0,
+      );
 
     const reportSubcontractGroups = subcontractGroups
       .map((group) => {
@@ -2230,1617 +2341,287 @@ export const GenerateWorkReportPanel = ({
     }
   };
 
-  const renderRowsSection = (
-    rows: EditableRow[],
-    setRows: Dispatch<SetStateAction<EditableRow[]>>,
-    options: RowsSectionOptions,
-  ) => (
-    <div className="space-y-3 pt-2">
-      {rows.map((row) => (
-        <div key={row.id} className={`grid grid-cols-1 gap-2 ${options.useUnit ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
-          <Input
-            placeholder={options.firstPlaceholder}
-            value={row.name}
-            onChange={(event) => updateRows(rows, setRows, row.id, { name: event.target.value })}
-          />
-          {options.secondOptions ? (
-            <Select value={row.detail || undefined} onValueChange={(value) => updateRows(rows, setRows, row.id, { detail: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder={options.secondPlaceholder} />
-              </SelectTrigger>
-              <SelectContent>
-                {options.secondOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              placeholder={options.secondPlaceholder}
-              value={row.detail}
-              onChange={(event) => updateRows(rows, setRows, row.id, { detail: event.target.value })}
-            />
-          )}
-          <Input
-            type="number"
-            min={0}
-            step={0.5}
-            value={editableNumericValue(row.value)}
-            onChange={(event) => updateRows(rows, setRows, row.id, { value: parseNumeric(event.target.value) })}
-            placeholder={options.valueLabel}
-          />
-          {options.useUnit ? (
-            <Select value={row.unit || ''} onValueChange={(value) => updateRows(rows, setRows, row.id, { unit: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Unidad" />
-              </SelectTrigger>
-              <SelectContent>
-                {(options.unitOptions || []).map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          <Button variant="outline" onClick={() => setRows(rows.filter((item) => item.id !== row.id))} disabled={rows.length === 1}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Eliminar
-          </Button>
-        </div>
-      ))}
-      <Button variant="outline" onClick={() => setRows([...rows, createRow(options.useUnit ? options.unitOptions?.[0]?.value : undefined)])}>
-        <Plus className="mr-2 h-4 w-4" />
-        Añadir fila en {options.sectionName}
-      </Button>
-    </div>
-  );
-
   return (
     <div className={`space-y-4 text-[15px] ${androidTypographyClass}`}>
-      <div className="rounded-xl border bg-white p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" onClick={onBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver
-            </Button>
-            <Button variant="outline" disabled>
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Anterior
-            </Button>
-            <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">0 / 0</div>
-            <Button variant="outline" disabled>
-              Siguiente
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-          <h2 className="text-lg font-semibold">{panelTitle}</h2>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          {reportIdentifier ? <span className="rounded-md border px-2 py-1">ID: {reportIdentifier}</span> : null}
-          {readOnly ? <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1">Parte cerrado: solo visualización</span> : null}
-        </div>
-
-        {isClonedReport ? (
-          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
-            <div className="text-sm font-medium">Parte clonado - Revisión necesaria</div>
-            <div className="text-sm text-amber-800">
-              Este parte se ha clonado. Revisa y actualiza los datos antes de guardar.
-              {cloneSourceLabel ? ` Origen: ${cloneSourceLabel}.` : ''}
-            </div>
-          </div>
-        ) : null}
-
-        <Card className="mt-3">
-          <CardContent className="p-0">
-            <div className="grid grid-cols-1 border-b md:grid-cols-2">
-              <div className="border-b p-4 md:border-b-0 md:border-r">
-                <Label htmlFor="work-number">Nº Obra</Label>
-                <Input id="work-number" className="mt-2" value={workNumber} onChange={(event) => setWorkNumber(event.target.value)} />
-              </div>
-              <div className="p-4">
-                <Label htmlFor="work-date">Día</Label>
-                <Popover open={workDatePickerOpen} onOpenChange={setWorkDatePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="work-date"
-                      type="button"
-                      variant="outline"
-                      className={`mt-2 w-full justify-between text-left font-normal ${
-                        selectedWorkDate ? 'text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {selectedWorkDate
-                        ? format(selectedWorkDate, 'dd/MM/yyyy', { locale: es })
-                        : 'Seleccionar fecha'}
-                      <CalendarDays className="ml-2 h-4 w-4 shrink-0 opacity-70" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedWorkDate}
-                      onSelect={(selectedDate) => {
-                        if (!selectedDate) return;
-                        setDate(format(selectedDate, 'yyyy-MM-dd'));
-                        setWorkDatePickerOpen(false);
-                      }}
-                      locale={es}
-                      initialFocus
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-            <div className="p-4">
-              <Label htmlFor="work-name">Nombre de la obra</Label>
-              <Input
-                id="work-name"
-                className="mt-2"
-                value={workName}
-                placeholder="Nombre de la obra"
-                onChange={(event) => setWorkName(event.target.value)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <WorkReportHeaderCard
+        panelTitle={panelTitle}
+        onBack={onBack}
+        reportIdentifier={reportIdentifier}
+        readOnly={readOnly}
+        isClonedReport={isClonedReport}
+        cloneSourceLabel={cloneSourceLabel}
+        workNumber={workNumber}
+        onWorkNumberChange={setWorkNumber}
+        workDatePickerOpen={workDatePickerOpen}
+        onWorkDatePickerOpenChange={setWorkDatePickerOpen}
+        selectedWorkDate={selectedWorkDate}
+        onWorkDateSelect={(selectedDate) => {
+          setDate(format(selectedDate, 'yyyy-MM-dd'));
+          setWorkDatePickerOpen(false);
+        }}
+        workName={workName}
+        onWorkNameChange={setWorkName}
+      />
 
       <div className={readOnly ? 'pointer-events-none select-none opacity-95' : ''}>
       <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="space-y-3">
-        <AccordionItem value="workforce" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Mano de obra</AccordionTrigger>
-          <AccordionContent className="space-y-4 text-[15px]">
-            <label className="inline-flex items-center gap-2 rounded-md border border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm">
-              <Checkbox
-                className="h-3 w-3 shrink-0"
-                checked={workforceSectionCompleted}
-                onCheckedChange={(checked) => setWorkforceSectionCompleted(Boolean(checked))}
-              />
-              Sección completada
-            </label>
-
-            <div className="rounded-md border border-[#d9e1ea] bg-white">
-              <div className="border-b border-[#d9e1ea] p-4 text-center">
-                <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Mano de obra</p>
-                <p className="mt-1 text-sm text-slate-500">Horas totales calculadas: {totalWorkforceHours.toFixed(2)}</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      toast({
-                        title: 'Dictado en preparacion',
-                        description: 'El dictado de mano de obra se conectara en la siguiente fase.',
-                      })
-                    }
-                  >
-                    <Mic className="mr-2 h-4 w-4" />
-                    Dictar mano de obra
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-3">
-                {workforceGroups.map((group, groupIndex) => {
-                  const groupHours = group.rows.reduce((sum, row) => sum + row.hours, 0);
-                  return (
-                    <div key={group.id} className="rounded-md border border-[#d9e1ea] bg-white">
-                      <div className="space-y-3 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-medium">Empresa:</p>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                toast({
-                                  title: 'Subida de documento en preparacion',
-                                  description: 'Se conectara en la siguiente fase.',
-                                })
-                              }
-                            >
-                              <Upload className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                toast({
-                                  title: 'Carga de empresa en preparacion',
-                                  description: 'Este acceso rapido se conectara a ficheros en la siguiente fase.',
-                                })
-                              }
-                            >
-                              <Camera className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm text-blue-700">Horas: {groupHours.toFixed(2)}</span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-red-600"
-                              onClick={() => removeWorkforceGroup(group.id)}
-                              disabled={workforceGroups.length === 1}
-                              title="Eliminar grupo"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <label className="inline-flex items-center gap-2 text-sm">
-                          <Checkbox
-                            className="h-3 w-3 shrink-0"
-                            checked={group.isOwnCompany}
-                            onCheckedChange={(checked) => updateWorkforceGroup(group.id, { isOwnCompany: Boolean(checked) })}
-                          />
-                          Empresa propia
-                        </label>
-
-                        <Input
-                          value={group.companyName}
-                          placeholder="Nombre de la empresa"
-                          onChange={(event) => updateWorkforceGroup(group.id, { companyName: event.target.value })}
-                        />
-                      </div>
-
-                      <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                          <div className="col-span-5">Nombre</div>
-                          <div className="col-span-4">Actividad</div>
-                          <div className="col-span-2">Horas</div>
-                          <div className="col-span-1"></div>
-                        </div>
-                        <div className="space-y-2 p-3">
-                          {group.rows.map((row) => (
-                            <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
-                              <div className="grid grid-cols-12 gap-2">
-                                <div className="col-span-12 space-y-1 md:col-span-5 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Nombre
-                                  </p>
-                                  <Input
-                                    placeholder="Nombre del trabajador"
-                                    value={row.workerName}
-                                    onChange={(event) => updateWorkforceRow(group.id, row.id, { workerName: event.target.value })}
-                                  />
-                                </div>
-                                <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Actividad
-                                  </p>
-                                  <Input
-                                    placeholder="Actividad realizada"
-                                    value={row.activity}
-                                    onChange={(event) => updateWorkforceRow(group.id, row.id, { activity: event.target.value })}
-                                  />
-                                </div>
-                                <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Horas
-                                  </p>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={0.5}
-                                    placeholder="0"
-                                    value={editableNumericValue(row.hours)}
-                                    onChange={(event) => updateWorkforceRow(group.id, row.id, { hours: parseNumeric(event.target.value) })}
-                                  />
-                                </div>
-                                <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
-                                  <Button
-                                    className="h-9 w-full md:h-10 md:w-10"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => removeWorkforceRow(group.id, row.id)}
-                                    disabled={group.rows.length === 1}
-                                    title="Eliminar fila"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <Button variant="outline" onClick={() => addWorkforceRow(group.id)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Añadir fila
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                        Grupo {groupIndex + 1}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="pt-1">
-                  <Button variant="outline" onClick={addWorkforceGroup}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Añadir grupo
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="machinery" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Maquinaria subcontratas</AccordionTrigger>
-          <AccordionContent className="space-y-4 text-[15px]">
-            <div className="rounded-md border border-[#d9e1ea] bg-white">
-              <div className="border-b border-[#d9e1ea] p-4 text-center">
-                <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Maquinaria</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      toast({
-                        title: 'Dictado en preparación',
-                        description: 'El dictado de maquinaria se conectará en la siguiente fase.',
-                      })
-                    }
-                  >
-                    <Mic className="mr-2 h-4 w-4" />
-                    Dictar Maquinaria
-                  </Button>
-                  <Button variant="outline" onClick={addSubcontractedMachineryGroup}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Añadir Grupo
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-4 p-3">
-                {subcontractedMachineryGroups.map((group) => {
-                  const groupHours = group.rows.reduce((sum, row) => sum + row.hours, 0);
-                  return (
-                    <div key={group.id} className="rounded-md border border-[#d9e1ea] bg-white">
-                      <div className="space-y-3 p-3">
-                        <div className="flex items-center gap-4 flex-wrap px-1">
-                          <div className="flex-1 min-w-[200px]">
-                            <p className="text-sm font-medium">Empresa:</p>
-                            <label className="mt-2 inline-flex items-center gap-2 text-sm">
-                              <Checkbox
-                                className="h-3 w-3 shrink-0"
-                                checked={group.isOwnCompany}
-                                onCheckedChange={(checked) => {
-                                  const isOwnCompany = Boolean(checked);
-                                  const ownCompanyName = 'Empresa propia';
-                                  updateSubcontractedMachineryGroup(group.id, {
-                                    isOwnCompany,
-                                    companyName: isOwnCompany
-                                      ? group.companyName || ownCompanyName
-                                      : group.companyName === ownCompanyName
-                                        ? ''
-                                        : group.companyName,
-                                  });
-                                }}
-                              />
-                              Empresa propia
-                            </label>
-                            <Input
-                              className="mt-2"
-                              value={group.companyName}
-                              placeholder="Nombre de la empresa"
-                              onChange={(event) =>
-                                updateSubcontractedMachineryGroup(group.id, { companyName: event.target.value })
-                              }
-                              disabled={group.isOwnCompany}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id={`machinery-upload-${group.id}`}
-                              type="file"
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(event) => handleSubcontractedMachineryUpload(group.id, event)}
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => document.getElementById(`machinery-upload-${group.id}`)?.click()}
-                            >
-                              <Upload className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                toast({
-                                  title: 'Cámara en preparación',
-                                  description: 'La captura de maquinaria se conectará en la siguiente fase.',
-                                })
-                              }
-                            >
-                              <Camera className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm text-blue-700">Total Horas: {groupHours.toFixed(2)}</span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-red-600"
-                              onClick={() => removeSubcontractedMachineryGroup(group.id)}
-                              disabled={subcontractedMachineryGroups.length === 1}
-                              title="Eliminar grupo"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                          <div className="col-span-4">Tipo máquina</div>
-                          <div className="col-span-5">Actividad</div>
-                          <div className="col-span-2">H/Cant.</div>
-                          <div className="col-span-1"></div>
-                        </div>
-                        <div className="space-y-2 p-3">
-                          {group.rows.map((row) => (
-                            <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
-                              <div className="grid grid-cols-12 gap-2">
-                                <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Tipo máquina
-                                  </p>
-                                  <Input
-                                    placeholder="Tipo de máquina"
-                                    value={row.machineType}
-                                    onChange={(event) =>
-                                      updateSubcontractedMachineryRow(group.id, row.id, { machineType: event.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div className="col-span-12 space-y-1 md:col-span-5 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Actividad
-                                  </p>
-                                  <Input
-                                    placeholder="Actividad realizada"
-                                    value={row.activity}
-                                    onChange={(event) =>
-                                      updateSubcontractedMachineryRow(group.id, row.id, { activity: event.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div className="col-span-10 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    H/Cant.
-                                  </p>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={0.5}
-                                    value={editableNumericValue(row.hours)}
-                                    onChange={(event) =>
-                                      updateSubcontractedMachineryRow(group.id, row.id, { hours: parseNumeric(event.target.value) })
-                                    }
-                                  />
-                                </div>
-                                <div className="col-span-2 flex items-end md:col-span-1 md:justify-center">
-                                  <Button
-                                    className="h-9 w-full md:h-10 md:w-10"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => removeSubcontractedMachineryRow(group.id, row.id)}
-                                    disabled={group.rows.length === 1}
-                                    title="Eliminar fila"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <Button variant="outline" onClick={() => addSubcontractedMachineryRow(group.id)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Añadir Fila
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Materiales</AccordionTrigger>
-          <AccordionContent className="space-y-4 text-[15px]">
-            <div className="rounded-md border border-[#d9e1ea] bg-white">
-              <div className="border-b border-[#d9e1ea] p-4 text-center">
-                <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Materiales</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Button variant="outline" onClick={addMaterialGroup} disabled={readOnly || isAlbaranProcessing}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Albarán
-                  </Button>
-                </div>
-                {albaranScanError ? (
-                  <p className="mt-2 text-sm text-red-600">{albaranScanError}</p>
-                ) : null}
-              </div>
-              <div className="space-y-4 p-3">
-                {materialGroups.map((group) => {
-                  const isActiveMaterialGroup = activeMaterialGroupId === group.id;
-                  const isScanningThisGroup = isAlbaranProcessing && scanInFlightTargetGroupId === group.id;
-
-                  return (
-                    <Collapsible
-                      id={`material-group-${group.id}`}
-                      key={group.id}
-                      open={openMaterialGroups[group.id] ?? true}
-                      onOpenChange={(isOpen) => setMaterialGroupOpen(group.id, isOpen)}
-                      onFocusCapture={() => setActiveMaterialGroupId(group.id)}
-                      onClick={() => setActiveMaterialGroupId(group.id)}
-                      className={`rounded-md border bg-white transition-all ${
-                        isActiveMaterialGroup
-                          ? 'border-blue-500 bg-blue-50/30 shadow-md ring-1 ring-blue-200'
-                          : 'border-slate-300 bg-slate-50/40 shadow-sm'
-                      }`}
-                    >
-                      <div
-                        className={`flex items-center gap-2 border-b px-3 py-2 ${
-                          isActiveMaterialGroup ? 'border-blue-200 bg-blue-100/70' : 'border-slate-300 bg-slate-100'
-                        }`}
-                      >
-                        <CollapsibleTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setActiveMaterialGroupId(group.id)}
-                          >
-                            <ChevronDown className={`h-4 w-4 transition-transform ${(openMaterialGroups[group.id] ?? true) ? '' : '-rotate-90'}`} />
-                          </Button>
-                        </CollapsibleTrigger>
-                        <div className="flex-1 text-sm font-medium">
-                          <div>{(group.supplier || 'Sin proveedor')} - {(group.invoiceNumber || 'Sin nº albarán')}</div>
-                          {isActiveMaterialGroup ? (
-                            <div className="text-xs font-semibold text-blue-700">Editando este albarán</div>
-                          ) : null}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant={isActiveMaterialGroup ? 'default' : 'outline'}
-                          className="h-8"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleScanMaterialsForGroup(group.id);
-                          }}
-                          disabled={readOnly || isAlbaranProcessing}
-                        >
-                          {isScanningThisGroup ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Procesando...
-                            </>
-                          ) : (
-                            <>
-                              <Camera className="mr-2 h-4 w-4" />
-                              Escanear IA
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-red-600"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeMaterialGroup(group.id);
-                          }}
-                          disabled={materialGroups.length === 1}
-                          title="Eliminar albarán"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="space-y-4 p-3">
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <div>
-                              <Label>Proveedor:</Label>
-                              <Input
-                                className="mt-2"
-                                placeholder="Nombre del proveedor"
-                                value={group.supplier}
-                                onChange={(event) => updateMaterialGroup(group.id, { supplier: event.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label>Nº Albarán:</Label>
-                              <Input
-                                className="mt-2"
-                                placeholder="Número de albarán"
-                                value={group.invoiceNumber}
-                                onChange={(event) => updateMaterialGroup(group.id, { invoiceNumber: event.target.value })}
-                              />
-                            </div>
-                          </div>
-                          <div className="rounded-md border border-[#d9e1ea]">
-                            <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                              <div className="col-span-3">Material</div>
-                              <div className="col-span-2">Cantidad</div>
-                              <div className="col-span-2">Unidad</div>
-                              <div className="col-span-2">Precio/Ud</div>
-                              <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
-                              <div className="col-span-1"></div>
-                            </div>
-                            <div className="space-y-2 p-3">
-                              {group.rows.map((row) => (
-                                <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
-                                  <div className="grid grid-cols-12 gap-2">
-                                    <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
-                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                        Material
-                                      </p>
-                                      <Input
-                                        placeholder="Nombre del material"
-                                        value={row.name}
-                                        onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
-                                      />
-                                    </div>
-                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                        Cantidad
-                                      </p>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        value={editableNumericValue(row.quantity)}
-                                        onChange={(event) =>
-                                          updateMaterialRow(group.id, row.id, { quantity: parseNumeric(event.target.value) })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                        Unidad
-                                      </p>
-                                      <Select
-                                        value={row.unit || undefined}
-                                        onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Unidad" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {MATERIAL_UNIT_OPTIONS.map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                              {option.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                        Precio/Ud
-                                      </p>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        value={editableNumericValue(row.unitPrice)}
-                                        onChange={(event) =>
-                                          updateMaterialRow(group.id, row.id, { unitPrice: parseNumeric(event.target.value) })
-                                        }
-                                      />
-                                    </div>
-                                    <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                      <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                        Coste (€)
-                                      </p>
-                                      <Input
-                                        type="text"
-                                        value={row.total.toFixed(2)}
-                                        title="Coste calculado automáticamente (cantidad × precio/ud)"
-                                        className={row.costWarningDelta ? 'border-amber-400 text-amber-700' : undefined}
-                                        readOnly
-                                      />
-                                      {row.costWarningDelta ? (
-                                        <button
-                                          type="button"
-                                          className="mt-1 text-left text-xs font-medium text-amber-700 hover:text-amber-800"
-                                          onClick={() => openCostDifferenceDialogForRow(group.id, row)}
-                                        >
-                                          Diferencia detectada: {row.costWarningDelta.toFixed(2)} €
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                    <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
-                                      <Button
-                                        className="h-9 w-full md:h-10 md:w-10"
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={() => removeMaterialRow(group.id, row.id)}
-                                        disabled={group.rows.length === 1}
-                                        title="Eliminar fila"
-                                      >
-                                        <Trash2 className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Añadir Fila
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })}
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="subcontracts" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Subcontratas</AccordionTrigger>
-          <AccordionContent className="space-y-4 text-[15px]">
-            <div className="rounded-md border border-[#d9e1ea] bg-white">
-              <div className="border-b border-[#d9e1ea] p-4 text-center">
-                <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Subcontratas</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      toast({
-                        title: 'Dictado en preparación',
-                        description: 'El dictado de subcontratas se conectará en la siguiente fase.',
-                      })
-                    }
-                  >
-                    <Mic className="mr-2 h-4 w-4" />
-                    Dictar Subcontratas
-                  </Button>
-                  <Button variant="outline" onClick={addSubcontractGroup}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Añadir Grupo
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-3">
-                {subcontractGroups.map((group, groupIndex) => {
-                  const groupTotals = subcontractTotalsByGroupId[group.id] ?? computeGroupTotals(group);
-                  const autoWorkersEnabled = groupTotals.uniqueWorkersWithHours > 0;
-                  const effectiveNumWorkers = autoWorkersEnabled ? groupTotals.numWorkersEffective : group.numWorkersManual;
-                  const unitBreakdown = Object.entries(groupTotals.totalsByUnit)
-                    .filter(([, value]) => value > 0)
-                    .map(([unit, value]) => `${unitLabel(unit)}: ${value.toFixed(2)}`)
-                    .join(' | ');
-
-                  return (
-                    <div key={group.id} className="rounded-md border border-[#d9e1ea] bg-white">
-                      <div className="space-y-3 p-3">
-                        <div className="flex flex-wrap items-end gap-3">
-                          <div className="min-w-[240px] flex-1">
-                            <Label>Empresa:</Label>
-                            <Input
-                              className="mt-2"
-                              value={group.companyName}
-                              placeholder="Nombre de la empresa"
-                              onChange={(event) => updateSubcontractGroup(group.id, { companyName: event.target.value })}
-                            />
-                          </div>
-
-                          <div className="w-28">
-                            <Label>Nº Trab:</Label>
-                            <Input
-                              className="mt-2"
-                              type="number"
-                              min={0}
-                              value={autoWorkersEnabled ? effectiveNumWorkers : editableNumericValue(effectiveNumWorkers)}
-                              disabled={autoWorkersEnabled}
-                              onChange={(event) =>
-                                updateSubcontractGroup(group.id, {
-                                  numWorkersManual: nonNegativeInt(parseNumeric(event.target.value)),
-                                })
-                              }
-                            />
-                          </div>
-
-                          <div className="flex w-full items-center gap-2 md:w-auto">
-                            <input
-                              id={`subcontract-upload-${group.id}`}
-                              type="file"
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(event) => handleSubcontractUpload(group.id, event)}
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => document.getElementById(`subcontract-upload-${group.id}`)?.click()}
-                            >
-                              <Upload className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                toast({
-                                  title: 'Cámara en preparación',
-                                  description: 'La captura de documentos se conectará en la siguiente fase.',
-                                })
-                              }
-                            >
-                              <Camera className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm text-blue-700">
-                              Total Grupo: {groupTotals.displayTotal.toFixed(2)} {groupTotals.displayUnitLabel}
-                            </span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-red-600"
-                              onClick={() => removeSubcontractGroup(group.id)}
-                              disabled={subcontractGroups.length === 1}
-                              title="Eliminar grupo"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {autoWorkersEnabled ? (
-                          <p className="text-sm text-slate-500">
-                            Nº Trab en modo automático: se calcula por trabajadores únicos con horas &gt; 0 dentro del grupo.
-                          </p>
-                        ) : null}
-
-                        {groupTotals.hasMixedUnits ? (
-                          <p className="text-sm text-slate-500">
-                            Producción por unidad: {unitBreakdown || '0'}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="border-t border-[#d9e1ea]">
-                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                          <div className="col-span-4">Partida</div>
-                          <div className="col-span-3">Actividad</div>
-                          <div className="col-span-1 whitespace-nowrap">Unidad</div>
-                          <div className="col-span-1 whitespace-nowrap text-[11px]">Cant./Trab.</div>
-                          <div className="col-span-1">Trab.</div>
-                          <div className="col-span-1">Horas</div>
-                          <div className="col-span-1"></div>
-                        </div>
-
-                        <div className="space-y-3 p-3">
-                          {group.rows.map((row) => {
-                            const rowTotals =
-                              groupTotals.rowTotalsById[row.id] ??
-                              computeRowTotals(row, { numWorkersEffective: groupTotals.numWorkersEffective });
-                            const rowWorkersOpen = openSubcontractWorkers[row.id] ?? false;
-
-                            return (
-                              <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2">
-                                <div className="grid grid-cols-12 gap-2">
-                                  <div className="col-span-12 space-y-1 md:col-span-4 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Partida
-                                    </p>
-                                    <Input
-                                      placeholder="Partida"
-                                      value={row.partida}
-                                      onChange={(event) =>
-                                        updateSubcontractRow(group.id, row.id, { partida: event.target.value })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Actividad
-                                    </p>
-                                    <Input
-                                      placeholder="Actividad"
-                                      value={row.activity}
-                                      onChange={(event) =>
-                                        updateSubcontractRow(group.id, row.id, { activity: event.target.value })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Unidad
-                                    </p>
-                                    <Select
-                                      value={row.unit}
-                                      onValueChange={(value) =>
-                                        updateSubcontractRow(group.id, row.id, { unit: normalizeSubcontractUnit(value) })
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Unidad" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {SUBCONTRACT_UNIT_OPTIONS.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Cant./Trab.
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.01}
-                                      value={editableNumericValue(row.cantPerWorker)}
-                                      onChange={(event) =>
-                                        updateSubcontractRow(group.id, row.id, {
-                                          cantPerWorker: nonNegative(parseNumeric(event.target.value)),
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Trab.
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      readOnly
-                                      value={rowTotals.numTrabEfectivo}
-                                      title="Número de trabajadores efectivo para el cálculo"
-                                    />
-                                  </div>
-                                  <div className="col-span-6 space-y-1 md:col-span-1 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Horas
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.5}
-                                      value={
-                                        rowTotals.hasAssignedWorkers
-                                          ? rowTotals.horasHombre.toFixed(2)
-                                          : editableNumericValue(row.hours)
-                                      }
-                                      disabled={rowTotals.hasAssignedWorkers}
-                                      title={
-                                        rowTotals.hasAssignedWorkers
-                                          ? 'Horas calculadas automáticamente por suma de trabajadores asignados'
-                                          : 'Horas manuales de la fila'
-                                      }
-                                      onChange={(event) =>
-                                        updateSubcontractRow(group.id, row.id, {
-                                          hours: nonNegative(parseNumeric(event.target.value)),
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-2 flex items-end md:col-span-1 md:justify-center">
-                                    <Button
-                                      className="h-9 w-full md:h-10 md:w-10"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => removeSubcontractRow(group.id, row.id)}
-                                      disabled={group.rows.length === 1}
-                                      title="Eliminar fila"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-600" />
-                                    </Button>
-                                  </div>
-                                </div>
-
-                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setSubcontractWorkersOpen(row.id, !rowWorkersOpen)}
-                                  >
-                                    <Users className="mr-2 h-4 w-4" />
-                                    Trabajadores
-                                  </Button>
-                                  <Button variant="outline" size="sm" onClick={() => addSubcontractWorker(group.id, row.id)}>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Añadir
-                                  </Button>
-                                  <span className="text-sm text-slate-500">
-                                    HH: {rowTotals.horasHombre.toFixed(2)} | Prod: {rowTotals.produccion.toFixed(2)} {unitLabel(rowTotals.unit)}
-                                    {rowTotals.hasAssignedWorkers ? ' | Horas auto' : ''}
-                                  </span>
-                                </div>
-
-                                <Collapsible open={rowWorkersOpen} onOpenChange={(isOpen) => setSubcontractWorkersOpen(row.id, isOpen)}>
-                                  <CollapsibleContent className="pt-2">
-                                    {row.workersAssigned.length === 0 ? (
-                                      <div className="rounded-md border border-dashed p-3 text-sm text-slate-500">
-                                        Sin trabajadores asignados en esta fila.
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-2 rounded-md border border-[#d9e1ea] p-2">
-                                        {row.workersAssigned.map((worker) => (
-                                          <div key={worker.id} className="grid grid-cols-12 gap-2">
-                                            <Input
-                                              className="col-span-12 md:col-span-7"
-                                              placeholder="Nombre del trabajador"
-                                              value={worker.name}
-                                              onChange={(event) =>
-                                                updateSubcontractWorker(group.id, row.id, worker.id, { name: event.target.value })
-                                              }
-                                            />
-                                            <Input
-                                              className="col-span-8 md:col-span-4"
-                                              type="number"
-                                              min={0}
-                                              step={0.5}
-                                              value={editableNumericValue(worker.hours)}
-                                              onChange={(event) =>
-                                                updateSubcontractWorker(group.id, row.id, worker.id, {
-                                                  hours: nonNegative(parseNumeric(event.target.value)),
-                                                })
-                                              }
-                                            />
-                                            <Button
-                                              className="col-span-4 md:col-span-1"
-                                              size="icon"
-                                              variant="ghost"
-                                              onClick={() => removeSubcontractWorker(group.id, row.id, worker.id)}
-                                              title="Eliminar trabajador"
-                                            >
-                                              <Trash2 className="h-4 w-4 text-red-600" />
-                                            </Button>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </CollapsibleContent>
-                                </Collapsible>
-                              </div>
-                            );
-                          })}
-
-                          <Button variant="outline" onClick={() => addSubcontractRow(group.id)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Añadir Fila
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                        Grupo {groupIndex + 1}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="rental" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Maquinaria alquilada</AccordionTrigger>
-          <AccordionContent className="space-y-3">
-            <div className="rounded-md border border-[#d9e1ea] bg-white">
-              <div className="border-b border-[#d9e1ea] px-3 py-2 text-sm font-semibold text-slate-700">
-                Maquinaria alquilada
-              </div>
-
-              <div className="p-4">
-                {rentalLoading ? (
-                  <div className="text-center text-sm text-slate-500">Cargando maquinaria de alquiler...</div>
-                ) : rentalError ? (
-                  <div className="text-center text-sm text-red-600">{rentalError}</div>
-                ) : !selectedWorkId || rentalResult.items.length === 0 ? (
-                  <div className="rounded-md bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                    <div>No hay maquinaria de alquiler activa para esta fecha.</div>
-                    <div>Gestiona la maquinaria de alquiler desde la pestaña de Gestión de Obras.</div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {rentalResult.items.map((machine) => (
-                      <div key={machine.id} className="rounded-md border border-[#d9e1ea] bg-slate-50 p-3">
-                        <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-5">
-                          <div>
-                            <div className="text-sm text-slate-500">Maquinaria</div>
-                            <div className="font-medium text-slate-800">{machine.name}</div>
-                            {machine.description ? (
-                              <div className="text-sm text-slate-500">{machine.description}</div>
-                            ) : null}
-                          </div>
-                          <div>
-                            <div className="text-sm text-slate-500">Proveedor</div>
-                            <div className="text-slate-800">{machine.provider || '-'}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-slate-500">Fechas</div>
-                            <div className="text-slate-800">
-                              {normalizeDate(machine.startDate)} - {machine.endDate ? normalizeDate(machine.endDate) : 'Abierta'}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-slate-500">Precio</div>
-                            <div className="text-slate-800">
-                              {typeof machine.price === 'number'
-                                ? `${machine.price.toFixed(2)} €/` + machine.priceUnit
-                                : '-'}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-slate-500">Estado</div>
-                            <div className="text-emerald-700 font-medium">{machine.status}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="waste" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Gestión de residuos</AccordionTrigger>
-          <AccordionContent>
-            {renderRowsSection(wasteRows, setWasteRows, {
-              sectionName: 'residuos',
-              firstPlaceholder: 'Residuo',
-              secondPlaceholder: 'Tipo',
-              secondOptions: [
-                { value: 'inertes', label: 'Inertes' },
-                { value: 'madera', label: 'Madera' },
-                { value: 'plastico', label: 'Plástico' },
-                { value: 'metal', label: 'Metal' },
-              ],
-              valueLabel: 'Cantidad',
-              useUnit: true,
-              unitOptions: [
-                { value: 'kg', label: 'Kg' },
-                { value: 'm3', label: 'M3' },
-                { value: 'contenedor', label: 'Contenedor' },
-              ],
-            })}
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="observations" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Observaciones e incidencias</AccordionTrigger>
-          <AccordionContent className="pt-2">
-            <ObservacionesIncidenciasSection
-              showHeader={false}
-              disabled={readOnly}
-              dictationActive={observacionesDictationActive}
-              dictationInterimText={observacionesInterimText}
-              dictationError={observacionesDictationError}
-              onDictate={() => {
-                if (observacionesDictationActive) {
-                  void stopObservacionesDictation();
-                  return;
-                }
-                void startObservacionesDictation();
-              }}
-              value={{
-                isCompleted: observationsCompleted,
-                category: observationsCategory,
-                text: observationsText,
-              }}
-              onChange={(next) => {
-                setObservationsCompleted(next.isCompleted);
-                setObservationsCategory(next.category);
-                setObservationsText(next.text);
-              }}
-            />
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="gallery" className="rounded-md border border-[#d9e1ea] bg-white px-4">
-          <AccordionTrigger className={sectionTriggerClass}>Galería de imágenes</AccordionTrigger>
-          <AccordionContent className="space-y-3 pt-2">
-            <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50">
-              <Camera className="mr-2 h-4 w-4" />
-              Añadir imágenes
-              <input type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryUpload} />
-            </label>
-            {galleryImages.length === 0 ? (
-              <div className="rounded-md border border-dashed p-6 text-center text-sm text-slate-500">Sin imágenes cargadas</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {galleryImages.map((image) => (
-                  <div key={image.id} className="rounded-md border bg-white p-2">
-                    <img src={image.dataUrl} alt={image.name} className="h-24 w-full rounded object-cover" />
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="truncate text-sm">{image.name}</span>
-                      <Button variant="ghost" size="icon" onClick={() => setGalleryImages(galleryImages.filter((item) => item.id !== image.id))}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </AccordionContent>
-        </AccordionItem>
+        <WorkforceSection
+          sectionTriggerClass={sectionTriggerClass}
+          workforceSectionCompleted={workforceSectionCompleted}
+          setWorkforceSectionCompleted={setWorkforceSectionCompleted}
+          totalWorkforceHours={totalWorkforceHours}
+          workforceGroups={workforceGroups}
+          removeWorkforceGroup={removeWorkforceGroup}
+          updateWorkforceGroup={updateWorkforceGroup}
+          updateWorkforceRow={updateWorkforceRow}
+          removeWorkforceRow={removeWorkforceRow}
+          addWorkforceRow={addWorkforceRow}
+          addWorkforceGroup={addWorkforceGroup}
+          editableNumericValue={editableNumericValue}
+          parseNumeric={parseNumeric}
+        />
+        <MachinerySection
+          sectionTriggerClass={sectionTriggerClass}
+          subcontractedMachineryGroups={subcontractedMachineryGroups}
+          addSubcontractedMachineryGroup={addSubcontractedMachineryGroup}
+          updateSubcontractedMachineryGroup={updateSubcontractedMachineryGroup}
+          handleSubcontractedMachineryUpload={handleSubcontractedMachineryUpload}
+          removeSubcontractedMachineryGroup={removeSubcontractedMachineryGroup}
+          updateSubcontractedMachineryRow={updateSubcontractedMachineryRow}
+          removeSubcontractedMachineryRow={removeSubcontractedMachineryRow}
+          addSubcontractedMachineryRow={addSubcontractedMachineryRow}
+          editableNumericValue={editableNumericValue}
+          parseNumeric={parseNumeric}
+        />
+        <MaterialsSection
+          sectionTriggerClass={sectionTriggerClass}
+          addMaterialGroup={addMaterialGroup}
+          readOnly={readOnly}
+          isAlbaranProcessing={isAlbaranProcessing}
+          albaranScanError={albaranScanError}
+          materialGroups={materialGroups}
+          activeMaterialGroupId={activeMaterialGroupId}
+          scanInFlightTargetGroupId={scanInFlightTargetGroupId}
+          openMaterialGroups={openMaterialGroups}
+          setMaterialGroupOpen={setMaterialGroupOpen}
+          setActiveMaterialGroupId={setActiveMaterialGroupId}
+          handleScanMaterialsForGroup={handleScanMaterialsForGroup}
+          removeMaterialGroup={removeMaterialGroup}
+          openAlbaranViewer={openAlbaranViewer}
+          updateMaterialGroup={updateMaterialGroup}
+          updateMaterialRow={updateMaterialRow}
+          updateServiceLine={updateServiceLine}
+          editableNumericValue={editableNumericValue}
+          parseNumeric={parseNumeric}
+          materialUnitOptions={MATERIAL_UNIT_OPTIONS}
+          openCostDifferenceDialogForRow={openCostDifferenceDialogForRow}
+          removeMaterialRow={removeMaterialRow}
+          addMaterialRow={addMaterialRow}
+          addServiceLine={addServiceLine}
+          removeServiceLine={removeServiceLine}
+        />
+        <SubcontractsSection
+          sectionTriggerClass={sectionTriggerClass}
+          subcontractGroups={subcontractGroups}
+          subcontractTotalsByGroupId={subcontractTotalsByGroupId}
+          computeGroupTotals={computeGroupTotals}
+          unitLabel={unitLabel}
+          addSubcontractGroup={addSubcontractGroup}
+          updateSubcontractGroup={updateSubcontractGroup}
+          handleSubcontractUpload={handleSubcontractUpload}
+          removeSubcontractGroup={removeSubcontractGroup}
+          openSubcontractWorkers={openSubcontractWorkers}
+          setSubcontractWorkersOpen={setSubcontractWorkersOpen}
+          computeRowTotals={computeRowTotals}
+          updateSubcontractRow={updateSubcontractRow}
+          normalizeSubcontractUnit={normalizeSubcontractUnit}
+          subcontractUnitOptions={SUBCONTRACT_UNIT_OPTIONS}
+          nonNegativeInt={nonNegativeInt}
+          nonNegative={nonNegative}
+          parseNumeric={parseNumeric}
+          editableNumericValue={editableNumericValue}
+          removeSubcontractRow={removeSubcontractRow}
+          addSubcontractWorker={addSubcontractWorker}
+          updateSubcontractWorker={updateSubcontractWorker}
+          removeSubcontractWorker={removeSubcontractWorker}
+          addSubcontractRow={addSubcontractRow}
+        />
+        <RentalSection
+          sectionTriggerClass={sectionTriggerClass}
+          rentalLoading={rentalLoading}
+          rentalError={rentalError}
+          selectedWorkId={selectedWorkId}
+          rentalResult={rentalResult}
+          normalizeDate={normalizeDate}
+        />
+        <WasteSection
+          sectionTriggerClass={sectionTriggerClass}
+          wasteRows={wasteRows}
+          setWasteRows={setWasteRows}
+          parseNumeric={parseNumeric}
+          editableNumericValue={editableNumericValue}
+        />
+        <ObservationsSection
+          sectionTriggerClass={sectionTriggerClass}
+          readOnly={readOnly}
+          observacionesDictationActive={observacionesDictationActive}
+          observacionesInterimText={observacionesInterimText}
+          observacionesDictationError={observacionesDictationError}
+          stopObservacionesDictation={stopObservacionesDictation}
+          startObservacionesDictation={startObservacionesDictation}
+          observationsCompleted={observationsCompleted}
+          observationsCategory={observationsCategory}
+          observationsText={observationsText}
+          setObservationsCompleted={setObservationsCompleted}
+          setObservationsCategory={setObservationsCategory}
+          setObservationsText={setObservationsText}
+        />
+        <GallerySection
+          sectionTriggerClass={sectionTriggerClass}
+          galleryImages={galleryImages}
+          handleGalleryUpload={handleGalleryUpload}
+          setGalleryImages={setGalleryImages}
+        />
       </Accordion>
+      <ForemanResourcesCard
+        readOnly={readOnly}
+        totalForemanSectionHours={totalForemanSectionHours}
+        foremanResources={foremanResources}
+        onAddResource={() => setForemanResources((current) => [...current, createForemanResource()])}
+        onUpdateResource={(id, patch) =>
+          setForemanResources((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+        }
+        onRemoveResource={(id) =>
+          setForemanResources((current) => current.filter((item) => item.id !== id))
+        }
+        mainForeman={mainForeman}
+        onMainForemanChange={setMainForeman}
+        mainForemanHours={mainForemanHours}
+        onMainForemanHoursChange={setMainForemanHours}
+        siteManager={siteManager}
+        onSiteManagerChange={setSiteManager}
+        editableNumericValue={editableNumericValue}
+        parseNumeric={parseNumeric}
+        nonNegative={nonNegative}
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
-              <Users className="h-4 w-4 text-slate-500" />
-              Encargados, capataces y recursos preventivos
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-slate-600">
-                <span className="mr-2">Total horas:</span>
-                <span className="font-semibold text-blue-700">{totalForemanSectionHours.toFixed(1)}h</span>
-              </div>
-              <Button
-                variant="outline"
-                disabled={readOnly}
-                onClick={() => setForemanResources((current) => [...current, createForemanResource()])}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4 text-[15px]">
-          <div className="space-y-3 rounded-md border border-[#d9e1ea] p-2">
-            {foremanResources.map((entry) => (
-              <div key={entry.id} className="rounded-md border border-[#d9e1ea] p-2">
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
-                  <div className="md:col-span-3">
-                    <Label className="mb-1 block text-sm font-medium text-slate-600">Rol</Label>
-                    <Select
-                      value={entry.role}
-                      disabled={readOnly}
-                      onValueChange={(value) =>
-                        setForemanResources((current) =>
-                          current.map((item) => (item.id === entry.id ? { ...item, role: value } : item)),
-                        )
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="encargado">Encargado</SelectItem>
-                        <SelectItem value="capataz">Capataz</SelectItem>
-                        <SelectItem value="preventivo">Recurso preventivo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      <AutoCloneSettingsCard
+        autoCloneNextDay={autoCloneNextDay}
+        onAutoCloneNextDayChange={setAutoCloneNextDay}
+      />
 
-                  <div className="md:col-span-6">
-                    <Label className="mb-1 block text-sm font-medium text-slate-600">Nombre</Label>
-                    <Input
-                      placeholder="Nombre del encargado"
-                      disabled={readOnly}
-                      value={entry.name}
-                      onChange={(event) =>
-                        setForemanResources((current) =>
-                          current.map((item) => (item.id === entry.id ? { ...item, name: event.target.value } : item)),
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <Label className="mb-1 block text-sm font-medium text-slate-600">Horas</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      disabled={readOnly}
-                      value={editableNumericValue(entry.hours)}
-                      onChange={(event) =>
-                        setForemanResources((current) =>
-                          current.map((item) =>
-                            item.id === entry.id ? { ...item, hours: nonNegative(parseNumeric(event.target.value)) } : item,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div className="md:col-span-1 flex items-end justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={readOnly}
-                      onClick={() => setForemanResources((current) => current.filter((item) => item.id !== entry.id))}
-                      title="Eliminar"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-          </div>
-
-          <div className="grid grid-cols-1 divide-y divide-[#d9e1ea] rounded-md border border-[#d9e1ea] md:grid-cols-3 md:divide-x md:divide-y-0">
-            <div className="p-3">
-              <Label htmlFor="main-foreman" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Encargado principal:
-              </Label>
-              <Input
-                id="main-foreman"
-                className="mt-2"
-                disabled={readOnly}
-                value={mainForeman}
-                onChange={(event) => setMainForeman(event.target.value)}
-              />
-            </div>
-            <div className="p-3">
-              <Label htmlFor="main-foreman-hours" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Horas encargado principal:
-              </Label>
-              <Input
-                id="main-foreman-hours"
-                className="mt-2"
-                type="number"
-                min={0}
-                step={0.5}
-                disabled={readOnly}
-                value={editableNumericValue(mainForemanHours)}
-                onChange={(event) => setMainForemanHours(nonNegative(parseNumeric(event.target.value)))}
-              />
-            </div>
-            <div className="p-3">
-              <Label htmlFor="site-manager" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Jefe de obra:
-              </Label>
-              <Input
-                id="site-manager"
-                className="mt-2"
-                disabled={readOnly}
-                value={siteManager}
-                onChange={(event) => setSiteManager(event.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Clonación automática</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <label className="flex items-start gap-3 rounded-md border bg-blue-50 p-3 text-sm">
-            <Checkbox
-              className="h-3 w-3 shrink-0"
-              checked={autoCloneNextDay}
-              onCheckedChange={(checked) => setAutoCloneNextDay(Boolean(checked))}
-            />
-            <div>
-              <p className="font-medium">Clonar automáticamente mañana a las 06:00</p>
-              <p className="text-sm text-slate-600">Si activas esta opción, este parte se clona para el siguiente día laborable.</p>
-            </div>
-          </label>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Firmas digitales</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <SignaturePad
-            label="Firma del encargado"
-            value={foremanSignature}
-            disabled={readOnly}
-            onChange={(signature) => setForemanSignature(signature)}
-          />
-          <SignaturePad
-            label="Firma del jefe de obra"
-            value={siteManagerSignature}
-            disabled={readOnly}
-            onChange={(signature) => setSiteManagerSignature(signature)}
-          />
-        </CardContent>
-      </Card>
+      <SignaturesCard
+        foremanSignature={foremanSignature}
+        onForemanSignatureChange={setForemanSignature}
+        siteManagerSignature={siteManagerSignature}
+        onSiteManagerSignatureChange={setSiteManagerSignature}
+        readOnly={readOnly}
+      />
       </div>
 
-      <div className="flex flex-col items-start justify-between gap-3 rounded-md border bg-white p-3 sm:flex-row sm:items-center">
-        <div className="space-y-1">
-          <div className="text-sm text-slate-600">Secciones completas: {completedSections}</div>
-          <div className="text-sm text-slate-600">Horas totales mano de obra: {totalWorkforceHours.toFixed(2)}</div>
-          <div className="text-sm text-slate-600">Estado seleccionado: {saveStatusSummaryLabel}</div>
-        </div>
-        <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
-          <Button variant="outline" onClick={() => void handleDownloadPdf()} disabled={exportingPdf || exportingExcel}>
-            <Download className="mr-2 h-4 w-4" />
-            {exportingPdf ? 'Generando...' : 'PDF'}
-          </Button>
-          <Button variant="outline" onClick={() => void handleDownloadExcel()} disabled={exportingPdf || exportingExcel}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            {exportingExcel ? 'Generando...' : 'Excel'}
-          </Button>
-          <Button onClick={() => void handleSave()} disabled={saving || readOnly}>
-            <Save className="mr-2 h-4 w-4" />
-            {readOnly ? 'Solo lectura' : saving ? 'Guardando...' : 'Guardar'}
-          </Button>
-        </div>
-      </div>
-
-      <Dialog
+      <SaveActionsBar
+        completedSections={completedSections}
+        totalWorkforceHours={totalWorkforceHours}
+        saveStatusSummaryLabel={saveStatusSummaryLabel}
+        exportingPdf={exportingPdf}
+        exportingExcel={exportingExcel}
+        onDownloadPdf={() => void handleDownloadPdf()}
+        onDownloadExcel={() => void handleDownloadExcel()}
+        onSave={() => void handleSave()}
+        saving={saving}
+        readOnly={readOnly}
+      />
+      <ScanReviewDialog
         open={scanReviewDialogOpen}
         onOpenChange={(open) => {
           setScanReviewDialogOpen(open);
           if (!open) {
             setScanReviewTargetGroupId(null);
+            setScanReviewOllamaProposal(null);
+            setScanReviewOllamaError(null);
+            setScanReviewOllamaLoading(false);
+            setScanReviewServiceLines([]);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Revision de albaran escaneado</DialogTitle>
-            <DialogDescription>
-              Ajusta los datos detectados antes de aplicarlos al bloque de materiales.
-            </DialogDescription>
-          </DialogHeader>
+        reason={scanReviewReason}
+        docType={scanReviewDocType}
+        docSubtype={scanReviewDocSubtype ?? null}
+        confidence={scanReviewConfidence}
+        profileUsed={scanReviewProfileUsed}
+        score={scanReviewScore}
+        warnings={scanReviewWarnings}
+        supplier={scanReviewSupplier}
+        invoiceNumber={scanReviewInvoiceNumber}
+        documentDate={scanReviewDocumentDate}
+        serviceDescription={scanReviewServiceDescription}
+        fieldConfidence={scanReviewFieldConfidence}
+        fieldWarnings={scanReviewFieldWarnings}
+        fieldMeta={scanReviewFieldMeta ?? null}
+        templateData={scanReviewTemplateData ?? null}
+        imageUris={scanReviewImageUris}
+        items={scanReviewItems}
+        serviceLines={scanReviewServiceLines}
+        onOpenViewer={() => openAlbaranViewer(scanReviewImageUris, 'Adjuntos del albaran escaneado')}
+        onSupplierChange={setScanReviewSupplier}
+        onInvoiceNumberChange={setScanReviewInvoiceNumber}
+        onDocumentDateChange={setScanReviewDocumentDate}
+        onServiceDescriptionChange={setScanReviewServiceDescription}
+        onUpdateItem={updateScanReviewItem}
+        onAddItem={addScanReviewItem}
+        onUpdateServiceLine={updateScanReviewServiceLine}
+        onAddServiceLine={addScanReviewServiceLine}
+        onRemoveServiceLine={removeScanReviewServiceLine}
+        onCreateOtrosLine={createOtrosLineInScanReview}
+        canImproveWithOllama={canImproveReviewWithOllama}
+        ollamaLoading={scanReviewOllamaLoading}
+        ollamaError={scanReviewOllamaError}
+        ollamaProposal={scanReviewOllamaProposal}
+        onImproveWithOllama={() => void improveScanReviewWithOllama()}
+        onApplyOllamaProposal={applyOllamaProposalToReview}
+        onKeepOffline={keepOfflineScanReview}
+        onCancel={() => {
+          setScanReviewDialogOpen(false);
+          setScanReviewTargetGroupId(null);
+          setScanReviewOllamaProposal(null);
+          setScanReviewOllamaError(null);
+          setScanReviewOllamaLoading(false);
+          setScanReviewServiceLines([]);
+        }}
+        onApply={applyScanReview}
+        parseNumeric={parseNumeric}
+      />
 
-          <div className="space-y-4">
-            {scanReviewReason ? (
-              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                {scanReviewReason}
-              </div>
-            ) : null}
+      <ServiceScanDialog
+        open={serviceScanDialogOpen}
+        onOpenChange={(open) => {
+          setServiceScanDialogOpen(open);
+          if (!open) {
+            setPendingServiceScanResolution(null);
+          }
+        }}
+        supplier={pendingServiceScanResolution?.parsed.supplier}
+        invoiceNumber={pendingServiceScanResolution?.parsed.invoiceNumber}
+        serviceDescription={pendingServiceScanResolution?.parsed.serviceDescription}
+        onCancel={cancelServiceScanResolution}
+        onConfirm={confirmServiceScanResolution}
+      />
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <Label>Proveedor</Label>
-                <Input
-                  className="mt-1"
-                  value={scanReviewSupplier}
-                  onChange={(event) => setScanReviewSupplier(event.target.value)}
-                  placeholder="Proveedor"
-                />
-              </div>
-              <div>
-                <Label>Nº Albarán</Label>
-                <Input
-                  className="mt-1"
-                  value={scanReviewInvoiceNumber}
-                  onChange={(event) => setScanReviewInvoiceNumber(event.target.value)}
-                  placeholder="Numero de albaran"
-                />
-              </div>
-            </div>
+      <NoPriceScanDialog
+        open={noPriceScanDialogOpen}
+        onOpenChange={(open) => {
+          setNoPriceScanDialogOpen(open);
+          if (!open) {
+            setPendingNoPriceScanResolution(null);
+          }
+        }}
+        supplier={pendingNoPriceScanResolution?.parsed.supplier}
+        invoiceNumber={pendingNoPriceScanResolution?.parsed.invoiceNumber}
+        description={pendingNoPriceScanResolution ? extractNoPriceDescription(pendingNoPriceScanResolution.parsed) || 'OTROS' : 'OTROS'}
+        onCancel={cancelNoPriceScanResolution}
+        onConfirm={confirmNoPriceScanResolution}
+      />
 
-            {scanReviewImageUris.length > 0 ? (
-              <div className="space-y-2">
-                <Label>Imagen escaneada</Label>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {scanReviewImageUris.slice(0, 2).map((uri) => (
-                    <img
-                      key={uri}
-                      src={Capacitor.convertFileSrc(uri)}
-                      alt="Albaran escaneado"
-                      className="max-h-64 w-full rounded-md border border-[#d9e1ea] object-contain bg-slate-50"
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="max-h-[46vh] space-y-2 overflow-y-auto rounded-md border border-[#d9e1ea] p-2">
-              {scanReviewItems.map((item, index) => (
-                <div key={`scan-review-${index}`} className="rounded-md border border-[#d9e1ea] p-2">
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
-                    <div className="md:col-span-2">
-                      <Label className="text-xs text-slate-600">Material</Label>
-                      <Input
-                        className="mt-1"
-                        value={item.material}
-                        onChange={(event) => updateScanReviewItem(index, { material: event.target.value })}
-                        placeholder="Material"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Cantidad</Label>
-                      <Input
-                        className="mt-1"
-                        type="number"
-                        step={0.01}
-                        value={item.quantity ?? ''}
-                        onChange={(event) =>
-                          updateScanReviewItem(index, {
-                            quantity: event.target.value === '' ? null : parseNumeric(event.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Unidad</Label>
-                      <Input
-                        className="mt-1"
-                        value={item.unit ?? ''}
-                        onChange={(event) => updateScanReviewItem(index, { unit: event.target.value || null })}
-                        placeholder="ud, m2, kg..."
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-slate-600">Precio/Ud</Label>
-                      <Input
-                        className="mt-1"
-                        type="number"
-                        step={0.01}
-                        value={item.unitPrice ?? ''}
-                        onChange={(event) =>
-                          updateScanReviewItem(index, {
-                            unitPrice: event.target.value === '' ? null : parseNumeric(event.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-                    <div>
-                      <Label className="text-xs text-slate-600">Coste documento</Label>
-                      <Input
-                        className="mt-1"
-                        type="number"
-                        step={0.01}
-                        value={item.costDoc ?? ''}
-                        onChange={(event) =>
-                          updateScanReviewItem(index, {
-                            costDoc: event.target.value === '' ? null : parseNumeric(event.target.value),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label className="text-xs text-slate-600">Texto OCR</Label>
-                      <Input className="mt-1" value={item.rowText || ''} readOnly />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button variant="outline" onClick={addScanReviewItem}>
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir fila
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setScanReviewDialogOpen(false);
-                    setScanReviewTargetGroupId(null);
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button onClick={applyScanReview}>Aplicar</Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
+      <RescanConfirmDialog
         open={rescanConfirmDialogOpen}
         onOpenChange={(open) => {
           setRescanConfirmDialogOpen(open);
@@ -3848,32 +2629,14 @@ export const GenerateWorkReportPanel = ({
             setPendingRescanTargetGroupId(null);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Re-escanear albarán</DialogTitle>
-            <DialogDescription>
-              Este albarán ya contiene datos. Si escaneas de nuevo, se sobrescribirán. ¿Quieres continuar?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRescanConfirmDialogOpen(false);
-                setPendingRescanTargetGroupId(null);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={continueRescanForMaterialGroup}>
-              Continuar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        onCancel={() => {
+          setRescanConfirmDialogOpen(false);
+          setPendingRescanTargetGroupId(null);
+        }}
+        onContinue={continueRescanForMaterialGroup}
+      />
 
-      <Dialog
+      <DuplicateDialog
         open={duplicateDialogOpen}
         onOpenChange={(open) => {
           setDuplicateDialogOpen(open);
@@ -3881,36 +2644,13 @@ export const GenerateWorkReportPanel = ({
             setPendingDuplicateResolution(null);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Albarán duplicado detectado</DialogTitle>
-            <DialogDescription>
-              Ya existe un albarán con este Proveedor y Nº. ¿Qué quieres hacer?
-            </DialogDescription>
-          </DialogHeader>
+        duplicateLabel={pendingDuplicateResolution?.duplicateLabel}
+        onApplyToTarget={applyDuplicateToTargetGroup}
+        onOverwriteExisting={overwriteExistingDuplicateGroup}
+        onCancel={cancelDuplicateResolution}
+      />
 
-          {pendingDuplicateResolution ? (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Coincide con: {pendingDuplicateResolution.duplicateLabel}
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button onClick={applyDuplicateToTargetGroup}>
-              Aplicar a este albarán
-            </Button>
-            <Button variant="outline" onClick={overwriteExistingDuplicateGroup}>
-              Sobrescribir albarán existente
-            </Button>
-            <Button variant="ghost" onClick={cancelDuplicateResolution}>
-              Cancelar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
+      <CostDifferenceDialog
         open={costDifferenceDialogOpen}
         onOpenChange={(open) => {
           setCostDifferenceDialogOpen(open);
@@ -3918,133 +2658,30 @@ export const GenerateWorkReportPanel = ({
             setPendingCostDifferences([]);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Diferencia de coste detectada</DialogTitle>
-            <DialogDescription>
-              El coste del documento no coincide con el calculado (cantidad × precio/ud).
-            </DialogDescription>
-          </DialogHeader>
+        differences={pendingCostDifferences}
+        onKeep={keepDocumentCostDifferences}
+        onOverwrite={overwriteCostDifferencesWithCalculated}
+      />
 
-          <div className="max-h-[45vh] space-y-2 overflow-y-auto">
-            {pendingCostDifferences.map((difference, index) => (
-              <div key={`${difference.groupId}-${difference.rowId}-${index}`} className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm">
-                <div className="font-medium text-amber-900">{difference.material}</div>
-                <div className="text-amber-800">
-                  Doc: {difference.costDoc.toFixed(2)} € | Calculado: {difference.costCalc.toFixed(2)} € | Delta: {difference.difference.toFixed(2)} €
-                </div>
-              </div>
-            ))}
-          </div>
+      <AlbaranDocumentViewerModal
+        open={albaranViewerOpen}
+        imageUris={albaranViewerImageUris}
+        initialIndex={albaranViewerInitialIndex}
+        title={albaranViewerTitle}
+        onClose={closeAlbaranViewer}
+      />
 
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={keepDocumentCostDifferences}>
-              Mantener
-            </Button>
-            <Button onClick={overwriteCostDifferencesWithCalculated}>
-              Sobrescribir
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={saveStatusDialogOpen} onOpenChange={setSaveStatusDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Estado del Parte de Trabajo</DialogTitle>
-            <DialogDescription>
-              Selecciona uno o más estados según corresponda.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">
-              Puedes seleccionar ambos estados de validación. <span className="font-medium">Completado</span> deselecciona el resto.
-            </div>
-
-            <button
-              type="button"
-              className={`w-full rounded-md border p-4 text-left transition-colors ${
-                saveStatusSelection.includes('completed')
-                  ? 'border-emerald-300 bg-emerald-50'
-                  : 'border-slate-200 bg-white hover:bg-slate-50'
-              }`}
-              onClick={() => handleToggleSaveStatus('completed')}
-            >
-              <div className="flex items-start gap-3">
-                <CheckCircle2
-                  className={`mt-0.5 h-5 w-5 ${
-                    saveStatusSelection.includes('completed') ? 'text-emerald-600' : 'text-slate-400'
-                  }`}
-                />
-                <div>
-                  <div className={`text-lg font-semibold ${saveStatusSelection.includes('completed') ? 'text-emerald-700' : 'text-slate-700'}`}>
-                    Completado
-                  </div>
-                  <div className="text-sm text-muted-foreground">El parte está completo y listo.</div>
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className={`w-full rounded-md border p-4 text-left transition-colors ${
-                saveStatusSelection.includes('missing_data')
-                  ? 'border-amber-300 bg-amber-50'
-                  : 'border-slate-200 bg-white hover:bg-slate-50'
-              }`}
-              onClick={() => handleToggleSaveStatus('missing_data')}
-            >
-              <div className="flex items-start gap-3">
-                <FileWarning
-                  className={`mt-0.5 h-5 w-5 ${
-                    saveStatusSelection.includes('missing_data') ? 'text-amber-600' : 'text-slate-400'
-                  }`}
-                />
-                <div>
-                  <div className={`text-lg font-semibold ${saveStatusSelection.includes('missing_data') ? 'text-amber-700' : 'text-slate-700'}`}>
-                    Faltan Datos
-                  </div>
-                  <div className="text-sm text-muted-foreground">Faltan datos por completar.</div>
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className={`w-full rounded-md border p-4 text-left transition-colors ${
-                saveStatusSelection.includes('missing_delivery_notes')
-                  ? 'border-rose-300 bg-rose-50'
-                  : 'border-slate-200 bg-white hover:bg-slate-50'
-              }`}
-              onClick={() => handleToggleSaveStatus('missing_delivery_notes')}
-            >
-              <div className="flex items-start gap-3">
-                <FileBadge2
-                  className={`mt-0.5 h-5 w-5 ${
-                    saveStatusSelection.includes('missing_delivery_notes') ? 'text-rose-600' : 'text-slate-400'
-                  }`}
-                />
-                <div>
-                  <div className={`text-lg font-semibold ${saveStatusSelection.includes('missing_delivery_notes') ? 'text-rose-700' : 'text-slate-700'}`}>
-                    Faltan Albaranes
-                  </div>
-                  <div className="text-sm text-muted-foreground">Faltan albaranes por adjuntar.</div>
-                </div>
-              </div>
-            </button>
-
-            <Button className="w-full" onClick={() => void handleConfirmSaveWithStatus()} disabled={saving || readOnly}>
-              Confirmar Estado
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SaveStatusDialog
+        open={saveStatusDialogOpen}
+        onOpenChange={setSaveStatusDialogOpen}
+        selection={saveStatusSelection}
+        onToggle={handleToggleSaveStatus}
+        onConfirm={() => void handleConfirmSaveWithStatus()}
+        saving={saving}
+        readOnly={readOnly}
+      />
     </div>
   );
 };
-
-
 
 
