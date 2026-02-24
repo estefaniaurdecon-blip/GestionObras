@@ -1542,8 +1542,19 @@ export const GenerateWorkReportPanel = ({
         return hasDescription || hasValues;
       });
 
+    const serviceSubtypeSet = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
+      'BOMBEOS_GILGIL_ALBARAN_BOMBA',
+      'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
+      'CONSTRUCCIONES_PARTE_TRABAJO',
+    ]);
+    const isServiceReview =
+      scanReviewDocType === 'SERVICE_MACHINERY' ||
+      (scanReviewDocSubtype ? serviceSubtypeSet.has(scanReviewDocSubtype) : false) ||
+      normalizedServiceLines.length > 0 ||
+      (sanitizeText(scanReviewServiceDescription).length > 0 && scanReviewDocType !== 'MATERIALS_TABLE');
+
     const reviewedItems =
-      scanReviewDocType === 'SERVICE_MACHINERY'
+      isServiceReview
         ? buildParsedItemsFromServiceLines(normalizedServiceLines)
         : scanReviewItems.map((item) => {
             const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : null;
@@ -1570,11 +1581,11 @@ export const GenerateWorkReportPanel = ({
       supplier: sanitizeText(scanReviewSupplier) || null,
       invoiceNumber: sanitizeText(scanReviewInvoiceNumber) || null,
       documentDate: sanitizeText(scanReviewDocumentDate) || null,
-      docType: scanReviewDocType,
+      docType: isServiceReview ? 'SERVICE_MACHINERY' : scanReviewDocType,
       docSubtype: scanReviewDocSubtype ?? null,
       serviceDescription:
         sanitizeText(scanReviewServiceDescription) ||
-        (scanReviewDocType === 'SERVICE_MACHINERY' ? normalizedServiceLines[0]?.description ?? null : null),
+        (isServiceReview ? normalizedServiceLines[0]?.description ?? null : null),
       confidence: 'medium',
       warnings: scanReviewWarnings,
       score: scanReviewScore,

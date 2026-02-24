@@ -100,7 +100,17 @@ export const ScanReviewDialog = ({
   onApply,
   parseNumeric,
 }: ScanReviewDialogProps) => {
-  const isServiceDoc = docType === 'SERVICE_MACHINERY';
+  const serviceSubtypeSet = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
+    'BOMBEOS_GILGIL_ALBARAN_BOMBA',
+    'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
+    'CONSTRUCCIONES_PARTE_TRABAJO',
+  ]);
+  const hasServiceDescription = sanitizeText(serviceDescription).length > 0;
+  const isServiceDoc =
+    docType === 'SERVICE_MACHINERY' ||
+    (docSubtype ? serviceSubtypeSet.has(docSubtype) : false) ||
+    serviceLines.length > 0 ||
+    (hasServiceDescription && docType !== 'MATERIALS_TABLE');
   const noStrongTable = docType !== 'MATERIALS_TABLE' || warnings.includes('NO_TABLE_STRONG');
   const hasNoPriceColumnsWarning = warnings.includes('NO_PRICE_COLUMNS');
   const serviceInfoWarnings = new Set(['NO_PRICE_COLUMNS', 'NO_ECONOMIC_COLUMNS', 'MISSING_INVOICE_NUMBER', 'MISSING_DATE']);
