@@ -13,6 +13,7 @@ import { useOrganizationLogo } from '@/hooks/useOrganizationLogo';
 import { useOrganization } from '@/hooks/useOrganization';
 import { CustomHolidaysManagement } from '@/components/CustomHolidaysManagement';
 import { CompanyStandardization } from '@/components/admin/CompanyStandardization';
+import { analyzeLogoColors } from '@/integrations/api/client';
 
 interface OrganizationData {
   id: string;
@@ -122,13 +123,9 @@ export const OrganizationSettings = () => {
           
           // Analyze colors with AI
           try {
-            const { data: colorData, error: colorError } = await supabase.functions.invoke('analyze-logo-colors', {
-              body: { imageDataUrl: dataUrl }
-            });
-            
-            if (colorError) {
-              console.error('Error analyzing colors:', colorError);
-            } else if (colorData?.colors && colorData.colors.length > 0) {
+            const colorData = await analyzeLogoColors({ imageDataUrl: dataUrl });
+
+            if (colorData?.colors && colorData.colors.length > 0) {
               // Store extracted colors for user to choose
               setExtractedColors(colorData.colors);
               

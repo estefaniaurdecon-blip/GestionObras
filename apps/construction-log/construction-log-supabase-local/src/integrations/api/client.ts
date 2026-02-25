@@ -920,6 +920,78 @@ export async function setToolEnabledForTenant(
 }
 
 // ============================================================
+// AI RUNTIME API
+// ============================================================
+
+export interface GenerateSummaryReportRequest {
+  workReports: Record<string, unknown>[];
+  filters?: {
+    period?: string;
+    work?: string;
+  };
+  organizationId?: string | number | null;
+}
+
+export interface GenerateSummaryReportResponse {
+  success: boolean;
+  statistics: Record<string, unknown>;
+  anomalies: Array<Record<string, unknown>>;
+  aiAnalysis: string;
+  chartData: Record<string, unknown>;
+  periodDescription: string;
+  error?: string;
+}
+
+export interface AnalyzeWorkImageRequest {
+  imageBase64: string;
+}
+
+export interface AnalyzeWorkImageResponse {
+  description: string;
+}
+
+export interface BrandColor {
+  hex: string;
+  name: string;
+}
+
+export interface AnalyzeLogoColorsRequest {
+  imageDataUrl: string;
+}
+
+export interface AnalyzeLogoColorsResponse {
+  colors: BrandColor[];
+  brandColor: string;
+}
+
+export async function generateSummaryReport(
+  payload: GenerateSummaryReportRequest
+): Promise<GenerateSummaryReportResponse> {
+  return apiFetchJson<GenerateSummaryReportResponse>('/api/v1/ai/generate-summary-report', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function analyzeWorkImage(
+  payload: AnalyzeWorkImageRequest
+): Promise<AnalyzeWorkImageResponse> {
+  return apiFetchJson<AnalyzeWorkImageResponse>('/api/v1/ai/analyze-work-image', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function analyzeLogoColors(
+  payload: AnalyzeLogoColorsRequest
+): Promise<AnalyzeLogoColorsResponse> {
+  return apiFetchJson<AnalyzeLogoColorsResponse>('/api/v1/ai/analyze-logo-colors', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+// ============================================================
 // PLACEHOLDER - For unimplemented features
 // ============================================================
 

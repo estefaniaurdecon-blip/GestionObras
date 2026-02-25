@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from . import (
+    ai_runtime,
     ai_chat,
     audit,
     auth,
@@ -33,6 +34,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(branding.router, prefix="/branding", tags=["branding"])
 api_router.include_router(updates.router, prefix="/updates", tags=["updates"])
 api_router.include_router(ai_chat.router, prefix="/ai", tags=["ai"])
+api_router.include_router(ai_runtime.router, prefix="/ai", tags=["ai"])
 
 # Rutas protegidas
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])

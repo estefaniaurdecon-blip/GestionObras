@@ -1,0 +1,765 @@
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime, timedelta
+from typing import Any
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.api.deps import get_current_active_user
+from app.core.config import settings
+from app.models.user import User
+
+
+router = APIRouter()
+
+_DEFAULT_BRAND_COLOR = {"hex": "#2563EB", "name": "Default Blue"}
+_HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_CLEAN_WS_RE = re.compile(r"\s+")
+
+
+class GenerateSummaryReportRequest(BaseModel):
+    workReports: list[dict[str, Any]] = Field(default_factory=list)
+    filters: dict[str, Any] | None = None
+    organizationId: Any | None = None
+
+
+class AnalyzeWorkImageRequest(BaseModel):
+    imageBase64: str
+
+
+class AnalyzeLogoColorsRequest(BaseModel):
+    imageDataUrl: str
+
+
+def _lovable_api_key() -> str:
+    key = (settings.lovable_api_key or "").strip()
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LOVABLE_API_KEY no configurada.",
+        )
+    return key
+
+
+async def _lovable_chat(payload: dict[str, Any], *, timeout: int = 60) -> dict[str, Any]:
+    key = _lovable_api_key()
+    url = "https://ai.gateway.lovable.dev/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(url, headers=headers, json=payload)
+
+    if response.status_code == 429:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please try again later.",
+        )
+    if response.status_code == 402:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Payment required. Please add credits to your Lovable workspace.",
+        )
+    if response.status_code >= 400:
+        snippet = response.text[:240]
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI gateway error ({response.status_code}): {snippet}",
+        )
+
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Respuesta invalida desde AI gateway.",
+        ) from exc
+
+
+def _as_float(value: Any) -> float:
+    try:
+        if value is None or value == "":
+            return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize_report(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": raw.get("id"),
+        "date": raw.get("date"),
+        "workName": raw.get("workName") or raw.get("work_name") or "",
+        "workNumber": raw.get("workNumber") or raw.get("work_number") or "",
+        "foreman": raw.get("foreman") or "",
+        "foremanHours": raw.get("foremanHours") or raw.get("foreman_hours") or 0,
+        "siteManager": raw.get("siteManager") or raw.get("site_manager") or "",
+        "status": raw.get("status") or "completed",
+        "approved": bool(raw.get("approved") or False),
+        "workGroups": raw.get("workGroups") or raw.get("work_groups") or [],
+        "machineryGroups": raw.get("machineryGroups") or raw.get("machinery_groups") or [],
+        "materialGroups": raw.get("materialGroups") or raw.get("material_groups") or [],
+        "subcontractGroups": raw.get("subcontractGroups") or raw.get("subcontract_groups") or [],
+        "observations": raw.get("observations") or "",
+    }
+
+
+def _safe_date_str(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if len(text) >= 10:
+        return text[:10]
+    return text
+
+
+def _calculate_statistics(reports: list[dict[str, Any]]) -> dict[str, Any]:
+    stats: dict[str, Any] = {
+        "totalReports": len(reports),
+        "completedReports": 0,
+        "approvedReports": 0,
+        "pendingReports": 0,
+        "totals": {
+            "workHours": 0.0,
+            "workersCount": 0,
+            "machineryHours": 0.0,
+            "machineryCount": 0,
+            "materialCost": 0.0,
+            "materialItems": 0,
+            "subcontractCost": 0.0,
+            "subcontractWorkers": 0,
+            "foremanHours": 0.0,
+        },
+        "byWork": {},
+        "byCompany": {},
+        "bySupplier": {},
+        "byMonth": {},
+        "byDayOfWeek": {},
+        "dateRange": {"earliest": "", "latest": ""},
+        "foremen": [],
+        "siteManagers": [],
+    }
+
+    sorted_reports = sorted(reports, key=lambda r: _safe_date_str(r.get("date")))
+    if sorted_reports:
+        stats["dateRange"]["earliest"] = _safe_date_str(sorted_reports[0].get("date"))
+        stats["dateRange"]["latest"] = _safe_date_str(sorted_reports[-1].get("date"))
+
+    foremen: set[str] = set()
+    site_managers: set[str] = set()
+
+    day_names = [
+        "Domingo",
+        "Lunes",
+        "Martes",
+        "Miercoles",
+        "Jueves",
+        "Viernes",
+        "Sabado",
+    ]
+
+    for report in reports:
+        date_str = _safe_date_str(report.get("date"))
+        if report.get("status") == "completed":
+            stats["completedReports"] += 1
+        else:
+            stats["pendingReports"] += 1
+        if report.get("approved"):
+            stats["approvedReports"] += 1
+
+        stats["totals"]["foremanHours"] += _as_float(report.get("foremanHours"))
+
+        foreman = str(report.get("foreman") or "").strip()
+        site_manager = str(report.get("siteManager") or "").strip()
+        if foreman:
+            foremen.add(foreman)
+        if site_manager:
+            site_managers.add(site_manager)
+
+        month_key = date_str[:7] if len(date_str) >= 7 else "unknown"
+        by_month = stats["byMonth"].setdefault(
+            month_key,
+            {
+                "reports": 0,
+                "workHours": 0.0,
+                "machineryHours": 0.0,
+                "materialCost": 0.0,
+                "subcontractCost": 0.0,
+            },
+        )
+        by_month["reports"] += 1
+
+        try:
+            day_idx = datetime.fromisoformat(date_str).weekday()
+            day_name = day_names[(day_idx + 1) % 7]
+        except ValueError:
+            day_name = "Desconocido"
+        stats["byDayOfWeek"][day_name] = stats["byDayOfWeek"].get(day_name, 0) + 1
+
+        work_key = f"{report.get('workNumber', '')} - {report.get('workName', '')}".strip(" -")
+        if not work_key:
+            work_key = "Obra sin nombre"
+        by_work = stats["byWork"].setdefault(
+            work_key,
+            {
+                "reportCount": 0,
+                "workHours": 0.0,
+                "machineryHours": 0.0,
+                "materialCost": 0.0,
+                "subcontractCost": 0.0,
+                "companies": [],
+            },
+        )
+        by_work["reportCount"] += 1
+        companies_set = set(by_work.get("companies", []))
+
+        for group in report.get("workGroups") or []:
+            company = str((group or {}).get("company") or "Sin empresa").strip() or "Sin empresa"
+            companies_set.add(company)
+            by_company = stats["byCompany"].setdefault(
+                company,
+                {"workHours": 0.0, "machineryHours": 0.0, "reportCount": 0},
+            )
+            by_company["reportCount"] += 1
+            for item in (group or {}).get("items") or []:
+                hours = _as_float((item or {}).get("hours"))
+                stats["totals"]["workHours"] += hours
+                stats["totals"]["workersCount"] += 1
+                by_company["workHours"] += hours
+                by_work["workHours"] += hours
+                by_month["workHours"] += hours
+
+        for group in report.get("machineryGroups") or []:
+            company = str((group or {}).get("company") or "Sin empresa").strip() or "Sin empresa"
+            by_company = stats["byCompany"].setdefault(
+                company,
+                {"workHours": 0.0, "machineryHours": 0.0, "reportCount": 0},
+            )
+            for item in (group or {}).get("items") or []:
+                hours = _as_float((item or {}).get("hours"))
+                stats["totals"]["machineryHours"] += hours
+                stats["totals"]["machineryCount"] += 1
+                by_company["machineryHours"] += hours
+                by_work["machineryHours"] += hours
+                by_month["machineryHours"] += hours
+
+        for group in report.get("materialGroups") or []:
+            supplier = str((group or {}).get("supplier") or "Sin proveedor").strip() or "Sin proveedor"
+            by_supplier = stats["bySupplier"].setdefault(
+                supplier,
+                {"materialCost": 0.0, "itemCount": 0},
+            )
+            for item in (group or {}).get("items") or []:
+                total = _as_float((item or {}).get("total"))
+                if total <= 0:
+                    total = _as_float((item or {}).get("quantity")) * _as_float((item or {}).get("unitPrice"))
+                stats["totals"]["materialCost"] += total
+                stats["totals"]["materialItems"] += 1
+                by_supplier["materialCost"] += total
+                by_supplier["itemCount"] += 1
+                by_work["materialCost"] += total
+                by_month["materialCost"] += total
+
+        for group in report.get("subcontractGroups") or []:
+            for item in (group or {}).get("items") or []:
+                cost = _as_float((item or {}).get("total"))
+                workers = int(_as_float((item or {}).get("workers")))
+                stats["totals"]["subcontractCost"] += cost
+                stats["totals"]["subcontractWorkers"] += workers
+                by_work["subcontractCost"] += cost
+                by_month["subcontractCost"] += cost
+
+        by_work["companies"] = sorted(companies_set)
+
+    stats["foremen"] = sorted(foremen)
+    stats["siteManagers"] = sorted(site_managers)
+    return stats
+
+
+def _detect_anomalies(reports: list[dict[str, Any]], stats: dict[str, Any]) -> list[dict[str, Any]]:
+    anomalies: list[dict[str, Any]] = []
+    total_reports = max(int(stats.get("totalReports") or 0), 1)
+    avg_hours = _as_float(stats.get("totals", {}).get("workHours")) / total_reports
+
+    high_hours: list[str] = []
+    low_hours: list[str] = []
+    missing_data: list[str] = []
+    duplicate_suspects: list[str] = []
+    date_work_combos: dict[str, list[Any]] = {}
+
+    for report in reports:
+        report_hours = 0.0
+        for group in report.get("workGroups") or []:
+            for item in (group or {}).get("items") or []:
+                report_hours += _as_float((item or {}).get("hours"))
+
+        date_str = _safe_date_str(report.get("date"))
+        work_name = str(report.get("workName") or "").strip() or "Obra sin nombre"
+
+        if avg_hours > 0 and report_hours > avg_hours * 3:
+            high_hours.append(f"{date_str} - {work_name} ({report_hours:.1f}h)")
+        if avg_hours > 0 and report_hours > 0 and report_hours < avg_hours * 0.2:
+            low_hours.append(f"{date_str} - {work_name} ({report_hours:.1f}h)")
+
+        has_work = bool(report.get("workGroups"))
+        has_machinery = bool(report.get("machineryGroups"))
+        has_materials = bool(report.get("materialGroups"))
+        if not has_work and not has_machinery and not has_materials:
+            missing_data.append(f"{date_str} - {work_name}")
+
+        combo_key = f"{date_str}_{report.get('workNumber')}"
+        date_work_combos.setdefault(combo_key, []).append(report.get("id"))
+
+    for combo, ids in date_work_combos.items():
+        if len(ids) > 1:
+            duplicate_suspects.append(combo.replace("_", " - Obra "))
+
+    if high_hours:
+        anomalies.append(
+            {
+                "type": "warning",
+                "title": "Partes con horas inusualmente altas",
+                "description": (
+                    f"Se detectaron {len(high_hours)} partes por encima del promedio ({avg_hours:.1f}h)."
+                ),
+                "affectedItems": high_hours[:10],
+            }
+        )
+    if low_hours:
+        anomalies.append(
+            {
+                "type": "info",
+                "title": "Partes con pocas horas registradas",
+                "description": f"Se detectaron {len(low_hours)} partes con horas muy bajas.",
+                "affectedItems": low_hours[:10],
+            }
+        )
+    if missing_data:
+        anomalies.append(
+            {
+                "type": "error",
+                "title": "Partes sin datos de trabajo",
+                "description": f"Se encontraron {len(missing_data)} partes sin mano de obra, maquinaria ni materiales.",
+                "affectedItems": missing_data[:10],
+            }
+        )
+    if duplicate_suspects:
+        anomalies.append(
+            {
+                "type": "warning",
+                "title": "Posibles partes duplicados",
+                "description": f"Se detectaron {len(duplicate_suspects)} combinaciones fecha/obra duplicadas.",
+                "affectedItems": duplicate_suspects[:10],
+            }
+        )
+
+    threshold = datetime.utcnow() - timedelta(days=30)
+    last_by_work: dict[str, str] = {}
+    for report in reports:
+        work_key = f"{report.get('workNumber', '')} - {report.get('workName', '')}".strip(" -")
+        if not work_key:
+            continue
+        date_str = _safe_date_str(report.get("date"))
+        previous = last_by_work.get(work_key)
+        if not previous or date_str > previous:
+            last_by_work[work_key] = date_str
+
+    inactive = []
+    for work, date_str in last_by_work.items():
+        try:
+            if datetime.fromisoformat(date_str) < threshold:
+                inactive.append(f"{work} (ultimo: {date_str})")
+        except ValueError:
+            continue
+    if inactive:
+        anomalies.append(
+            {
+                "type": "info",
+                "title": "Obras sin actividad reciente",
+                "description": f"{len(inactive)} obras sin partes en los ultimos 30 dias.",
+                "affectedItems": inactive[:10],
+            }
+        )
+
+    return anomalies
+
+
+def _analysis_prompt(stats: dict[str, Any], anomalies: list[dict[str, Any]], period_description: str) -> str:
+    works = stats.get("byWork", {})
+    by_company = stats.get("byCompany", {})
+    by_supplier = stats.get("bySupplier", {})
+    by_day = stats.get("byDayOfWeek", {})
+
+    works_lines = "\n".join(
+        f"- {work}: {data.get('reportCount', 0)} partes, {data.get('workHours', 0):.1f}h, {data.get('materialCost', 0):.2f} EUR"
+        for work, data in works.items()
+    )
+    top_companies = sorted(
+        by_company.items(),
+        key=lambda item: _as_float(item[1].get("workHours")) + _as_float(item[1].get("machineryHours")),
+        reverse=True,
+    )[:10]
+    company_lines = "\n".join(
+        f"- {name}: {(_as_float(data.get('workHours')) + _as_float(data.get('machineryHours'))):.1f}h"
+        for name, data in top_companies
+    )
+    top_suppliers = sorted(
+        by_supplier.items(),
+        key=lambda item: _as_float(item[1].get("materialCost")),
+        reverse=True,
+    )[:5]
+    supplier_lines = "\n".join(
+        f"- {name}: {_as_float(data.get('materialCost')):.2f} EUR ({int(_as_float(data.get('itemCount')))} items)"
+        for name, data in top_suppliers
+    )
+    day_lines = "\n".join(f"- {day}: {count} partes" for day, count in by_day.items())
+    anomaly_lines = (
+        "No se detectaron anomalias significativas."
+        if not anomalies
+        else "\n".join(
+            f"- {entry.get('title')}: {entry.get('description')}"
+            for entry in anomalies
+        )
+    )
+
+    totals = stats.get("totals", {})
+    return (
+        "Eres un experto en gestion de obras de construccion.\n"
+        "Genera un informe ejecutivo en espanol con datos concretos y recomendaciones accionables.\n\n"
+        f"Periodo: {period_description}\n"
+        f"Total partes: {stats.get('totalReports', 0)}\n"
+        f"Completados: {stats.get('completedReports', 0)}\n"
+        f"Aprobados: {stats.get('approvedReports', 0)}\n"
+        f"Rango fechas: {stats.get('dateRange', {}).get('earliest', '')} a {stats.get('dateRange', {}).get('latest', '')}\n\n"
+        "Totales:\n"
+        f"- Horas mano de obra: {_as_float(totals.get('workHours')):.1f}\n"
+        f"- Horas maquinaria: {_as_float(totals.get('machineryHours')):.1f}\n"
+        f"- Coste materiales: {_as_float(totals.get('materialCost')):.2f} EUR\n"
+        f"- Coste subcontratas: {_as_float(totals.get('subcontractCost')):.2f} EUR\n"
+        f"- Horas encargados: {_as_float(totals.get('foremanHours')):.1f}\n\n"
+        "Desglose por obra:\n"
+        f"{works_lines or '- Sin datos'}\n\n"
+        "Top empresas por horas:\n"
+        f"{company_lines or '- Sin datos'}\n\n"
+        "Top proveedores de materiales:\n"
+        f"{supplier_lines or '- Sin datos'}\n\n"
+        "Distribucion por dia:\n"
+        f"{day_lines or '- Sin datos'}\n\n"
+        "Anomalias:\n"
+        f"{anomaly_lines}\n\n"
+        "Estructura obligatoria:\n"
+        "1) Resumen ejecutivo\n"
+        "2) Analisis de productividad\n"
+        "3) Analisis economico\n"
+        "4) Analisis de recursos humanos\n"
+        "5) Problemas detectados\n"
+        "6) Conclusiones\n"
+        "7) Recomendaciones\n"
+    )
+
+
+def _chart_data(stats: dict[str, Any]) -> dict[str, Any]:
+    by_month = stats.get("byMonth", {})
+    by_company = stats.get("byCompany", {})
+    by_work = stats.get("byWork", {})
+
+    monthly_trends = [
+        {
+            "month": month,
+            "workHours": _as_float(data.get("workHours")),
+            "machineryHours": _as_float(data.get("machineryHours")),
+            "materialCost": _as_float(data.get("materialCost")),
+            "subcontractCost": _as_float(data.get("subcontractCost")),
+            "reports": int(_as_float(data.get("reports"))),
+        }
+        for month, data in sorted(by_month.items(), key=lambda item: item[0])
+    ]
+    cost_distribution = [
+        {"name": "Mano de Obra", "value": _as_float(stats.get("totals", {}).get("workHours")) * 25.0, "color": "#6E8F56"},
+        {"name": "Maquinaria", "value": _as_float(stats.get("totals", {}).get("machineryHours")) * 50.0, "color": "#4A7C59"},
+        {"name": "Materiales", "value": _as_float(stats.get("totals", {}).get("materialCost")), "color": "#8B4513"},
+        {"name": "Subcontratas", "value": _as_float(stats.get("totals", {}).get("subcontractCost")), "color": "#2F4F4F"},
+    ]
+    top_companies = [
+        {
+            "company": company,
+            "workHours": _as_float(data.get("workHours")),
+            "machineryHours": _as_float(data.get("machineryHours")),
+            "total": _as_float(data.get("workHours")) + _as_float(data.get("machineryHours")),
+        }
+        for company, data in sorted(
+            by_company.items(),
+            key=lambda item: _as_float(item[1].get("workHours")) + _as_float(item[1].get("machineryHours")),
+            reverse=True,
+        )[:10]
+    ]
+    top_works = [
+        {
+            "work": work,
+            "reports": int(_as_float(data.get("reportCount"))),
+            "workHours": _as_float(data.get("workHours")),
+            "materialCost": _as_float(data.get("materialCost")),
+        }
+        for work, data in sorted(
+            by_work.items(),
+            key=lambda item: _as_float(item[1].get("reportCount")),
+            reverse=True,
+        )[:10]
+    ]
+    day_distribution = [
+        {"day": day, "count": int(_as_float(count))}
+        for day, count in stats.get("byDayOfWeek", {}).items()
+    ]
+    return {
+        "monthlyTrends": monthly_trends,
+        "costDistribution": cost_distribution,
+        "topCompanies": top_companies,
+        "topWorks": top_works,
+        "dayDistribution": day_distribution,
+    }
+
+
+def _normalize_hex(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = value.strip().upper()
+    if not _HEX_RE.fullmatch(text):
+        return None
+    if text in {"#000000", "#FFFFFF"}:
+        return None
+    return text
+
+
+def _extract_hex_colors(text: str) -> list[dict[str, str]]:
+    found = re.findall(r"#[0-9A-Fa-f]{6}", text or "")
+    unique = []
+    seen = set()
+    for hex_value in found:
+        normalized = _normalize_hex(hex_value)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append({"hex": normalized, "name": "Brand Color"})
+    return unique[:5]
+
+
+@router.post("/generate-summary-report")
+async def generate_summary_report(
+    payload: GenerateSummaryReportRequest,
+    _: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    if not payload.workReports:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="workReports array is required",
+        )
+
+    reports = [_normalize_report(raw) for raw in payload.workReports]
+    stats = _calculate_statistics(reports)
+    anomalies = _detect_anomalies(reports, stats)
+    period_description = (
+        str((payload.filters or {}).get("period") or "").strip()
+        or f"{stats['dateRange']['earliest']} al {stats['dateRange']['latest']}"
+    )
+
+    prompt = _analysis_prompt(stats, anomalies, period_description)
+    ai_response = await _lovable_chat(
+        {
+            "model": "google/gemini-3-flash-preview",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un analista de gestion de obras. "
+                        "Responde en espanol profesional con recomendaciones accionables."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 4000,
+        },
+        timeout=90,
+    )
+    ai_analysis = (
+        ((ai_response.get("choices") or [{}])[0].get("message") or {}).get("content")
+        or ""
+    )
+
+    return {
+        "success": True,
+        "statistics": stats,
+        "anomalies": anomalies,
+        "aiAnalysis": ai_analysis,
+        "chartData": _chart_data(stats),
+        "periodDescription": period_description,
+    }
+
+
+@router.post("/analyze-work-image")
+async def analyze_work_image(
+    payload: AnalyzeWorkImageRequest,
+    _: User = Depends(get_current_active_user),
+) -> dict[str, str]:
+    image_base64 = (payload.imageBase64 or "").strip()
+    if not image_base64:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image is required",
+        )
+
+    ai_response = await _lovable_chat(
+        {
+            "model": "google/gemini-2.5-flash",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un asistente experto en construccion. "
+                        "Analiza imagenes de obra en maximo 10 lineas cortas."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Analiza esta imagen de obra en maximo 10 lineas: "
+                                "actividad principal, materiales clave, maquinaria y avance."
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": image_base64}},
+                    ],
+                },
+            ],
+            "max_tokens": 300,
+            "temperature": 0.5,
+        }
+    )
+    description = (
+        ((ai_response.get("choices") or [{}])[0].get("message") or {}).get("content")
+        or "No se pudo generar una descripcion"
+    )
+    return {"description": description}
+
+
+@router.post("/analyze-logo-colors")
+async def analyze_logo_colors(
+    payload: AnalyzeLogoColorsRequest,
+    _: User = Depends(get_current_active_user),
+) -> dict[str, Any]:
+    image_data_url = (payload.imageDataUrl or "").strip()
+    if not image_data_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="imageDataUrl is required",
+        )
+
+    try:
+        ai_response = await _lovable_chat(
+            {
+                "model": "google/gemini-2.5-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Analyze this company logo and extract 3-5 dominant brand colors. "
+                                    "Return hex codes suitable for UI, sorted by prominence."
+                                ),
+                            },
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                        ],
+                    }
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "extract_brand_colors",
+                            "description": "Extract the main brand colors from a company logo",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "colors": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "hex": {"type": "string"},
+                                                "name": {"type": "string"},
+                                            },
+                                            "required": ["hex", "name"],
+                                            "additionalProperties": False,
+                                        },
+                                        "minItems": 3,
+                                        "maxItems": 5,
+                                    }
+                                },
+                                "required": ["colors"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    }
+                ],
+                "tool_choice": {"type": "function", "function": {"name": "extract_brand_colors"}},
+                "temperature": 0.3,
+            }
+        )
+    except HTTPException:
+        return {
+            "colors": [_DEFAULT_BRAND_COLOR],
+            "brandColor": _DEFAULT_BRAND_COLOR["hex"],
+        }
+
+    message = ((ai_response.get("choices") or [{}])[0].get("message") or {})
+    tool_calls = message.get("tool_calls") or []
+    extracted: list[dict[str, str]] = []
+
+    if tool_calls:
+        arguments = ((tool_calls[0] or {}).get("function") or {}).get("arguments")
+        if isinstance(arguments, str):
+            try:
+                parsed = json.loads(arguments)
+                for item in parsed.get("colors", []) if isinstance(parsed, dict) else []:
+                    hex_color = _normalize_hex(str((item or {}).get("hex") or ""))
+                    if not hex_color:
+                        continue
+                    name = str((item or {}).get("name") or "Brand Color").strip() or "Brand Color"
+                    extracted.append({"hex": hex_color, "name": name})
+            except json.JSONDecodeError:
+                extracted = []
+
+    if not extracted:
+        fallback_text = str(message.get("content") or "")
+        extracted = _extract_hex_colors(fallback_text)
+
+    if not extracted:
+        extracted = [_DEFAULT_BRAND_COLOR]
+
+    unique: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in extracted:
+        hex_color = _normalize_hex(item.get("hex"))
+        if not hex_color or hex_color in seen:
+            continue
+        seen.add(hex_color)
+        unique.append({"hex": hex_color, "name": item.get("name") or "Brand Color"})
+        if len(unique) == 5:
+            break
+
+    if not unique:
+        unique = [_DEFAULT_BRAND_COLOR]
+
+    return {
+        "colors": unique,
+        "brandColor": unique[0]["hex"],
+    }

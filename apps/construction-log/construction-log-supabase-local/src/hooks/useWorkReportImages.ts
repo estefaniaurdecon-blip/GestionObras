@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { analyzeWorkImage as analyzeWorkImageApi } from '@/integrations/api/client';
 
 export interface WorkReportImage {
   id: string;
@@ -273,11 +274,7 @@ export const useWorkReportImages = (workReportId: string | null) => {
 
   const analyzeImage = async (imageBase64: string): Promise<string | null> => {
     try {
-      const { data, error } = await supabase.functions.invoke('analyze-work-image', {
-        body: { imageBase64 }
-      });
-
-      if (error) throw error;
+      const data = await analyzeWorkImageApi({ imageBase64 });
       return data?.description || null;
     } catch (error: any) {
       console.error('Error analyzing image:', error);

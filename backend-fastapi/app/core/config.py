@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     ollama_json_timeout_seconds: int = 45
     ai_circuit_breaker_ttl_seconds: int = 60
     ai_health_check_timeout_seconds: int = 5
+    lovable_api_key: str | None = None
 
     # Facturas
     invoices_storage_path: str = "/data/invoices"

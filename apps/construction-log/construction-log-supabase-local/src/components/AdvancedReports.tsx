@@ -20,6 +20,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
+import { generateSummaryReport } from '@/integrations/api/client';
 
 interface AdvancedReportsProps {
   reports: WorkReport[];
@@ -1147,19 +1148,14 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                     description: "Analizando datos con IA. Esto puede tardar unos segundos." 
                   });
                   
-                  // Llamar a la edge function
-                  const { data, error } = await supabase.functions.invoke('generate-summary-report', {
-                    body: {
-                      workReports: filteredReports,
-                      filters: {
-                        period: periodLabel,
-                        work: selectedWork !== 'all' ? availableWorks.find(w => w.id === selectedWork)?.name : 'Todas',
-                      },
-                      organizationId: organization?.id,
-                    }
+                  const data = await generateSummaryReport({
+                    workReports: filteredReports as unknown as Record<string, unknown>[],
+                    filters: {
+                      period: periodLabel,
+                      work: selectedWork !== 'all' ? availableWorks.find(w => w.id === selectedWork)?.name : 'Todas',
+                    },
+                    organizationId: organization?.id,
                   });
-                  
-                  if (error) throw error;
                   
                   if (!data.success) {
                     throw new Error(data.error || 'Error al generar el informe');
