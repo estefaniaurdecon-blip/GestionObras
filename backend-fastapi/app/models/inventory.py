@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
+from sqlalchemy import Column, JSON
 from sqlmodel import Field, SQLModel
 
 
@@ -72,3 +73,29 @@ class WorkInventorySyncLog(SQLModel, table=True):
     work_external_id: str = Field(index=True, max_length=128)
     work_report_id: int = Field(foreign_key="erp_work_report.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class PendingDeliveryNote(SQLModel, table=True):
+    __tablename__ = "erp_pending_delivery_note"
+
+    id: str = Field(default_factory=_uuid_str, primary_key=True, max_length=36)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    work_external_id: str = Field(index=True, max_length=128)
+
+    supplier: str = Field(max_length=255)
+    delivery_note_number: Optional[str] = Field(default=None, max_length=128)
+    delivery_date: str = Field(max_length=24, index=True)
+    status: str = Field(default="pending", max_length=24, index=True)
+
+    processed_items: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False, default=list),
+    )
+    raw_ocr_data: Any = Field(default=None, sa_column=Column(JSON, nullable=True))
+    ai_confidence: Optional[float] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+    validated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    validated_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)

@@ -6,6 +6,7 @@ from . import (
     audit,
     auth,
     dashboard,
+    delivery_notes,
     erp,
     external_collaborations,
     branding,
@@ -35,6 +36,11 @@ api_router.include_router(branding.router, prefix="/branding", tags=["branding"]
 api_router.include_router(updates.router, prefix="/updates", tags=["updates"])
 api_router.include_router(ai_chat.router, prefix="/ai", tags=["ai"])
 api_router.include_router(ai_runtime.router, prefix="/ai", tags=["ai"])
+api_router.include_router(
+    delivery_notes.router,
+    prefix="/delivery-notes",
+    tags=["delivery-notes"],
+)
 
 # Rutas protegidas
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])

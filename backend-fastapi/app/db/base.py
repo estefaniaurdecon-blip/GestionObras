@@ -47,6 +47,7 @@ from app.models.inventory import (  # noqa: F401
     WorkInventoryItem,
     InventoryMovement,
     WorkInventorySyncLog,
+    PendingDeliveryNote,
 )
 from app.invoices.models import Invoice, InvoiceEvent, NotificationLog  # noqa: F401
 from app.contracts.models import (  # noqa: F401

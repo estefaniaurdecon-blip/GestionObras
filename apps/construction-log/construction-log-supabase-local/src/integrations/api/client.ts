@@ -44,7 +44,7 @@ const TENANT_ID = import.meta.env.VITE_TENANT_ID;
 
 export interface ApiError extends Error {
   status?: number;
-  data?: any;
+  data?: unknown;
 }
 
 function normalizeApiPath(path: string, baseUrl = activeApiBaseUrl): string {
@@ -182,14 +182,13 @@ export async function apiFetch(
     headers['X-Tenant-Id'] = TENANT_ID;
   }
   
+  const { skipAuth, ...restInit } = init ?? {};
+
   const fetchOptions: RequestInit = {
-    ...init,
+    ...restInit,
     credentials: init?.credentials ?? 'include',
     headers,
   };
-  
-  // Remove custom options before fetch
-  delete (fetchOptions as any).skipAuth;
 
   const response = await fetchWithNativeFallback(path, fetchOptions);
   
@@ -425,17 +424,18 @@ export async function login(request: LoginRequest): Promise<LoginResponse> {
   for (const attempt of uniqueAttempts) {
     try {
       return await performLoginRequest(attempt);
-    } catch (error: any) {
-      const detail = String(error?.data?.detail || '');
+    } catch (error: unknown) {
+      const apiError = error as ApiError & { data?: { detail?: unknown } };
+      const detail = String(apiError.data?.detail || '');
       const isInvalidCredentials =
-        error?.status === 400 &&
+        apiError.status === 400 &&
         /credenciales incorrectas/i.test(detail);
 
       if (!isInvalidCredentials) {
-        throw error;
+        throw apiError;
       }
 
-      lastError = error;
+      lastError = apiError;
     }
   }
 
@@ -1123,6 +1123,81 @@ export interface ApplyInventoryAnalysisResponse {
   errors: string[];
 }
 
+export type DeliveryNoteStatus = 'pending' | 'validated' | 'rejected';
+
+export interface DeliveryNoteItemPayload {
+  id?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unit_price?: number;
+  total_price?: number;
+  item_type: 'material' | 'tool' | 'machinery';
+  category?: string;
+  is_immediate_consumption: boolean;
+  ai_confidence?: number;
+  serial_number?: string;
+  brand?: string;
+  model?: string;
+  user_corrected?: boolean;
+}
+
+export interface DeliveryNoteApi {
+  id: string;
+  supplier: string;
+  delivery_note_number?: string | null;
+  delivery_date: string;
+  status: DeliveryNoteStatus;
+  processed_items: DeliveryNoteItemPayload[];
+  raw_ocr_data?: Record<string, unknown> | unknown[] | null;
+  ai_confidence?: number | null;
+  work_id: string;
+  organization_id: string;
+  created_at: string;
+  notes?: string | null;
+  validated_at?: string | null;
+  validated_by?: number | null;
+}
+
+export interface ListDeliveryNotesParams {
+  work_id?: string;
+  status?: DeliveryNoteStatus;
+  limit?: number;
+}
+
+export interface CreateDeliveryNotePayload {
+  work_id: string;
+  supplier: string;
+  delivery_note_number?: string | null;
+  delivery_date: string;
+  status?: DeliveryNoteStatus;
+  processed_items?: DeliveryNoteItemPayload[];
+  raw_ocr_data?: Record<string, unknown> | unknown[] | null;
+  ai_confidence?: number | null;
+  notes?: string | null;
+}
+
+export interface UpdateDeliveryNotePayload {
+  supplier?: string;
+  delivery_note_number?: string | null;
+  delivery_date?: string;
+  status?: DeliveryNoteStatus;
+  processed_items?: DeliveryNoteItemPayload[];
+  raw_ocr_data?: Record<string, unknown> | unknown[] | null;
+  ai_confidence?: number | null;
+  notes?: string | null;
+}
+
+export interface ValidateDeliveryNotePayload {
+  work_id: string;
+  items: DeliveryNoteItemPayload[];
+}
+
+export interface DeliveryNoteMutationResponse {
+  success: boolean;
+  note: DeliveryNoteApi;
+}
+
 export interface PopulateInventoryRequest {
   work_id: string;
   force?: boolean;
@@ -1273,6 +1348,62 @@ export async function applyInventoryAnalysis(
   return apiFetchJson<ApplyInventoryAnalysisResponse>('/api/v1/ai/inventory/apply-analysis', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function listDeliveryNotes(
+  params: ListDeliveryNotesParams
+): Promise<DeliveryNoteApi[]> {
+  const query = buildQueryParams({
+    work_id: params.work_id,
+    status: params.status,
+    limit: params.limit,
+  });
+  return apiFetchJson<DeliveryNoteApi[]>(`/api/v1/delivery-notes${query}`);
+}
+
+export async function createDeliveryNote(
+  payload: CreateDeliveryNotePayload
+): Promise<DeliveryNoteApi> {
+  return apiFetchJson<DeliveryNoteApi>('/api/v1/delivery-notes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDeliveryNote(
+  noteId: string,
+  payload: UpdateDeliveryNotePayload
+): Promise<DeliveryNoteApi> {
+  return apiFetchJson<DeliveryNoteApi>(`/api/v1/delivery-notes/${noteId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteDeliveryNote(noteId: string): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/delivery-notes/${noteId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function validateDeliveryNote(
+  noteId: string,
+  payload: ValidateDeliveryNotePayload
+): Promise<DeliveryNoteMutationResponse> {
+  return apiFetchJson<DeliveryNoteMutationResponse>(`/api/v1/delivery-notes/${noteId}/validate`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rejectDeliveryNote(
+  noteId: string,
+  reason?: string
+): Promise<DeliveryNoteMutationResponse> {
+  return apiFetchJson<DeliveryNoteMutationResponse>(`/api/v1/delivery-notes/${noteId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
   });
 }
 
