@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "lint:changed": "node scripts/lint-changed.cjs",
     "preview": "vite preview",
     "android:migration:check": "node scripts/android-migration-check.cjs",
     "sync:robustness": "node scripts/sync-robustness-harness.mjs"
