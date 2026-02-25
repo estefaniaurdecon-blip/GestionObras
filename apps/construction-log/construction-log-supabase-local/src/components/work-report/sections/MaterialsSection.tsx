@@ -5,36 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlbaranAttachmentsRow } from '@/components/work-report/shared/AlbaranAttachmentsRow';
+import type { MaterialGroup, MaterialRow, ServiceLine } from '@/components/work-report/types';
+import { normalizeDocType } from '@/plugins/albaranScanner';
 import { Camera, ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react';
-
-type MaterialRow = {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  total: number;
-  costWarningDelta?: number | null;
-};
-
-type MaterialGroup = {
-  id: string;
-  supplier: string;
-  invoiceNumber: string;
-  docType?: 'MATERIALS_TABLE' | 'SERVICE_MACHINERY' | 'UNKNOWN' | null;
-  imageUris?: string[];
-  rows: MaterialRow[];
-  serviceLines?: ServiceLine[];
-};
-
-type ServiceLine = {
-  id: string;
-  description: string;
-  hours?: number | null;
-  trips?: number | null;
-  tons?: number | null;
-  m3?: number | null;
-};
 
 type MaterialUnitOption = {
   value: string;
@@ -117,8 +90,9 @@ export const MaterialsSection = ({
             {materialGroups.map((group) => {
               const isActiveMaterialGroup = activeMaterialGroupId === group.id;
               const isScanningThisGroup = isAlbaranProcessing && scanInFlightTargetGroupId === group.id;
-              const isServiceGroup = group.docType === 'SERVICE_MACHINERY';
               const serviceLines = group.serviceLines || [];
+              const normalizedGroupDocType = normalizeDocType(group.docType);
+              const isServiceGroup = normalizedGroupDocType === 'SERVICE_MACHINERY' || serviceLines.length > 0;
 
               return (
                 <Collapsible
@@ -231,121 +205,119 @@ export const MaterialsSection = ({
                           />
                         </div>
                       </div>
-                      {!isServiceGroup ? (
-                        <div className="rounded-md border border-[#d9e1ea]">
-                          <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
-                            <div className="col-span-3">Material</div>
-                            <div className="col-span-2">Cantidad</div>
-                            <div className="col-span-2">Unidad</div>
-                            <div className="col-span-2">Precio/Ud</div>
-                            <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
-                            <div className="col-span-1"></div>
-                          </div>
-                          <div className="space-y-2 p-3">
-                            {group.rows.map((row) => (
-                              <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
-                                <div className="grid grid-cols-12 gap-2">
-                                  <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Material
-                                    </p>
-                                    <Input
-                                      placeholder="Nombre del material"
-                                      value={row.name}
-                                      onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
-                                    />
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Cantidad
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.01}
-                                      value={editableNumericValue(row.quantity)}
-                                      onChange={(event) =>
-                                        updateMaterialRow(group.id, row.id, { quantity: parseNumeric(event.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Unidad
-                                    </p>
-                                    <Select
-                                      value={row.unit || undefined}
-                                      onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
+                      <div className="rounded-md border border-[#d9e1ea]">
+                        <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
+                          <div className="col-span-3">Material</div>
+                          <div className="col-span-2">Cantidad</div>
+                          <div className="col-span-2">Unidad</div>
+                          <div className="col-span-2">Precio/Ud</div>
+                          <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
+                          <div className="col-span-1"></div>
+                        </div>
+                        <div className="space-y-2 p-3">
+                          {group.rows.map((row) => (
+                            <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
+                              <div className="grid grid-cols-12 gap-2">
+                                <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    Material
+                                  </p>
+                                  <Input
+                                    placeholder="Nombre del material"
+                                    value={row.name}
+                                    onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
+                                  />
+                                </div>
+                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    Cantidad
+                                  </p>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={editableNumericValue(row.quantity)}
+                                    onChange={(event) =>
+                                      updateMaterialRow(group.id, row.id, { quantity: parseNumeric(event.target.value) })
+                                    }
+                                  />
+                                </div>
+                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    Unidad
+                                  </p>
+                                  <Select
+                                    value={row.unit || undefined}
+                                    onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Unidad" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {materialUnitOptions.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    Precio/Ud
+                                  </p>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={editableNumericValue(row.unitPrice)}
+                                    onChange={(event) =>
+                                      updateMaterialRow(group.id, row.id, { unitPrice: parseNumeric(event.target.value) })
+                                    }
+                                  />
+                                </div>
+                                <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
+                                    Coste (€)
+                                  </p>
+                                  <Input
+                                    type="text"
+                                    value={row.total.toFixed(2)}
+                                    title="Coste calculado automáticamente (cantidad × precio/ud)"
+                                    className={row.costWarningDelta ? 'border-amber-400 text-amber-700' : undefined}
+                                    readOnly
+                                  />
+                                  {row.costWarningDelta ? (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-left text-xs font-medium text-amber-700 hover:text-amber-800"
+                                      onClick={() => openCostDifferenceDialogForRow(group.id, row)}
                                     >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Unidad" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {materialUnitOptions.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Precio/Ud
-                                    </p>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      step={0.01}
-                                      value={editableNumericValue(row.unitPrice)}
-                                      onChange={(event) =>
-                                        updateMaterialRow(group.id, row.id, { unitPrice: parseNumeric(event.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                    <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                      Coste (€)
-                                    </p>
-                                    <Input
-                                      type="text"
-                                      value={row.total.toFixed(2)}
-                                      title="Coste calculado automáticamente (cantidad × precio/ud)"
-                                      className={row.costWarningDelta ? 'border-amber-400 text-amber-700' : undefined}
-                                      readOnly
-                                    />
-                                    {row.costWarningDelta ? (
-                                      <button
-                                        type="button"
-                                        className="mt-1 text-left text-xs font-medium text-amber-700 hover:text-amber-800"
-                                        onClick={() => openCostDifferenceDialogForRow(group.id, row)}
-                                      >
-                                        Diferencia detectada: {row.costWarningDelta.toFixed(2)} €
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                  <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
-                                    <Button
-                                      className="h-9 w-full md:h-10 md:w-10"
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => removeMaterialRow(group.id, row.id)}
-                                      disabled={group.rows.length === 1}
-                                      title="Eliminar fila"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-600" />
-                                    </Button>
-                                  </div>
+                                      Diferencia detectada: {row.costWarningDelta.toFixed(2)} €
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
+                                  <Button
+                                    className="h-9 w-full md:h-10 md:w-10"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => removeMaterialRow(group.id, row.id)}
+                                    disabled={group.rows.length === 1}
+                                    title="Eliminar fila"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
                                 </div>
                               </div>
-                            ))}
-                            <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
-                              <Plus className="mr-2 h-4 w-4" />
-                              Añadir Fila
-                            </Button>
-                          </div>
+                            </div>
+                          ))}
+                          <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Añadir Fila
+                          </Button>
                         </div>
-                      ) : null}
+                      </div>
 
                       {isServiceGroup ? (
                         <div className="rounded-md border border-[#d9e1ea]">

@@ -1,15 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { Accordion } from '@/components/ui/accordion';
 import { normalizeNoteCategory, type NoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
 import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
 import {
-  improveScanWithOllama,
-  isOllamaScanEnabled,
-  shouldOfferOllamaImprove,
-  type OllamaScanItem,
-} from '@/api/ollamaAlbaran';
-import {
+  normalizeDocType,
   type ParsedAlbaranItem,
   type ParsedAlbaranResult,
   type ParsedFieldConfidence,
@@ -225,9 +220,6 @@ export const GenerateWorkReportPanel = ({
   const [scanReviewImageUris, setScanReviewImageUris] = useState<string[]>([]);
   const [scanReviewRawText, setScanReviewRawText] = useState('');
   const [scanReviewTargetGroupId, setScanReviewTargetGroupId] = useState<string | null>(null);
-  const [scanReviewOllamaLoading, setScanReviewOllamaLoading] = useState(false);
-  const [scanReviewOllamaError, setScanReviewOllamaError] = useState<string | null>(null);
-  const [scanReviewOllamaProposal, setScanReviewOllamaProposal] = useState<ParsedAlbaranResult | null>(null);
   const [scanInFlightTargetGroupId, setScanInFlightTargetGroupId] = useState<string | null>(null);
   const [rescanConfirmDialogOpen, setRescanConfirmDialogOpen] = useState(false);
   const [pendingRescanTargetGroupId, setPendingRescanTargetGroupId] = useState<string | null>(null);
@@ -259,8 +251,6 @@ export const GenerateWorkReportPanel = ({
   const [saveStatusSelection, setSaveStatusSelection] = useState<SaveStatusOption[]>(['completed']);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
-
-  const ollamaFeatureEnabled = useMemo(() => isOllamaScanEnabled(), []);
   const isAndroidPlatform = useMemo(() => Capacitor.getPlatform() === 'android', []);
   const androidTypographyClass = isAndroidPlatform
     ? [
@@ -847,6 +837,39 @@ export const GenerateWorkReportPanel = ({
     return items;
   }, []);
 
+  const isServiceLikeParsedResult = useCallback((parsed: ParsedAlbaranResult): boolean => {
+    if (parsed.docType === 'SERVICE_MACHINERY') return true;
+
+    const serviceSubtypes = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
+      'BOMBEOS_GILGIL_ALBARAN_BOMBA',
+      'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
+      'CONSTRUCCIONES_PARTE_TRABAJO',
+    ]);
+    if (parsed.docSubtype && serviceSubtypes.has(parsed.docSubtype)) return true;
+
+    const warningSet = new Set(parsed.warnings || []);
+    if (
+      warningSet.has('SERVICE_LAYOUT_HEADER') ||
+      warningSet.has('SERVICE_MARKERS_DETECTED') ||
+      warningSet.has('SERVICE_TABLE_DETECTED')
+    ) {
+      return true;
+    }
+
+    const hasServiceUnit = parsed.items.some((item) => {
+      const normalized = normalizeServiceUnitFromScan(item.unit);
+      return normalized === 'h' || normalized === 'viaje' || normalized === 't' || normalized === 'm3';
+    });
+    if (hasServiceUnit) return true;
+
+    const hasServiceDescription = sanitizeText(parsed.serviceDescription).length > 0;
+    if (hasServiceDescription && (warningSet.has('NO_PRICE_COLUMNS') || warningSet.has('NO_ECONOMIC_COLUMNS'))) {
+      return true;
+    }
+
+    return false;
+  }, []);
+
   const buildOthersRowFromParsedResult = useCallback((parsed: ParsedAlbaranResult): MaterialRow => {
     const description = extractNoPriceDescription(parsed);
     const materialName = description ? `OTROS - ${description}` : 'OTROS';
@@ -1037,7 +1060,12 @@ export const GenerateWorkReportPanel = ({
                 ...group,
                 supplier: supplier || group.supplier,
                 invoiceNumber: invoiceNumber || group.invoiceNumber,
-                docType: parsed.docType === 'MATERIALS_TABLE' ? 'MATERIALS_TABLE' : group.docType ?? 'MATERIALS_TABLE',
+                docType:
+                  parsed.docType === 'SERVICE_MACHINERY'
+                    ? 'SERVICE_MACHINERY'
+                    : parsed.docType === 'MATERIALS_TABLE'
+                      ? 'MATERIALS_TABLE'
+                      : group.docType ?? 'MATERIALS_TABLE',
                 isScanned: true,
                 imageUris: resolveScanImageUris(group, parsed),
                 rows: parsedRows,
@@ -1078,11 +1106,13 @@ export const GenerateWorkReportPanel = ({
   );
 
   const openScanReview = useCallback((parsed: ParsedAlbaranResult, targetGroupId: string) => {
+    const serviceLike = isServiceLikeParsedResult(parsed);
+    const normalizedDocType = normalizeDocType(parsed.docType);
     setScanReviewReason(parsed.reviewReason || 'No se detecto la tabla con suficiente precision.');
     setScanReviewSupplier(sanitizeText(parsed.supplier));
     setScanReviewInvoiceNumber(sanitizeText(parsed.invoiceNumber));
     setScanReviewDocumentDate(sanitizeText(parsed.documentDate));
-    setScanReviewDocType(parsed.docType || 'UNKNOWN');
+    setScanReviewDocType(serviceLike ? 'SERVICE_MACHINERY' : normalizedDocType);
     setScanReviewDocSubtype(parsed.docSubtype ?? null);
     setScanReviewServiceDescription(sanitizeText(parsed.serviceDescription));
     setScanReviewConfidence(parsed.confidence || 'medium');
@@ -1105,15 +1135,12 @@ export const GenerateWorkReportPanel = ({
     setScanReviewImageUris(parsed.imageUris || []);
     setScanReviewRawText(sanitizeText(parsed.rawText));
     setScanReviewTargetGroupId(targetGroupId);
-    setScanReviewOllamaLoading(false);
-    setScanReviewOllamaError(null);
-    setScanReviewOllamaProposal(null);
     setScanReviewDialogOpen(true);
-  }, [buildServiceLinesFromParsedResult]);
+  }, [buildServiceLinesFromParsedResult, isServiceLikeParsedResult]);
 
   const applyParsedScanResultToGroup = useCallback(
     (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      if (parsed.docType === 'SERVICE_MACHINERY') {
+      if (isServiceLikeParsedResult(parsed)) {
         if (parsed.requiresReview || parsed.confidence === 'low') {
           openScanReview(parsed, targetGroupId);
           return;
@@ -1131,7 +1158,7 @@ export const GenerateWorkReportPanel = ({
       }
       applyParsedAlbaranToMaterials(targetGroupId, parsed);
     },
-    [applyParsedAlbaranToMaterials, applyParsedScanMetadataOnly, applyParsedServiceToGroup, openScanReview],
+    [applyParsedAlbaranToMaterials, applyParsedScanMetadataOnly, applyParsedServiceToGroup, isServiceLikeParsedResult, openScanReview],
   );
 
   const resolveDuplicateForScan = useCallback(
@@ -1171,7 +1198,7 @@ export const GenerateWorkReportPanel = ({
         const parsed = await startAlbaranScan();
         if (!parsed) return;
 
-        if (parsed.docType === 'SERVICE_MACHINERY') {
+        if (isServiceLikeParsedResult(parsed)) {
           setPendingServiceScanResolution({ parsed, targetGroupId });
           setServiceScanDialogOpen(true);
           return;
@@ -1204,6 +1231,7 @@ export const GenerateWorkReportPanel = ({
     [
       clearAlbaranScanError,
       isAlbaranProcessing,
+      isServiceLikeParsedResult,
       openScanReview,
       readOnly,
       resolveDuplicateForScan,
@@ -1356,169 +1384,6 @@ export const GenerateWorkReportPanel = ({
     });
   }, [scanReviewServiceDescription]);
 
-  const canImproveReviewWithOllama = useMemo(() => {
-    if (!ollamaFeatureEnabled) return false;
-    return shouldOfferOllamaImprove({
-      confidence: scanReviewConfidence,
-      docType: scanReviewDocType,
-      warnings: scanReviewWarnings,
-    });
-  }, [ollamaFeatureEnabled, scanReviewConfidence, scanReviewDocType, scanReviewWarnings]);
-
-  const mapOllamaItemToParsedItem = useCallback((item: OllamaScanItem): ParsedAlbaranItem => {
-    const quantity =
-      typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : null;
-    const unitPrice =
-      typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? nonNegative(item.unitPrice) : null;
-    const costDoc = typeof item.total === 'number' && Number.isFinite(item.total) ? nonNegative(item.total) : null;
-    const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
-    const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
-    const unit = item.unit ? normalizeMaterialUnitFromScan(item.unit) || sanitizeText(item.unit) : null;
-
-    return {
-      material: sanitizeText(item.name),
-      quantity,
-      unit,
-      unitPrice,
-      costDoc,
-      costCalc,
-      difference,
-      rowText: 'OLLAMA',
-      missingCritical: !(item.name || '').trim(),
-    };
-  }, []);
-
-  const improveScanReviewWithOllama = useCallback(async () => {
-    if (!canImproveReviewWithOllama || scanReviewOllamaLoading) return;
-
-    setScanReviewOllamaLoading(true);
-    setScanReviewOllamaError(null);
-    setScanReviewOllamaProposal(null);
-
-    try {
-      const response = await improveScanWithOllama({
-        imageUris: scanReviewImageUris,
-        offlineResult: {
-          supplier: scanReviewSupplier || null,
-          invoiceNumber: scanReviewInvoiceNumber || null,
-          documentDate: scanReviewDocumentDate || null,
-          docType: scanReviewDocType,
-          docSubtype: scanReviewDocSubtype ?? null,
-          serviceDescription: scanReviewServiceDescription || null,
-          confidence: scanReviewConfidence,
-          warnings: scanReviewWarnings,
-          profileUsed: scanReviewProfileUsed,
-          score: scanReviewScore,
-          fieldMeta: scanReviewFieldMeta ?? null,
-          templateData: scanReviewTemplateData ?? null,
-          items: scanReviewItems,
-          imageUris: scanReviewImageUris,
-          rawText: scanReviewRawText,
-        },
-      });
-
-      const proposalItems = response.items.map(mapOllamaItemToParsedItem);
-      const serviceDescription =
-        response.docType === 'SERVICE_MACHINERY' && proposalItems.length > 0
-          ? proposalItems[0].material
-          : scanReviewServiceDescription;
-
-      const proposal: ParsedAlbaranResult = {
-        supplier: response.supplier,
-        invoiceNumber: response.invoiceNumber,
-        documentDate: response.documentDate,
-        docType: response.docType,
-        docSubtype: null,
-        serviceDescription: serviceDescription || null,
-        confidence: response.confidence,
-        warnings: response.warnings,
-        score: scanReviewScore,
-        profileUsed: scanReviewProfileUsed,
-        fieldConfidence: undefined,
-        fieldWarnings: undefined,
-        fieldMeta: null,
-        templateData: null,
-        requiresReview: true,
-        reviewReason: 'Propuesta generada por IA (Ollama). Revisa y confirma antes de aplicar.',
-        headerDetected: true,
-        items: proposalItems,
-        imageUris: scanReviewImageUris,
-        rawText: scanReviewRawText,
-      };
-
-      setScanReviewOllamaProposal(proposal);
-      toast({
-        title: 'Propuesta IA disponible',
-        description: 'Revisa la propuesta de Ollama y decide si aplicarla.',
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : 'No se pudo mejorar el escaneo con IA en este momento.';
-      setScanReviewOllamaError(message);
-      toast({
-        title: 'No se pudo mejorar con IA',
-        description: message,
-        variant: 'destructive',
-      });
-    } finally {
-      setScanReviewOllamaLoading(false);
-    }
-  }, [
-    canImproveReviewWithOllama,
-    mapOllamaItemToParsedItem,
-    scanReviewConfidence,
-    scanReviewDocType,
-    scanReviewDocSubtype,
-    scanReviewDocumentDate,
-    scanReviewFieldMeta,
-    scanReviewImageUris,
-    scanReviewInvoiceNumber,
-    scanReviewItems,
-    scanReviewOllamaLoading,
-    scanReviewProfileUsed,
-    scanReviewRawText,
-    scanReviewScore,
-    scanReviewServiceDescription,
-    scanReviewSupplier,
-    scanReviewTemplateData,
-    scanReviewWarnings,
-  ]);
-
-  const applyOllamaProposalToReview = useCallback(() => {
-    if (!scanReviewOllamaProposal) return;
-    setScanReviewSupplier(sanitizeText(scanReviewOllamaProposal.supplier));
-    setScanReviewInvoiceNumber(sanitizeText(scanReviewOllamaProposal.invoiceNumber));
-    setScanReviewDocumentDate(sanitizeText(scanReviewOllamaProposal.documentDate));
-    setScanReviewDocType(scanReviewOllamaProposal.docType || 'UNKNOWN');
-    setScanReviewDocSubtype(scanReviewOllamaProposal.docSubtype ?? null);
-    setScanReviewServiceDescription(sanitizeText(scanReviewOllamaProposal.serviceDescription));
-    setScanReviewConfidence(scanReviewOllamaProposal.confidence || 'medium');
-    setScanReviewWarnings(scanReviewOllamaProposal.warnings || []);
-    setScanReviewItems(
-      scanReviewOllamaProposal.items.map((item) => ({
-        ...item,
-        material: sanitizeText(item.material),
-        unit: item.unit ? sanitizeText(item.unit) : item.unit,
-        rowText: sanitizeText(item.rowText),
-      })),
-    );
-    setScanReviewServiceLines(buildServiceLinesFromParsedResult(scanReviewOllamaProposal));
-    setScanReviewReason(scanReviewOllamaProposal.reviewReason || null);
-    setScanReviewFieldConfidence(null);
-    setScanReviewFieldWarnings(null);
-    setScanReviewFieldMeta(scanReviewOllamaProposal.fieldMeta ?? null);
-    setScanReviewTemplateData(scanReviewOllamaProposal.templateData ?? null);
-    setScanReviewOllamaError(null);
-    setScanReviewOllamaProposal(null);
-  }, [buildServiceLinesFromParsedResult, scanReviewOllamaProposal]);
-
-  const keepOfflineScanReview = useCallback(() => {
-    setScanReviewOllamaProposal(null);
-    setScanReviewOllamaError(null);
-  }, []);
-
   const applyScanReview = useCallback(() => {
     const normalizedServiceLines = scanReviewServiceLines
       .map((line) => ({
@@ -1542,14 +1407,26 @@ export const GenerateWorkReportPanel = ({
         return hasDescription || hasValues;
       });
 
-    const serviceSubtypeSet = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
+    const warningSet = new Set(scanReviewWarnings);
+    const hasServiceWarning =
+      warningSet.has('SERVICE_LAYOUT_HEADER') ||
+      warningSet.has('SERVICE_MARKERS_DETECTED') ||
+      warningSet.has('SERVICE_TABLE_DETECTED');
+    const serviceSubtypes = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
       'BOMBEOS_GILGIL_ALBARAN_BOMBA',
       'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
       'CONSTRUCCIONES_PARTE_TRABAJO',
     ]);
+    const hasServiceSubtype = scanReviewDocSubtype ? serviceSubtypes.has(scanReviewDocSubtype) : false;
+    const hasServiceUnitInReviewItems = scanReviewItems.some((item) => {
+      const normalized = normalizeServiceUnitFromScan(item.unit);
+      return normalized === 'h' || normalized === 'viaje' || normalized === 't' || normalized === 'm3';
+    });
     const isServiceReview =
       scanReviewDocType === 'SERVICE_MACHINERY' ||
-      (scanReviewDocSubtype ? serviceSubtypeSet.has(scanReviewDocSubtype) : false) ||
+      hasServiceWarning ||
+      hasServiceSubtype ||
+      hasServiceUnitInReviewItems ||
       normalizedServiceLines.length > 0 ||
       (sanitizeText(scanReviewServiceDescription).length > 0 && scanReviewDocType !== 'MATERIALS_TABLE');
 
@@ -1581,7 +1458,7 @@ export const GenerateWorkReportPanel = ({
       supplier: sanitizeText(scanReviewSupplier) || null,
       invoiceNumber: sanitizeText(scanReviewInvoiceNumber) || null,
       documentDate: sanitizeText(scanReviewDocumentDate) || null,
-      docType: isServiceReview ? 'SERVICE_MACHINERY' : scanReviewDocType,
+      docType: isServiceReview ? 'SERVICE_MACHINERY' : normalizeDocType(scanReviewDocType),
       docSubtype: scanReviewDocSubtype ?? null,
       serviceDescription:
         sanitizeText(scanReviewServiceDescription) ||
@@ -1604,8 +1481,6 @@ export const GenerateWorkReportPanel = ({
 
     if (!scanReviewTargetGroupId) {
       setScanReviewDialogOpen(false);
-      setScanReviewOllamaProposal(null);
-      setScanReviewOllamaError(null);
       setScanReviewServiceLines([]);
       return;
     }
@@ -1613,8 +1488,6 @@ export const GenerateWorkReportPanel = ({
     const targetGroupId = scanReviewTargetGroupId;
     setScanReviewTargetGroupId(null);
     setScanReviewDialogOpen(false);
-    setScanReviewOllamaProposal(null);
-    setScanReviewOllamaError(null);
     setScanReviewServiceLines([]);
     resolveDuplicateForScan(targetGroupId, reviewedResult);
   }, [
@@ -2548,9 +2421,6 @@ export const GenerateWorkReportPanel = ({
           setScanReviewDialogOpen(open);
           if (!open) {
             setScanReviewTargetGroupId(null);
-            setScanReviewOllamaProposal(null);
-            setScanReviewOllamaError(null);
-            setScanReviewOllamaLoading(false);
             setScanReviewServiceLines([]);
           }
         }}
@@ -2583,19 +2453,9 @@ export const GenerateWorkReportPanel = ({
         onAddServiceLine={addScanReviewServiceLine}
         onRemoveServiceLine={removeScanReviewServiceLine}
         onCreateOtrosLine={createOtrosLineInScanReview}
-        canImproveWithOllama={canImproveReviewWithOllama}
-        ollamaLoading={scanReviewOllamaLoading}
-        ollamaError={scanReviewOllamaError}
-        ollamaProposal={scanReviewOllamaProposal}
-        onImproveWithOllama={() => void improveScanReviewWithOllama()}
-        onApplyOllamaProposal={applyOllamaProposalToReview}
-        onKeepOffline={keepOfflineScanReview}
         onCancel={() => {
           setScanReviewDialogOpen(false);
           setScanReviewTargetGroupId(null);
-          setScanReviewOllamaProposal(null);
-          setScanReviewOllamaError(null);
-          setScanReviewOllamaLoading(false);
           setScanReviewServiceLines([]);
         }}
         onApply={applyScanReview}

@@ -1,4 +1,4 @@
-﻿import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,6 +7,7 @@ import { AlbaranAttachmentsRow } from '@/components/work-report/shared/AlbaranAt
 import type { ServiceLine } from '@/components/work-report/types';
 import { sanitizeText } from '@/components/work-report/helpers';
 import {
+  normalizeDocType,
   type ParsedAlbaranItem,
   type ParsedAlbaranResult,
   type ParsedFieldConfidence,
@@ -45,13 +46,6 @@ type ScanReviewDialogProps = {
   onAddServiceLine: () => void;
   onRemoveServiceLine: (lineId: string) => void;
   onCreateOtrosLine: () => void;
-  canImproveWithOllama: boolean;
-  ollamaLoading: boolean;
-  ollamaError: string | null;
-  ollamaProposal: ParsedAlbaranResult | null;
-  onImproveWithOllama: () => void;
-  onApplyOllamaProposal: () => void;
-  onKeepOffline: () => void;
   onCancel: () => void;
   onApply: () => void;
   parseNumeric: (value: string) => number;
@@ -89,13 +83,6 @@ export const ScanReviewDialog = ({
   onAddServiceLine,
   onRemoveServiceLine,
   onCreateOtrosLine,
-  canImproveWithOllama,
-  ollamaLoading,
-  ollamaError,
-  ollamaProposal,
-  onImproveWithOllama,
-  onApplyOllamaProposal,
-  onKeepOffline,
   onCancel,
   onApply,
   parseNumeric,
@@ -105,13 +92,35 @@ export const ScanReviewDialog = ({
     'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
     'CONSTRUCCIONES_PARTE_TRABAJO',
   ]);
+  const warningSet = new Set(warnings);
+  const hasServiceWarning =
+    warningSet.has('SERVICE_LAYOUT_HEADER') ||
+    warningSet.has('SERVICE_MARKERS_DETECTED') ||
+    warningSet.has('SERVICE_TABLE_DETECTED');
+  const hasServiceUnitInItems = items.some((item) => {
+    const unit = sanitizeText(item.unit).toLowerCase();
+    return (
+      unit === 'h' ||
+      unit === 'hora' ||
+      unit === 'horas' ||
+      unit === 'viaje' ||
+      unit === 'viajes' ||
+      unit === 't' ||
+      unit === 'tn' ||
+      unit === 'm3' ||
+      unit === 'mÂ³'
+    );
+  });
   const hasServiceDescription = sanitizeText(serviceDescription).length > 0;
+  const normalizedDocType = normalizeDocType(docType);
   const isServiceDoc =
-    docType === 'SERVICE_MACHINERY' ||
+    normalizedDocType === 'SERVICE_MACHINERY' ||
+    hasServiceWarning ||
+    hasServiceUnitInItems ||
     (docSubtype ? serviceSubtypeSet.has(docSubtype) : false) ||
     serviceLines.length > 0 ||
-    (hasServiceDescription && docType !== 'MATERIALS_TABLE');
-  const noStrongTable = docType !== 'MATERIALS_TABLE' || warnings.includes('NO_TABLE_STRONG');
+    (hasServiceDescription && normalizedDocType !== 'MATERIALS_TABLE');
+  const noStrongTable = normalizedDocType !== 'MATERIALS_TABLE' || warnings.includes('NO_TABLE_STRONG');
   const hasNoPriceColumnsWarning = warnings.includes('NO_PRICE_COLUMNS');
   const serviceInfoWarnings = new Set(['NO_PRICE_COLUMNS', 'NO_ECONOMIC_COLUMNS', 'MISSING_INVOICE_NUMBER', 'MISSING_DATE']);
   const fieldMetaJson = fieldMeta ? JSON.stringify(fieldMeta, null, 2) : null;
@@ -139,7 +148,7 @@ export const ScanReviewDialog = ({
           {noStrongTable ? (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {isServiceDoc
-                ? 'No se detectó una tabla de servicio con fiabilidad. Puedes añadir filas manualmente o cancelar.'
+                ? 'No se detecto una tabla de servicio con fiabilidad. Puedes anadir filas manualmente o cancelar.'
                 : 'No se detecto una tabla de materiales con fiabilidad. Puedes anadir filas manualmente o cancelar.'}
             </div>
           ) : null}
@@ -147,80 +156,18 @@ export const ScanReviewDialog = ({
           {hasNoPriceColumnsWarning && !isServiceDoc ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <p>
-                Este albarán no incluye precios/importes. Materiales no puede imputar coste automáticamente.
+                Este albaran no incluye precios/importes. Materiales no puede imputar coste automaticamente.
               </p>
               <Button variant="outline" onClick={onCreateOtrosLine}>
-                Crear línea OTROS
+                Crear linea OTROS
               </Button>
-            </div>
-          ) : null}
-
-          {canImproveWithOllama ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#d9e1ea] bg-slate-50 px-3 py-2 text-sm">
-              <p className="text-slate-700">
-                Puedes solicitar una propuesta adicional para este escaneo.
-              </p>
-              <Button variant="outline" onClick={onImproveWithOllama} disabled={ollamaLoading}>
-                {ollamaLoading ? 'Consultando IA...' : 'Mejorar con IA (Ollama)'}
-              </Button>
-            </div>
-          ) : null}
-
-          {ollamaError ? (
-            <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {ollamaError}
-            </div>
-          ) : null}
-
-          {ollamaProposal ? (
-            <div className="space-y-3 rounded-md border border-[#b9d2ff] bg-[#eef4ff] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-slate-800">Propuesta IA (Ollama)</p>
-                <div className="flex gap-2">
-                  <Button onClick={onApplyOllamaProposal}>Aplicar propuesta IA</Button>
-                  <Button variant="outline" onClick={onKeepOffline}>
-                    Mantener offline
-                  </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-5">
-                <div>
-                  <span className="font-medium text-slate-600">Tipo:</span> {ollamaProposal.docType}
-                </div>
-                <div>
-                  <span className="font-medium text-slate-600">Confianza:</span> {ollamaProposal.confidence}
-                </div>
-                <div className="md:col-span-2">
-                  <span className="font-medium text-slate-600">Proveedor:</span>{' '}
-                  {ollamaProposal.supplier || 'Sin detectar'}
-                </div>
-                <div>
-                  <span className="font-medium text-slate-600">Nº:</span>{' '}
-                  {ollamaProposal.invoiceNumber || 'Sin detectar'}
-                </div>
-              </div>
-              <div className="text-sm text-slate-700">
-                Filas propuestas: <span className="font-medium">{ollamaProposal.items.length}</span>
-              </div>
-              {ollamaProposal.warnings.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {ollamaProposal.warnings.map((warning) => (
-                    <span
-                      key={`ollama-warning-${warning}`}
-                      className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-700"
-                    >
-                      {warning}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
             </div>
           ) : null}
 
           <div className="rounded-md border border-[#d9e1ea] bg-slate-50 p-3 text-sm">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
               <div>
-                <span className="font-medium text-slate-600">Tipo:</span> {docType}
+                <span className="font-medium text-slate-600">Tipo:</span> {normalizedDocType}
               </div>
               <div className="md:col-span-2">
                 <span className="font-medium text-slate-600">Subtipo:</span> {docSubtype || 'No detectado'}
@@ -297,7 +244,7 @@ export const ScanReviewDialog = ({
               ) : null}
             </div>
             <div>
-              <Label>Nº Albarán</Label>
+              <Label>Nº Albaran</Label>
               <Input
                 className={`mt-1 ${
                   (fieldConfidence?.invoiceNumber ?? 1) < 0.65 || (fieldWarnings?.invoiceNumber?.length ?? 0) > 0
@@ -330,14 +277,14 @@ export const ScanReviewDialog = ({
             </div>
           </div>
 
-          {docType === 'SERVICE_MACHINERY' ? (
+          {isServiceDoc ? (
             <div>
-              <Label>Descripción de servicio detectada</Label>
+              <Label>Descripcion de servicio detectada</Label>
               <Input
                 className="mt-1"
                 value={serviceDescription}
                 onChange={(event) => onServiceDescriptionChange(sanitizeText(event.target.value))}
-                placeholder="Descripción del servicio"
+                placeholder="Descripcion del servicio"
               />
             </div>
           ) : null}
@@ -441,12 +388,12 @@ export const ScanReviewDialog = ({
                 <div key={line.id} className="rounded-md border border-[#d9e1ea] p-2">
                   <div className="grid grid-cols-12 gap-2">
                     <div className="col-span-12 md:col-span-4">
-                      <Label className="text-xs text-slate-600">Descripción</Label>
+                      <Label className="text-xs text-slate-600">Descripcion</Label>
                       <Input
                         className="mt-1"
                         value={line.description}
                         onChange={(event) => onUpdateServiceLine(line.id, { description: sanitizeText(event.target.value) })}
-                        placeholder="Descripción del servicio"
+                        placeholder="Descripcion del servicio"
                       />
                     </div>
                     <div className="col-span-6 md:col-span-2">
@@ -546,4 +493,3 @@ export const ScanReviewDialog = ({
 };
 
 export type { ScanReviewDialogProps };
-

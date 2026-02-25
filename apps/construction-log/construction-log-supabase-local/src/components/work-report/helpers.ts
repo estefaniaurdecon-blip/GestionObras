@@ -1,4 +1,9 @@
-import type { ParsedAlbaranItem, ParsedAlbaranResult, ParsedDocType } from '@/plugins/albaranScanner';
+import {
+  normalizeDocType,
+  type ParsedAlbaranItem,
+  type ParsedAlbaranResult,
+  type ParsedDocType,
+} from '@/plugins/albaranScanner';
 import type { RentalMachine } from '@/services/rentalMachinerySource';
 import type {
   EditableRow,
@@ -553,10 +558,7 @@ export const normalizeMaterialGroups = (groups: MaterialGroup[] | undefined): Ma
                 : null,
           }))
         : [];
-    const docType: ParsedDocType | null =
-      group.docType === 'MATERIALS_TABLE' || group.docType === 'SERVICE_MACHINERY' || group.docType === 'UNKNOWN'
-        ? group.docType
-        : null;
+    const docType: ParsedDocType | null = group.docType == null ? null : normalizeDocType(group.docType);
     return {
       id: group.id || crypto.randomUUID(),
       supplier: sanitizeText(group.supplier),
