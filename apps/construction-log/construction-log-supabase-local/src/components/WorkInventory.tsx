@@ -10,7 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Package, Wrench, Download, Trash2, Search, RefreshCw, Loader2, Pencil, Minus, ArrowLeft, Upload, FileText, GitMerge, CheckCircle, LayoutDashboard, FileCheck, AlertCircle } from 'lucide-react';
+import { Package, Wrench, Download, Trash2, Search, RefreshCw, Loader2, Pencil, Minus, ArrowLeft, FileText, GitMerge, CheckCircle, LayoutDashboard, FileCheck, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,6 +22,10 @@ import { InventoryAIAnalysis } from './InventoryAIAnalysis';
 import { DeliveryNoteReview } from './DeliveryNoteReview';
 import { InventoryDashboard } from './InventoryDashboard';
 import { useDeliveryNotes } from '@/hooks/useDeliveryNotes';
+import {
+  cleanInventory as cleanInventoryApi,
+  populateInventoryFromReports as populateInventoryFromReportsApi,
+} from '@/integrations/api/client';
 import {
   Dialog,
   DialogContent,
@@ -105,13 +109,11 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
   const [validating, setValidating] = useState(false);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const formSchema = z.object({
     name: z.string().min(1, "El nombre es obligatorio"),
@@ -159,11 +161,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('populate-inventory-from-reports', {
-        body: { work_id: workId, force: true }
-      });
-
-      if (error) throw error;
+      const data = await populateInventoryFromReportsApi({ work_id: workId, force: true });
 
       const messages = [];
       if (data.itemsInserted > 0) messages.push(`${data.itemsInserted} nuevos`);
@@ -187,25 +185,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     
     setCleaning(true);
     try {
-      // Obtener el organization_id del usuario
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.organization_id) {
-        throw new Error('No se pudo obtener la organización del usuario');
-      }
-
-      const { data, error } = await supabase.functions.invoke('clean-inventory', {
-        body: { 
-          work_id: workId,
-          organization_id: profile.organization_id
-        }
-      });
-
-      if (error) throw error;
+      const data = await cleanInventoryApi({ work_id: workId });
 
       toast.success(data.message || `Limpieza completada: ${data.deletedCount} items eliminados de servicios/alquileres`);
       loadInventory();
@@ -554,89 +534,6 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       toast.error("No se pudo eliminar el elemento");
     }
   };
-
-  const handleImportInvoice = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    setImporting(true);
-    try {
-      const file = files[0];
-      
-      // Validar tipo de archivo
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
-      if (!validTypes.includes(file.type)) {
-        toast.error('Tipo de archivo no válido. Use JPG, PNG, WEBP o PDF');
-        return;
-      }
-
-      // Convertir a base64
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const base64 = e.target?.result as string;
-          
-          // Obtener organization_id del usuario
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('organization_id')
-            .eq('id', user?.id)
-            .single();
-
-          // Llamar a la función de análisis
-          const { data, error } = await supabase.functions.invoke('analyze-invoice', {
-            body: {
-              imageBase64: base64,
-              workId: workId,
-              organizationId: profile?.organization_id
-            }
-          });
-
-          if (error) throw error;
-
-          if (data?.success && data?.data) {
-            const invoiceData = data.data;
-            
-            toast.success(
-              `Albarán procesado: ${invoiceData.items?.length || 0} elementos encontrados`,
-              {
-                description: invoiceData.supplier ? `Proveedor: ${invoiceData.supplier}` : undefined
-              }
-            );
-
-            // Recargar inventario para mostrar los nuevos elementos
-            await loadInventory();
-          } else {
-            toast.error('No se pudo procesar el albarán');
-          }
-        } catch (err) {
-          console.error('Error processing invoice:', err);
-          toast.error('Error al procesar el albarán');
-        }
-      };
-
-      reader.onerror = () => {
-        toast.error('Error al leer el archivo');
-      };
-
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error importing invoice:', error);
-      toast.error('Error al importar el albarán');
-    } finally {
-      setImporting(false);
-      // Limpiar el input para permitir seleccionar el mismo archivo de nuevo
-      if (event.target) {
-        event.target.value = '';
-      }
-    }
-  };
-
-
   const exportToExcel = () => {
     setExportingNotes(true);
   
@@ -1066,19 +963,6 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleImportInvoice}
-              disabled={importing}
-            >
-              {importing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4 mr-2" />
-              )}
-              Importar Albarán
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1586,15 +1470,6 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
         </DialogContent>
       </Dialog>
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-
       {/* Merge Suppliers Confirmation Dialog */}
       <AlertDialog open={showMergeConfirm} onOpenChange={setShowMergeConfirm}>
         <AlertDialogContent>
@@ -1631,3 +1506,4 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     </Card>
   );
 };
+

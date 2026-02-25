@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { analyzeInventory } from '@/integrations/api/client';
 
 interface AnalysisResult {
   item_id: string;
@@ -49,11 +50,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
     setShowResults(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('analyze-inventory', {
-        body: { work_id: workId }
-      });
-
-      if (error) throw error;
+      const data = await analyzeInventory({ work_id: workId });
 
       if (data.success) {
         setResults(data.results || []);

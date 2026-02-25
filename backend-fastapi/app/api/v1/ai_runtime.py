@@ -15,6 +15,7 @@ from app.api.deps import get_current_active_user
 from app.core.config import settings
 from app.db.session import get_session
 from app.models.erp import ExternalCollaboration, RentalMachinery, WorkReport
+from app.models.inventory import InventoryMovement, WorkInventoryItem, WorkInventorySyncLog
 from app.models.user import User
 
 
@@ -48,6 +49,20 @@ class StandardizeCompaniesRequest(BaseModel):
     action: str
     threshold: float = 0.7
     updates: list[StandardizationUpdate] = Field(default_factory=list)
+
+
+class AnalyzeInventoryRequest(BaseModel):
+    work_id: str
+
+
+class PopulateInventoryRequest(BaseModel):
+    work_id: str
+    force: bool = False
+
+
+class CleanInventoryRequest(BaseModel):
+    work_id: str
+    organization_id: str | None = None
 
 
 def _lovable_api_key() -> str:
@@ -723,6 +738,216 @@ def _replace_company_in_payload(payload: dict[str, Any], old_name: str, new_name
     return updated, changed
 
 
+def _normalize_unit(unit: Any) -> str:
+    raw = str(unit or "").strip().lower().replace(" ", "").replace(".", "")
+    if not raw:
+        return "ud"
+    if raw in {"tn", "ton", "tons", "toneladas", "tonelada"}:
+        return "t"
+    if raw in {"m3", "mc", "metroscubicos", "metrocubico"}:
+        return "m3"
+    if raw in {"lt", "lts", "litro", "litros"}:
+        return "l"
+    if raw in {"u", "unidad", "unidades", "uds"}:
+        return "ud"
+    if raw in {"kgs", "kilogramo", "kilogramos", "kilos"}:
+        return "kg"
+    if raw in {"metro", "metros", "mts"}:
+        return "m"
+    return raw
+
+
+def _is_immediate_consumption_material(name: str) -> bool:
+    low_name = (name or "").lower()
+    keywords = [
+        "hormigon",
+        "hormigón",
+        "concrete",
+        "asfalto",
+        "aglomerado",
+        "mezcla bituminosa",
+        "arido",
+        "árido",
+        "grava",
+        "gravilla",
+        "arena",
+        "zahorra",
+        "todo-uno",
+        "mortero preparado",
+        "relleno fluido",
+        "reciclado",
+        "rechazo de cantera",
+    ]
+    return any(keyword in low_name for keyword in keywords)
+
+
+def _service_keywords() -> list[str]:
+    return [
+        "alquiler",
+        "servicio",
+        "servicios",
+        "mano de obra",
+        "manodeobra",
+        "operario",
+        "operarios",
+        "transporte",
+        "portes",
+        "grua",
+        "grúa",
+        "plataforma",
+        "excavacion",
+        "excavación",
+        "retirada",
+        "montaje",
+        "desmontaje",
+    ]
+
+
+def _looks_like_service_item(name: str) -> bool:
+    low_name = (name or "").lower()
+    return any(keyword in low_name for keyword in _service_keywords())
+
+
+def _item_type_from_name(name: str) -> str:
+    low = (name or "").lower()
+    tool_keywords = [
+        "taladro",
+        "amoladora",
+        "radial",
+        "martillo",
+        "destornillador",
+        "llave",
+        "alicate",
+        "nivel",
+        "flexometro",
+        "flexómetro",
+        "sierra",
+        "lijadora",
+        "carretilla",
+        "escalera",
+    ]
+    if any(keyword in low for keyword in tool_keywords):
+        return "herramienta"
+    return "material"
+
+
+def _normalize_supplier_name(name: str) -> str:
+    text = (name or "").lower()
+    text = _CLEAN_WS_RE.sub("", text)
+    translation = str.maketrans("áàäâéèëêíìïîóòöôúùüûñ", "aaaaeeeeiiiioooouuuun")
+    text = text.translate(translation)
+    return re.sub(r"[^a-z0-9]", "", text)
+
+
+def _report_payload_for_work(report: WorkReport, work_id: str) -> dict[str, Any] | None:
+    payload = dict(report.payload or {})
+    report_work_id = str(payload.get("workId") or payload.get("work_id") or "").strip()
+    if report_work_id and report_work_id != work_id:
+        return None
+    if not report_work_id:
+        # Compatibilidad con payloads antiguos: si no traen workId, tratamos el reporte como candidato.
+        return payload
+    return payload
+
+
+def _iter_material_groups(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return _payload_groups(payload, "materialGroups", "material_groups")
+
+
+def _extract_supplier_duplicates(
+    suppliers: list[str],
+) -> list[dict[str, Any]]:
+    supplier_map: dict[str, list[str]] = {}
+    for supplier in suppliers:
+        normalized = _normalize_supplier_name(supplier)
+        if not normalized:
+            continue
+        supplier_map.setdefault(normalized, []).append(supplier)
+
+    duplicates: list[dict[str, Any]] = []
+    for normalized, variants in supplier_map.items():
+        unique_variants = sorted(set(variants))
+        if len(unique_variants) > 1:
+            duplicates.append(
+                {
+                    "suppliers": unique_variants,
+                    "item_count": len(variants),
+                    "reason": f"Se detectaron {len(unique_variants)} variantes del mismo proveedor",
+                    "normalized_name": normalized,
+                }
+            )
+
+    all_norm = list(supplier_map.keys())
+    processed: set[str] = set()
+    for i in range(len(all_norm)):
+        for j in range(i + 1, len(all_norm)):
+            first = all_norm[i]
+            second = all_norm[j]
+            pair = "|".join(sorted([first, second]))
+            if pair in processed:
+                continue
+            shorter, longer = (first, second) if len(first) <= len(second) else (second, first)
+            if len(shorter) >= 4 and longer.startswith(shorter):
+                merged = sorted(set(supplier_map.get(first, []) + supplier_map.get(second, [])))
+                duplicates = [
+                    entry
+                    for entry in duplicates
+                    if entry.get("normalized_name") not in {first, second}
+                ]
+                duplicates.append(
+                    {
+                        "suppliers": merged,
+                        "item_count": len(supplier_map.get(first, [])) + len(supplier_map.get(second, [])),
+                        "reason": "Proveedores similares detectados (uno es extension del otro)",
+                        "normalized_name": shorter,
+                    }
+                )
+                processed.add(pair)
+    return duplicates
+
+
+def _parse_analysis_results(content: str, allowed_ids: set[str]) -> list[dict[str, Any]]:
+    raw_text = content.strip()
+    json_block = raw_text
+    match = re.search(r"\[[\s\S]*\]", raw_text)
+    if match:
+        json_block = match.group(0)
+    parsed = json.loads(json_block)
+    if not isinstance(parsed, list):
+        raise ValueError("Formato de respuesta de IA invalido")
+
+    valid: list[dict[str, Any]] = []
+    uuid_re = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("item_id") or "").strip()
+        if item_id not in allowed_ids:
+            continue
+        if not uuid_re.fullmatch(item_id):
+            continue
+        action = str(item.get("action") or "").strip().lower()
+        if action not in {"delete", "update", "keep"}:
+            continue
+        normalized = {
+            "item_id": item_id,
+            "original_name": str(item.get("original_name") or ""),
+            "action": action,
+            "reason": str(item.get("reason") or ""),
+        }
+        suggested = item.get("suggested_changes")
+        if isinstance(suggested, dict):
+            clean_suggested = {
+                key: value
+                for key, value in suggested.items()
+                if key in {"item_type", "category", "unit", "name"}
+            }
+            if clean_suggested:
+                normalized["suggested_changes"] = clean_suggested
+        valid.append(normalized)
+    return valid
+
+
 @router.post("/generate-summary-report")
 async def generate_summary_report(
     payload: GenerateSummaryReportRequest,
@@ -1082,3 +1307,398 @@ def standardize_companies(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail='Invalid action. Use "analyze" or "apply".',
     )
+
+
+@router.post("/populate-inventory-from-reports")
+def populate_inventory_from_reports(
+    payload: PopulateInventoryRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    if not work_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id is required",
+        )
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    all_reports = session.exec(
+        select(WorkReport).where(
+            WorkReport.tenant_id == tenant_id,
+            WorkReport.deleted_at.is_(None),
+            WorkReport.status == "completed",
+        )
+    ).all()
+
+    reports: list[tuple[WorkReport, dict[str, Any]]] = []
+    for report in all_reports:
+        report_payload = _report_payload_for_work(report, work_id)
+        if report_payload is None:
+            continue
+        reports.append((report, report_payload))
+
+    if not reports:
+        return {
+            "message": "No completed reports found for this work",
+            "itemsProcessed": 0,
+            "reportsAnalyzed": 0,
+            "newReports": 0,
+            "itemsInserted": 0,
+            "itemsUpdated": 0,
+            "immediateConsumptionItems": 0,
+            "errors": 0,
+            "alreadySynced": 0,
+        }
+
+    synced_ids: set[int] = set()
+    if not payload.force:
+        synced_rows = session.exec(
+            select(WorkInventorySyncLog).where(
+                WorkInventorySyncLog.tenant_id == tenant_id,
+                WorkInventorySyncLog.work_external_id == work_id,
+            )
+        ).all()
+        synced_ids = {row.work_report_id for row in synced_rows}
+
+    reports_to_sync = reports if payload.force else [entry for entry in reports if entry[0].id not in synced_ids]
+    if not reports_to_sync:
+        return {
+            "message": "No new reports to sync. All reports already processed.",
+            "itemsProcessed": 0,
+            "reportsAnalyzed": len(reports),
+            "newReports": 0,
+            "itemsInserted": 0,
+            "itemsUpdated": 0,
+            "immediateConsumptionItems": 0,
+            "errors": 0,
+            "alreadySynced": len(reports),
+        }
+
+    inserted = 0
+    updated = 0
+    immediate_consumption = 0
+    errors = 0
+    processed_items = 0
+
+    for report, report_payload in reports_to_sync:
+        date_str = _safe_date_str(report.date)
+        for group in _iter_material_groups(report_payload):
+            if not isinstance(group, dict):
+                continue
+            supplier = str(group.get("supplier") or group.get("provider") or "Sin proveedor").strip()
+            delivery_note = str(
+                group.get("invoiceNumber")
+                or group.get("deliveryNoteNumber")
+                or group.get("delivery_note_number")
+                or ""
+            ).strip()
+            if not delivery_note:
+                continue
+
+            raw_items = group.get("items") if isinstance(group.get("items"), list) else []
+            for item in raw_items:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or item.get("material") or "").strip()
+                if not name or _looks_like_service_item(name):
+                    continue
+
+                quantity = _as_float(item.get("quantity"))
+                unit = _normalize_unit(item.get("unit") or "ud")
+                unit_price = _as_float(item.get("unitPrice")) if item.get("unitPrice") is not None else None
+                total_price = None
+                if unit_price is not None and quantity:
+                    total_price = unit_price * quantity
+                immediate = _is_immediate_consumption_material(name)
+                item_type = _item_type_from_name(name)
+
+                existing = session.exec(
+                    select(WorkInventoryItem).where(
+                        WorkInventoryItem.tenant_id == tenant_id,
+                        WorkInventoryItem.work_external_id == work_id,
+                        WorkInventoryItem.name == name,
+                        WorkInventoryItem.item_type == item_type,
+                        WorkInventoryItem.unit == unit,
+                    )
+                ).first()
+
+                try:
+                    if existing:
+                        existing.quantity = 0 if immediate else _as_float(existing.quantity) + quantity
+                        existing.last_entry_date = date_str
+                        existing.last_supplier = existing.last_supplier or supplier
+                        existing.delivery_note_number = existing.delivery_note_number or delivery_note
+                        existing.product_code = existing.product_code or str(item.get("product_code") or "").strip() or None
+                        existing.unit_price = existing.unit_price or unit_price
+                        existing.total_price = total_price or existing.total_price
+                        existing.batch_number = existing.batch_number or str(item.get("batch_number") or "").strip() or None
+                        existing.brand = existing.brand or str(item.get("brand") or "").strip() or None
+                        existing.model = existing.model or str(item.get("model") or "").strip() or None
+                        existing.is_immediate_consumption = immediate
+                        existing.updated_at = datetime.utcnow()
+                        session.add(existing)
+                        inventory_item = existing
+                        updated += 1
+                    else:
+                        inventory_item = WorkInventoryItem(
+                            tenant_id=tenant_id,
+                            work_external_id=work_id,
+                            name=name,
+                            item_type=item_type,
+                            category=supplier or "Materiales",
+                            quantity=0 if immediate else quantity,
+                            unit=unit,
+                            last_entry_date=date_str,
+                            last_supplier=supplier or None,
+                            delivery_note_number=delivery_note or None,
+                            product_code=str(item.get("product_code") or "").strip() or None,
+                            unit_price=unit_price,
+                            total_price=total_price,
+                            batch_number=str(item.get("batch_number") or "").strip() or None,
+                            brand=str(item.get("brand") or "").strip() or None,
+                            model=str(item.get("model") or "").strip() or None,
+                            is_immediate_consumption=immediate,
+                            source="ai",
+                        )
+                        session.add(inventory_item)
+                        inserted += 1
+
+                    processed_items += 1
+                    session.flush()
+                    movement = InventoryMovement(
+                        tenant_id=tenant_id,
+                        work_external_id=work_id,
+                        inventory_item_id=inventory_item.id,
+                        movement_type="entry",
+                        quantity=quantity,
+                        unit=unit,
+                        unit_price=unit_price,
+                        total_price=total_price,
+                        supplier=supplier or None,
+                        delivery_note_number=delivery_note or None,
+                        source="ai",
+                        is_immediate_consumption=immediate,
+                    )
+                    session.add(movement)
+
+                    if immediate and quantity > 0:
+                        session.add(
+                            InventoryMovement(
+                                tenant_id=tenant_id,
+                                work_external_id=work_id,
+                                inventory_item_id=inventory_item.id,
+                                movement_type="exit",
+                                quantity=quantity,
+                                unit=unit,
+                                unit_price=unit_price,
+                                total_price=total_price,
+                                supplier=supplier or None,
+                                delivery_note_number=delivery_note or None,
+                                source="auto_consumption",
+                                notes="Consumo directo en obra (Just-in-Time)",
+                                is_immediate_consumption=True,
+                            )
+                        )
+                        immediate_consumption += 1
+                except Exception:
+                    errors += 1
+
+    if not payload.force:
+        for report, _ in reports_to_sync:
+            if report.id is None:
+                continue
+            session.add(
+                WorkInventorySyncLog(
+                    tenant_id=tenant_id,
+                    work_external_id=work_id,
+                    work_report_id=report.id,
+                )
+            )
+
+    session.commit()
+
+    return {
+        "message": (
+            f"Inventario actualizado. {inserted} nuevos, {updated} actualizados, "
+            f"{immediate_consumption} consumo directo."
+        ),
+        "itemsInserted": inserted,
+        "itemsUpdated": updated,
+        "immediateConsumptionItems": immediate_consumption,
+        "errors": errors,
+        "reportsAnalyzed": len(reports),
+        "newReports": len(reports_to_sync),
+        "alreadySynced": max(len(reports) - len(reports_to_sync), 0),
+        "itemsProcessed": processed_items,
+    }
+
+
+@router.post("/clean-inventory")
+def clean_inventory(
+    payload: CleanInventoryRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    if not work_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id is required",
+        )
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    items = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).all()
+
+    service_companies = [
+        "hune rental",
+        "ramon valiente",
+        "zenda s coop",
+        "zenda",
+        "hondo excabaciones",
+        "rafha gruas",
+        "gruas torre",
+    ]
+    to_delete: list[WorkInventoryItem] = []
+    for item in items:
+        should_delete = False
+        if not (item.delivery_note_number or "").strip():
+            should_delete = True
+        name_lower = (item.name or "").lower()
+        if any(keyword in name_lower for keyword in _service_keywords()):
+            should_delete = True
+        supplier_lower = (item.last_supplier or "").lower()
+        if any(company in supplier_lower for company in service_companies):
+            should_delete = True
+        category_lower = (item.category or "").lower()
+        if "maquinaria" in category_lower and not (item.delivery_note_number or "").strip():
+            should_delete = True
+        if should_delete:
+            to_delete.append(item)
+
+    deleted_count = 0
+    for item in to_delete:
+        session.delete(item)
+        deleted_count += 1
+
+    session.commit()
+    return {
+        "success": True,
+        "message": f"Limpieza completada: {deleted_count} items eliminados",
+        "deletedCount": deleted_count,
+        "totalScanned": len(items),
+        "remaining": max(len(items) - deleted_count, 0),
+    }
+
+
+@router.post("/analyze-inventory")
+async def analyze_inventory(
+    payload: AnalyzeInventoryRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    if not work_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id is required",
+        )
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    reports = session.exec(
+        select(WorkReport).where(
+            WorkReport.tenant_id == tenant_id,
+            WorkReport.deleted_at.is_(None),
+        )
+    ).all()
+
+    suppliers: list[str] = []
+    for report in reports:
+        report_payload = _report_payload_for_work(report, work_id)
+        if report_payload is None:
+            continue
+        for group in _iter_material_groups(report_payload):
+            if not isinstance(group, dict):
+                continue
+            supplier = str(group.get("supplier") or "").strip()
+            if supplier:
+                suppliers.append(supplier)
+
+    inventory_items = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).all()
+    if not inventory_items:
+        duplicates = _extract_supplier_duplicates(suppliers)
+        return {
+            "success": True,
+            "message": "No hay items en el inventario para analizar",
+            "results": [],
+            "duplicate_suppliers": duplicates,
+            "total_analyzed": 0,
+        }
+
+    limited_items = inventory_items[:50]
+    suppliers.extend([item.last_supplier or "" for item in limited_items if item.last_supplier])
+    duplicates = _extract_supplier_duplicates(suppliers)
+
+    item_lines = "\n".join(
+        f"ID:{item.id}|Nombre:{item.name}|Tipo:{item.item_type}|Categoria:{item.category or 'sin categoria'}|Unidad:{item.unit or 'sin unidad'}|Marca:{item.brand or 'N/A'}|Modelo:{item.model or 'N/A'}"
+        for item in limited_items
+    )
+
+    system_prompt = (
+        "Eres un experto en construccion y gestion de inventarios de obra. "
+        "Debes clasificar cada item como delete/update/keep. "
+        "Responde solo un array JSON valido con campos: item_id, original_name, action, reason, suggested_changes."
+    )
+    user_prompt = (
+        f"Analiza estos {len(limited_items)} items del inventario y propone correcciones.\n"
+        "Usa exactamente los IDs recibidos.\n"
+        f"Items:\n{item_lines}\n"
+        "Responde SOLO con JSON array."
+    )
+
+    ai_response = await _lovable_chat(
+        {
+            "model": "google/gemini-2.5-pro",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.3,
+        },
+        timeout=90,
+    )
+    content = str(((ai_response.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
+    if not content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No se recibio respuesta valida de IA para inventario.",
+        )
+
+    allowed_ids = {item.id for item in limited_items}
+    try:
+        results = _parse_analysis_results(content, allowed_ids)
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Error al procesar respuesta de IA. Formato JSON invalido.",
+        )
+
+    return {
+        "success": True,
+        "results": results,
+        "duplicate_suppliers": duplicates,
+        "total_analyzed": len(limited_items),
+    }

@@ -1007,6 +1007,68 @@ export interface StandardizeCompaniesApplyResponse {
   updatedCount: number;
 }
 
+export interface AnalyzeInventoryRequest {
+  work_id: string;
+}
+
+export interface InventoryAnalysisResult {
+  item_id: string;
+  original_name: string;
+  action: 'delete' | 'update' | 'keep';
+  reason: string;
+  suggested_changes?: {
+    item_type?: string;
+    category?: string;
+    unit?: string;
+    name?: string;
+  };
+}
+
+export interface DuplicateSupplier {
+  suppliers: string[];
+  item_count: number;
+  reason: string;
+  normalized_name: string;
+}
+
+export interface AnalyzeInventoryResponse {
+  success: boolean;
+  message?: string;
+  results: InventoryAnalysisResult[];
+  duplicate_suppliers: DuplicateSupplier[];
+  total_analyzed: number;
+}
+
+export interface PopulateInventoryRequest {
+  work_id: string;
+  force?: boolean;
+}
+
+export interface PopulateInventoryResponse {
+  message: string;
+  itemsInserted: number;
+  itemsUpdated: number;
+  immediateConsumptionItems: number;
+  errors: number;
+  reportsAnalyzed: number;
+  newReports: number;
+  alreadySynced: number;
+  itemsProcessed: number;
+}
+
+export interface CleanInventoryRequest {
+  work_id: string;
+  organization_id?: string;
+}
+
+export interface CleanInventoryResponse {
+  success: boolean;
+  message: string;
+  deletedCount: number;
+  totalScanned: number;
+  remaining: number;
+}
+
 export async function generateSummaryReport(
   payload: GenerateSummaryReportRequest
 ): Promise<GenerateSummaryReportResponse> {
@@ -1050,6 +1112,33 @@ export async function standardizeCompanies(
       body: JSON.stringify(payload),
     }
   );
+}
+
+export async function analyzeInventory(
+  payload: AnalyzeInventoryRequest
+): Promise<AnalyzeInventoryResponse> {
+  return apiFetchJson<AnalyzeInventoryResponse>('/api/v1/ai/analyze-inventory', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function populateInventoryFromReports(
+  payload: PopulateInventoryRequest
+): Promise<PopulateInventoryResponse> {
+  return apiFetchJson<PopulateInventoryResponse>('/api/v1/ai/populate-inventory-from-reports', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function cleanInventory(
+  payload: CleanInventoryRequest
+): Promise<CleanInventoryResponse> {
+  return apiFetchJson<CleanInventoryResponse>('/api/v1/ai/clean-inventory', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 // ============================================================
