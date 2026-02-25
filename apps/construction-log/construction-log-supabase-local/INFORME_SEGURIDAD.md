@@ -1,8 +1,11 @@
 # 🔒 INFORME DE AUDITORÍA DE SEGURIDAD
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 **Fecha**: 2 de noviembre de 2025  
 **App**: Sistema de Gestión de Partes de Trabajo (Construction Management)  
-**Nivel de Criticidad**: 🔴 **ALTO - VULNERABILIDADES CRÍTICAS DETECTADAS**
+**Nivel de Criticidad**: **ALTO - VULNERABILIDADES CRÍTICAS DETECTADAS**
 
 ---
 
@@ -47,7 +50,7 @@ const STORAGE_KEY_USER = `${STORAGE_KEY}:${user?.id || 'nouser'}:${organizationI
 
 **Funciones Afectadas** (según `supabase/config.toml`):
 ```toml
-[functions.check-updates]
+[functions.update-function]  # Ver documentacion/ENDPOINTS_UNIFICADOS.md
 verify_jwt = false  # ❌ Permite llamadas no autenticadas
 
 [functions.publish-update]
@@ -134,16 +137,16 @@ can_view_profile(profile_id)
 is_assigned_to_work(user_id, work_id)
 ```
 
-### 4. **Aislamiento por Organización** ✅
-- ✅ Todas las tablas críticas tienen `organization_id`
-- ✅ Función `current_user_organization()` para obtener org del usuario
-- ✅ RLS policies filtran por `organization_id`
+### 4. **Aislamiento por Organización** 
+-  Todas las tablas críticas tienen `organization_id`
+- Función `current_user_organization()` para obtener org del usuario
+- RLS policies filtran por `organization_id`
 
 ---
 
-## ⚠️ ADVERTENCIAS Y RECOMENDACIONES
+## ADVERTENCIAS Y RECOMENDACIONES
 
-### 1. **Columna `role` Legacy en `profiles`** ⚠️
+### 1. **Columna `role` heredada en `profiles`** ⚠️
 **Problema**: Existe una columna `role` en la tabla `profiles` que NO debería usarse.
 
 **Recomendación**: 
@@ -204,7 +207,7 @@ is_assigned_to_work(user_id, work_id)
 ### Prioridad 2 - ALTO (Esta semana)
 3. ❌ **Habilitar Leaked Password Protection** en Auth Settings
 4. ❌ **Política de contraseñas fuertes**: mínimo 12 caracteres, complejidad
-5. ❌ **Auditoría completa de accesos**: implementar logging de acciones sensibles
+5. ❌ **Auditoría completa de accesos**: implementar registro de acciones sensibles
 
 ### Prioridad 3 - MEDIO (Este mes)
 6. ⚠️ Eliminar columna `role` legacy de `profiles`

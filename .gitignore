@@ -2,6 +2,7 @@
 .DS_Store
 Thumbs.db
 *.log
+*.log.*
 *.tmp
 *.swp
 *.swo
@@ -32,6 +33,8 @@ node_modules/react-icons/
 dist/
 build/
 coverage/
+.vite/
+.cache/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -46,6 +49,34 @@ pnpm-debug.log*
 *.out
 *.err
 *.pid
+tmp_*
 bugreport-*.zip
 repo_export_*.zip
 temp_remote_*.html
+
+# Azure Functions local secrets/config
+azure-functions/docint-proxy/local.settings.json
+
+# === Cross-project build artifacts ===
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.vite/
+**/.cache/
+
+# Android build artifacts
+**/.gradle/
+**/.idea/
+**/.cxx/
+**/.externalNativeBuild/
+**/build/
+**/*.apk
+**/*.aab
+
+# Azure Functions runtime artifacts
+azure-functions/**/node_modules/
+azure-functions/**/dist/
+azure-functions/**/.func/
+azure-functions/**/local.settings.json
+azure-functions/**/*.log

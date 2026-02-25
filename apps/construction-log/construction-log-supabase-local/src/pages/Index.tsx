@@ -91,6 +91,13 @@ const Index = () => {
   } = useAccessControlReports({ tenantId: resolvedTenantId });
 
   const roles = useMemo(() => normalizeRoles(user?.roles), [user?.roles]);
+  const permissions = useMemo(
+    () =>
+      Array.isArray(user?.permissions)
+        ? user.permissions.map((permission) => String(permission).trim().toLowerCase())
+        : [],
+    [user?.permissions],
+  );
   const roleName = roles[0] || '';
 
   // Backwards-compatible mapping:
@@ -104,7 +111,12 @@ const Index = () => {
   // We keep it only for superadmin (system managers).
   const showUserManagementTab = isSuperAdmin;
   const showUpdatesTab = isSuperAdmin || isTenantAdmin;
-  const workReportsReadOnlyByRole = tenantResolved && isTenantAdmin && !isSuperAdmin;
+  const canCreateTimeReports =
+    isSuperAdmin ||
+    permissions.includes('can_create_time_reports') ||
+    permissions.includes('work_reports:create') ||
+    permissions.includes('work_reports:write');
+  const workReportsReadOnlyByRole = tenantResolved && isTenantAdmin && !canCreateTimeReports;
   const canCreateWorkReport = tenantResolved && !workReportsReadOnlyByRole;
 
   const roleLabel = useMemo(() => getRoleLabel(isSuperAdmin, isTenantAdmin), [isSuperAdmin, isTenantAdmin]);

@@ -1,0 +1,22 @@
+{
+  "name": "docint-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Functions proxy for Azure AI Document Intelligence v4.0 (albaranes).",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "start": "func start",
+    "start:watch": "npm run build && func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "azure-functions-core-tools": "^4.7.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,66 +1,48 @@
-# Plataforma SaaS Multi‑Tenant – Monorepo
+# Plataforma SaaS Multi-Tenant (Monorepo)
 
-Este repositorio contiene la implementación de una plataforma SaaS multi‑tenant profesional bajo el dominio `mavico.shop`, compuesta por
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
 
-- Backend SaaS (FastAPI) – núcleo de negocio y multi‑tenant.
-- Módulo ERP (FastAPI) – gestión operativa interna.
-- Frontend (React) – dashboard desacoplado.
-- Infraestructura (Docker + Cloudflare Tunnel) – despliegue y dominios.
+Repositorio principal de una plataforma SaaS multi-tenant con backend, frontend
+e infraestructura de despliegue.
 
-## Estructura
+## Componentes
 
-- `backend-fastapi/` – API SaaS:
-  - `app/models/` – modelos de base de datos (SQLModel).
-  - `app/schemas/` – DTOs de entrada/salida de la API.
-  - `app/services/` – lógica de dominio (auth, tenants, users, tools).
-  - `app/api/v1/` – rutas HTTP (finas) que usan los servicios.
-  - `app/core/` – configuración, seguridad, auditoría, seed de RBAC.
+- `backend-fastapi/`
+  - API principal y modulos ERP.
+  - Modelos SQLModel, servicios de negocio y seguridad.
+- `frontend-react/`
+  - Panel web desacoplado.
+  - Ruteo, autenticacion y modulos de gestion.
+- `infra/`
+  - Docker Compose para desarrollo y produccion.
+  - Configuracion de tunel Cloudflare.
+- `documentacion/`
+  - Arquitectura, seguridad, despliegue y catalogo unificado de endpoints.
 
-- `frontend-react/` – frontend:
-  - `src/api/` – cliente HTTP y módulos de API.
-  - `src/components/` – layout y componentes reutilizables (ToolGrid, etc.).
-  - `src/pages/` – páginas (Login, MFA, Dashboard).
-
-- `infra/` – infraestructura:
-  - `docker-compose.yml` – entorno de desarrollo.
-  - `docker-compose.prod.yml` – override de producción.
-  - `cloudflared/config.yml` – configuración del túnel Cloudflare.
-
-- `documentacion/` – documentación técnica detallada (arquitectura, seguridad, etc.).
-
-## Puesta en marcha rápida
-
-### Desarrollo local
+## Puesta en marcha local
 
 ```bash
 cd infra
 docker compose up --build
 ```
 
-Servicios expuestos en el host configurado:
-- FastAPI: `http://<host>:8000/api/v1/health/`
-- Frontend: `http://<host>:5173/`
+Servicios:
+- API: `http://<host>:8000`
+- Frontend: `http://<host>:5173`
 
-### Seed de RBAC y Super Admin
+## Seed de roles y super admin
 
 ```bash
 docker exec -it saas-backend-fastapi python -m app.core.seed_rbac
 ```
 
-Crea permisos/roles base y garantiza un Super Admin:
-- Email: `dios@cortecelestial.god`
-- Contraseña inicial: `temporal`
-
-### Producción (esqueleto)
-
-1. Configurar el dominio `mavico.shop` en Cloudflare y crear túnel `saas-mavico`.
-2. Colocar el JSON de credenciales del túnel en `infra/cloudflared/saas-mavico.json`.
-3. Desplegar:
+## Produccion (base)
 
 ```bash
 cd infra
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-Más detalles en `documentacion/infraestructura.md` y `documentacion/seguridad.md`.
-
+Para detalles de infraestructura y seguridad revisar:
+- `documentacion/infraestructura.md`
+- `documentacion/seguridad.md`

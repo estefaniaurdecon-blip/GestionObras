@@ -1,5 +1,8 @@
 # 🚨 ACCIONES URGENTES DE SEGURIDAD
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 ## ✅ COMPLETADO - Fuga de Datos Entre Organizaciones
 
 ### Cambios Implementados:
@@ -47,7 +50,7 @@
 ```toml
 # IMPORTANTE: Cambiar TODAS estas funciones a verify_jwt = true
 
-[functions.check-updates]
+[functions.update-function]  # Ver documentacion/ENDPOINTS_UNIFICADOS.md
 verify_jwt = true  # ✅ Solo usuarios autenticados pueden verificar actualizaciones
 
 [functions.publish-update]
@@ -259,7 +262,7 @@ await logAction('update', 'work_report', reportId);
 - [ ] Mínimo 12 caracteres requerido
 - [ ] Usuarios existentes notificados
 
-#### Audit Logs:
+#### Registros de auditoria:
 - [ ] Todas las acciones críticas se registran
 - [ ] Solo admins pueden ver logs
 - [ ] Logs incluyen IP y timestamp

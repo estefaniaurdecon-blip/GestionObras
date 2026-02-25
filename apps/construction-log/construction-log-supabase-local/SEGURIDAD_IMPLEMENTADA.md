@@ -1,11 +1,14 @@
 # ✅ CONTROLES DE SEGURIDAD IMPLEMENTADOS
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 **Fecha**: 2 de noviembre de 2025  
 **Estado**: Implementación Completada - Sin Afectar Funcionalidades
 
 ---
 
-## 🔒 1. AUDIT LOGS (ISO 27001, GDPR Art. 30, SOC 2)
+## 🔒 1. REGISTROS DE AUDITORIA (ISO 27001, GDPR Art. 30, SOC 2)
 
 ### ✅ Implementación Completada
 
@@ -56,7 +59,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 - ✅ `clean-inventory` - Solo usuarios autenticados
 
 **Funciones Públicas** (sin JWT, por diseño):
-- ✅ `check-updates` - Necesario para verificar actualizaciones sin auth
+- ✅ Pipeline de updates (detalle en `documentacion/ENDPOINTS_UNIFICADOS.md`)
 - ✅ `auto-duplicate-rental-machinery` - Llamado desde cron job
 
 **Verificación de Roles**:
@@ -72,7 +75,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 **Ahora**: ⚠️ PARCIALMENTE CUMPLE
 
 **Mejoras**:
-- ✅ Audit logs completos
+- ✅ Registros de auditoria completos
 - ✅ Control de acceso reforzado en edge functions
 - ✅ Monitoreo de acciones críticas
 - ⚠️ Falta: Evaluación de riesgos documentada
@@ -86,7 +89,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 - ✅ Registro completo de procesamiento (Art. 30)
 - ✅ Fuga de datos organizaciones CORREGIDA
 - ✅ Trazabilidad de eliminación de datos
-- ✅ Audit trail de acciones con PII
+- ✅ Trazabilidad de acciones con PII
 - ⚠️ Pendiente: Habilitar protección contraseñas filtradas (requiere configuración manual)
 
 ### SOC 2 Type II ✅ MEJORADO
@@ -95,7 +98,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 
 **Mejoras**:
 - ✅ CC6.1 - Control de acceso lógico (JWT enforced)
-- ✅ CC7.2 - Monitoreo de seguridad (audit logs)
+- ✅ CC7.2 - Monitoreo de seguridad (registros de auditoria)
 - ✅ Registro de todas las acciones administrativas
 - ⚠️ Falta: Auditoría externa de 6-12 meses
 - ⚠️ Falta: Sistema de alertas en tiempo real
@@ -112,7 +115,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 - ✅ Solo agregado de código nuevo (audit logs, utilities)
 - ✅ Solo endurecimiento de seguridad (JWT en edge functions)
 - ✅ Triggers automáticos no afectan operaciones normales
-- ✅ Audit logs NO bloqueantes (errores son silenciosos)
+- ✅ Registros de auditoria no bloqueantes (errores son silenciosos)
 
 **Funcionalidades Verificadas**:
 - ✅ Partes de trabajo: crear, editar, aprobar, eliminar
@@ -121,7 +124,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 - ✅ Control de accesos: crear, exportar
 - ✅ Informes económicos: generar, exportar
 - ✅ Clonado automático de partes (cron job)
-- ✅ Actualizaciones de app (check-updates)
+- ✅ Actualizaciones de app (ver `documentacion/ENDPOINTS_UNIFICADOS.md`)
 
 ---
 
@@ -147,7 +150,7 @@ await auditLog.createInventoryItem(itemId, itemName, itemType);
 
 ---
 
-## 🔍 6. CÓMO USAR LOS AUDIT LOGS
+## 🔍 6. COMO USAR LOS REGISTROS DE AUDITORIA
 
 ### Para Administradores:
 
@@ -214,7 +217,7 @@ COPY (
 
 ## 📊 7. MÉTRICAS DE SEGURIDAD
 
-### Cobertura de Audit Logs:
+### Cobertura de registros de auditoria:
 
 **Automático** (triggers):
 - ✅ Eliminación de usuarios
@@ -234,7 +237,7 @@ COPY (
 
 | Función | JWT | Verificación Roles | Estado |
 |---------|-----|-------------------|--------|
-| check-updates | ❌ Público | N/A | ✅ Por diseño |
+| Pipeline de updates | ❌ Público | N/A | ✅ Por diseño |
 | publish-update | ✅ Requerido | ✅ Admin/Master | ✅ Seguro |
 | analyze-invoice | ✅ Requerido | Auth básica | ✅ Seguro |
 | analyze-inventory | ✅ Requerido | Auth básica | ✅ Seguro |
@@ -258,7 +261,7 @@ COPY (
 
 **Fase 1 - Completar (1 semana)**:
 - [ ] Configurar protección contraseñas filtradas (manual)
-- [ ] Agregar logging en componentes frontend críticos
+- [ ] Agregar registro de auditoria en componentes frontend criticos
 - [ ] Implementar rate limiting en edge functions
 
 **Fase 2 - Documentación (2-4 semanas)**:

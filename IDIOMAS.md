@@ -1,33 +1,33 @@
-## 🧠 Enfoque recomendado (high level)
+# Guia de internacionalizacion (i18n)
 
-1. **Frontend (React)**
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
 
-   * Manejar traducciones con una librería i18n (no “a mano”).
-   * Detectar idioma del navegador automáticamente.
-   * Permitir cambiar idioma desde *Settings*.
-   * Guardar el idioma elegido (localStorage + backend).
+## Objetivo
 
-2. **Backend (FastAPI)**
+Unificar la estrategia de idiomas en frontend y backend para evitar textos
+hardcodeados y facilitar la ampliacion futura (por ejemplo, anadir `fr`).
 
-   * Guardar `language` en el modelo `User`.
-   * Usar ese idioma para:
+## Recomendacion de arquitectura
 
-     * Emails
-     * Mensajes de error
-     * Respuestas internacionalizadas (si aplica)
-   * Fallback al header `Accept-Language`.
+1. Frontend:
+   - Usar `react-i18next`.
+   - Detectar idioma del navegador.
+   - Permitir cambio manual en ajustes.
+   - Persistir la preferencia en backend.
+2. Backend:
+   - Guardar `language` en el usuario.
+   - Usar ese idioma en emails, notificaciones y mensajes de error.
+   - Aplicar respaldo con `Accept-Language` si el usuario no tiene idioma guardado.
 
----
+## Frontend (React)
 
-## 🧩 FRONTEND (React)
-
-### 1️⃣ Usa `react-i18next` (estándar de facto)
+Instalacion:
 
 ```bash
 npm install i18next react-i18next i18next-browser-languagedetector
 ```
 
-### 2️⃣ Configuración básica (`i18n.ts`)
+Configuracion base (`i18n.ts`):
 
 ```ts
 import i18n from "i18next";
@@ -41,11 +41,11 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    fallbackLng: "en",
-    supportedLngs: ["en", "es"],
+    fallbackLng: "es",
+    supportedLngs: ["es", "en"],
     resources: {
-      en: { translation: en },
       es: { translation: es },
+      en: { translation: en },
     },
     interpolation: {
       escapeValue: false,
@@ -55,370 +55,74 @@ i18n
 export default i18n;
 ```
 
-📁 Estructura recomendada:
+Estructura recomendada:
 
-```
+```text
 src/
- └─ locales/
-     ├─ en.json
-     └─ es.json
+  locales/
+    es.json
+    en.json
 ```
 
----
-
-### 3️⃣ Uso en componentes
+Uso en componentes:
 
 ```tsx
 import { useTranslation } from "react-i18next";
 
-function Profile() {
+function Perfil() {
   const { t } = useTranslation();
-
   return <h1>{t("settings.language")}</h1>;
 }
 ```
 
----
-
-### 4️⃣ Selector de idioma en Settings
+Cambio de idioma y persistencia:
 
 ```tsx
 import i18n from "i18next";
 
-const changeLanguage = async (lang: string) => {
-  i18n.changeLanguage(lang);
-
-  // Persistir en backend
-  await api.put("/users/me", { language: lang });
+const cambiarIdioma = async (lang: "es" | "en") => {
+  await i18n.changeLanguage(lang);
+  await api.patch("<ruta perfil; ver ENDPOINTS_UNIFICADOS>", { language: lang });
 };
 ```
 
----
+## Backend (FastAPI)
 
-### 5️⃣ Detección automática del navegador
-
-`i18next-browser-languagedetector` ya detecta:
-
-* localStorage
-* navegador
-* cookie
-
-👉 Si el usuario **no tiene idioma guardado**, se usará el del navegador.
-
----
-
-## 🧩 BACKEND (FastAPI)
-
-### 1️⃣ Añade `language` al modelo User
+Modelo y esquema:
 
 ```py
 class User(Base):
     ...
-    language = Column(String, default="en")
+    language = Column(String, default="es")
 ```
-
-Y en el schema:
 
 ```py
 class UserUpdate(BaseModel):
     language: str | None = None
 ```
 
----
-
-### 2️⃣ Endpoint `/users/me`
+Resolucion de idioma:
 
 ```py
-@router.put("/users/me")
-def update_user_me(
-    user_in: UserUpdate,
-    current_user: User = Depends(get_current_user),
-):
-    if user_in.language:
-        current_user.language = user_in.language
-    db.commit()
-    return current_user
-```
-
----
-
-### 3️⃣ Leer idioma desde el request
-
-Orden recomendado:
-
-1. `current_user.language`
-2. Header `Accept-Language`
-3. Default (`en`)
-
-```py
-def get_language(
-    request: Request,
-    user: User | None = None,
-):
+def get_language(request: Request, user: User | None = None) -> str:
     if user and user.language:
         return user.language
-    return request.headers.get("accept-language", "en")[:2]
+    return request.headers.get("accept-language", "es")[:2]
 ```
 
----
+Nota sobre rutas:
+- Para actualizar perfil y otras rutas, consultar siempre
+  `documentacion/ENDPOINTS_UNIFICADOS.md`.
 
-### 4️⃣ (Opcional) Traducciones en backend
+## Buenas practicas
 
-Si necesitas **emails, errores, notificaciones**, usa `gettext` o `babel`.
+- Usar claves semanticas (`auth.login.title`, `common.save`).
+- Agrupar traducciones por dominio funcional (`auth.*`, `profile.*`, `errors.*`).
+- Evitar concatenar textos traducidos en componentes.
+- Mantener paridad de claves entre `es.json` y `en.json`.
 
-Ejemplo rápido con `gettext`:
+## Que evitar
 
-```py
-import gettext
-
-translations = gettext.translation(
-    "messages", localedir="locales", languages=[lang], fallback=True
-)
-_ = translations.gettext
-
-raise HTTPException(status_code=400, detail=_("Invalid credentials"))
-```
-
----
-
-## 🧩 Qué NO recomiendo
-
-❌ Guardar traducciones en la base de datos
-❌ Traducir textos largos en backend para UI
-❌ Tener lógica de idioma solo en backend
-
----
-
-## ✅ Resumen final
-
-✔ **React**: `react-i18next`
-✔ **Detección automática**: navegador
-✔ **Settings**: selector + persistencia
-✔ **Backend**: guarda `user.language`
-✔ **Fallback**: `Accept-Language → en`
-
-# Ejemplos de archivos de idiomas
-
-Buena pregunta — ahí está la clave de que el i18n sea **mantenible** 👍
-Te muestro **cómo estructurar** `es.json` / `en.json`, con ejemplos reales y buenas prácticas.
-
----
-
-## 🧱 Estructura recomendada
-
-La idea es:
-
-* **Claves estables**
-* **Anidado por dominio funcional**
-* **Sin textos “hardcodeados” en React**
-
-### 📁 `locales/en.json`
-
-```json
-{
-  "common": {
-    "save": "Save",
-    "cancel": "Cancel",
-    "delete": "Delete",
-    "loading": "Loading..."
-  },
-
-  "auth": {
-    "login": {
-      "title": "Sign in",
-      "email": "Email",
-      "password": "Password",
-      "submit": "Sign in",
-      "error": "Invalid email or password"
-    },
-    "logout": "Log out"
-  },
-
-  "settings": {
-    "title": "Settings",
-    "language": "Language",
-    "languageOptions": {
-      "en": "English",
-      "es": "Spanish"
-    }
-  },
-
-  "profile": {
-    "title": "Profile",
-    "name": "Name",
-    "email": "Email"
-  },
-
-  "errors": {
-    "required": "This field is required",
-    "invalidEmail": "Invalid email address",
-    "server": "Unexpected server error"
-  }
-}
-```
-
----
-
-### 📁 `locales/es.json`
-
-```json
-{
-  "common": {
-    "save": "Guardar",
-    "cancel": "Cancelar",
-    "delete": "Eliminar",
-    "loading": "Cargando..."
-  },
-
-  "auth": {
-    "login": {
-      "title": "Iniciar sesión",
-      "email": "Correo electrónico",
-      "password": "Contraseña",
-      "submit": "Entrar",
-      "error": "Correo o contraseña incorrectos"
-    },
-    "logout": "Cerrar sesión"
-  },
-
-  "settings": {
-    "title": "Configuración",
-    "language": "Idioma",
-    "languageOptions": {
-      "en": "Inglés",
-      "es": "Español"
-    }
-  },
-
-  "profile": {
-    "title": "Perfil",
-    "name": "Nombre",
-    "email": "Correo electrónico"
-  },
-
-  "errors": {
-    "required": "Este campo es obligatorio",
-    "invalidEmail": "Correo electrónico inválido",
-    "server": "Error inesperado del servidor"
-  }
-}
-```
-
----
-
-## 🧩 Uso en React
-
-### Acceso a claves simples
-
-```tsx
-t("common.save")
-```
-
-### Acceso a claves anidadas
-
-```tsx
-t("auth.login.title")
-```
-
----
-
-## 🔁 Textos dinámicos (interpolación)
-
-### JSON
-
-```json
-"welcome": "Welcome, {{name}}!"
-```
-
-```json
-"welcome": "¡Bienvenido, {{name}}!"
-```
-
-### React
-
-```tsx
-t("welcome", { name: user.name })
-```
-
----
-
-## 🔢 Plurales (muy importante)
-
-### JSON
-
-```json
-"notifications": "{{count}} notification",
-"notifications_plural": "{{count}} notifications"
-```
-
-```json
-"notifications": "{{count}} notificación",
-"notifications_plural": "{{count}} notificaciones"
-```
-
-### React
-
-```tsx
-t("notifications", { count: notifications.length })
-```
-
----
-
-## 🚀 Buenas prácticas clave
-
-### ✅ Claves SEMÁNTICAS (no texto)
-
-❌ `"save": "Save button"`
-✅ `"save": "Save"`
-
----
-
-### ✅ Agrupa por feature
-
-```
-auth.*
-settings.*
-profile.*
-```
-
----
-
-### ✅ Usa `common.*` para reutilizables
-
-* save
-* cancel
-* yes / no
-* loading
-
----
-
-### ❌ No concatenes strings
-
-```tsx
-// ❌
-t("common.save") + " " + t("profile.title")
-```
-
-Usa frases completas.
-
----
-
-## 🛠️ Extra (recomendado): typing con TypeScript
-
-Puedes generar tipos automáticamente:
-
-```bash
-npm install i18next-resources-for-ts
-```
-
-Evita errores como:
-
-```tsx
-t("settngs.langauge") // typo 😵
-```
-
----
-
-## 🧠 Regla de oro
-
-> **Si mañana añades francés (`fr.json`) y no tocas React, lo hiciste bien.**
+- Guardar textos de UI traducidos en base de datos.
+- Mezclar logica de idioma en muchos puntos sin capa comun.
+- Duplicar catalogos de textos fuera de `locales/*.json`.

@@ -1,5 +1,8 @@
 # 💻 Guía Completa de Build Automático - Electron Desktop
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 ## 📋 Scripts Disponibles
 
 ### 1️⃣ Build Completo con Versión (Recomendado para Releases)
@@ -110,7 +113,7 @@ src/
 
 supabase/
 └── functions/
-    └── check-updates/         # Endpoint para verificar versiones
+    └── updates-function/         # Ver catalogo en documentacion/ENDPOINTS_UNIFICADOS.md
 ```
 
 ### Configuración Auto-Updater

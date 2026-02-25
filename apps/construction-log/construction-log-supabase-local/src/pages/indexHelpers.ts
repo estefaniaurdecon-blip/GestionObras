@@ -192,16 +192,57 @@ export function filterRecentWorkReportsByCreationDay(reports: WorkReport[], visi
   minVisibleDay.setDate(minVisibleDay.getDate() - (normalizedVisibleDays - 1));
   const minVisibleEpoch = minVisibleDay.getTime();
 
+  // Prefer report business day over createdAt. On sync/import flows, createdAt can be refreshed
+  // and cause stale reports to appear as "recent" on some platforms.
+  const reportDayCache = new Map<string, number>();
+  const getReportDayEpoch = (report: WorkReport): number | null => {
+    const cached = reportDayCache.get(report.id);
+    if (cached !== undefined) return cached;
+
+    const dateCandidates = [report.date, payloadText(report.payload, 'date')];
+    for (const candidate of dateCandidates) {
+      if (typeof candidate !== 'string') continue;
+      const normalized = candidate.trim();
+      if (!normalized) continue;
+
+      const parsedIso = parseIsoDate(normalized);
+      if (parsedIso) {
+        const dayEpoch = parsedIso.getTime();
+        reportDayCache.set(report.id, dayEpoch);
+        return dayEpoch;
+      }
+
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) {
+        parsed.setHours(0, 0, 0, 0);
+        const dayEpoch = parsed.getTime();
+        reportDayCache.set(report.id, dayEpoch);
+        return dayEpoch;
+      }
+    }
+
+    const createdAt = Number(report.createdAt);
+    if (!Number.isFinite(createdAt) || createdAt <= 0) return null;
+    const createdDay = new Date(createdAt);
+    createdDay.setHours(0, 0, 0, 0);
+    const dayEpoch = createdDay.getTime();
+    reportDayCache.set(report.id, dayEpoch);
+    return dayEpoch;
+  };
+
   return reports
     .filter((report) => {
-      const createdAt = Number(report.createdAt);
-      if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
-
-      const createdDay = new Date(createdAt);
-      createdDay.setHours(0, 0, 0, 0);
-      return createdDay.getTime() >= minVisibleEpoch;
+      const reportDayEpoch = getReportDayEpoch(report);
+      return reportDayEpoch !== null && reportDayEpoch >= minVisibleEpoch;
     })
-    .sort((left, right) => right.createdAt - left.createdAt);
+    .sort((left, right) => {
+      const rightDay = getReportDayEpoch(right) ?? Number.NEGATIVE_INFINITY;
+      const leftDay = getReportDayEpoch(left) ?? Number.NEGATIVE_INFINITY;
+      if (rightDay !== leftDay) {
+        return rightDay - leftDay;
+      }
+      return right.createdAt - left.createdAt;
+    });
 }
 
 export type HistoryFilterKey = 'foreman' | 'weeks' | 'months' | 'workName' | 'date';

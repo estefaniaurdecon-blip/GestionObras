@@ -1,5 +1,8 @@
 # Arquitectura General de la Plataforma
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 ## Componentes principales
 
 - **Backend SaaS (FastAPI)**  
@@ -13,7 +16,7 @@
 - **Módulo ERP (FastAPI)**  
   Gestión operativa interna por tenant:
   - Proyectos, tareas y control de tiempo.
-  - APIs REST bajo `/api/v1/erp`.
+  - APIs REST (detalle centralizado en `documentacion/ENDPOINTS_UNIFICADOS.md`).
 
 - **Frontend (React + TypeScript)**  
   Interfaz desacoplada:

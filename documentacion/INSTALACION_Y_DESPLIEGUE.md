@@ -1,5 +1,8 @@
 # Instalación y despliegue de la plataforma
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 Este documento resume, de forma práctica, cómo preparar el entorno y levantar todos los servicios con Docker.
 
 ---
@@ -75,7 +78,7 @@ docker compose down
 ## 4. URLs de servicios en local
 
 - **Frontend plataforma**: `http://<host>:5173`
-- **API FastAPI**: `http://<host>:8000/api/v1`
+- **API FastAPI**: `http://<host>:8000` (rutas en `documentacion/ENDPOINTS_UNIFICADOS.md`)
 - **Moodle**: `http://<host>:8080`
 
 Credenciales iniciales relevantes:

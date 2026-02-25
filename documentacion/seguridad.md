@@ -1,5 +1,8 @@
 # Seguridad y Cumplimiento
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 ## Objetivos de seguridad
 
 - Autenticación robusta con MFA TOTP.

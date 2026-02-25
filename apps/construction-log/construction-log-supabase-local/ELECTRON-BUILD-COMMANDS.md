@@ -1,5 +1,8 @@
 # 💻 Comandos de Build Electron - Referencia Rápida
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 ## 🎯 Comandos Principales
 
 ### Build Completo con Versión (Producción)
@@ -232,7 +235,7 @@ cd C:\temp\test-install
 ### Verificar Actualizaciones Manualmente (En Dev Mode)
 ```javascript
 // En electron/main.js, agregar temporalmente:
-ipcMain.handle('check-updates-manual', async () => {
+ipcMain.handle('manual-update-check', async () => {
   try {
     const result = await autoUpdater.checkForUpdates();
     return result;

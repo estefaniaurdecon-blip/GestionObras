@@ -1,5 +1,8 @@
 # Sistema de Actualizaciones Automáticas
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 Este proyecto incluye un sistema completo de actualizaciones automáticas para Windows, Android y Web.
 
 ## Características
@@ -66,7 +69,7 @@ Este proyecto incluye un sistema completo de actualizaciones automáticas para W
   - `/web/` - (Opcional) Assets para web
 
 ### Edge Functions
-- **check-updates**: Verifica si hay actualizaciones disponibles
+- **Pipeline de updates**: Verifica si hay actualizaciones disponibles (detalle en `documentacion/ENDPOINTS_UNIFICADOS.md`)
   - Input: currentVersion, platform
   - Output: updateAvailable, version, fileUrl, releaseNotes, etc.
 
@@ -116,7 +119,7 @@ Este proyecto usa [Semantic Versioning](https://semver.org/):
 
 **No aparece la notificación de actualización:**
 - Verifica que la versión publicada sea mayor a la actual
-- Revisa los logs de la edge function `check-updates`
+- Revisa los logs de la funcion de updates (ver `documentacion/ENDPOINTS_UNIFICADOS.md`)
 - Asegúrate de que el archivo existe en Storage
 
 **Error al descargar:**

@@ -1,5 +1,8 @@
 # URDECON INNOVA · Resumen funcional de la plataforma SaaS
 
+> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+
+
 Este documento resume, a alto nivel, lo que incluye actualmente la plataforma (backend, frontend, ERP y soporte), pensado para presentarlo internamente o a clientes.
 
 ---
@@ -118,7 +121,7 @@ Este documento resume, a alto nivel, lo que incluye actualmente la plataforma (b
     - Crea automáticamente un `TimeEntry` con las horas (segundos / 3600).
 
 - **Informe de horas (backend ERP)**:
-  - Endpoint `/api/v1/erp/reports/time`:
+  - Ruta de informe de horas (ver `documentacion/ENDPOINTS_UNIFICADOS.md`):
     - Filtros: proyecto, usuario, rango de fechas.
     - Devuelve horas agregadas por **proyecto, tarea y usuario**.
 
@@ -165,7 +168,7 @@ Este documento resume, a alto nivel, lo que incluye actualmente la plataforma (b
   - `tenant.list`, `tenant.create`, `tenant.delete`.
   - Acciones de login y cambios relevantes en configuración.
 
-- Endpoint `/api/v1/audit/`:
+- Endpoint de auditoria (ver `documentacion/ENDPOINTS_UNIFICADOS.md`):
   - Protegido con permiso `audit:read`.
   - **Super Admin**: puede ver todos los registros (con posibilidad de filtrar por tenant).
   - `tenant_admin` / usuario: solo ven registros de su propio tenant.
@@ -178,7 +181,7 @@ Este documento resume, a alto nivel, lo que incluye actualmente la plataforma (b
 
 ## 8. Dashboard y métricas
 
-- API de resumen: `/api/v1/dashboard/summary`:
+- API de resumen (ver `documentacion/ENDPOINTS_UNIFICADOS.md`):
   - Calcula, entre otros:
     - `tenants_activos`:
       - Super Admin → total de tenants activos.
@@ -230,12 +233,12 @@ Este documento resume, a alto nivel, lo que incluye actualmente la plataforma (b
 - `TicketParticipant`:
   - Participantes del ticket (creador, asignado, watchers) para visibilidad avanzada.
 
-- Endpoints REST bajo `/api/v1/tickets`:
+- Endpoints REST de tickets (ver `documentacion/ENDPOINTS_UNIFICADOS.md`):
   - Listar tickets con filtros (estado, prioridad, categoría, herramienta, `tenant_id` para Super Admin, “solo mis tickets”).
   - Crear ticket.
-  - Cambiar estado (`/close`, `/reopen`).
-  - Asignar responsable (`/assign`).
-  - Listar y añadir mensajes (`/messages`).
+  - Cambiar estado.
+  - Asignar responsable.
+  - Listar y añadir mensajes.
 
 - RBAC de soporte:
   - Permisos:
