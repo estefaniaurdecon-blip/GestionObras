@@ -1087,6 +1087,64 @@ export interface InventoryUpdatePayload {
   observations?: string | null;
 }
 
+export interface InventoryMovementApi {
+  id: string;
+  item_name: string;
+  item_type: string;
+  item_category?: string | null;
+  movement_type: 'entry' | 'exit' | 'transfer' | 'adjustment';
+  quantity: number;
+  unit: string;
+  unit_price?: number | null;
+  total_price?: number | null;
+  source: 'ai' | 'manual' | 'auto_consumption' | string;
+  is_immediate_consumption: boolean;
+  delivery_note_number?: string | null;
+  supplier?: string | null;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+  work_id: string;
+}
+
+export interface InventoryKpisApi {
+  totalStockValue: number;
+  directConsumptionValue: number;
+  totalMaterialItems: number;
+  totalToolItems: number;
+  totalMachineryItems: number;
+  pendingDeliveryNotes: number;
+  recentMovements: InventoryMovementApi[];
+}
+
+export interface InventoryMovementCreatePayload {
+  work_id: string;
+  inventory_item_id: string;
+  movement_type: 'entry' | 'exit' | 'transfer' | 'adjustment';
+  quantity: number;
+  unit?: string;
+  unit_price?: number | null;
+  total_price?: number | null;
+  source?: string | null;
+  is_immediate_consumption?: boolean;
+  delivery_note_number?: string | null;
+  supplier?: string | null;
+  notes?: string | null;
+}
+
+export interface InventoryMovementUpdatePayload {
+  movement_type?: 'entry' | 'exit' | 'transfer' | 'adjustment';
+  quantity?: number;
+  unit?: string;
+  unit_price?: number | null;
+  total_price?: number | null;
+  source?: string | null;
+  is_immediate_consumption?: boolean;
+  delivery_note_number?: string | null;
+  supplier?: string | null;
+  notes?: string | null;
+}
+
 export interface MergeInventorySuppliersRequest {
   work_id: string;
   target_supplier: string;
@@ -1348,6 +1406,47 @@ export async function applyInventoryAnalysis(
   return apiFetchJson<ApplyInventoryAnalysisResponse>('/api/v1/ai/inventory/apply-analysis', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function listInventoryMovements(
+  workId?: string,
+  limit = 200
+): Promise<InventoryMovementApi[]> {
+  const query = buildQueryParams({
+    work_id: workId,
+    limit,
+  });
+  return apiFetchJson<InventoryMovementApi[]>(`/api/v1/inventory-movements${query}`);
+}
+
+export async function getInventoryKpis(workId?: string): Promise<InventoryKpisApi> {
+  const query = buildQueryParams({ work_id: workId });
+  return apiFetchJson<InventoryKpisApi>(`/api/v1/inventory-movements/kpis${query}`);
+}
+
+export async function createInventoryMovement(
+  payload: InventoryMovementCreatePayload
+): Promise<InventoryMovementApi> {
+  return apiFetchJson<InventoryMovementApi>('/api/v1/inventory-movements', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInventoryMovement(
+  movementId: string | number,
+  payload: InventoryMovementUpdatePayload
+): Promise<InventoryMovementApi> {
+  return apiFetchJson<InventoryMovementApi>(`/api/v1/inventory-movements/${movementId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInventoryMovement(movementId: string | number): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/inventory-movements/${movementId}`, {
+    method: 'DELETE',
   });
 }
 

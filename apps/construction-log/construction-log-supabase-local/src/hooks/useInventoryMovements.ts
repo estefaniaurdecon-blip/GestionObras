@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUserPermissions } from '@/contexts/UserPermissionsContext';
+import {
+  getInventoryKpis,
+  listInventoryMovements,
+  type InventoryKpisApi,
+  type InventoryMovementApi,
+} from '@/integrations/api/client';
 
 export interface InventoryMovement {
   id: string;
@@ -33,94 +37,69 @@ export interface InventoryKPIs {
   recentMovements: InventoryMovement[];
 }
 
+function mapMovement(movement: InventoryMovementApi): InventoryMovement {
+  const source = movement.source === 'ai' || movement.source === 'auto_consumption'
+    ? movement.source
+    : 'manual';
+
+  return {
+    id: movement.id,
+    item_name: movement.item_name,
+    item_type: movement.item_type,
+    item_category: movement.item_category || undefined,
+    movement_type: movement.movement_type,
+    quantity: Number(movement.quantity) || 0,
+    unit: movement.unit || 'ud',
+    unit_price:
+      movement.unit_price === null || movement.unit_price === undefined
+        ? undefined
+        : Number(movement.unit_price),
+    total_price:
+      movement.total_price === null || movement.total_price === undefined
+        ? undefined
+        : Number(movement.total_price),
+    source,
+    is_immediate_consumption: Boolean(movement.is_immediate_consumption),
+    delivery_note_number: movement.delivery_note_number || undefined,
+    supplier: movement.supplier || undefined,
+    notes: movement.notes || undefined,
+    created_at: movement.created_at,
+    created_by: movement.created_by || undefined,
+    work_id: movement.work_id,
+  };
+}
+
+function mapKpis(kpis: InventoryKpisApi): InventoryKPIs {
+  return {
+    totalStockValue: Number(kpis.totalStockValue) || 0,
+    directConsumptionValue: Number(kpis.directConsumptionValue) || 0,
+    totalMaterialItems: Number(kpis.totalMaterialItems) || 0,
+    totalToolItems: Number(kpis.totalToolItems) || 0,
+    totalMachineryItems: Number(kpis.totalMachineryItems) || 0,
+    pendingDeliveryNotes: Number(kpis.pendingDeliveryNotes) || 0,
+    recentMovements: (kpis.recentMovements || []).map(mapMovement),
+  };
+}
+
 export const useInventoryMovements = (workId?: string) => {
-  const { userProfile } = useUserPermissions();
+  const { user } = useAuth();
 
   const { data: movements, isLoading: isLoadingMovements } = useQuery({
     queryKey: ['inventory-movements', workId],
     queryFn: async () => {
-      let query = supabase
-        .from('inventory_movements')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (workId) {
-        query = query.eq('work_id', workId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as InventoryMovement[];
+      const data = await listInventoryMovements(workId);
+      return data.map(mapMovement) as InventoryMovement[];
     },
-    enabled: !!userProfile?.organization_id,
+    enabled: Boolean(user),
   });
 
   const { data: kpis, isLoading: isLoadingKPIs } = useQuery({
     queryKey: ['inventory-kpis', workId],
     queryFn: async () => {
-      // Get inventory items
-      let inventoryQuery = supabase
-        .from('work_inventory')
-        .select('*');
-
-      if (workId) {
-        inventoryQuery = inventoryQuery.eq('work_id', workId);
-      }
-
-      const { data: inventoryData, error: invError } = await inventoryQuery;
-      if (invError) throw invError;
-
-      // Get pending delivery notes count
-      let pendingQuery = supabase
-        .from('pending_delivery_notes')
-        .select('id', { count: 'exact' })
-        .eq('status', 'pending');
-
-      if (workId) {
-        pendingQuery = pendingQuery.eq('work_id', workId);
-      }
-
-      const { count: pendingCount, error: pendingError } = await pendingQuery;
-      if (pendingError) throw pendingError;
-
-      // Get recent movements for direct consumption tracking
-      let movementsQuery = supabase
-        .from('inventory_movements')
-        .select('*')
-        .eq('is_immediate_consumption', true)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (workId) {
-        movementsQuery = movementsQuery.eq('work_id', workId);
-      }
-
-      const { data: directConsumptionData, error: dcError } = await movementsQuery;
-      if (dcError) throw dcError;
-
-      // Calculate KPIs
-      const stockItems = (inventoryData || []).filter(item => !item.is_immediate_consumption);
-      const totalStockValue = stockItems.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
-
-      const directConsumptionValue = (directConsumptionData || [])
-        .filter(m => m.movement_type === 'entry')
-        .reduce((sum, m) => sum + (Number(m.total_price) || 0), 0);
-
-      const materialItems = (inventoryData || []).filter(item => item.item_type === 'material');
-      const toolItems = (inventoryData || []).filter(item => item.item_type === 'tool');
-      const machineryItems = (inventoryData || []).filter(item => item.item_type === 'machinery');
-
-      return {
-        totalStockValue,
-        directConsumptionValue,
-        totalMaterialItems: materialItems.length,
-        totalToolItems: toolItems.length,
-        totalMachineryItems: machineryItems.length,
-        pendingDeliveryNotes: pendingCount || 0,
-        recentMovements: (directConsumptionData || []).slice(0, 10) as InventoryMovement[],
-      } as InventoryKPIs;
+      const data = await getInventoryKpis(workId);
+      return mapKpis(data);
     },
-    enabled: !!userProfile?.organization_id,
+    enabled: Boolean(user),
   });
 
   return {

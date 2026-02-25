@@ -13,6 +13,7 @@ from . import (
     health,
     hr,
     invitations,
+    inventory_movements,
     internal,
     contracts,
     invoices,
@@ -40,6 +41,11 @@ api_router.include_router(
     delivery_notes.router,
     prefix="/delivery-notes",
     tags=["delivery-notes"],
+)
+api_router.include_router(
+    inventory_movements.router,
+    prefix="/inventory-movements",
+    tags=["inventory-movements"],
 )
 
 # Rutas protegidas
