@@ -889,6 +889,106 @@ export async function changePassword(request: ChangePasswordRequest): Promise<vo
   });
 }
 
+export interface ApiOrganization {
+  id: string;
+  name: string;
+  commercial_name?: string | null;
+  logo?: string | null;
+  subscription_status?: string | null;
+  subscription_end_date?: string | null;
+  trial_end_date?: string | null;
+  updated_at?: string | null;
+  invitation_code?: string | null;
+  brand_color?: string | null;
+  fiscal_id?: string | null;
+  legal_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  max_users: number;
+  current_users: number;
+}
+
+export interface UpdateOrganizationPayload {
+  name?: string;
+  commercial_name?: string | null;
+  fiscal_id?: string | null;
+  legal_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  brand_color?: string | null;
+  max_users?: number;
+  subscription_status?: string | null;
+}
+
+export interface BrandingTenantApi {
+  logo?: string | null;
+  accent_color: string;
+  company_name?: string | null;
+}
+
+export type UserPlatformPreference = 'all' | 'windows' | 'android' | 'web';
+
+export interface UserPreferencesApi {
+  user_platform: UserPlatformPreference;
+  updated_at?: string | null;
+}
+
+export async function getMyOrganization(): Promise<ApiOrganization> {
+  return apiFetchJson<ApiOrganization>('/api/v1/organization/me');
+}
+
+export async function updateMyOrganization(
+  payload: UpdateOrganizationPayload
+): Promise<ApiOrganization> {
+  return apiFetchJson<ApiOrganization>('/api/v1/organization/me', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadMyOrganizationLogo(
+  file: Blob | File,
+  filename = 'logo.png'
+): Promise<ApiOrganization> {
+  const formData = new FormData();
+  formData.append('logo', file, filename);
+  return apiFetchJson<ApiOrganization>('/api/v1/organization/me/logo', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function removeMyOrganizationLogo(): Promise<ApiOrganization> {
+  return apiFetchJson<ApiOrganization>('/api/v1/organization/me/logo', {
+    method: 'DELETE',
+  });
+}
+
+export async function getBrandingByTenant(tenantId: string | number): Promise<BrandingTenantApi> {
+  return apiFetchJson<BrandingTenantApi>(`/api/v1/branding/${encodeURIComponent(String(tenantId))}`);
+}
+
+export async function getMyUserPreferences(): Promise<UserPreferencesApi> {
+  return apiFetchJson<UserPreferencesApi>('/api/v1/users/me/preferences');
+}
+
+export async function updateMyUserPreferences(
+  userPlatform: UserPlatformPreference
+): Promise<UserPreferencesApi> {
+  return apiFetchJson<UserPreferencesApi>('/api/v1/users/me/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify({ user_platform: userPlatform }),
+  });
+}
+
 // ============================================================
 // TOOLS API
 // ============================================================

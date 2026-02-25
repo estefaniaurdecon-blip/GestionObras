@@ -19,6 +19,7 @@ from . import (
     contracts,
     invoices,
     notifications,
+    organization,
     tenants,
     tickets,
     tools,
@@ -52,6 +53,11 @@ api_router.include_router(
     attachments.router,
     prefix="",
     tags=["attachments"],
+)
+api_router.include_router(
+    organization.router,
+    prefix="",
+    tags=["organization"],
 )
 
 # Rutas protegidas

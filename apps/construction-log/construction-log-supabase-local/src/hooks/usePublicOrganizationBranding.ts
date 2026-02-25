@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { getBrandingByTenant } from '@/integrations/api/client';
 
 export interface OrganizationBranding {
   name: string;
@@ -7,36 +8,17 @@ export interface OrganizationBranding {
   brandColor: string | null;
 }
 
-/**
- * Hook para obtener el branding de una organización
- * Puede usarse con o sin autenticación
- */
 export const usePublicOrganizationBranding = (organizationId?: string) => {
   const [branding, setBranding] = useState<OrganizationBranding | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchBranding = async () => {
       try {
-        let orgId = organizationId;
+        const tenantId = organizationId || (user?.tenant_id ? String(user.tenant_id) : undefined);
 
-        // Si no se proporciona organizationId, intentar obtenerlo del usuario actual
-        if (!orgId) {
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (user) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('organization_id')
-              .eq('id', user.id)
-              .single();
-            
-            orgId = profile?.organization_id;
-          }
-        }
-
-        if (!orgId) {
-          // Si no hay organización, usar valores por defecto
+        if (!tenantId) {
           setBranding({
             name: 'Partes de Trabajo',
             logo: null,
@@ -46,26 +28,12 @@ export const usePublicOrganizationBranding = (organizationId?: string) => {
           return;
         }
 
-        // Obtener datos de la organización
-        const { data: organization } = await supabase
-          .from('organizations')
-          .select('name, logo, brand_color')
-          .eq('id', orgId)
-          .single();
-
-        if (organization) {
-          setBranding({
-            name: organization.name || 'Partes de Trabajo',
-            logo: organization.logo,
-            brandColor: organization.brand_color,
-          });
-        } else {
-          setBranding({
-            name: 'Partes de Trabajo',
-            logo: null,
-            brandColor: null,
-          });
-        }
+        const data = await getBrandingByTenant(tenantId);
+        setBranding({
+          name: data.company_name || 'Partes de Trabajo',
+          logo: data.logo || null,
+          brandColor: data.accent_color || null,
+        });
       } catch (error) {
         console.error('Error fetching organization branding:', error);
         setBranding({
@@ -79,7 +47,7 @@ export const usePublicOrganizationBranding = (organizationId?: string) => {
     };
 
     fetchBranding();
-  }, [organizationId]);
+  }, [organizationId, user?.tenant_id]);
 
   return { branding, loading };
 };

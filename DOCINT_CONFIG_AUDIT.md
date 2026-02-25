@@ -137,7 +137,7 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
   - Plan actualizado: `SUPABASE_MIGRATION_PLAN.md`.
 
 ### Commit 11
-- `pendiente` - `feat(attachments): migrate supabase storage to api`
+- `9fe18c9` - `feat(attachments): migrate supabase storage to api`
 - Cambios:
   - Nuevos endpoints FastAPI:
     - `GET /api/v1/work-reports/{work_report_id}/attachments`
@@ -160,6 +160,28 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
     - `usePostventaImages.ts`
     - `useSharedFiles.ts`
   - Cliente API ampliado con soporte de adjuntos y descarga binaria.
+
+### Commit 12
+- `pendiente` - `feat(organization): migrate branding and preferences runtime to API`
+- Cambios:
+  - Nuevos endpoints FastAPI:
+    - `GET /api/v1/organization/me`
+    - `PATCH /api/v1/organization/me`
+    - `POST /api/v1/organization/me/logo`
+    - `DELETE /api/v1/organization/me/logo`
+    - `GET /api/v1/users/me/preferences`
+    - `PATCH /api/v1/users/me/preferences`
+  - Nuevos modelos backend:
+    - `tenant_profile`
+    - `user_preference`
+  - Frontend migra runtime en:
+    - `useOrganization.ts`
+    - `useOrganizationLogo.ts`
+    - `useCompanySettings.ts`
+    - `usePublicOrganizationBranding.ts`
+    - `PlatformPreferences.tsx`
+    - `OrganizationSettings.tsx`
+    - `imageUrlHelper.ts`
 
 ## Validacion por bloque (post-commit)
 
@@ -209,6 +231,13 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
 - Android: no tocado en este corte.
 - Azure Functions: no tocadas en este corte.
 
+### Commit 12
+- Frontend: `npm run lint:changed` OK (solo warnings heredados de `react-hooks/exhaustive-deps`, sin errores).
+- Frontend: `npm run build` OK.
+- Backend FastAPI: `python -m compileall backend-fastapi/app` OK.
+- Android: no tocado en este corte.
+- Azure Functions: no tocadas en este corte.
+
 ### Backend tests adicionales
 - `python -m pytest tests/test_updates_api.py` -> no ejecutable en este entorno por incompatibilidad local con Python 3.14 y stack actual (error de carga en modelos).
 
@@ -232,10 +261,10 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
   - `check-updates` Supabase: migrado.
 - Estado actualizado de Supabase runtime:
   - `supabase.functions.invoke(...)` en `src`: **0**.
-  - Imports runtime `from '@/integrations/supabase/client'` en `src`: **42**.
+  - Imports runtime `from '@/integrations/supabase/client'` en `src`: **35**.
 - Conclusión de estado:
   - Invocaciones Edge migradas completamente a API propia.
-  - Aun NO es "Supabase runtime = 0" global: faltan 42 imports `supabase.from/auth/storage/rpc` por migrar.
+  - Aun NO es "Supabase runtime = 0" global: faltan 35 imports `supabase.from/auth/storage/rpc` por migrar.
 
 ## Smoke tests funcionales
 
@@ -274,4 +303,4 @@ El objetivo tecnico principal del flujo DocInt (modelos, parser model-aware, ser
 La retirada total de runtime Supabase en toda la aplicacion sigue pendiente por modulos.
 Estado actual verificable:
 - `supabase.functions.invoke(...) = 0`
-- `imports supabase runtime = 42`
+- `imports supabase runtime = 35`

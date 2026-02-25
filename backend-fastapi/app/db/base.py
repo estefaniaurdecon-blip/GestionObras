@@ -12,6 +12,7 @@ from app.models.role_permission import RolePermission  # noqa: F401
 from app.models.tool import Tool  # noqa: F401
 from app.models.tenant_tool import TenantTool  # noqa: F401
 from app.models.tenant_branding import TenantBranding  # noqa: F401
+from app.models.tenant_profile import TenantProfile  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401
@@ -24,6 +25,7 @@ from app.models.hr import (  # noqa: F401
     EmployeeAllocation,
 )  # noqa: F401
 from app.models.user_invitation import UserInvitation  # noqa: F401
+from app.models.user_preference import UserPreference  # noqa: F401
 from app.models.erp import (  # noqa: F401
     Activity,
     Deliverable,

@@ -14,7 +14,7 @@ rg -n "VITE_SUPABASE"
 ```
 
 Estado actual:
-- Imports runtime `from '@/integrations/supabase/client'`: **42 archivos**.
+- Imports runtime `from '@/integrations/supabase/client'`: **35 archivos**.
 - Invocaciones `supabase.functions.invoke(...)`: **0** (bloqueante resuelto).
 - `VITE_SUPABASE` en `src`: **0**.
 - `VITE_SUPABASE` residual fuera de `src`: `docker-compose.yml` + referencias históricas en documentación.
@@ -34,7 +34,7 @@ Estado actual:
 | `src/components/CalendarTasks.tsx` | Tareas de calendario y recordatorios | - | `GET/POST/PATCH/DELETE /api/v1/erp/calendar-tasks*` | Pendiente |
 | `src/components/HelpCenter.tsx`<br>`src/hooks/useMessages.ts`<br>`src/hooks/useMessageableUsers.ts`<br>`src/components/WorkReportComments.tsx` | Mensajería/soporte interno | - | `GET/POST/PATCH/DELETE /api/v1/messages*` | Pendiente |
 | `src/components/NotificationsCenter.tsx`<br>`src/hooks/useNotifications.ts` | Notificaciones de usuario | - | `GET/POST /api/v1/notifications*` (usar endpoints FastAPI existentes y ampliar) | Pendiente |
-| `src/components/OrganizationSettings.tsx`<br>`src/hooks/useOrganization.ts`<br>`src/hooks/useOrganizationLogo.ts`<br>`src/hooks/useCompanySettings.ts`<br>`src/hooks/usePublicOrganizationBranding.ts`<br>`src/components/PlatformPreferences.tsx`<br>`src/utils/imageUrlHelper.ts` | Branding/organización/storage | - | `GET/PUT /api/v1/branding/{tenant_id}` + `POST /api/v1/files/upload` + `GET /api/v1/files/public-url` | Pendiente |
+| `src/components/OrganizationSettings.tsx`<br>`src/hooks/useOrganization.ts`<br>`src/hooks/useOrganizationLogo.ts`<br>`src/hooks/useCompanySettings.ts`<br>`src/hooks/usePublicOrganizationBranding.ts`<br>`src/components/PlatformPreferences.tsx`<br>`src/utils/imageUrlHelper.ts` | Branding/organización/storage | - | `GET/PATCH /api/v1/organization/me`<br>`POST/DELETE /api/v1/organization/me/logo`<br>`GET/PATCH /api/v1/users/me/preferences`<br>`GET /api/v1/branding/{tenant_id}` | Migrado (2026-02-25) |
 | `src/components/UserManagement.tsx`<br>`src/hooks/useUsers.ts`<br>`src/contexts/UserPermissionsContext.tsx` | Usuarios, roles y permisos | - | `GET/POST/PATCH/DELETE /api/v1/users*` + `GET /api/v1/rbac/*` | Pendiente |
 | `src/components/WorkReportList.tsx`<br>`src/hooks/useWorkReports.ts`<br>`src/hooks/useAssignedWorks.ts`<br>`src/hooks/useAccessControlSync.ts`<br>`src/hooks/usePhases.ts` | Partes y sincronización ERP | - | Reusar `GET/POST/PATCH/DELETE /api/v1/erp/work-reports*` y ampliar endpoints faltantes | Pendiente |
 | `src/hooks/useDeliveryNotes.ts`<br>`src/hooks/useInventoryMovements.ts`<br>`src/services/rentalMachinerySource.ts`<br>`src/hooks/useRentalMachineryAssignments.ts`<br>`src/hooks/useWasteEntries.ts` | Albaranes, movimientos y maquinaria | - | `GET/POST/PATCH/DELETE /api/v1/delivery-notes*`<br>`GET/POST/PATCH/DELETE /api/v1/inventory-movements*`<br>`/rental-machinery*` | Parcial (delivery-notes + inventory-movements migrados, resto pendiente) |

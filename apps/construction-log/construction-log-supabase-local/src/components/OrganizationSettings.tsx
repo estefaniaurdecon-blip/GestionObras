@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Building2, Save, Users, AlertCircle, Upload, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -13,7 +12,12 @@ import { useOrganizationLogo } from '@/hooks/useOrganizationLogo';
 import { useOrganization } from '@/hooks/useOrganization';
 import { CustomHolidaysManagement } from '@/components/CustomHolidaysManagement';
 import { CompanyStandardization } from '@/components/admin/CompanyStandardization';
-import { analyzeLogoColors } from '@/integrations/api/client';
+import {
+  analyzeLogoColors,
+  getMyOrganization,
+  updateMyOrganization,
+  type ApiOrganization,
+} from '@/integrations/api/client';
 
 interface OrganizationData {
   id: string;
@@ -48,28 +52,43 @@ export const OrganizationSettings = () => {
     loadOrganization();
   }, []);
 
+  const mapApiOrganization = (apiOrg: ApiOrganization): OrganizationData => ({
+    id: String(apiOrg.id),
+    name: apiOrg.name,
+    fiscal_id: apiOrg.fiscal_id || null,
+    legal_name: apiOrg.legal_name || null,
+    commercial_name: apiOrg.commercial_name || null,
+    email: apiOrg.email || null,
+    phone: apiOrg.phone || null,
+    address: apiOrg.address || null,
+    city: apiOrg.city || null,
+    postal_code: apiOrg.postal_code || null,
+    country: apiOrg.country || 'Espana',
+    max_users: Number(apiOrg.max_users || 25),
+    current_users: Number(apiOrg.current_users || 0),
+    subscription_status: apiOrg.subscription_status || null,
+    brand_color: apiOrg.brand_color || '#2563eb',
+  });
+
+  const readErrorMessage = (error: unknown, fallback: string): string => {
+    if (!error || typeof error !== 'object') return fallback;
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) return maybeMessage;
+    return fallback;
+  };
+
+  const isFiscalIdDuplicateError = (error: unknown): boolean => {
+    if (!error || typeof error !== 'object') return false;
+    const maybeCode = (error as { code?: unknown }).code;
+    const maybeMessage = (error as { message?: unknown }).message;
+    return maybeCode === '23505' && typeof maybeMessage === 'string' && maybeMessage.includes('fiscal_id');
+  };
+
   const loadOrganization = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.organization_id) return;
-
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', profile.organization_id)
-        .single();
-
-      if (error) throw error;
-      setOrganization(data);
-    } catch (error: any) {
+      const data = await getMyOrganization();
+      setOrganization(mapApiOrganization(data));
+    } catch (error: unknown) {
       console.error('Error loading organization:', error);
       toast({
         title: t('common.error'),
@@ -177,24 +196,18 @@ export const OrganizationSettings = () => {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('organizations')
-        .update({
-          fiscal_id: organization.fiscal_id?.trim() || null,
-          legal_name: organization.legal_name?.trim() || null,
-          commercial_name: organization.commercial_name?.trim() || organization.name,
-          email: organization.email?.trim() || null,
-          phone: organization.phone?.trim() || null,
-          address: organization.address?.trim() || null,
-          city: organization.city?.trim() || null,
-          postal_code: organization.postal_code?.trim() || null,
-          country: organization.country || 'España',
-          brand_color: organization.brand_color || '#2563eb',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', organization.id);
-
-      if (error) throw error;
+      await updateMyOrganization({
+        fiscal_id: organization.fiscal_id?.trim() || null,
+        legal_name: organization.legal_name?.trim() || null,
+        commercial_name: organization.commercial_name?.trim() || organization.name,
+        email: organization.email?.trim() || null,
+        phone: organization.phone?.trim() || null,
+        address: organization.address?.trim() || null,
+        city: organization.city?.trim() || null,
+        postal_code: organization.postal_code?.trim() || null,
+        country: organization.country || 'Espana',
+        brand_color: organization.brand_color || '#2563eb',
+      });
 
       toast({
         title: t('organizationSettings.saved'),
@@ -203,11 +216,11 @@ export const OrganizationSettings = () => {
       
       await loadOrganization();
       await reloadOrg();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving organization:', error);
       
       // Error específico para fiscal_id duplicado
-      if (error.code === '23505' && error.message.includes('fiscal_id')) {
+      if (isFiscalIdDuplicateError(error)) {
         toast({
           title: t('common.error'),
           description: t('organizationSettings.duplicateFiscalId'),
@@ -216,7 +229,7 @@ export const OrganizationSettings = () => {
       } else {
         toast({
           title: t('common.error'),
-          description: error.message || t('organizationSettings.errorSaving'),
+          description: readErrorMessage(error, t('organizationSettings.errorSaving')),
           variant: 'destructive',
         });
       }
@@ -309,10 +322,9 @@ export const OrganizationSettings = () => {
                           applyBrandColor(color.hex);
                           
                           // Persist immediately so it propagates in realtime to all users
-                          await supabase
-                            .from('organizations')
-                            .update({ brand_color: color.hex, updated_at: new Date().toISOString() })
-                            .eq('id', organization.id);
+                          await updateMyOrganization({
+                            brand_color: color.hex,
+                          });
                           
                           toast({
                             title: 'Color aplicado',

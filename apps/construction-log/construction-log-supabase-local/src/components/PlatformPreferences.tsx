@@ -3,11 +3,15 @@ import { Monitor, Smartphone, Globe, Bell } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import {
+  getMyUserPreferences,
+  updateMyUserPreferences,
+  type UserPlatformPreference,
+} from '@/integrations/api/client';
 
-type Platform = 'all' | 'windows' | 'android' | 'web';
+type Platform = UserPlatformPreference;
 
 const platforms: { value: Platform; label: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -44,20 +48,17 @@ export const PlatformPreferences: React.FC = () => {
 
   useEffect(() => {
     const loadPreference = async () => {
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('user_platform')
-          .eq('id', user.id)
-          .single();
-
-        if (error) throw error;
+        const data = await getMyUserPreferences();
         if (data?.user_platform) {
           setSelectedPlatform(data.user_platform as Platform);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error loading platform preference:', error);
       } finally {
         setLoading(false);
@@ -72,23 +73,19 @@ export const PlatformPreferences: React.FC = () => {
     
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ user_platform: value })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      await updateMyUserPreferences(value);
       
       setSelectedPlatform(value);
       toast({
         title: 'Preferencia guardada',
         description: `Ahora recibirás notificaciones de actualizaciones para ${platforms.find(p => p.value === value)?.label}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'No se pudo guardar la preferencia';
       console.error('Error saving platform preference:', error);
       toast({
         title: 'Error al guardar',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     } finally {
