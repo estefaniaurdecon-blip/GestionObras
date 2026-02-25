@@ -964,6 +964,49 @@ export interface AnalyzeLogoColorsResponse {
   brandColor: string;
 }
 
+export interface CompanyOccurrenceApi {
+  name: string;
+  sources: string[];
+  count: number;
+  normalizedName: string;
+}
+
+export interface SimilarGroupApi {
+  canonicalName: string;
+  variations: CompanyOccurrenceApi[];
+  totalCount: number;
+}
+
+export interface StandardizeCompaniesAnalyzeRequest {
+  action: 'analyze';
+  threshold?: number;
+}
+
+export interface StandardizeCompaniesApplyRequest {
+  action: 'apply';
+  updates: Array<{
+    oldName: string;
+    newName: string;
+  }>;
+}
+
+export type StandardizeCompaniesRequest =
+  | StandardizeCompaniesAnalyzeRequest
+  | StandardizeCompaniesApplyRequest;
+
+export interface StandardizeCompaniesAnalyzeResponse {
+  success: boolean;
+  totalCompanies: number;
+  duplicateGroups: number;
+  groups: SimilarGroupApi[];
+}
+
+export interface StandardizeCompaniesApplyResponse {
+  success: boolean;
+  message: string;
+  updatedCount: number;
+}
+
 export async function generateSummaryReport(
   payload: GenerateSummaryReportRequest
 ): Promise<GenerateSummaryReportResponse> {
@@ -989,6 +1032,24 @@ export async function analyzeLogoColors(
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+export async function standardizeCompanies(
+  payload: StandardizeCompaniesAnalyzeRequest
+): Promise<StandardizeCompaniesAnalyzeResponse>;
+export async function standardizeCompanies(
+  payload: StandardizeCompaniesApplyRequest
+): Promise<StandardizeCompaniesApplyResponse>;
+export async function standardizeCompanies(
+  payload: StandardizeCompaniesRequest
+): Promise<StandardizeCompaniesAnalyzeResponse | StandardizeCompaniesApplyResponse> {
+  return apiFetchJson<StandardizeCompaniesAnalyzeResponse | StandardizeCompaniesApplyResponse>(
+    '/api/v1/ai/standardize-companies',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 // ============================================================

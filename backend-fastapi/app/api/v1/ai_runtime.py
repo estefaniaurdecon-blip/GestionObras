@@ -3,14 +3,18 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta
+from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel, Field
+from sqlmodel import Session, select
 
 from app.api.deps import get_current_active_user
 from app.core.config import settings
+from app.db.session import get_session
+from app.models.erp import ExternalCollaboration, RentalMachinery, WorkReport
 from app.models.user import User
 
 
@@ -33,6 +37,17 @@ class AnalyzeWorkImageRequest(BaseModel):
 
 class AnalyzeLogoColorsRequest(BaseModel):
     imageDataUrl: str
+
+
+class StandardizationUpdate(BaseModel):
+    oldName: str
+    newName: str
+
+
+class StandardizeCompaniesRequest(BaseModel):
+    action: str
+    threshold: float = 0.7
+    updates: list[StandardizationUpdate] = Field(default_factory=list)
 
 
 def _lovable_api_key() -> str:
@@ -549,6 +564,165 @@ def _extract_hex_colors(text: str) -> list[dict[str, str]]:
     return unique[:5]
 
 
+def _tenant_scope(current_user: User, x_tenant_id: int | None) -> int:
+    if current_user.is_super_admin:
+        tenant_id = x_tenant_id or current_user.tenant_id
+    else:
+        tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant requerido para esta operacion.",
+        )
+    return int(tenant_id)
+
+
+def _normalize_company_name(name: str) -> str:
+    cleaned = (name or "").lower().strip()
+    if not cleaned:
+        return ""
+    cleaned = re.sub(
+        r",?\s*(s\.?l\.?u?\.?|s\.?a\.?|sociedad limitada|sociedad anonima)\.?\s*$",
+        "",
+        cleaned,
+    )
+    cleaned = _CLEAN_WS_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"[^a-z0-9\sáéíóúñü]", "", cleaned)
+    return cleaned.strip()
+
+
+def _similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _has_different_suffix(name_a: str, name_b: str) -> bool:
+    words_a = [w for w in name_a.lower().split() if len(w) > 2]
+    words_b = [w for w in name_b.lower().split() if len(w) > 2]
+    if len(words_a) < 2 or len(words_b) < 2:
+        return False
+
+    common = 0
+    for idx in range(min(len(words_a), len(words_b))):
+        if words_a[idx] == words_b[idx]:
+            common += 1
+        else:
+            break
+
+    if common >= 1 and common < max(len(words_a), len(words_b)):
+        suffix_a = " ".join(words_a[common:])
+        suffix_b = " ".join(words_b[common:])
+        if suffix_a and suffix_b and suffix_a != suffix_b:
+            return _similarity(suffix_a, suffix_b) < 0.7
+    return False
+
+
+def _payload_groups(payload: dict[str, Any], camel_key: str, snake_key: str) -> list[dict[str, Any]]:
+    raw = payload.get(camel_key)
+    if raw is None:
+        raw = payload.get(snake_key)
+    return raw if isinstance(raw, list) else []
+
+
+def _collect_companies_from_payload(payload: dict[str, Any], collector: dict[str, dict[str, Any]]) -> None:
+    def add(name: Any, source: str) -> None:
+        text = str(name or "").strip()
+        if not text:
+            return
+        entry = collector.setdefault(text, {"sources": set(), "count": 0})
+        entry["sources"].add(source)
+        entry["count"] += 1
+
+    for group in _payload_groups(payload, "subcontractGroups", "subcontract_groups"):
+        add((group or {}).get("company"), "subcontrata")
+    for group in _payload_groups(payload, "materialGroups", "material_groups"):
+        add((group or {}).get("supplier"), "proveedor_material")
+    for group in _payload_groups(payload, "machineryGroups", "machinery_groups"):
+        add((group or {}).get("company"), "maquinaria")
+    for group in _payload_groups(payload, "workGroups", "work_groups"):
+        add((group or {}).get("company"), "mano_obra")
+
+
+def _group_similar_companies(
+    companies: list[dict[str, Any]],
+    threshold: float,
+) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    used: set[str] = set()
+    ordered = sorted(companies, key=lambda item: item.get("count", 0), reverse=True)
+
+    for company in ordered:
+        name = company["name"]
+        if name in used:
+            continue
+
+        group = {
+            "canonicalName": name,
+            "variations": [company],
+            "totalCount": int(company.get("count") or 0),
+        }
+        used.add(name)
+
+        for other in ordered:
+            other_name = other["name"]
+            if other_name in used:
+                continue
+            if _has_different_suffix(name, other_name):
+                continue
+            if _similarity(company["normalizedName"], other["normalizedName"]) >= threshold:
+                group["variations"].append(other)
+                group["totalCount"] += int(other.get("count") or 0)
+                used.add(other_name)
+
+        if len(group["variations"]) > 1:
+            groups.append(group)
+
+    groups.sort(key=lambda item: item.get("totalCount", 0), reverse=True)
+    return groups
+
+
+def _replace_company_in_groups(
+    groups: list[dict[str, Any]],
+    field_name: str,
+    old_name: str,
+    new_name: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    changed = False
+    result: list[dict[str, Any]] = []
+    for group in groups:
+        current = dict(group or {})
+        if str(current.get(field_name) or "") == old_name:
+            current[field_name] = new_name
+            changed = True
+        result.append(current)
+    return result, changed
+
+
+def _replace_company_in_payload(payload: dict[str, Any], old_name: str, new_name: str) -> tuple[dict[str, Any], bool]:
+    changed = False
+    updated = dict(payload)
+
+    for camel_key, snake_key, field in (
+        ("subcontractGroups", "subcontract_groups", "company"),
+        ("materialGroups", "material_groups", "supplier"),
+        ("machineryGroups", "machinery_groups", "company"),
+        ("workGroups", "work_groups", "company"),
+    ):
+        groups = _payload_groups(updated, camel_key, snake_key)
+        if not groups:
+            continue
+        next_groups, local_changed = _replace_company_in_groups(groups, field, old_name, new_name)
+        if local_changed:
+            updated[camel_key] = next_groups
+            updated[snake_key] = next_groups
+            changed = True
+
+    return updated, changed
+
+
 @router.post("/generate-summary-report")
 async def generate_summary_report(
     payload: GenerateSummaryReportRequest,
@@ -763,3 +937,148 @@ async def analyze_logo_colors(
         "colors": unique,
         "brandColor": unique[0]["hex"],
     }
+
+
+@router.post("/standardize-companies")
+def standardize_companies(
+    payload: StandardizeCompaniesRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    if payload.action == "analyze":
+        threshold = max(0.1, min(float(payload.threshold or 0.7), 1.0))
+        company_map: dict[str, dict[str, Any]] = {}
+
+        reports = session.exec(
+            select(WorkReport).where(
+                WorkReport.tenant_id == tenant_id,
+                WorkReport.deleted_at.is_(None),
+            )
+        ).all()
+        for report in reports:
+            report_payload = dict(report.payload or {})
+            _collect_companies_from_payload(report_payload, company_map)
+
+        rental_rows = session.exec(
+            select(RentalMachinery).where(
+                RentalMachinery.tenant_id == tenant_id,
+                RentalMachinery.deleted_at.is_(None),
+            )
+        ).all()
+        for row in rental_rows:
+            provider = (row.provider or "").strip()
+            if not provider:
+                continue
+            entry = company_map.setdefault(provider, {"sources": set(), "count": 0})
+            entry["sources"].add("alquiler")
+            entry["count"] += 1
+
+        external_rows = session.exec(
+            select(ExternalCollaboration).where(
+                ExternalCollaboration.tenant_id == tenant_id
+            )
+        ).all()
+        for row in external_rows:
+            for value, source in (
+                (row.name, "colaboracion_nombre"),
+                (row.legal_name, "colaboracion_legal"),
+            ):
+                text = (value or "").strip()
+                if not text:
+                    continue
+                entry = company_map.setdefault(text, {"sources": set(), "count": 0})
+                entry["sources"].add(source)
+                entry["count"] += 1
+
+        companies = [
+            {
+                "name": name,
+                "sources": sorted(list(meta["sources"])),
+                "count": int(meta["count"]),
+                "normalizedName": _normalize_company_name(name),
+            }
+            for name, meta in company_map.items()
+        ]
+        groups = _group_similar_companies(companies, threshold)
+        return {
+            "success": True,
+            "totalCompanies": len(companies),
+            "duplicateGroups": len(groups),
+            "groups": groups,
+        }
+
+    if payload.action == "apply":
+        if not payload.updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No updates provided",
+            )
+
+        total_updated = 0
+        reports = session.exec(
+            select(WorkReport).where(
+                WorkReport.tenant_id == tenant_id,
+                WorkReport.deleted_at.is_(None),
+            )
+        ).all()
+        rentals = session.exec(
+            select(RentalMachinery).where(
+                RentalMachinery.tenant_id == tenant_id,
+                RentalMachinery.deleted_at.is_(None),
+            )
+        ).all()
+        externals = session.exec(
+            select(ExternalCollaboration).where(
+                ExternalCollaboration.tenant_id == tenant_id
+            )
+        ).all()
+
+        for update in payload.updates:
+            old_name = (update.oldName or "").strip()
+            new_name = (update.newName or "").strip()
+            if not old_name or not new_name or old_name == new_name:
+                continue
+
+            for report in reports:
+                next_payload, changed = _replace_company_in_payload(
+                    dict(report.payload or {}),
+                    old_name,
+                    new_name,
+                )
+                if changed:
+                    report.payload = next_payload
+                    session.add(report)
+                    total_updated += 1
+
+            for row in rentals:
+                if (row.provider or "").strip() == old_name:
+                    row.provider = new_name
+                    session.add(row)
+                    total_updated += 1
+
+            for row in externals:
+                changed = False
+                if (row.name or "").strip() == old_name:
+                    row.name = new_name
+                    changed = True
+                if (row.legal_name or "").strip() == old_name:
+                    row.legal_name = new_name
+                    changed = True
+                if changed:
+                    session.add(row)
+                    total_updated += 1
+
+        session.commit()
+        return {
+            "success": True,
+            "message": f"Se actualizaron {total_updated} registros",
+            "updatedCount": total_updated,
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail='Invalid action. Use "analyze" or "apply".',
+    )

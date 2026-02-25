@@ -14,8 +14,8 @@ rg -n "VITE_SUPABASE"
 ```
 
 Estado actual:
-- Imports runtime `from '@/integrations/supabase/client'`: **51 archivos**.
-- Invocaciones `supabase.functions.invoke(...)`: **5** (bloqueante).
+- Imports runtime `from '@/integrations/supabase/client'`: **50 archivos**.
+- Invocaciones `supabase.functions.invoke(...)`: **3** (bloqueante).
 - `VITE_SUPABASE` en `src`: **0**.
 - `VITE_SUPABASE` residual fuera de `src`: `docker-compose.yml` + referencias históricas en documentación.
 
@@ -24,7 +24,7 @@ Estado actual:
 | Archivo(s) | Feature | Función supabase | Endpoint API nuevo propuesto | Estado |
 |---|---|---|---|---|
 | `src/components/AdvancedReports.tsx` | Resumen IA avanzado | `generate-summary-report` | `POST /api/v1/ai/generate-summary-report` | Migrado (2026-02-25) |
-| `src/hooks/useCompanyStandardization.ts` | Estandarización de empresas | `standardize-companies` | `POST /api/v1/ai/standardize-companies` | Bloqueante |
+| `src/hooks/useCompanyStandardization.ts` | Estandarización de empresas | `standardize-companies` | `POST /api/v1/ai/standardize-companies` | Migrado (2026-02-25) |
 | `src/components/InventoryAIAnalysis.tsx` | IA sobre inventario | `analyze-inventory` | `POST /api/v1/ai/analyze-inventory` | Bloqueante |
 | `src/components/OrganizationSettings.tsx` | Detección de colores de logo | `analyze-logo-colors` | `POST /api/v1/ai/analyze-logo-colors` | Migrado (2026-02-25) |
 | `src/hooks/useWorkReportImages.ts` | Análisis IA de imagen de parte | `analyze-work-image` | `POST /api/v1/ai/analyze-work-image` | Migrado (2026-02-25) |

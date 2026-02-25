@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { standardizeCompanies } from '@/integrations/api/client';
 
 export interface CompanyOccurrence {
   name: string;
@@ -31,11 +31,7 @@ export const useCompanyStandardization = () => {
   const analyzeCompanies = useCallback(async (threshold: number = 0.7) => {
     setAnalyzing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('standardize-companies', {
-        body: { action: 'analyze', threshold }
-      });
-
-      if (error) throw error;
+      const data = await standardizeCompanies({ action: 'analyze', threshold });
 
       if (data.success) {
         // Add selectedCanonical to each group (defaults to the most used name)
@@ -114,11 +110,7 @@ export const useCompanyStandardization = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('standardize-companies', {
-        body: { action: 'apply', updates }
-      });
-
-      if (error) throw error;
+      const data = await standardizeCompanies({ action: 'apply', updates });
 
       if (data.success) {
         toast.success(data.message);
