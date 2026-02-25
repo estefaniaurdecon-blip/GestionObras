@@ -21,7 +21,7 @@ const isDataUrl = (s: unknown): s is string => typeof s === 'string' && s.starts
 
 async function uploadImageAndGetUrl(
   base64DataUrl: string,
-  userId: string,
+  userId: string | number,
   reportId: string,
   section: string,
   index: number
@@ -64,7 +64,7 @@ async function uploadImageAndGetUrl(
   return data.publicUrl;
 }
 
-async function ensureImagesUploaded(report: WorkReport, userId: string): Promise<WorkReport> {
+async function ensureImagesUploaded(report: WorkReport, userId: string | number): Promise<WorkReport> {
   const cloned: WorkReport = JSON.parse(JSON.stringify(report));
 
   const processGroups = async (groups: any[] | undefined, section: string) => {
@@ -369,7 +369,7 @@ export const useWorkReports = () => {
               };
               
               // Si es una actualización y el editor no es el creador, registrar la edición
-              if (op.type === 'update' && processed.createdBy && processed.createdBy !== user.id) {
+              if (op.type === 'update' && processed.createdBy && Number(processed.createdBy) !== Number(user.id)) {
                 reportData.last_edited_by = user.id;
                 reportData.last_edited_at = new Date().toISOString();
               }
@@ -784,7 +784,7 @@ export const useWorkReports = () => {
         };
 
         // Si es una actualización y el editor no es el creador, registrar la edición
-        if (isUpdate && processed.createdBy && processed.createdBy !== user.id) {
+        if (isUpdate && processed.createdBy && Number(processed.createdBy) !== Number(user.id)) {
           reportData.last_edited_by = user.id;
           reportData.last_edited_at = new Date().toISOString();
         }

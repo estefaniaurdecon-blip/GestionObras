@@ -128,11 +128,11 @@ export interface WorkReport {
   wasteLog?: WasteLogEntry[];
   createdAt: string;
   updatedAt: string;
-  createdBy?: string;
+  createdBy?: string | number;
   approved?: boolean;
-  approvedBy?: string;
+  approvedBy?: string | number;
   approvedAt?: string;
-  lastEditedBy?: string; // Jefe de obra que edito el parte
+  lastEditedBy?: string | number; // Jefe de obra que edito el parte
   lastEditedAt?: string; // Fecha y hora de la ultima edicion
   status?: 'completed' | 'missing_data' | 'missing_delivery_notes';
   missingDeliveryNotes?: boolean;
@@ -141,7 +141,7 @@ export interface WorkReport {
   // Archivado
   isArchived?: boolean;
   archivedAt?: string;
-  archivedBy?: string;
+  archivedBy?: string | number;
 }
 
 export interface CompanySettings {

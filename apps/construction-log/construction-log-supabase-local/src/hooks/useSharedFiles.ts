@@ -11,8 +11,8 @@ export interface SharedFile {
   file_path: string;
   file_size: number;
   file_type: string;
-  from_user_id: string;
-  to_user_id: string;
+  from_user_id: string | number;
+  to_user_id: string | number;
   work_report_id?: string;
   message?: string;
   downloaded: boolean;
@@ -172,7 +172,7 @@ export const useSharedFiles = () => {
             console.log('File saved to:', result.uri);
 
         // Mark as downloaded if user is recipient
-        if (user?.id === sharedFile.to_user_id && !sharedFile.downloaded) {
+        if (Number(user?.id) === Number(sharedFile.to_user_id) && !sharedFile.downloaded) {
           const { error: updateError } = await supabase
             .from('shared_files')
             .update({ downloaded: true })
@@ -214,7 +214,7 @@ export const useSharedFiles = () => {
         URL.revokeObjectURL(url);
 
         // Mark as downloaded if user is recipient
-        if (user?.id === sharedFile.to_user_id && !sharedFile.downloaded) {
+        if (Number(user?.id) === Number(sharedFile.to_user_id) && !sharedFile.downloaded) {
           const { error: updateError } = await supabase
             .from('shared_files')
             .update({ downloaded: true })
