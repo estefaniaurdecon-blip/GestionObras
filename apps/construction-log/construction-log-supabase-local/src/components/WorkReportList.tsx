@@ -55,7 +55,6 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { generateWorkReportPDF } from '@/utils/pdfGenerator';
 import { exportToExcel } from '@/utils/exportUtils';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';

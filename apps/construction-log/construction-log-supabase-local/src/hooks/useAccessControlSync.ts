@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { WorkReport } from '@/types/workReport';
 import { AccessEntry } from '@/types/accessControl';
 import { useAuth } from '@/contexts/AuthContext';

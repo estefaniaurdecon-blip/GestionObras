@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { supabase } from '@/integrations/supabase/client';
 import { Loader2, AlertCircle, Clock, Wrench } from 'lucide-react';
 
 interface ActivePostventa {

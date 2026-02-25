@@ -11,7 +11,6 @@ import { Loader2, UserPlus, Settings2, Crown, Copy, Check, Building2, Mail, Phon
 import { useOrganization } from '@/hooks/useOrganization';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';

@@ -4,7 +4,6 @@ import { WorkReport } from '@/types/workReport';
 import { generateWorkReportPDF } from './pdfGenerator';
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/integrations/supabase/client';
 
 // Helper function to apply center alignment to all cells in a worksheet
 const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {

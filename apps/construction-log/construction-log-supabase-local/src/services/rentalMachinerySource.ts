@@ -1,4 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
 type WorkRentalMachineryRow = Database['public']['Tables']['work_rental_machinery']['Row'];

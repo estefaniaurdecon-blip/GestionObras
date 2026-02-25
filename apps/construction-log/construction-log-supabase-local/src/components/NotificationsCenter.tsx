@@ -28,7 +28,6 @@ import { exportToExcel } from '@/utils/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
 import type { WorkReport } from '@/types/workReport';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
