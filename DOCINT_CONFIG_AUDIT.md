@@ -121,6 +121,21 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
   - Script `scripts/lint-changed.cjs`.
   - Politica de gates en `CONTRIBUTING.md`.
 
+### Commit 10
+- `80cf641` - `feat(inventory): migrate inventory CRUD and supplier fixes to API`
+- Cambios:
+  - Nuevos endpoints FastAPI:
+    - `GET /api/v1/ai/inventory-items`
+    - `PATCH /api/v1/ai/inventory-items/{item_id}`
+    - `DELETE /api/v1/ai/inventory-items/{item_id}`
+    - `POST /api/v1/ai/inventory/merge-suppliers`
+    - `POST /api/v1/ai/inventory/validate-fix`
+    - `POST /api/v1/ai/inventory/apply-analysis`
+  - Frontend migra operaciones runtime en:
+    - `InventoryAIAnalysis.tsx` (merge/apply)
+    - `WorkInventory.tsx` (list/update/delete/merge/validate-fix)
+  - Plan actualizado: `SUPABASE_MIGRATION_PLAN.md`.
+
 ## Validacion por bloque (post-commit)
 
 ### Commit 1
@@ -156,6 +171,12 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
 - Frontend: `npm run lint:changed` OK.
 - Frontend: `npm run build` OK.
 
+### Commit 10
+- Frontend: `npm run build` OK.
+- Backend FastAPI: `python -m compileall backend-fastapi/app` OK.
+- Android: no tocado en este corte.
+- Azure Functions: no tocadas en este corte.
+
 ### Backend tests adicionales
 - `python -m pytest tests/test_updates_api.py` -> no ejecutable en este entorno por incompatibilidad local con Python 3.14 y stack actual (error de carga en modelos).
 
@@ -179,10 +200,10 @@ Verificar y ajustar el flujo de escaneo de albaranes para DocInt-only:
   - `check-updates` Supabase: migrado.
 - Estado actualizado de Supabase runtime:
   - `supabase.functions.invoke(...)` en `src`: **0**.
-  - Imports runtime `from '@/integrations/supabase/client'` en `src`: **50**.
+  - Imports runtime `from '@/integrations/supabase/client'` en `src`: **48**.
 - Conclusión de estado:
   - Invocaciones Edge migradas completamente a API propia.
-  - Aun NO es "Supabase runtime = 0" global: faltan 50 imports `supabase.from/auth/storage/rpc` por migrar.
+  - Aun NO es "Supabase runtime = 0" global: faltan 48 imports `supabase.from/auth/storage/rpc` por migrar.
 
 ## Smoke tests funcionales
 
@@ -221,4 +242,4 @@ El objetivo tecnico principal del flujo DocInt (modelos, parser model-aware, ser
 La retirada total de runtime Supabase en toda la aplicacion sigue pendiente por modulos.
 Estado actual verificable:
 - `supabase.functions.invoke(...) = 0`
-- `imports supabase runtime = 50`
+- `imports supabase runtime = 48`
