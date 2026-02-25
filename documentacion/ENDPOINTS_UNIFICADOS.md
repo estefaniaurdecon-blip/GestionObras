@@ -45,12 +45,78 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 |---|---|---|
 | POST | `/api/v1/ai/construction-chat` | `backend-fastapi/app/api/v1/ai_chat.py` |
 
+### Modulo `ai_runtime`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| POST | `/api/v1/ai/generate-summary-report` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/analyze-work-image` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/analyze-logo-colors` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/standardize-companies` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/populate-inventory-from-reports` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/clean-inventory` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/analyze-inventory` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| GET | `/api/v1/ai/inventory-items` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| PATCH | `/api/v1/ai/inventory-items/{item_id}` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| DELETE | `/api/v1/ai/inventory-items/{item_id}` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/inventory/merge-suppliers` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/inventory/validate-fix` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+| POST | `/api/v1/ai/inventory/apply-analysis` | `backend-fastapi/app/api/v1/ai_runtime.py` |
+
 ### Modulo `branding`
 
 | Metodo | Ruta | Fuente |
 |---|---|---|
 | GET | `/api/v1/branding/{tenant_id}` | `backend-fastapi/app/api/v1/branding.py` |
 | PUT | `/api/v1/branding/{tenant_id}` | `backend-fastapi/app/api/v1/branding.py` |
+
+### Modulo `organization`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/organization/me` | `backend-fastapi/app/api/v1/organization.py` |
+| PATCH | `/api/v1/organization/me` | `backend-fastapi/app/api/v1/organization.py` |
+| POST | `/api/v1/organization/me/logo` | `backend-fastapi/app/api/v1/organization.py` |
+| DELETE | `/api/v1/organization/me/logo` | `backend-fastapi/app/api/v1/organization.py` |
+| GET | `/api/v1/users/me/preferences` | `backend-fastapi/app/api/v1/organization.py` |
+| PATCH | `/api/v1/users/me/preferences` | `backend-fastapi/app/api/v1/organization.py` |
+
+### Modulo `delivery_notes`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/delivery-notes` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+| POST | `/api/v1/delivery-notes` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+| PATCH | `/api/v1/delivery-notes/{note_id}` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+| DELETE | `/api/v1/delivery-notes/{note_id}` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+| POST | `/api/v1/delivery-notes/{note_id}/validate` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+| POST | `/api/v1/delivery-notes/{note_id}/reject` | `backend-fastapi/app/api/v1/delivery_notes.py` |
+
+### Modulo `inventory_movements`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/inventory-movements` | `backend-fastapi/app/api/v1/inventory_movements.py` |
+| GET | `/api/v1/inventory-movements/kpis` | `backend-fastapi/app/api/v1/inventory_movements.py` |
+| POST | `/api/v1/inventory-movements` | `backend-fastapi/app/api/v1/inventory_movements.py` |
+| PATCH | `/api/v1/inventory-movements/{movement_id}` | `backend-fastapi/app/api/v1/inventory_movements.py` |
+| DELETE | `/api/v1/inventory-movements/{movement_id}` | `backend-fastapi/app/api/v1/inventory_movements.py` |
+
+### Modulo `attachments`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/work-reports/{work_report_id}/attachments` | `backend-fastapi/app/api/v1/attachments.py` |
+| POST | `/api/v1/work-reports/{work_report_id}/attachments` | `backend-fastapi/app/api/v1/attachments.py` |
+| PATCH | `/api/v1/work-reports/{work_report_id}/attachments/{attachment_id}` | `backend-fastapi/app/api/v1/attachments.py` |
+| DELETE | `/api/v1/work-reports/{work_report_id}/attachments/{attachment_id}` | `backend-fastapi/app/api/v1/attachments.py` |
+| POST | `/api/v1/attachments/images` | `backend-fastapi/app/api/v1/attachments.py` |
+| DELETE | `/api/v1/attachments/images/by-url` | `backend-fastapi/app/api/v1/attachments.py` |
+| GET | `/api/v1/shared-files` | `backend-fastapi/app/api/v1/attachments.py` |
+| POST | `/api/v1/shared-files` | `backend-fastapi/app/api/v1/attachments.py` |
+| GET | `/api/v1/shared-files/{shared_file_id}/download` | `backend-fastapi/app/api/v1/attachments.py` |
+| POST | `/api/v1/shared-files/{shared_file_id}/mark-downloaded` | `backend-fastapi/app/api/v1/attachments.py` |
+| DELETE | `/api/v1/shared-files/{shared_file_id}` | `backend-fastapi/app/api/v1/attachments.py` |
 
 ### Modulo `tenants`
 
@@ -231,6 +297,19 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | POST | `/api/v1/notifications/read-all` | `backend-fastapi/app/api/v1/notifications.py` |
 | POST | `/api/v1/notifications/{notification_id}/read` | `backend-fastapi/app/api/v1/notifications.py` |
 
+### Modulo `invoices`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| POST | `/api/v1/invoices` | `backend-fastapi/app/invoices/router.py` |
+| GET | `/api/v1/invoices` | `backend-fastapi/app/invoices/router.py` |
+| GET | `/api/v1/invoices/{invoice_id}` | `backend-fastapi/app/invoices/router.py` |
+| GET | `/api/v1/invoices/{invoice_id}/download` | `backend-fastapi/app/invoices/router.py` |
+| PATCH | `/api/v1/invoices/{invoice_id}` | `backend-fastapi/app/invoices/router.py` |
+| POST | `/api/v1/invoices/{invoice_id}/mark-paid` | `backend-fastapi/app/invoices/router.py` |
+| DELETE | `/api/v1/invoices/{invoice_id}` | `backend-fastapi/app/invoices/router.py` |
+| POST | `/api/v1/invoices/{invoice_id}/reprocess` | `backend-fastapi/app/invoices/router.py` |
+
 ### Modulo `contracts`
 
 | Metodo | Ruta | Fuente |
@@ -267,13 +346,13 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 |---|---|---|---|
 | `check-updates` | Migrado | `POST /api/v1/updates/check` | `apps/construction-log/.../useAppUpdates.ts` |
 | `construction-chat` | Migrado (modo seguro) | `POST /api/v1/ai/construction-chat` | `apps/construction-log/.../AIAssistantChat.tsx` |
-| `generate-summary-report` | Pendiente | `POST /api/v1/ai/generate-summary-report (propuesto)` | `apps/construction-log/.../AdvancedReports.tsx` |
-| `standardize-companies` | Pendiente | `POST /api/v1/ai/standardize-companies (propuesto)` | `apps/construction-log/.../useCompanyStandardization.ts` |
-| `analyze-inventory` | Pendiente | `POST /api/v1/ai/analyze-inventory (propuesto)` | `apps/construction-log/.../InventoryAIAnalysis.tsx` |
-| `analyze-work-image` | Pendiente | `POST /api/v1/ai/analyze-work-image (propuesto)` | `apps/construction-log/.../useWorkReportImages.ts` |
-| `analyze-logo-colors` | Pendiente | `POST /api/v1/ai/analyze-logo-colors (propuesto)` | `apps/construction-log/.../OrganizationSettings.tsx` |
-| `populate-inventory-from-reports` | Pendiente | `POST /api/v1/erp/inventory/populate-from-reports (propuesto)` | `apps/construction-log/.../WorkInventory.tsx` |
-| `clean-inventory` | Pendiente | `POST /api/v1/erp/inventory/clean (propuesto)` | `apps/construction-log/.../WorkInventory.tsx` |
+| `generate-summary-report` | Migrado | `POST /api/v1/ai/generate-summary-report` | `apps/construction-log/.../AdvancedReports.tsx` |
+| `standardize-companies` | Migrado | `POST /api/v1/ai/standardize-companies` | `apps/construction-log/.../useCompanyStandardization.ts` |
+| `analyze-inventory` | Migrado | `POST /api/v1/ai/analyze-inventory` | `apps/construction-log/.../InventoryAIAnalysis.tsx` |
+| `analyze-work-image` | Migrado | `POST /api/v1/ai/analyze-work-image` | `apps/construction-log/.../useWorkReportImages.ts` |
+| `analyze-logo-colors` | Migrado | `POST /api/v1/ai/analyze-logo-colors` | `apps/construction-log/.../OrganizationSettings.tsx` |
+| `populate-inventory-from-reports` | Migrado | `POST /api/v1/ai/populate-inventory-from-reports` | `apps/construction-log/.../WorkInventory.tsx` |
+| `clean-inventory` | Migrado | `POST /api/v1/ai/clean-inventory` | `apps/construction-log/.../WorkInventory.tsx` |
 
 ## Norma de mantenimiento
 
