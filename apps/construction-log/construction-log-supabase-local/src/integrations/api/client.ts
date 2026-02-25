@@ -1506,6 +1506,192 @@ export async function rejectDeliveryNote(
   });
 }
 
+export interface WorkReportAttachmentApi {
+  id: string;
+  work_report_id: string;
+  image_url: string;
+  description: string | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface UploadGenericImagePayload {
+  category: string;
+  entity_id: string;
+  image_type?: string;
+  file: Blob | File;
+  filename?: string;
+}
+
+export interface GenericImageUploadResponse {
+  url: string;
+  file_path: string;
+  file_size: number;
+  content_type: string;
+}
+
+export interface SharedFileApi {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  file_type: string;
+  from_user_id: string;
+  to_user_id: string;
+  work_report_id?: string | null;
+  message?: string | null;
+  downloaded: boolean;
+  created_at: string;
+  from_user?: { full_name: string };
+  to_user?: { full_name: string };
+}
+
+export type SharedFilesDirection = 'sent' | 'received' | 'all';
+
+export interface SharedFileCreatePayload {
+  file: File;
+  to_user_id: string;
+  message?: string;
+  work_report_id?: string;
+}
+
+export async function listWorkReportAttachments(
+  workReportId: string
+): Promise<WorkReportAttachmentApi[]> {
+  return apiFetchJson<WorkReportAttachmentApi[]>(
+    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments`
+  );
+}
+
+export async function createWorkReportAttachment(
+  workReportId: string,
+  payload: { file: Blob | File; description?: string | null; display_order?: number; filename?: string }
+): Promise<WorkReportAttachmentApi> {
+  const formData = new FormData();
+  const fileName = payload.filename || `image-${Date.now()}.jpg`;
+  formData.append('file', payload.file, fileName);
+  if (payload.description !== undefined && payload.description !== null) {
+    formData.append('description', payload.description);
+  }
+  if (payload.display_order !== undefined && payload.display_order !== null) {
+    formData.append('display_order', String(payload.display_order));
+  }
+  return apiFetchJson<WorkReportAttachmentApi>(
+    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+}
+
+export async function updateWorkReportAttachment(
+  workReportId: string,
+  attachmentId: string,
+  payload: { description?: string | null }
+): Promise<WorkReportAttachmentApi> {
+  return apiFetchJson<WorkReportAttachmentApi>(
+    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments/${encodeURIComponent(
+      attachmentId
+    )}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function deleteWorkReportAttachment(
+  workReportId: string,
+  attachmentId: string
+): Promise<void> {
+  return apiFetchJson<void>(
+    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments/${encodeURIComponent(
+      attachmentId
+    )}`,
+    {
+      method: 'DELETE',
+    }
+  );
+}
+
+export async function uploadGenericImage(
+  payload: UploadGenericImagePayload
+): Promise<GenericImageUploadResponse> {
+  const formData = new FormData();
+  const fileName = payload.filename || `image-${Date.now()}.jpg`;
+  formData.append('category', payload.category);
+  formData.append('entity_id', payload.entity_id);
+  if (payload.image_type) {
+    formData.append('image_type', payload.image_type);
+  }
+  formData.append('file', payload.file, fileName);
+  return apiFetchJson<GenericImageUploadResponse>('/api/v1/attachments/images', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function deleteGenericImageByUrl(url: string): Promise<{ success: boolean; deleted: boolean }> {
+  return apiFetchJson<{ success: boolean; deleted: boolean }>('/api/v1/attachments/images/by-url', {
+    method: 'DELETE',
+    body: JSON.stringify({ url }),
+  });
+}
+
+export async function listSharedFiles(
+  direction: SharedFilesDirection = 'all'
+): Promise<SharedFileApi[]> {
+  const query = buildQueryParams({ direction });
+  return apiFetchJson<SharedFileApi[]>(`/api/v1/shared-files${query}`);
+}
+
+export async function createSharedFile(
+  payload: SharedFileCreatePayload
+): Promise<SharedFileApi> {
+  const formData = new FormData();
+  formData.append('file', payload.file, payload.file.name || `file-${Date.now()}`);
+  formData.append('to_user_id', payload.to_user_id);
+  if (payload.message) {
+    formData.append('message', payload.message);
+  }
+  if (payload.work_report_id) {
+    formData.append('work_report_id', payload.work_report_id);
+  }
+  return apiFetchJson<SharedFileApi>('/api/v1/shared-files', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export async function downloadSharedFile(sharedFileId: string): Promise<Blob> {
+  const response = await apiFetch(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/download`, {
+    method: 'GET',
+  });
+  if (!response.ok) {
+    const error: ApiError = new Error(
+      `API Error: ${response.status} ${response.statusText}`
+    );
+    error.status = response.status;
+    throw error;
+  }
+  return response.blob();
+}
+
+export async function markSharedFileDownloaded(sharedFileId: string): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/mark-downloaded`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteSharedFile(sharedFileId: string): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ============================================================
 // PLACEHOLDER - For unimplemented features
 // ============================================================

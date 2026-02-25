@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     avatars_storage_path: str = str(BASE_DIR / "data" / "avatars")
     logos_storage_path: str = str(BASE_DIR / "data" / "logos")
     project_docs_storage_path: str = str(BASE_DIR / "data" / "project-docs")
+    work_report_images_storage_path: str = str(BASE_DIR / "data" / "work-report-images")
+    shared_files_storage_path: str = str(BASE_DIR / "data" / "shared-files")
     default_brand_accent_color: str = "#00662b"
 
     # Integracion con Moodle (Web Services)

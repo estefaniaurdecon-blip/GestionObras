@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from . import (
+    attachments,
     ai_runtime,
     ai_chat,
     audit,
@@ -46,6 +47,11 @@ api_router.include_router(
     inventory_movements.router,
     prefix="/inventory-movements",
     tags=["inventory-movements"],
+)
+api_router.include_router(
+    attachments.router,
+    prefix="",
+    tags=["attachments"],
 )
 
 # Rutas protegidas

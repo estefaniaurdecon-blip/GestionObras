@@ -1,36 +1,41 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { uploadGenericImage } from '@/integrations/api/client';
 
-// Compression function similar to useRepasoImages
-const compressImage = async (base64: string, maxWidth = 1200, quality = 0.7): Promise<string> => {
-  return new Promise((resolve, reject) => {
+const compressImage = async (base64: string, maxWidth = 1200, quality = 0.7): Promise<string> =>
+  new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let { width, height } = img;
-      
       if (width > maxWidth) {
         height = (height * maxWidth) / width;
         width = maxWidth;
       }
-      
       canvas.width = width;
       canvas.height = height;
-      
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         reject(new Error('Could not get canvas context'));
         return;
       }
-      
       ctx.drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = reject;
     img.src = base64;
   });
+
+const base64ToBlob = (base64: string): Blob => {
+  const [header, data] = base64.split(',');
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  const mime = mimeMatch?.[1] || 'image/jpeg';
+  const binary = atob(data || '');
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 };
 
 export const usePostventaImages = () => {
@@ -48,33 +53,17 @@ export const usePostventaImages = () => {
     }
 
     try {
-      // Compress image before upload
       const compressed = await compressImage(base64Data);
-      
-      // Convert base64 to blob
-      const base64Response = await fetch(compressed);
-      const blob = await base64Response.blob();
-      
-      // Generate unique filename
-      const fileName = `${user.id}/postventas/${postventaId}/${imageType}_${Date.now()}.jpg`;
-      
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('work-report-images')
-        .upload(fileName, blob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('work-report-images')
-        .getPublicUrl(fileName);
-
-      return publicUrl;
-    } catch (error: any) {
+      const blob = base64ToBlob(compressed);
+      const uploaded = await uploadGenericImage({
+        category: 'postventas',
+        entity_id: postventaId,
+        image_type: imageType,
+        file: blob,
+        filename: `${imageType}_${Date.now()}.jpg`,
+      });
+      return uploaded.url;
+    } catch (error: unknown) {
       console.error('Error uploading postventa image:', error);
       toast.error('Error al subir imagen');
       return null;
@@ -88,13 +77,11 @@ export const usePostventaImages = () => {
   ): Promise<{ before_image?: string; after_image?: string }> => {
     setUploading(true);
     const result: { before_image?: string; after_image?: string } = {};
-
     try {
       if (beforeBase64) {
         const beforeUrl = await uploadImage(beforeBase64, postventaId, 'before');
         if (beforeUrl) result.before_image = beforeUrl;
       }
-
       if (afterBase64) {
         const afterUrl = await uploadImage(afterBase64, postventaId, 'after');
         if (afterUrl) result.after_image = afterUrl;
@@ -102,19 +89,11 @@ export const usePostventaImages = () => {
     } finally {
       setUploading(false);
     }
-
     return result;
   };
 
-  // Check if URL is a data URL (base64)
-  const isDataUrl = (url: string): boolean => {
-    return url?.startsWith('data:') || false;
-  };
-
-  // Check if URL is a storage URL
-  const isStorageUrl = (url: string): boolean => {
-    return url?.includes('supabase') || false;
-  };
+  const isDataUrl = (url: string): boolean => url?.startsWith('data:') || false;
+  const isStorageUrl = (url: string): boolean => url?.includes('/static/work-report-images/') || false;
 
   return {
     uploading,

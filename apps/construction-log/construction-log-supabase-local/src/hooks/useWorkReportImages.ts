@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { analyzeWorkImage as analyzeWorkImageApi } from '@/integrations/api/client';
+import {
+  analyzeWorkImage as analyzeWorkImageApi,
+  createWorkReportAttachment,
+  deleteWorkReportAttachment,
+  listWorkReportAttachments,
+  updateWorkReportAttachment,
+} from '@/integrations/api/client';
 
 export interface WorkReportImage {
   id: string;
@@ -15,17 +20,11 @@ export interface WorkReportImage {
   created_by: string | null;
 }
 
-// Helper to check if string is a data URL (base64)
-const isDataUrl = (str: string): boolean => {
-  return str?.startsWith('data:image/') || false;
-};
+const isDataUrl = (str: string): boolean => str?.startsWith('data:image/') || false;
 
-// Helper to check if string is already a storage URL
-const isStorageUrl = (str: string): boolean => {
-  return str?.includes('supabase.co/storage/') || false;
-};
+const isStorageUrl = (str: string): boolean =>
+  str?.includes('/static/work-report-images/') || false;
 
-// Convert base64 to blob for upload
 const base64ToBlob = (base64: string): Blob => {
   const [header, data] = base64.split(',');
   const mimeMatch = header.match(/data:(.*?);base64/);
@@ -37,6 +36,12 @@ const base64ToBlob = (base64: string): Blob => {
   return new Blob([bytes], { type: mime });
 };
 
+const extensionFromMime = (mime: string | undefined): string => {
+  if (!mime) return 'jpg';
+  const value = mime.split('/')[1]?.toLowerCase() || 'jpg';
+  return value === 'jpeg' ? 'jpg' : value;
+};
+
 export const useWorkReportImages = (workReportId: string | null) => {
   const [images, setImages] = useState<WorkReportImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +49,7 @@ export const useWorkReportImages = (workReportId: string | null) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     if (!workReportId) {
       setImages([]);
       return;
@@ -52,86 +57,29 @@ export const useWorkReportImages = (workReportId: string | null) => {
 
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('work_report_images')
-        .select('*')
-        .eq('work_report_id', workReportId)
-        .order('display_order', { ascending: true });
-
-      if (error) throw error;
-      setImages(data || []);
-    } catch (error: any) {
+      const data = await listWorkReportAttachments(workReportId);
+      setImages(data);
+    } catch (error: unknown) {
       console.error('Error fetching work report images:', error);
       toast({
         title: 'Error',
-        description: 'No se pudieron cargar las imágenes',
+        description: 'No se pudieron cargar las imagenes',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast, workReportId]);
 
   useEffect(() => {
     fetchImages();
-  }, [workReportId]);
-
-  // Upload image to Supabase Storage and return the public URL
-  const uploadImageToStorage = useCallback(async (imageBase64: string): Promise<string | null> => {
-    if (!user) {
-      console.error('No user for image upload');
-      return null;
-    }
-
-    // If already a storage URL, return as-is
-    if (isStorageUrl(imageBase64)) {
-      return imageBase64;
-    }
-
-    // If not a data URL, can't upload
-    if (!isDataUrl(imageBase64)) {
-      console.error('Invalid image format for upload');
-      return null;
-    }
-
-    try {
-      const blob = base64ToBlob(imageBase64);
-      const ext = (blob.type?.split('/')?.[1] || 'jpeg').toLowerCase();
-      const timestamp = Date.now();
-      const filePath = `${user.id}/work-reports/${workReportId}/${timestamp}.${ext}`;
-
-      console.log('Uploading image to storage:', filePath);
-
-      const { error: uploadError } = await supabase.storage
-        .from('work-report-images')
-        .upload(filePath, blob, {
-          upsert: true,
-          contentType: blob.type || 'image/jpeg'
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        throw uploadError;
-      }
-
-      // Get public URL
-      const { data } = supabase.storage
-        .from('work-report-images')
-        .getPublicUrl(filePath);
-
-      console.log('Image uploaded successfully:', data.publicUrl);
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading image to storage:', error);
-      return null;
-    }
-  }, [user, workReportId]);
+  }, [fetchImages]);
 
   const addImage = async (imageUrl: string, description: string | null = null) => {
     if (!workReportId) {
       toast({
         title: 'Error',
-        description: 'Debe guardar el parte antes de agregar imágenes',
+        description: 'Debe guardar el parte antes de agregar imagenes',
         variant: 'destructive',
       });
       return null;
@@ -146,51 +94,46 @@ export const useWorkReportImages = (workReportId: string | null) => {
       return null;
     }
 
-    try {
-      setIsUploading(true);
-
-      // Upload to storage if it's a base64 image
-      let finalImageUrl = imageUrl;
-      if (isDataUrl(imageUrl)) {
-        console.log('Uploading base64 image to storage...');
-        const storageUrl = await uploadImageToStorage(imageUrl);
-        if (!storageUrl) {
-          throw new Error('Failed to upload image to storage');
-        }
-        finalImageUrl = storageUrl;
-        console.log('Image uploaded, storage URL:', finalImageUrl);
-      }
-
-      const maxOrder = images.length > 0 ? Math.max(...images.map(img => img.display_order)) : -1;
-      
-      const { data, error } = await supabase
-        .from('work_report_images')
-        .insert({
-          work_report_id: workReportId,
-          image_url: finalImageUrl,
-          description,
-          display_order: maxOrder + 1,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Database insert error:', error);
-        throw error;
-      }
-
-      setImages(prev => [...prev, data]);
-      toast({
-        title: 'Éxito',
-        description: 'Imagen agregada correctamente',
-      });
-      return data;
-    } catch (error: any) {
-      console.error('Error adding image:', error);
+    if (!isDataUrl(imageUrl) && !isStorageUrl(imageUrl)) {
       toast({
         title: 'Error',
-        description: error.message || 'No se pudo agregar la imagen',
+        description: 'Formato de imagen no valido',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (isStorageUrl(imageUrl)) {
+      toast({
+        title: 'Aviso',
+        description: 'La imagen ya esta subida',
+      });
+      return null;
+    }
+
+    try {
+      setIsUploading(true);
+      const blob = base64ToBlob(imageUrl);
+      const ext = extensionFromMime(blob.type);
+      const maxOrder = images.length > 0 ? Math.max(...images.map((img) => img.display_order)) : -1;
+      const created = await createWorkReportAttachment(workReportId, {
+        file: blob,
+        description,
+        display_order: maxOrder + 1,
+        filename: `work-report-${Date.now()}.${ext}`,
+      });
+      setImages((prev) => [...prev, created]);
+      toast({
+        title: 'Exito',
+        description: 'Imagen agregada correctamente',
+      });
+      return created;
+    } catch (error: unknown) {
+      console.error('Error adding image:', error);
+      const message = error instanceof Error ? error.message : 'No se pudo agregar la imagen';
+      toast({
+        title: 'Error',
+        description: message,
         variant: 'destructive',
       });
       return null;
@@ -200,69 +143,38 @@ export const useWorkReportImages = (workReportId: string | null) => {
   };
 
   const updateDescription = async (imageId: string, description: string) => {
+    if (!workReportId) return;
     try {
-      const { error } = await supabase
-        .from('work_report_images')
-        .update({ description })
-        .eq('id', imageId);
-
-      if (error) throw error;
-
-      setImages(prev =>
-        prev.map(img => (img.id === imageId ? { ...img, description } : img))
-      );
-      
-      toast({
-        title: 'Éxito',
-        description: 'Descripción actualizada',
+      const updated = await updateWorkReportAttachment(workReportId, imageId, {
+        description,
       });
-    } catch (error: any) {
+      setImages((prev) =>
+        prev.map((img) => (img.id === imageId ? { ...img, description: updated.description } : img))
+      );
+      toast({
+        title: 'Exito',
+        description: 'Descripcion actualizada',
+      });
+    } catch (error: unknown) {
       console.error('Error updating description:', error);
       toast({
         title: 'Error',
-        description: 'No se pudo actualizar la descripción',
+        description: 'No se pudo actualizar la descripcion',
         variant: 'destructive',
       });
     }
   };
 
   const deleteImage = async (imageId: string) => {
+    if (!workReportId) return;
     try {
-      // Get the image to delete from storage
-      const imageToDelete = images.find(img => img.id === imageId);
-      
-      const { error } = await supabase
-        .from('work_report_images')
-        .delete()
-        .eq('id', imageId);
-
-      if (error) throw error;
-
-      // Also delete from storage if it's a storage URL
-      if (imageToDelete && isStorageUrl(imageToDelete.image_url)) {
-        try {
-          const urlObj = new URL(imageToDelete.image_url);
-          const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/public\/work-report-images\/(.+)/);
-          
-          if (pathMatch) {
-            const filePath = decodeURIComponent(pathMatch[1]);
-            await supabase.storage
-              .from('work-report-images')
-              .remove([filePath]);
-          }
-        } catch (storageError) {
-          console.error('Error deleting image from storage:', storageError);
-          // Don't throw, the DB record is already deleted
-        }
-      }
-
-      setImages(prev => prev.filter(img => img.id !== imageId));
-      
+      await deleteWorkReportAttachment(workReportId, imageId);
+      setImages((prev) => prev.filter((img) => img.id !== imageId));
       toast({
-        title: 'Éxito',
+        title: 'Exito',
         description: 'Imagen eliminada',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting image:', error);
       toast({
         title: 'Error',
@@ -276,7 +188,7 @@ export const useWorkReportImages = (workReportId: string | null) => {
     try {
       const data = await analyzeWorkImageApi({ imageBase64 });
       return data?.description || null;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error analyzing image:', error);
       toast({
         title: 'Error',

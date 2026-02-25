@@ -86,6 +86,17 @@ def create_app() -> FastAPI:
     docs_path = Path(settings.project_docs_storage_path)
     docs_path.mkdir(parents=True, exist_ok=True)
     app.mount("/static/project-docs", StaticFiles(directory=str(docs_path)), name="project_docs")
+
+    work_report_images_path = Path(settings.work_report_images_storage_path)
+    work_report_images_path.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/static/work-report-images",
+        StaticFiles(directory=str(work_report_images_path)),
+        name="work_report_images",
+    )
+
+    shared_files_path = Path(settings.shared_files_storage_path)
+    shared_files_path.mkdir(parents=True, exist_ok=True)
     return app
 
 

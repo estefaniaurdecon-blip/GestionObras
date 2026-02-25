@@ -14,7 +14,7 @@ rg -n "VITE_SUPABASE"
 ```
 
 Estado actual:
-- Imports runtime `from '@/integrations/supabase/client'`: **48 archivos**.
+- Imports runtime `from '@/integrations/supabase/client'`: **42 archivos**.
 - Invocaciones `supabase.functions.invoke(...)`: **0** (bloqueante resuelto).
 - `VITE_SUPABASE` en `src`: **0**.
 - `VITE_SUPABASE` residual fuera de `src`: `docker-compose.yml` + referencias históricas en documentación.
@@ -37,10 +37,10 @@ Estado actual:
 | `src/components/OrganizationSettings.tsx`<br>`src/hooks/useOrganization.ts`<br>`src/hooks/useOrganizationLogo.ts`<br>`src/hooks/useCompanySettings.ts`<br>`src/hooks/usePublicOrganizationBranding.ts`<br>`src/components/PlatformPreferences.tsx`<br>`src/utils/imageUrlHelper.ts` | Branding/organización/storage | - | `GET/PUT /api/v1/branding/{tenant_id}` + `POST /api/v1/files/upload` + `GET /api/v1/files/public-url` | Pendiente |
 | `src/components/UserManagement.tsx`<br>`src/hooks/useUsers.ts`<br>`src/contexts/UserPermissionsContext.tsx` | Usuarios, roles y permisos | - | `GET/POST/PATCH/DELETE /api/v1/users*` + `GET /api/v1/rbac/*` | Pendiente |
 | `src/components/WorkReportList.tsx`<br>`src/hooks/useWorkReports.ts`<br>`src/hooks/useAssignedWorks.ts`<br>`src/hooks/useAccessControlSync.ts`<br>`src/hooks/usePhases.ts` | Partes y sincronización ERP | - | Reusar `GET/POST/PATCH/DELETE /api/v1/erp/work-reports*` y ampliar endpoints faltantes | Pendiente |
-| `src/hooks/useDeliveryNotes.ts`<br>`src/hooks/useInventoryMovements.ts`<br>`src/services/rentalMachinerySource.ts`<br>`src/hooks/useRentalMachineryAssignments.ts`<br>`src/hooks/useWasteEntries.ts` | Albaranes, movimientos y maquinaria | - | `GET/POST/PATCH/DELETE /api/v1/erp/delivery-notes*`<br>`/inventory-movements*`<br>`/rental-machinery*` | Pendiente |
+| `src/hooks/useDeliveryNotes.ts`<br>`src/hooks/useInventoryMovements.ts`<br>`src/services/rentalMachinerySource.ts`<br>`src/hooks/useRentalMachineryAssignments.ts`<br>`src/hooks/useWasteEntries.ts` | Albaranes, movimientos y maquinaria | - | `GET/POST/PATCH/DELETE /api/v1/delivery-notes*`<br>`GET/POST/PATCH/DELETE /api/v1/inventory-movements*`<br>`/rental-machinery*` | Parcial (delivery-notes + inventory-movements migrados, resto pendiente) |
 | `src/components/ActiveRepasosSection.tsx`<br>`src/components/ActivePostventasSection.tsx`<br>`src/hooks/useWorkRepasos.ts`<br>`src/hooks/useWorkPostventas.ts` | Repasos/Postventas | - | `GET/POST/PATCH/DELETE /api/v1/erp/repasos*` y `/postventas*` | Pendiente |
-| `src/hooks/useRepasoImages.ts`<br>`src/hooks/usePostventaImages.ts`<br>`src/hooks/useWorkReportImages.ts` | Imágenes (upload + firma URL pública) | - | `POST /api/v1/files/upload` + `GET /api/v1/files/public-url` + `DELETE /api/v1/files` | Pendiente |
-| `src/hooks/useSharedFiles.ts`<br>`src/hooks/useWorkReportDownloads.ts` | Archivos compartidos/descargas | - | `GET/POST/PATCH/DELETE /api/v1/files/shared*` | Pendiente |
+| `src/hooks/useRepasoImages.ts`<br>`src/hooks/usePostventaImages.ts`<br>`src/hooks/useWorkReportImages.ts` | Imágenes (upload + CRUD adjuntos) | - | `GET/POST/PATCH/DELETE /api/v1/work-reports/{work_report_id}/attachments`<br>`POST /api/v1/attachments/images`<br>`DELETE /api/v1/attachments/images/by-url` | Migrado (2026-02-25) |
+| `src/hooks/useSharedFiles.ts`<br>`src/hooks/useWorkReportDownloads.ts` | Archivos compartidos/descargas | - | `GET /api/v1/shared-files`<br>`POST /api/v1/shared-files`<br>`GET /api/v1/shared-files/{id}/download`<br>`POST /api/v1/shared-files/{id}/mark-downloaded`<br>`DELETE /api/v1/shared-files/{id}` | Parcial (`useSharedFiles` migrado, `useWorkReportDownloads` pendiente) |
 | `src/hooks/useUpcomingDeadlines.ts` | Vencimientos próximos | - | `GET /api/v1/erp/deadlines/upcoming` | Pendiente |
 | `src/components/EconomicAnalysis.tsx`<br>`src/components/EconomicManagement.tsx`<br>`src/components/SavedEconomicReports.tsx` | Gestión económica | - | `GET/POST/PATCH/DELETE /api/v1/erp/economic-reports*` | Pendiente |
 | `src/hooks/useWorkRentalMachinery.ts` | Maquinaria alquilada (parte) | - | Reusar/ampliar `GET/POST/PATCH/DELETE /api/v1/erp/rental-machinery*` | Pendiente |
