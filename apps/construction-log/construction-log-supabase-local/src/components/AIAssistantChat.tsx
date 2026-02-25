@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { HardHat, X, Send, Minimize2, Maximize2, Trash2, Image as ImageIcon, Maximize, FileDown, ChevronLeft, ChevronRight, History, Clock, Trash, Camera, Bell, AlertCircle, MoreVertical, FileText, BarChart3, TrendingUp, Users, Package, Calculator } from "lucide-react";
+import { HardHat, X, Send, Minimize2, Maximize2, Trash2, Image as ImageIcon, Maximize, FileDown, ChevronLeft, ChevronRight, History, Clock, Trash, Bell, AlertCircle, MoreVertical, FileText, BarChart3, TrendingUp, Users, Package, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { WorkReport } from "@/types/workReport";
 import { AccessReport } from "@/types/accessControl";
@@ -20,9 +20,6 @@ import { storage } from "@/utils/storage";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { AdvancedMaterialScanner } from "@/components/AdvancedMaterialScanner";
-import { EnhancedMaterialData } from "@/utils/advancedOcrService";
-import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type InventoryItem = Database['public']['Tables']['work_inventory']['Row'];
@@ -65,7 +62,6 @@ export const AIAssistantChat = ({ workReports, advancedReportsData, accessReport
   const [currentAnalysisIndex, setCurrentAnalysisIndex] = useState<number>(-1);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [urgentTasks, setUrgentTasks] = useState<any[]>([]);
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
   const [isButtonEnabled, setIsButtonEnabled] = useState(true);
@@ -209,66 +205,13 @@ export const AIAssistantChat = ({ workReports, advancedReportsData, accessReport
     }
   }, [isOpen, organization?.name]);
 
-  // Play notification sound
-  const playNotificationSound = useCallback(() => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
-  }, []);
-
   // Check for upcoming tasks
   const checkCalendarTasks = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-calendar-tasks');
-      
-      if (error) throw error;
-      
-      const { urgentTasks: urgent = [], upcomingTasks: upcoming = [] } = data || {};
-      
-      // Check if there are new urgent tasks
-      const hasNewUrgentTasks = urgent.length > urgentTasks.length;
-      
-      setUrgentTasks(urgent);
-      setUpcomingTasks(upcoming);
-
-      // Send notification to chat if there are urgent tasks
-      if (hasNewUrgentTasks && urgent.length > 0) {
-        playNotificationSound();
-        
-        const taskMessage: Message = {
-          role: "assistant",
-          content: `🔔 **ALERTA DE TAREAS URGENTES**\n\n${urgent.map((task: any) => {
-            const urgencyEmoji = task.urgencyLevel === 'overdue' ? '❌' : 
-                               task.urgencyLevel === 'critical' ? '⚠️' : '🔴';
-            const urgencyText = task.urgencyLevel === 'overdue' ? 'VENCIDA' :
-                              task.urgencyLevel === 'critical' ? 'CRÍTICA (< 2 horas)' : 'URGENTE';
-            
-            return `${urgencyEmoji} **${task.title}**\n   - Estado: ${urgencyText}\n   - Fecha: ${task.task_date}${task.due_time ? ` a las ${task.due_time}` : ''}\n   - Prioridad: ${task.priority === 'urgent' ? '🔴 Urgente' : task.priority === 'high' ? '🟠 Alta' : '🟡 Media'}\n   ${task.description ? `- ${task.description}\n` : ''}`;
-          }).join('\n\n')}\n\n📌 Revisa el calendario para gestionar estas tareas.`
-        };
-
-        setMessages(prev => [...prev, taskMessage]);
-        
-        // Auto-open chat if closed
-        if (!isOpen) {
-          setIsOpen(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking calendar tasks:', error);
-    }
-  }, [urgentTasks.length, isOpen, playNotificationSound]);
+    // Legacy calendar checks depended on Supabase Edge Functions.
+    // Keep task lists empty in DocInt-only mode to avoid runtime failures.
+    setUrgentTasks([]);
+    setUpcomingTasks([]);
+  }, []);
 
   // Check if current time is within working hours (Spain time: Mon-Fri, 07:00-19:00)
   const isWorkingHours = useCallback(() => {
@@ -432,12 +375,11 @@ useEffect(() => {
       console.log(`[AIAssistantChat] Sending ${allReports.length} work reports to AI for analysis`);
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/construction-chat`,
+        `/api/v1/ai/construction-chat`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
             messages: newMessages,
@@ -694,40 +636,6 @@ useEffect(() => {
 
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleCameraCapture = async (materialData: EnhancedMaterialData, imageData: string) => {
-    // Agregar la imagen capturada
-    setSelectedImages(prev => [...prev, imageData]);
-    
-    // Crear un mensaje descriptivo basado en los datos extraídos
-    let autoMessage = "He capturado una imagen de un plano de construcción.";
-    
-    // Si hay información específica extraída, agregarla
-    if (materialData.supplier) {
-      autoMessage += `\n\nProveedor/Empresa: ${materialData.supplier}`;
-    }
-    if (materialData.invoiceNumber) {
-      autoMessage += `\nNúmero de documento: ${materialData.invoiceNumber}`;
-    }
-    if (materialData.date) {
-      autoMessage += `\nFecha: ${materialData.date}`;
-    }
-    
-    // Agregar información de items si están disponibles
-    if (materialData.items && materialData.items.length > 0) {
-      autoMessage += `\n\nItems detectados: ${materialData.items.length}`;
-    }
-    
-    // Si no hay input del usuario, usar el mensaje automático
-    if (!input.trim()) {
-      setInput(autoMessage);
-    }
-    
-    toast({
-      title: "Imagen capturada y procesada",
-      description: "La imagen está lista para el análisis con IA",
-    });
   };
 
   // Consultas predefinidas para análisis de partes de trabajo
@@ -1707,19 +1615,6 @@ useEffect(() => {
               >
                 <ImageIcon className="h-4 w-4 md:h-5 md:w-5" />
               </Button>
-              <Button
-                onClick={() => {
-                  setIsCameraOpen(true);
-                  setIsOpen(false);
-                }}
-                disabled={isLoading}
-                size="icon"
-                variant="outline"
-                className="h-[50px] w-[50px] md:h-[60px] md:w-[60px] shrink-0"
-                title="Capturar desde cámara"
-              >
-                <Camera className="h-4 w-4 md:h-5 md:w-5" />
-              </Button>
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -1753,12 +1648,7 @@ useEffect(() => {
     <>
       {!isOpen && floatingButton}
       {isOpen && chatWindow}
-      
-      <AdvancedMaterialScanner
-        isOpen={isCameraOpen}
-        onClose={() => setIsCameraOpen(false)}
-        onMaterialDataExtracted={handleCameraCapture}
-      />
     </>
   , document.body);
 };
+

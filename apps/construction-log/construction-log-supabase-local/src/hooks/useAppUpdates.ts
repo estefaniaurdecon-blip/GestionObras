@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
+import { checkAppUpdates, type CheckAppUpdatesResponse, type UpdatePlatform } from '@/integrations/api/client';
 
 interface UpdateInfo {
   updateAvailable: boolean;
@@ -116,79 +116,61 @@ export const useAppUpdates = () => {
     return 'web';
   };
 
+  const shouldIgnoreUpdate = (candidate: CheckAppUpdatesResponse): boolean => {
+    if (!candidate.version) return false;
+    if (candidate.isMandatory) return false;
+
+    const dismissedVersions = getDismissedVersions();
+    if (dismissedVersions.has(candidate.version)) {
+      return true;
+    }
+
+    const installedVersion = getInstalledVersion();
+    return installedVersion === candidate.version;
+  };
+
   const checkForUpdates = async (silent: boolean = false, createNotification: boolean = false) => {
     console.log('[Updates] checkForUpdates START', { silent, createNotification, timestamp: new Date().toISOString() });
     try {
       setChecking(true);
-      
-      const platform = getPlatform();
-      console.log('[Updates] Platform detected:', platform);
-      
+
       const currentVersion = await getCurrentVersion();
-      console.log('[Updates] Current version:', currentVersion);
+      const platform = getPlatform() as UpdatePlatform;
+      console.log('[Updates] Current version/platform:', { currentVersion, platform });
 
-      if (!silent) {
-        toast({
-          title: 'Verificando actualizaciones...',
-          description: `Versión actual: ${currentVersion}`,
-        });
-      }
-
-      console.log('[Updates] Invoking check-updates edge function...');
-      const { data, error } = await supabase.functions.invoke('check-updates', {
-        body: {
-          currentVersion,
-          platform,
-        },
+      const result = await checkAppUpdates({
+        currentVersion,
+        platform,
       });
 
-      console.log('[Updates] Response:', { data, error });
-      if (error) throw error;
+      if (result.updateAvailable && !shouldIgnoreUpdate(result)) {
+        const normalizedUpdateInfo: UpdateInfo = {
+          updateAvailable: true,
+          version: result.version,
+          downloadUrl: result.downloadUrl,
+          fileSize: result.fileSize,
+          releaseNotes: result.releaseNotes,
+          isMandatory: Boolean(result.isMandatory),
+        };
 
-      if (data.updateAvailable) {
-        // Verificar si esta versión ya fue instalada
-        const installedVersion = getInstalledVersion();
-        if (installedVersion === data.version) {
-          console.log(`Version ${data.version} already installed`);
-          return null;
-        }
+        setUpdateInfo(normalizedUpdateInfo);
 
-        // Verificar si esta versión fue descartada por el usuario
-        const dismissed = getDismissedVersions();
-        if (dismissed.has(data.version) && !data.isMandatory) {
-          console.log(`Version ${data.version} was dismissed by user`);
-          return null;
-        }
-
-        setUpdateInfo(data);
-        
-        // Crear notificación si se solicita
-        if (createNotification) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await supabase.from('notifications').insert({
-              user_id: user.id,
-              title: '¡Nueva actualización disponible!',
-              message: `Versión ${data.version} lista para descargar${data.isMandatory ? ' (Obligatoria)' : ''}`,
-              type: 'update',
-              read: false,
-            });
-          }
-        }
-        
-        if (!silent) {
+        if (createNotification && !silent) {
           toast({
-            title: '¡Actualización disponible!',
-            description: `Nueva versión ${data.version} disponible`,
-            duration: 10000,
+            title: 'Actualizacion disponible',
+            description: `Version ${result.version || 'nueva'} lista para descargar`,
           });
         }
 
-        return data;
-      } else if (!silent) {
+        return normalizedUpdateInfo;
+      }
+
+      setUpdateInfo(null);
+
+      if (!silent) {
         toast({
-          title: 'App actualizada',
-          description: 'Estás usando la última versión',
+          title: 'Sin actualizaciones',
+          description: `Version actual: ${currentVersion}`,
         });
       }
 
@@ -558,3 +540,4 @@ export const useAppUpdates = () => {
     postponeUpdate,
   };
 };
+

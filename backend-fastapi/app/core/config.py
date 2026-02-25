@@ -1,4 +1,5 @@
 from functools import lru_cache
+import json
 from pathlib import Path
 from typing import List
 
@@ -72,6 +73,7 @@ class Settings(BaseSettings):
     ollama_headers_json: str | None = None
     ollama_ocr_model: str = "deepseek-ocr:3b"
     ollama_json_model: str = "qwen3-coder:30b"
+    ollama_timeout_secs: int = 60
     ollama_ocr_timeout_seconds: int = 90
     ollama_json_timeout_seconds: int = 45
     ai_circuit_breaker_ttl_seconds: int = 60
@@ -105,6 +107,10 @@ class Settings(BaseSettings):
     # Clave interna para crear notificaciones desde ERP
     saas_internal_api_key: str | None = None
 
+    # Actualizaciones de app (replace check-updates Supabase function)
+    app_updates_catalog_json: str | None = None
+    app_updates_disabled_versions: List[str] = []
+
     @staticmethod
     def _coerce_bool_like(value):
         if isinstance(value, bool):
@@ -134,6 +140,32 @@ class Settings(BaseSettings):
     @classmethod
     def parse_debug(cls, value):
         return cls._coerce_bool_like(value)
+
+    @field_validator("app_updates_disabled_versions", mode="before")
+    @classmethod
+    def parse_app_updates_disabled_versions(cls, value):
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except json.JSONDecodeError:
+                    pass
+
+            return [item.strip() for item in raw.split(",") if item.strip()]
+
+        if isinstance(value, (set, tuple)):
+            return [str(item).strip() for item in value if str(item).strip()]
+
+        return value
 
 
 @lru_cache

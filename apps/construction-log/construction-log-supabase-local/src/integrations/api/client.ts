@@ -39,7 +39,7 @@ function resolveApiBaseUrl(): string {
   return webBaseUrl;
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+let activeApiBaseUrl = resolveApiBaseUrl();
 const TENANT_ID = import.meta.env.VITE_TENANT_ID;
 
 export interface ApiError extends Error {
@@ -47,12 +47,12 @@ export interface ApiError extends Error {
   data?: any;
 }
 
-function normalizeApiPath(path: string): string {
+function normalizeApiPath(path: string, baseUrl = activeApiBaseUrl): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   // When using Vite proxy with base "/api", avoid generating "/api/api/v1/*".
   if (
-    (API_BASE_URL === '/api' || API_BASE_URL.endsWith('/api')) &&
+    (baseUrl === '/api' || baseUrl.endsWith('/api')) &&
     normalizedPath.startsWith('/api/')
   ) {
     return normalizedPath.slice(4);
@@ -61,12 +61,97 @@ function normalizeApiPath(path: string): string {
   return normalizedPath;
 }
 
-function buildApiUrl(path: string): string {
-  return `${API_BASE_URL}${normalizeApiPath(path)}`;
+function buildApiUrl(path: string, baseUrl = activeApiBaseUrl): string {
+  return `${baseUrl}${normalizeApiPath(path, baseUrl)}`;
 }
 
 export function getApiBaseUrl(): string {
-  return API_BASE_URL;
+  return activeApiBaseUrl;
+}
+
+function resolveNativeLoopbackFallback(baseUrl: string): string | null {
+  if (Capacitor.isNativePlatform?.() !== true) return null;
+  if (!baseUrl || baseUrl.startsWith('/')) return null;
+
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.hostname === '10.0.2.2') {
+      parsed.hostname = '127.0.0.1';
+      return normalizeBaseUrl(parsed.toString());
+    }
+    if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
+      parsed.hostname = '10.0.2.2';
+      return normalizeBaseUrl(parsed.toString());
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function resolveNativeApiFallbackCandidates(baseUrl: string): string[] {
+  if (Capacitor.isNativePlatform?.() !== true) return [];
+  if (!baseUrl || baseUrl.startsWith('/')) return [];
+
+  try {
+    const parsed = new URL(baseUrl);
+    const scheme = parsed.protocol;
+    const port = parsed.port;
+    const path = parsed.pathname;
+    const query = parsed.search;
+    const hash = parsed.hash;
+    const userInfo = parsed.username
+      ? `${parsed.username}${parsed.password ? `:${parsed.password}` : ''}@`
+      : '';
+    const originalHost = parsed.hostname;
+    const hosts = [originalHost, '10.0.2.2', '127.0.0.1', 'localhost'];
+    const uniqueHosts = [...new Set(hosts.filter(Boolean))];
+
+    return uniqueHosts
+      .map((host) => `${scheme}//${userInfo}${host}${port ? `:${port}` : ''}${path}${query}${hash}`)
+      .map(normalizeBaseUrl)
+      .filter((candidate) => candidate && candidate !== baseUrl);
+  } catch {
+    return [];
+  }
+}
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
+async function fetchWithNativeFallback(path: string, init: RequestInit): Promise<Response> {
+  const primaryUrl = buildApiUrl(path);
+
+  try {
+    return await fetch(primaryUrl, init);
+  } catch (error) {
+    if (!isNetworkError(error)) {
+      throw error;
+    }
+
+    const candidates = [
+      resolveNativeLoopbackFallback(activeApiBaseUrl),
+      ...resolveNativeApiFallbackCandidates(activeApiBaseUrl),
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    let lastError: unknown = error;
+    for (const fallbackBaseUrl of [...new Set(candidates)]) {
+      if (fallbackBaseUrl === activeApiBaseUrl) continue;
+      try {
+        const fallbackUrl = buildApiUrl(path, fallbackBaseUrl);
+        const response = await fetch(fallbackUrl, init);
+        activeApiBaseUrl = fallbackBaseUrl;
+        console.warn(`[api] Fallback nativo aplicado. Nueva base URL: ${activeApiBaseUrl}`);
+        return response;
+      } catch (fallbackError) {
+        lastError = fallbackError;
+      }
+    }
+
+    throw lastError;
+  }
 }
 
 /**
@@ -77,8 +162,6 @@ export async function apiFetch(
   path: string,
   init?: RequestInit & { skipAuth?: boolean }
 ): Promise<Response> {
-  const url = buildApiUrl(path);
-  
   // Build headers
   const headers: Record<string, string> = {
     ...(init?.headers as Record<string, string>),
@@ -107,8 +190,8 @@ export async function apiFetch(
   
   // Remove custom options before fetch
   delete (fetchOptions as any).skipAuth;
-  
-  const response = await fetch(url, fetchOptions);
+
+  const response = await fetchWithNativeFallback(path, fetchOptions);
   
   // Handle 401 Unauthorized - clear token and throw error
   if (response.status === 401) {
@@ -368,7 +451,7 @@ async function performLoginRequest(request: LoginRequest): Promise<LoginResponse
   formData.append('username', request.username);
   formData.append('password', request.password);
   
-  const response = await fetch(buildApiUrl('/api/v1/auth/login'), {
+  const response = await fetchWithNativeFallback('/api/v1/auth/login', {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -700,6 +783,37 @@ export async function deleteAccessControlReport(
   return apiFetchJson<void>(`/api/v1/erp/access-control-reports/${reportId}`, {
     method: 'DELETE',
     headers: tenantHeader(tenantId),
+  });
+}
+
+// ============================================================
+// APP UPDATES API
+// ============================================================
+
+export type UpdatePlatform = 'windows' | 'android' | 'web';
+
+export interface CheckAppUpdatesRequest {
+  currentVersion: string;
+  platform: UpdatePlatform;
+}
+
+export interface CheckAppUpdatesResponse {
+  updateAvailable: boolean;
+  version?: string;
+  downloadUrl?: string;
+  fileSize?: number;
+  releaseNotes?: string;
+  isMandatory?: boolean;
+  message?: string;
+}
+
+export async function checkAppUpdates(
+  payload: CheckAppUpdatesRequest
+): Promise<CheckAppUpdatesResponse> {
+  return apiFetchJson<CheckAppUpdatesResponse>('/api/v1/updates/check', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    skipAuth: true,
   });
 }
 
