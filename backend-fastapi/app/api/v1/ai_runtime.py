@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -63,6 +63,53 @@ class PopulateInventoryRequest(BaseModel):
 class CleanInventoryRequest(BaseModel):
     work_id: str
     organization_id: str | None = None
+
+
+class InventoryListFilters(BaseModel):
+    work_id: str
+
+
+class InventoryUpdateRequest(BaseModel):
+    name: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    category: str | None = None
+    last_supplier: str | None = None
+    last_entry_date: str | None = None
+    notes: str | None = None
+    product_code: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+    delivery_note_number: str | None = None
+    batch_number: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    condition: str | None = None
+    location: str | None = None
+    exit_date: str | None = None
+    observations: str | None = None
+
+
+class MergeSuppliersRequest(BaseModel):
+    work_id: str
+    target_supplier: str
+    suppliers_to_merge: list[str] = Field(default_factory=list)
+    update_report_material_groups: bool = False
+
+
+class ValidateFixInventoryRequest(BaseModel):
+    work_id: str
+
+
+class InventoryAnalysisAction(BaseModel):
+    item_id: str
+    action: str
+    suggested_changes: dict[str, Any] | None = None
+
+
+class ApplyInventoryAnalysisRequest(BaseModel):
+    work_id: str
+    results: list[InventoryAnalysisAction] = Field(default_factory=list)
 
 
 def _lovable_api_key() -> str:
@@ -948,6 +995,34 @@ def _parse_analysis_results(content: str, allowed_ids: set[str]) -> list[dict[st
     return valid
 
 
+def _inventory_item_to_dict(item: WorkInventoryItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "work_id": item.work_external_id,
+        "item_type": item.item_type,
+        "category": item.category,
+        "name": item.name,
+        "quantity": item.quantity,
+        "unit": item.unit,
+        "last_entry_date": item.last_entry_date,
+        "last_supplier": item.last_supplier,
+        "notes": item.notes,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        "product_code": item.product_code,
+        "unit_price": item.unit_price,
+        "total_price": item.total_price,
+        "delivery_note_number": item.delivery_note_number,
+        "batch_number": item.batch_number,
+        "brand": item.brand,
+        "model": item.model,
+        "condition": None,
+        "location": None,
+        "exit_date": None,
+        "delivery_note_image": None,
+        "observations": None,
+    }
+
 @router.post("/generate-summary-report")
 async def generate_summary_report(
     payload: GenerateSummaryReportRequest,
@@ -1701,4 +1776,339 @@ async def analyze_inventory(
         "results": results,
         "duplicate_suppliers": duplicates,
         "total_analyzed": len(limited_items),
+    }
+
+
+@router.get("/inventory-items")
+def list_inventory_items(
+    work_id: str = Query(..., min_length=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> list[dict[str, Any]]:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    items = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).all()
+    items_sorted = sorted(items, key=lambda item: (item.name or "").lower())
+    return [_inventory_item_to_dict(item) for item in items_sorted]
+
+
+@router.patch("/inventory-items/{item_id}")
+def update_inventory_item(
+    item_id: str,
+    payload: InventoryUpdateRequest,
+    work_id: str = Query(..., min_length=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    item = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.id == item_id,
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item de inventario no encontrado.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if key == "unit" and isinstance(value, str):
+            setattr(item, key, value.lower().strip())
+        else:
+            setattr(item, key, value)
+
+    if ("quantity" in update_data or "unit_price" in update_data) and ("total_price" not in update_data):
+        if item.unit_price is not None:
+            item.total_price = _as_float(item.quantity) * _as_float(item.unit_price)
+        else:
+            item.total_price = None
+    item.updated_at = datetime.utcnow()
+
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return _inventory_item_to_dict(item)
+
+
+@router.delete("/inventory-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_inventory_item(
+    item_id: str,
+    work_id: str = Query(..., min_length=1),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    item = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.id == item_id,
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item de inventario no encontrado.",
+        )
+    session.delete(item)
+    session.commit()
+
+
+@router.post("/inventory/merge-suppliers")
+def merge_inventory_suppliers(
+    payload: MergeSuppliersRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    target_supplier = (payload.target_supplier or "").strip()
+    suppliers_to_merge = [str(s).strip() for s in payload.suppliers_to_merge if str(s).strip()]
+    if not work_id or not target_supplier or not suppliers_to_merge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id, target_supplier y suppliers_to_merge son obligatorios.",
+        )
+
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    inventory_updated = 0
+    report_groups_updated = 0
+
+    items = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).all()
+    for item in items:
+        if (item.last_supplier or "").strip() in suppliers_to_merge:
+            item.last_supplier = target_supplier
+            item.updated_at = datetime.utcnow()
+            session.add(item)
+            inventory_updated += 1
+
+    if payload.update_report_material_groups:
+        reports = session.exec(
+            select(WorkReport).where(
+                WorkReport.tenant_id == tenant_id,
+                WorkReport.deleted_at.is_(None),
+            )
+        ).all()
+        for report in reports:
+            report_payload = _report_payload_for_work(report, work_id)
+            if report_payload is None:
+                continue
+            groups = _iter_material_groups(report_payload)
+            if not groups:
+                continue
+            changed = False
+            next_groups: list[dict[str, Any]] = []
+            for group in groups:
+                if not isinstance(group, dict):
+                    next_groups.append(group)
+                    continue
+                next_group = dict(group)
+                supplier = str(next_group.get("supplier") or "").strip()
+                if supplier in suppliers_to_merge:
+                    next_group["supplier"] = target_supplier
+                    report_groups_updated += 1
+                    changed = True
+                next_groups.append(next_group)
+            if changed:
+                report_payload["materialGroups"] = next_groups
+                report_payload["material_groups"] = next_groups
+                report.payload = report_payload
+                session.add(report)
+
+    session.commit()
+    return {
+        "success": True,
+        "inventoryUpdated": inventory_updated,
+        "reportGroupsUpdated": report_groups_updated,
+    }
+
+
+@router.post("/inventory/validate-fix")
+def validate_fix_inventory(
+    payload: ValidateFixInventoryRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    if not work_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id is required",
+        )
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    items = session.exec(
+        select(WorkInventoryItem).where(
+            WorkInventoryItem.tenant_id == tenant_id,
+            WorkInventoryItem.work_external_id == work_id,
+        )
+    ).all()
+
+    unit_corrections = {
+        "zahorra": "tn",
+        "arena": "tn",
+        "grava": "tn",
+        "arido": "tn",
+        "árido": "tn",
+        "rechazo": "tn",
+        "hormigon": "m3",
+        "hormigón": "m3",
+    }
+    name_corrections = {
+        "calefaccion": "cafetera",
+        "berenjeno": "puntal",
+    }
+    heavy_machinery = [
+        "tractor",
+        "cuba",
+        "trajilla",
+        "excavadora",
+        "retroexcavadora",
+        "dumper",
+        "bulldozer",
+        "grua movil",
+        "grúa móvil",
+    ]
+
+    fixed_count = 0
+    deleted_count = 0
+    to_delete: list[WorkInventoryItem] = []
+
+    for item in items:
+        name_lower = (item.name or "").lower()
+
+        if (item.category or "").lower() == "herramienta" and any(keyword in name_lower for keyword in heavy_machinery):
+            to_delete.append(item)
+            deleted_count += 1
+            continue
+
+        if item.quantity is None or _as_float(item.quantity) == 0:
+            to_delete.append(item)
+            deleted_count += 1
+            continue
+
+        changed = False
+        if (item.unit or "") == "ud":
+            for keyword, unit in unit_corrections.items():
+                if keyword in name_lower:
+                    item.unit = unit
+                    changed = True
+                    break
+        if (item.unit or "").upper() in {"TN", "T"}:
+            item.unit = "tn"
+            changed = True
+
+        corrected_name = item.name
+        for wrong, correct in name_corrections.items():
+            if wrong in name_lower:
+                corrected_name = re.sub(wrong, correct, corrected_name, flags=re.IGNORECASE)
+                changed = True
+        if corrected_name != item.name:
+            item.name = corrected_name
+
+        if (item.category or "").lower() in {"otros", "varios"} and ("rechazo" in name_lower or "residuo" in name_lower):
+            item.category = "Residuos de obra"
+            changed = True
+        if (item.category or "").lower() == "yeso":
+            item.category = "Morteros y revocos"
+            changed = True
+        if "zahorra" in name_lower and "ac113" in name_lower:
+            item.name = "Zahorra artificial ZA-20"
+            changed = True
+
+        if changed:
+            item.updated_at = datetime.utcnow()
+            session.add(item)
+            fixed_count += 1
+
+    for item in to_delete:
+        session.delete(item)
+
+    session.commit()
+    return {
+        "success": True,
+        "fixedCount": fixed_count,
+        "deletedCount": deleted_count,
+    }
+
+
+@router.post("/inventory/apply-analysis")
+def apply_inventory_analysis(
+    payload: ApplyInventoryAnalysisRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    work_id = (payload.work_id or "").strip()
+    if not work_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_id is required",
+        )
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+
+    deleted_count = 0
+    updated_count = 0
+    error_count = 0
+    errors: list[str] = []
+
+    for result in payload.results:
+        item = session.exec(
+            select(WorkInventoryItem).where(
+                WorkInventoryItem.id == result.item_id,
+                WorkInventoryItem.tenant_id == tenant_id,
+                WorkInventoryItem.work_external_id == work_id,
+            )
+        ).first()
+        if not item:
+            error_count += 1
+            errors.append(f"{result.item_id}: no encontrado")
+            continue
+
+        action = (result.action or "").strip().lower()
+        try:
+            if action == "delete":
+                session.delete(item)
+                deleted_count += 1
+                continue
+            if action == "update" and isinstance(result.suggested_changes, dict):
+                allowed_keys = {"item_type", "category", "unit", "name"}
+                for key, value in result.suggested_changes.items():
+                    if key not in allowed_keys:
+                        continue
+                    if key == "unit" and isinstance(value, str):
+                        setattr(item, key, value.lower().strip())
+                    else:
+                        setattr(item, key, value)
+                item.updated_at = datetime.utcnow()
+                session.add(item)
+                updated_count += 1
+        except Exception as exc:
+            error_count += 1
+            errors.append(f"{result.item_id}: {exc}")
+
+    session.commit()
+    return {
+        "success": True,
+        "deletedCount": deleted_count,
+        "updatedCount": updated_count,
+        "errorCount": error_count,
+        "errors": errors,
     }

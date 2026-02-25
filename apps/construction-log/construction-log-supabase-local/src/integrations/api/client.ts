@@ -1039,6 +1039,90 @@ export interface AnalyzeInventoryResponse {
   total_analyzed: number;
 }
 
+export interface InventoryItemApi {
+  id: string;
+  work_id: string;
+  item_type: 'material' | 'herramienta';
+  category: string | null;
+  name: string;
+  quantity: number;
+  unit: string;
+  last_entry_date: string | null;
+  last_supplier: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  product_code?: string | null;
+  unit_price?: number | null;
+  total_price?: number | null;
+  delivery_note_number?: string | null;
+  batch_number?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  condition?: string | null;
+  location?: string | null;
+  exit_date?: string | null;
+  delivery_note_image?: string | null;
+  observations?: string | null;
+}
+
+export interface InventoryUpdatePayload {
+  name?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  category?: string | null;
+  last_supplier?: string | null;
+  last_entry_date?: string | null;
+  notes?: string | null;
+  product_code?: string | null;
+  unit_price?: number | null;
+  total_price?: number | null;
+  delivery_note_number?: string | null;
+  batch_number?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  condition?: string | null;
+  location?: string | null;
+  exit_date?: string | null;
+  observations?: string | null;
+}
+
+export interface MergeInventorySuppliersRequest {
+  work_id: string;
+  target_supplier: string;
+  suppliers_to_merge: string[];
+  update_report_material_groups?: boolean;
+}
+
+export interface MergeInventorySuppliersResponse {
+  success: boolean;
+  inventoryUpdated: number;
+  reportGroupsUpdated: number;
+}
+
+export interface ValidateFixInventoryResponse {
+  success: boolean;
+  fixedCount: number;
+  deletedCount: number;
+}
+
+export interface ApplyInventoryAnalysisRequest {
+  work_id: string;
+  results: Array<{
+    item_id: string;
+    action: 'delete' | 'update' | 'keep';
+    suggested_changes?: Record<string, unknown>;
+  }>;
+}
+
+export interface ApplyInventoryAnalysisResponse {
+  success: boolean;
+  deletedCount: number;
+  updatedCount: number;
+  errorCount: number;
+  errors: string[];
+}
+
 export interface PopulateInventoryRequest {
   work_id: string;
   force?: boolean;
@@ -1136,6 +1220,57 @@ export async function cleanInventory(
   payload: CleanInventoryRequest
 ): Promise<CleanInventoryResponse> {
   return apiFetchJson<CleanInventoryResponse>('/api/v1/ai/clean-inventory', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listInventoryItems(workId: string): Promise<InventoryItemApi[]> {
+  const query = buildQueryParams({ work_id: workId });
+  return apiFetchJson<InventoryItemApi[]>(`/api/v1/ai/inventory-items${query}`);
+}
+
+export async function updateInventoryItem(
+  workId: string,
+  itemId: string,
+  payload: InventoryUpdatePayload
+): Promise<InventoryItemApi> {
+  const query = buildQueryParams({ work_id: workId });
+  return apiFetchJson<InventoryItemApi>(`/api/v1/ai/inventory-items/${itemId}${query}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInventoryItem(workId: string, itemId: string): Promise<void> {
+  const query = buildQueryParams({ work_id: workId });
+  return apiFetchJson<void>(`/api/v1/ai/inventory-items/${itemId}${query}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function mergeInventorySuppliers(
+  payload: MergeInventorySuppliersRequest
+): Promise<MergeInventorySuppliersResponse> {
+  return apiFetchJson<MergeInventorySuppliersResponse>('/api/v1/ai/inventory/merge-suppliers', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function validateFixInventory(
+  workId: string
+): Promise<ValidateFixInventoryResponse> {
+  return apiFetchJson<ValidateFixInventoryResponse>('/api/v1/ai/inventory/validate-fix', {
+    method: 'POST',
+    body: JSON.stringify({ work_id: workId }),
+  });
+}
+
+export async function applyInventoryAnalysis(
+  payload: ApplyInventoryAnalysisRequest
+): Promise<ApplyInventoryAnalysisResponse> {
+  return apiFetchJson<ApplyInventoryAnalysisResponse>('/api/v1/ai/inventory/apply-analysis', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

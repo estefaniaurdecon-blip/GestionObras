@@ -8,8 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { Package, Wrench, Download, Trash2, Search, RefreshCw, Loader2, Pencil, Minus, ArrowLeft, FileText, GitMerge, CheckCircle, LayoutDashboard, FileCheck, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -23,6 +21,11 @@ import { DeliveryNoteReview } from './DeliveryNoteReview';
 import { InventoryDashboard } from './InventoryDashboard';
 import { useDeliveryNotes } from '@/hooks/useDeliveryNotes';
 import {
+  deleteInventoryItem,
+  listInventoryItems,
+  mergeInventorySuppliers,
+  updateInventoryItem,
+  validateFixInventory,
   cleanInventory as cleanInventoryApi,
   populateInventoryFromReports as populateInventoryFromReportsApi,
 } from '@/integrations/api/client';
@@ -98,7 +101,6 @@ interface WorkInventoryProps {
 
 export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, onBack }) => {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const [materials, setMaterials] = useState<InventoryItem[]>([]);
   const [tools, setTools] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +183,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const cleanInventory = async () => {
-    if (!workId || !user) return;
+    if (!workId) return;
     
     setCleaning(true);
     try {
@@ -198,6 +200,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const mergeSuppliers = async () => {
+    if (!workId) return;
     if (selectedSuppliers.length < 2) {
       toast.error('Selecciona al menos 2 proveedores para fusionar');
       return;
@@ -205,21 +208,17 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
 
     setMergingSuppliers(true);
     try {
-      const targetSupplier = selectedSuppliers[0]; // El primer proveedor será el destino
-      const suppliersToMerge = selectedSuppliers.slice(1); // Los demás se fusionarán en el primero
+      const targetSupplier = selectedSuppliers[0];
+      const suppliersToMerge = selectedSuppliers.slice(1);
+      const response = await mergeInventorySuppliers({
+        work_id: workId,
+        target_supplier: targetSupplier,
+        suppliers_to_merge: suppliersToMerge,
+      });
 
-      // Actualizar todos los items que tengan los proveedores a fusionar
-      for (const supplier of suppliersToMerge) {
-        const { error } = await supabase
-          .from('work_inventory')
-          .update({ last_supplier: targetSupplier })
-          .eq('work_id', workId)
-          .eq('last_supplier', supplier);
-
-        if (error) throw error;
-      }
-
-      toast.success(`Proveedores fusionados en "${targetSupplier}"`);
+      toast.success(`Proveedores fusionados en "${targetSupplier}"`, {
+        description: `${response.inventoryUpdated} elementos actualizados`,
+      });
       setSelectedSuppliers([]);
       setShowMergeConfirm(false);
       loadInventory();
@@ -240,163 +239,16 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const validateAndFixInventory = async () => {
-    if (!workId || !user) return;
-    
+    if (!workId) return;
+
     setValidating(true);
     try {
-      // Obtener el organization_id del usuario
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
+      const data = await validateFixInventory(workId);
 
-      if (!profile?.organization_id) {
-        throw new Error('No se pudo obtener la organización del usuario');
-      }
-
-      // Obtener todos los items del inventario
-      const { data: items, error: fetchError } = await supabase
-        .from('work_inventory')
-        .select('*')
-        .eq('work_id', workId)
-        .eq('organization_id', profile.organization_id);
-
-      if (fetchError) throw fetchError;
-
-      let fixedCount = 0;
-      let deletedCount = 0;
-      const updates: any[] = [];
-      const deletions: string[] = [];
-
-      // Reglas de corrección
-      const unitCorrections: Record<string, string> = {
-        'zahorra': 'tn',
-        'arena': 'tn',
-        'grava': 'tn',
-        'árido': 'tn',
-        'arido': 'tn',
-        'rechazo': 'tn',
-        'hormigón': 'm³',
-        'hormigon': 'm³'
-      };
-
-      const nameCorrections: Record<string, string> = {
-        'calefaccion': 'cafetera',
-        'berenjeno': 'puntal'
-      };
-
-      const heavyMachineryKeywords = ['tractor', 'cuba', 'trajilla', 'excavadora', 'retroexcavadora', 'dumper', 'bulldozer', 'grúa móvil', 'grua movil'];
-
-      for (const item of items || []) {
-        const nameLower = (item.name || '').toLowerCase();
-        let shouldUpdate = false;
-        let shouldDelete = false;
-        const updates_to_apply: any = {};
-
-        // 1. CRÍTICO: Detectar maquinaria pesada clasificada como herramienta
-        if (item.category?.toLowerCase() === 'herramienta') {
-          for (const keyword of heavyMachineryKeywords) {
-            if (nameLower.includes(keyword)) {
-              shouldDelete = true;
-              deletions.push(item.id);
-              deletedCount++;
-              break;
-            }
-          }
-        }
-
-        if (shouldDelete) continue;
-
-        // 2. Eliminar items con cantidad 0
-        if (item.quantity === 0 || item.quantity === null) {
-          deletions.push(item.id);
-          deletedCount++;
-          continue;
-        }
-
-        // 3. Corregir unidades incorrectas para áridos
-        if (item.unit === 'ud') {
-          for (const [keyword, correctUnit] of Object.entries(unitCorrections)) {
-            if (nameLower.includes(keyword)) {
-              updates_to_apply.unit = correctUnit;
-              shouldUpdate = true;
-              break;
-            }
-          }
-        }
-
-        // 4. Estandarizar unidades de toneladas
-        if (item.unit === 'TN' || item.unit === 'T') {
-          updates_to_apply.unit = 'tn';
-          shouldUpdate = true;
-        }
-
-        // 5. Corregir nombres con errores ortográficos
-        let correctedName = item.name;
-        for (const [wrong, correct] of Object.entries(nameCorrections)) {
-          if (nameLower.includes(wrong)) {
-            correctedName = correctedName.replace(new RegExp(wrong, 'gi'), correct);
-            updates_to_apply.name = correctedName;
-            shouldUpdate = true;
-          }
-        }
-
-        // 6. Mejorar categorías genéricas
-        if (item.category === 'otros' || item.category === 'varios') {
-          if (nameLower.includes('rechazo') || nameLower.includes('residuo')) {
-            updates_to_apply.category = 'Residuos de obra';
-            shouldUpdate = true;
-          }
-        }
-
-        if (item.category === 'yeso') {
-          updates_to_apply.category = 'Morteros y revocos';
-          shouldUpdate = true;
-        }
-
-        // 7. Normalizar nombres de zahorra
-        if (nameLower.includes('zahorra') && nameLower.includes('ac113')) {
-          updates_to_apply.name = 'Zahorra artificial ZA-20';
-          shouldUpdate = true;
-        }
-
-        if (shouldUpdate) {
-          updates.push({
-            id: item.id,
-            ...updates_to_apply
-          });
-          fixedCount++;
-        }
-      }
-
-      // Aplicar eliminaciones
-      if (deletions.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('work_inventory')
-          .delete()
-          .in('id', deletions);
-
-        if (deleteError) throw deleteError;
-      }
-
-      // Aplicar actualizaciones
-      for (const update of updates) {
-        const { id, ...updateData } = update;
-        const { error: updateError } = await supabase
-          .from('work_inventory')
-          .update(updateData)
-          .eq('id', id);
-
-        if (updateError) {
-          console.error('Error updating item:', updateError);
-        }
-      }
-
-      toast.success("Validación completada", {
-        description: `${fixedCount} items corregidos, ${deletedCount} items eliminados`
+      toast.success('Validación completada', {
+        description: `${data.fixedCount} items corregidos, ${data.deletedCount} items eliminados`,
       });
-      
+
       loadInventory();
     } catch (error) {
       console.error('Error validating inventory:', error);
@@ -407,26 +259,17 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const loadInventory = async () => {
-    if (!user) return;
-    
+    if (!workId) return;
+
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('work_inventory')
-        .select('*')
-        .eq('work_id', workId)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-
-      if (data) {
-        const typedData = data as InventoryItem[];
-        setMaterials(typedData.filter(item => item.item_type === 'material'));
-        setTools(typedData.filter(item => item.item_type === 'herramienta'));
-      }
+      const data = await listInventoryItems(workId);
+      const typedData = data as InventoryItem[];
+      setMaterials(typedData.filter(item => item.item_type === 'material'));
+      setTools(typedData.filter(item => item.item_type === 'herramienta'));
     } catch (error) {
       console.error('Error loading inventory:', error);
-      toast.error("No se pudo cargar el inventario");
+      toast.error('No se pudo cargar el inventario');
     } finally {
       setLoading(false);
     }
@@ -434,7 +277,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
 
   useEffect(() => {
     loadInventory();
-  }, [workId, user]);
+  }, [workId]);
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item);
@@ -471,35 +314,26 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       // Normalizar la unidad antes de guardar
       const normalizedUnit = values.unit.toLowerCase().trim();
 
-      const { error } = await supabase
-        .from("work_inventory")
-        .update({
-          name: values.name,
-          quantity: values.quantity,
-          unit: normalizedUnit,
-          category: values.category || null,
-          last_supplier: values.last_supplier || null,
-          last_entry_date: values.last_entry_date || null,
-          notes: values.notes || null,
-          product_code: values.product_code || null,
-          unit_price: values.unit_price || null,
-          total_price: totalPrice,
-          delivery_note_number: values.delivery_note_number || null,
-          batch_number: values.batch_number || null,
-          brand: values.brand || null,
-          model: values.model || null,
-          condition: values.condition || null,
-          location: values.location || null,
-          exit_date: values.exit_date || null,
-          observations: values.observations || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editingItem.id);
-
-      if (error) {
-        console.error("Error details:", error);
-        throw error;
-      }
+      await updateInventoryItem(workId, editingItem.id, {
+        name: values.name,
+        quantity: values.quantity,
+        unit: normalizedUnit,
+        category: values.category || null,
+        last_supplier: values.last_supplier || null,
+        last_entry_date: values.last_entry_date || null,
+        notes: values.notes || null,
+        product_code: values.product_code || null,
+        unit_price: values.unit_price ?? null,
+        total_price: totalPrice,
+        delivery_note_number: values.delivery_note_number || null,
+        batch_number: values.batch_number || null,
+        brand: values.brand || null,
+        model: values.model || null,
+        condition: values.condition || null,
+        location: values.location || null,
+        exit_date: values.exit_date || null,
+        observations: values.observations || null,
+      });
 
       toast.success("Elemento actualizado correctamente");
       setEditDialogOpen(false);
@@ -517,15 +351,10 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de eliminar este elemento del inventario?')) return;
+    if (!window.confirm('Â¿EstÃ¡s seguro de eliminar este elemento del inventario?')) return;
 
     try {
-      const { error } = await supabase
-        .from('work_inventory')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteInventoryItem(workId, id);
 
       toast.success("Elemento eliminado del inventario");
       await loadInventory();
@@ -551,8 +380,8 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const generateWorksheet = (items: InventoryItem[], sheetName: string) => {
       const wsData = [
         [
-          'Nombre', 'Tipo', 'Categoría', 'Código', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
-          'Precio Unitario', 'Precio Total', 'Nº Albarán', 'Lote/Serie', 'Proveedor', 'Ubicación',
+          'Nombre', 'Tipo', 'CategorÃ­a', 'CÃ³digo', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
+          'Precio Unitario', 'Precio Total', 'NÂº AlbarÃ¡n', 'Lote/Serie', 'Proveedor', 'UbicaciÃ³n',
           'Estado', 'Fecha Entrada', 'Fecha Salida', 'Observaciones'
         ],
         ...items.map(item => [
@@ -597,7 +426,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const itemsWithDeliveryNotes = allItems.filter(item => item.delivery_note_number);
   
     if (itemsWithDeliveryNotes.length === 0) {
-      toast.error('No hay elementos con albarán para exportar.');
+      toast.error('No hay elementos con albarÃ¡n para exportar.');
       setExportingNotes(false);
       return;
     }
@@ -608,8 +437,8 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const generateWorksheet = (items: InventoryItem[], sheetName: string) => {
       const wsData = [
         [
-          'Nombre', 'Tipo', 'Categoría', 'Código', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
-          'Precio Unitario', 'Precio Total', 'Nº Albarán', 'Lote/Serie', 'Proveedor', 'Ubicación',
+          'Nombre', 'Tipo', 'CategorÃ­a', 'CÃ³digo', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
+          'Precio Unitario', 'Precio Total', 'NÂº AlbarÃ¡n', 'Lote/Serie', 'Proveedor', 'UbicaciÃ³n',
           'Estado', 'Fecha Entrada', 'Fecha Salida', 'Observaciones'
         ],
         ...items.map(item => [
@@ -641,7 +470,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   const filterItems = (items: InventoryItem[]) => {
     let filtered = items;
     
-    // Filtrar por búsqueda de texto
+    // Filtrar por bÃºsqueda de texto
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(item =>
@@ -653,7 +482,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       );
     }
     
-    // Filtrar por mes y año
+    // Filtrar por mes y aÃ±o
     if (filterMonth !== null || filterYear !== null) {
       filtered = filtered.filter(item => {
         if (!item.last_entry_date) return false;
@@ -677,13 +506,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     return filtered;
   };
 
-  // Agrupar items por proveedor, luego por fecha y número de albarán
+  // Agrupar items por proveedor, luego por fecha y nÃºmero de albarÃ¡n
   const groupItemsByDelivery = (items: InventoryItem[]) => {
     const grouped: Record<string, Record<string, InventoryItem[]>> = {};
 
     items.forEach(item => {
       const supplier = item.last_supplier || 'Sin proveedor';
-      const deliveryKey = `${item.delivery_note_number || 'Sin albarán'}_${item.last_entry_date || 'Sin fecha'}`;
+      const deliveryKey = `${item.delivery_note_number || 'Sin albarÃ¡n'}_${item.last_entry_date || 'Sin fecha'}`;
       
       if (!grouped[supplier]) {
         grouped[supplier] = {};
@@ -734,13 +563,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                     <div className="text-left">
                       <div className="font-semibold">{supplier}</div>
                       <div className="text-sm text-muted-foreground">
-                        {supplierItemCount} elementos • {Object.keys(deliveries).length} albaranes
+                        {supplierItemCount} elementos â€¢ {Object.keys(deliveries).length} albaranes
                       </div>
                     </div>
                   </div>
                   {supplierTotal > 0 && (
                     <Badge variant="secondary" className="text-base font-semibold">
-                      {supplierTotal.toFixed(2)}€
+                      {supplierTotal.toFixed(2)}â‚¬
                     </Badge>
                   )}
                 </div>
@@ -761,10 +590,10 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                           <div className="flex items-center justify-between w-full pr-4">
                             <div className="text-left">
                               <div className="font-medium text-sm">
-                                {deliveryNote !== 'Sin albarán' && (
+                                {deliveryNote !== 'Sin albarÃ¡n' && (
                                   <span className="font-mono">{deliveryNote}</span>
                                 )}
-                                {deliveryNote === 'Sin albarán' && (
+                                {deliveryNote === 'Sin albarÃ¡n' && (
                                   <span className="text-muted-foreground">{deliveryNote}</span>
                                 )}
                               </div>
@@ -772,12 +601,12 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                 {entryDate !== 'Sin fecha' 
                                   ? format(new Date(entryDate), "d 'de' MMMM, yyyy", { locale: es })
                                   : 'Sin fecha'
-                                } • {deliveryItems.length} elementos
+                                } â€¢ {deliveryItems.length} elementos
                               </div>
                             </div>
                             {deliveryTotal > 0 && (
                               <Badge variant="outline" className="font-semibold">
-                                {deliveryTotal.toFixed(2)}€
+                                {deliveryTotal.toFixed(2)}â‚¬
                               </Badge>
                             )}
                           </div>
@@ -788,13 +617,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead className="h-8">Código</TableHead>
+                                  <TableHead className="h-8">CÃ³digo</TableHead>
                                   <TableHead className="h-8">Nombre</TableHead>
                                   <TableHead className="h-8">Marca/Modelo</TableHead>
                                   <TableHead className="h-8">Cantidad</TableHead>
                                   <TableHead className="h-8">P. Unit.</TableHead>
                                   <TableHead className="h-8">P. Total</TableHead>
-                                  <TableHead className="h-8">Ubicación</TableHead>
+                                  <TableHead className="h-8">UbicaciÃ³n</TableHead>
                                   <TableHead className="h-8">Estado</TableHead>
                                   <TableHead className="h-8">Acciones</TableHead>
                                 </TableRow>
@@ -808,16 +637,16 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                       {item.brand && item.model ? `${item.brand} ${item.model}` : item.brand || item.model || '-'}
                                     </TableCell>
                                     <TableCell>{item.quantity} {item.unit}</TableCell>
-                                    <TableCell>{item.unit_price ? `${item.unit_price.toFixed(2)}€` : '-'}</TableCell>
+                                    <TableCell>{item.unit_price ? `${item.unit_price.toFixed(2)}â‚¬` : '-'}</TableCell>
                                     <TableCell className="font-semibold">
-                                      {item.total_price ? `${item.total_price.toFixed(2)}€` : '-'}
+                                      {item.total_price ? `${item.total_price.toFixed(2)}â‚¬` : '-'}
                                     </TableCell>
                                     <TableCell>{item.location || '-'}</TableCell>
                                     <TableCell>
                                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                         item.condition === 'nuevo' ? 'bg-green-100 text-green-800' :
                                         item.condition === 'usado' ? 'bg-yellow-100 text-yellow-800' :
-                                        item.condition === 'dañado' ? 'bg-red-100 text-red-800' :
+                                        item.condition === 'daÃ±ado' ? 'bg-red-100 text-red-800' :
                                         'bg-gray-100 text-gray-800'
                                       }`}>
                                         {item.condition || 'nuevo'}
@@ -863,7 +692,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                     </div>
                                     {item.total_price && (
                                       <Badge variant="secondary" className="font-semibold">
-                                        {item.total_price.toFixed(2)}€
+                                        {item.total_price.toFixed(2)}â‚¬
                                       </Badge>
                                     )}
                                   </div>
@@ -888,12 +717,12 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                     {item.unit_price && (
                                       <div>
                                         <span className="text-muted-foreground">P. Unit.:</span>
-                                        <p className="font-medium">{item.unit_price.toFixed(2)}€</p>
+                                        <p className="font-medium">{item.unit_price.toFixed(2)}â‚¬</p>
                                       </div>
                                     )}
                                     {item.location && (
                                       <div>
-                                        <span className="text-muted-foreground">Ubicación:</span>
+                                        <span className="text-muted-foreground">UbicaciÃ³n:</span>
                                         <p className="font-medium">{item.location}</p>
                                       </div>
                                     )}
@@ -1051,7 +880,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Buscar por nombre, código, marca..."
+              placeholder="Buscar por nombre, cÃ³digo, marca..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -1087,16 +916,16 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
             </div>
             
             <div className="flex-1 min-w-[150px]">
-              <label className="text-sm font-medium mb-1 block">Año</label>
+              <label className="text-sm font-medium mb-1 block">AÃ±o</label>
               <Select
                 value={filterYear !== null ? filterYear.toString() : "all"}
                 onValueChange={(value) => setFilterYear(value === "all" ? null : parseInt(value))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos los años" />
+                  <SelectValue placeholder="Todos los aÃ±os" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los años</SelectItem>
+                  <SelectItem value="all">Todos los aÃ±os</SelectItem>
                   {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
@@ -1210,7 +1039,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="product_code"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Código</FormLabel>
+                      <FormLabel>CÃ³digo</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Ej: MAT-001" />
                       </FormControl>
@@ -1224,7 +1053,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="category"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Categoría</FormLabel>
+                      <FormLabel>CategorÃ­a</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -1297,13 +1126,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                           <SelectItem value="kg">kg (Kilogramos)</SelectItem>
                           <SelectItem value="t">t (Toneladas)</SelectItem>
                           <SelectItem value="m">m (Metros)</SelectItem>
-                          <SelectItem value="m²">m² (Metros cuadrados)</SelectItem>
-                          <SelectItem value="m³">m³ (Metros cúbicos)</SelectItem>
+                          <SelectItem value="mÂ²">mÂ² (Metros cuadrados)</SelectItem>
+                          <SelectItem value="mÂ³">mÂ³ (Metros cÃºbicos)</SelectItem>
                           <SelectItem value="l">l (Litros)</SelectItem>
                           <SelectItem value="ml">ml (Mililitros)</SelectItem>
                           <SelectItem value="g">g (Gramos)</SelectItem>
                           <SelectItem value="h">h (Horas)</SelectItem>
-                          <SelectItem value="día">día (Días)</SelectItem>
+                          <SelectItem value="dÃ­a">dÃ­a (DÃ­as)</SelectItem>
                           <SelectItem value="mes">mes (Meses)</SelectItem>
                           <SelectItem value="pza">pza (Piezas)</SelectItem>
                           <SelectItem value="caja">caja (Cajas)</SelectItem>
@@ -1323,7 +1152,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="unit_price"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Precio Unitario (€)</FormLabel>
+                      <FormLabel>Precio Unitario (â‚¬)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -1342,7 +1171,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="delivery_note_number"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nº Albarán</FormLabel>
+                      <FormLabel>NÂº AlbarÃ¡n</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -1384,7 +1213,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Ubicación</FormLabel>
+                      <FormLabel>UbicaciÃ³n</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Planta 2, Zona A" />
                       </FormControl>
@@ -1408,7 +1237,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                         <SelectContent>
                           <SelectItem value="nuevo">Nuevo</SelectItem>
                           <SelectItem value="usado">Usado</SelectItem>
-                          <SelectItem value="dañado">Dañado</SelectItem>
+                          <SelectItem value="daÃ±ado">DaÃ±ado</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1476,15 +1305,15 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
           <AlertDialogHeader>
             <AlertDialogTitle>Fusionar Proveedores</AlertDialogTitle>
             <AlertDialogDescription>
-              Los siguientes proveedores se fusionarán en <strong>"{selectedSuppliers[0]}"</strong>:
+              Los siguientes proveedores se fusionarÃ¡n en <strong>"{selectedSuppliers[0]}"</strong>:
               <ul className="mt-2 ml-4 list-disc space-y-1">
                 {selectedSuppliers.slice(1).map(supplier => (
                   <li key={supplier} className="text-sm">{supplier}</li>
                 ))}
               </ul>
               <p className="mt-3 text-destructive font-medium">
-                Todos los albaranes e ítems de los proveedores fusionados se asignarán a "{selectedSuppliers[0]}".
-                Esta acción no se puede deshacer.
+                Todos los albaranes e Ã­tems de los proveedores fusionados se asignarÃ¡n a "{selectedSuppliers[0]}".
+                Esta acciÃ³n no se puede deshacer.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1506,4 +1335,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     </Card>
   );
 };
+
+
+
 

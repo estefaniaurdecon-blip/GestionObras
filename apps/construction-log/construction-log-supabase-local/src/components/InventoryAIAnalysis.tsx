@@ -6,9 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { analyzeInventory } from '@/integrations/api/client';
+import { analyzeInventory, applyInventoryAnalysis, mergeInventorySuppliers } from '@/integrations/api/client';
 
 interface AnalysisResult {
   item_id: string;
@@ -96,76 +95,33 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
     setApplying(true);
     let unifiedInReportsCount = 0;
     let unifiedInInventoryCount = 0;
-    
+
     try {
       for (const [index, duplicate] of duplicateSuppliers.entries()) {
         const keepSupplier = selectedSuppliers[index];
-        const suppliersToRemove = duplicate.suppliers.filter(s => s !== keepSupplier);
-        
-        console.log(`Unifying suppliers: ${suppliersToRemove.join(', ')} → ${keepSupplier}`);
+        const suppliersToRemove = duplicate.suppliers.filter((s) => s !== keepSupplier);
 
-        // Step 1: Update work_reports material_groups
-        const { data: workReports, error: fetchError } = await supabase
-          .from('work_reports')
-          .select('id, material_groups')
-          .eq('work_id', workId);
+        if (!keepSupplier || suppliersToRemove.length === 0) continue;
 
-        if (fetchError) {
-          console.error('Error fetching work reports:', fetchError);
-          throw fetchError;
-        }
+        const response = await mergeInventorySuppliers({
+          work_id: workId,
+          target_supplier: keepSupplier,
+          suppliers_to_merge: suppliersToRemove,
+          update_report_material_groups: true,
+        });
 
-        if (workReports) {
-          for (const report of workReports) {
-            let materialGroups = Array.isArray(report.material_groups) ? report.material_groups : [];
-            let hasChanges = false;
-
-            materialGroups = materialGroups.map((group: any) => {
-              if (suppliersToRemove.includes(group.supplier)) {
-                hasChanges = true;
-                unifiedInReportsCount++;
-                return { ...group, supplier: keepSupplier };
-              }
-              return group;
-            });
-
-            if (hasChanges) {
-              const { error: updateError } = await supabase
-                .from('work_reports')
-                .update({ material_groups: materialGroups })
-                .eq('id', report.id);
-
-              if (updateError) {
-                console.error('Error updating work report:', updateError);
-              }
-            }
-          }
-        }
-
-        // Step 2: Update work_inventory
-        for (const oldSupplier of suppliersToRemove) {
-          const { error } = await supabase
-            .from('work_inventory')
-            .update({ last_supplier: keepSupplier })
-            .eq('work_id', workId)
-            .eq('last_supplier', oldSupplier);
-          
-          if (error) {
-            console.error('Error unifying supplier in inventory:', error);
-          } else {
-            unifiedInInventoryCount++;
-          }
-        }
+        unifiedInReportsCount += response.reportGroupsUpdated || 0;
+        unifiedInInventoryCount += response.inventoryUpdated || 0;
       }
-      
+
       toast({
         title: "Proveedores unificados exitosamente",
         description: `${unifiedInReportsCount} albaranes y ${unifiedInInventoryCount} items de inventario actualizados`,
       });
-      
+
       setDuplicateSuppliers([]);
       setSelectedSuppliers({});
-      
+
       if (onAnalysisComplete) {
         await onAnalysisComplete();
       }
@@ -180,80 +136,30 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
       setApplying(false);
     }
   };
-
   const handleApplyChanges = async () => {
     setApplying(true);
 
     try {
-      let deletedCount = 0;
-      let updatedCount = 0;
-      let skippedCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
+      const validResults = results
+        .filter((result) => {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(result.item_id);
+        })
+        .map((result) => ({
+          item_id: result.item_id,
+          action: result.action,
+          suggested_changes: result.suggested_changes,
+        }));
 
-      for (const result of results) {
-        // Validar que el item_id sea un UUID válido
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(result.item_id)) {
-          console.error(`Invalid UUID format for item: ${result.original_name} - ID: ${result.item_id}`);
-          errors.push(`${result.original_name}: ID inválido`);
-          errorCount++;
-          continue;
-        }
+      const response = await applyInventoryAnalysis({
+        work_id: workId,
+        results: validResults,
+      });
 
-        try {
-          if (result.action === 'delete') {
-            const { error } = await supabase
-              .from('work_inventory')
-              .delete()
-              .eq('id', result.item_id);
-
-            if (error) {
-              console.error(`Error deleting ${result.original_name}:`, error);
-              errors.push(`${result.original_name}: ${error.message}`);
-              errorCount++;
-            } else {
-              deletedCount++;
-            }
-          } else if (result.action === 'update' && result.suggested_changes) {
-            // Intentar actualizar
-            const { error } = await supabase
-              .from('work_inventory')
-              .update(result.suggested_changes)
-              .eq('id', result.item_id);
-
-            if (error) {
-              // Si es un error de duplicado (23505), marcar como item duplicado para eliminar
-              if (error.code === '23505') {
-                console.warn(`Duplicate detected for ${result.original_name}, marking for deletion instead`);
-                const { error: deleteError } = await supabase
-                  .from('work_inventory')
-                  .delete()
-                  .eq('id', result.item_id);
-                
-                if (deleteError) {
-                  console.error(`Error deleting duplicate ${result.original_name}:`, deleteError);
-                  errors.push(`${result.original_name}: No se pudo eliminar duplicado`);
-                  errorCount++;
-                } else {
-                  deletedCount++;
-                  console.log(`Deleted duplicate: ${result.original_name}`);
-                }
-              } else {
-                console.error(`Error updating ${result.original_name}:`, error);
-                errors.push(`${result.original_name}: ${error.message}`);
-                errorCount++;
-              }
-            } else {
-              updatedCount++;
-            }
-          }
-        } catch (itemError: any) {
-          console.error(`Exception processing ${result.original_name}:`, itemError);
-          errors.push(`${result.original_name}: ${itemError.message}`);
-          errorCount++;
-        }
-      }
+      const deletedCount = response.deletedCount || 0;
+      const updatedCount = response.updatedCount || 0;
+      const errorCount = response.errorCount || 0;
+      const errors = response.errors || [];
 
       if (errorCount > 0) {
         toast({
@@ -271,14 +177,13 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
 
       setResults([]);
       setShowResults(false);
-      
-      // Wait a moment to ensure DB changes are committed
+
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       if (onAnalysisComplete) {
         await onAnalysisComplete();
       }
-      
+
       if (errorCount === 0) {
         toast({
           title: "Inventario actualizado",
@@ -296,7 +201,6 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
       setApplying(false);
     }
   };
-
   const getActionIcon = (action: string) => {
     switch (action) {
       case 'delete': return <XCircle className="h-5 w-5 text-destructive" />;
@@ -324,11 +228,11 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          Análisis de Inventario con IA
+          AnÃ¡lisis de Inventario con IA
         </CardTitle>
         <CardDescription>
-          La IA analizará el inventario para clasificar correctamente materiales y herramientas, 
-          corregir valores erróneos y eliminar maquinaria incorrectamente categorizada.
+          La IA analizarÃ¡ el inventario para clasificar correctamente materiales y herramientas, 
+          corregir valores errÃ³neos y eliminar maquinaria incorrectamente categorizada.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -346,7 +250,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Iniciar Análisis Exhaustivo
+                Iniciar AnÃ¡lisis Exhaustivo
               </>
             )}
           </Button>
@@ -434,7 +338,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                Resultados del análisis: {deleteCount} items a eliminar, {updateCount} items a actualizar, {keepCount} items correctos.
+                Resultados del anÃ¡lisis: {deleteCount} items a eliminar, {updateCount} items a actualizar, {keepCount} items correctos.
               </AlertDescription>
             </Alert>
 
@@ -454,16 +358,16 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
                           <strong>Cambios sugeridos:</strong>
                           <ul className="mt-1 space-y-1">
                             {result.suggested_changes.item_type && (
-                              <li>• Tipo: {result.suggested_changes.item_type}</li>
+                              <li>â€¢ Tipo: {result.suggested_changes.item_type}</li>
                             )}
                             {result.suggested_changes.category && (
-                              <li>• Categoría: {result.suggested_changes.category}</li>
+                              <li>â€¢ CategorÃ­a: {result.suggested_changes.category}</li>
                             )}
                             {result.suggested_changes.unit && (
-                              <li>• Unidad: {result.suggested_changes.unit}</li>
+                              <li>â€¢ Unidad: {result.suggested_changes.unit}</li>
                             )}
                             {result.suggested_changes.name && (
-                              <li>• Nombre: {result.suggested_changes.name}</li>
+                              <li>â€¢ Nombre: {result.suggested_changes.name}</li>
                             )}
                           </ul>
                         </div>
@@ -504,7 +408,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
           <Alert>
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
-              No se encontraron items que requieran correcciones. El inventario está correcto.
+              No se encontraron items que requieran correcciones. El inventario estÃ¡ correcto.
             </AlertDescription>
           </Alert>
         )}
@@ -512,3 +416,4 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
     </Card>
   );
 };
+

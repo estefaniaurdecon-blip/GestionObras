@@ -14,7 +14,7 @@ rg -n "VITE_SUPABASE"
 ```
 
 Estado actual:
-- Imports runtime `from '@/integrations/supabase/client'`: **50 archivos**.
+- Imports runtime `from '@/integrations/supabase/client'`: **48 archivos**.
 - Invocaciones `supabase.functions.invoke(...)`: **0** (bloqueante resuelto).
 - `VITE_SUPABASE` en `src`: **0**.
 - `VITE_SUPABASE` residual fuera de `src`: `docker-compose.yml` + referencias históricas en documentación.
@@ -25,10 +25,10 @@ Estado actual:
 |---|---|---|---|---|
 | `src/components/AdvancedReports.tsx` | Resumen IA avanzado | `generate-summary-report` | `POST /api/v1/ai/generate-summary-report` | Migrado (2026-02-25) |
 | `src/hooks/useCompanyStandardization.ts` | Estandarización de empresas | `standardize-companies` | `POST /api/v1/ai/standardize-companies` | Migrado (2026-02-25) |
-| `src/components/InventoryAIAnalysis.tsx` | IA sobre inventario | `analyze-inventory` | `POST /api/v1/ai/analyze-inventory` | Migrado (2026-02-25) |
+| `src/components/InventoryAIAnalysis.tsx` | IA sobre inventario | `analyze-inventory`, `merge-suppliers`, `apply-analysis` | `POST /api/v1/ai/analyze-inventory`<br>`POST /api/v1/ai/inventory/merge-suppliers`<br>`POST /api/v1/ai/inventory/apply-analysis` | Migrado (2026-02-25) |
 | `src/components/OrganizationSettings.tsx` | Detección de colores de logo | `analyze-logo-colors` | `POST /api/v1/ai/analyze-logo-colors` | Migrado (2026-02-25) |
 | `src/hooks/useWorkReportImages.ts` | Análisis IA de imagen de parte | `analyze-work-image` | `POST /api/v1/ai/analyze-work-image` | Migrado (2026-02-25) |
-| `src/components/WorkInventory.tsx` | Poblado/limpieza de inventario | `populate-inventory-from-reports`, `clean-inventory` | `POST /api/v1/ai/populate-inventory-from-reports`<br>`POST /api/v1/ai/clean-inventory` | Migrado (2026-02-25) |
+| `src/components/WorkInventory.tsx` | Poblado/limpieza/edición de inventario | `populate-inventory-from-reports`, `clean-inventory`, lecturas/escrituras directas `supabase.from('work_inventory')` | `POST /api/v1/ai/populate-inventory-from-reports`<br>`POST /api/v1/ai/clean-inventory`<br>`GET /api/v1/ai/inventory-items`<br>`PATCH /api/v1/ai/inventory-items/{item_id}`<br>`DELETE /api/v1/ai/inventory-items/{item_id}`<br>`POST /api/v1/ai/inventory/validate-fix`<br>`POST /api/v1/ai/inventory/merge-suppliers` | Migrado (2026-02-25) |
 | `src/utils/archivedExportUtils.ts`<br>`src/utils/exportUtils.ts`<br>`src/utils/weeklyMonthlyExportUtils.ts`<br>`src/utils/pdfGenerator.ts` | Exportaciones (datos ERP + storage) | - | `GET /api/v1/erp/exports/*` + `GET /api/v1/files/public-url` | Pendiente |
 | `src/components/CompanyPortfolio.tsx` | Portfolio de empresa y relaciones | - | `GET/POST/PATCH/DELETE /api/v1/erp/company-portfolio*` | Pendiente |
 | `src/components/CalendarTasks.tsx` | Tareas de calendario y recordatorios | - | `GET/POST/PATCH/DELETE /api/v1/erp/calendar-tasks*` | Pendiente |
