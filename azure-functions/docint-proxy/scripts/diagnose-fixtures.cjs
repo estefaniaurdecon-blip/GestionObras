@@ -7,7 +7,7 @@ const { DocIntClient } = require('../dist/src/docint/client.js');
 const {
   parsePrimaryInvoice,
   parseLayoutOrRead,
-  shouldFallbackToLayout,
+  shouldUseFallbackModel,
 } = require('../dist/src/docint/parsers.js');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -153,7 +153,7 @@ async function run() {
       const primaryParsed = parseByModel(settings.modelPrimary, primaryRaw);
 
       let fallbackParsed = null;
-      if (shouldFallbackToLayout(primaryParsed)) {
+      if (shouldUseFallbackModel(primaryParsed)) {
         const fallbackRaw = await client.analyzeWithModel({
           modelId: settings.modelFallback,
           base64Source,

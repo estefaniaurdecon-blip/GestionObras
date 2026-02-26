@@ -4,7 +4,7 @@ import {
   DOCINT_OUTPUT_CONTENT_FORMAT,
   DocIntClient,
 } from '../docint/client';
-import { parseLayoutOrRead, parsePrimaryInvoice, shouldFallbackToLayout } from '../docint/parsers';
+import { parseLayoutOrRead, parsePrimaryInvoice, shouldUseFallbackModel } from '../docint/parsers';
 import type { ParsedDocIntOutput, ProcessAlbaranResponse } from '../schema';
 
 const toInt = (value: string | undefined, fallback: number): number => {
@@ -223,7 +223,7 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
     let selected = parseByModel(config.modelPrimary, primaryRaw);
     let modelUsed = config.modelPrimary;
 
-    if (shouldFallbackToLayout(selected)) {
+    if (shouldUseFallbackModel(selected)) {
       const fallbackRaw = await client.analyzeWithModel({
         modelId: config.modelFallback,
         base64Source,
