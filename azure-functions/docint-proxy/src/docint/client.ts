@@ -1,8 +1,5 @@
 import type { DocIntAnalyzeResponse } from '../schema';
 
-export const DOCINT_ANALYZE_FEATURES = ['ocrHighResolution', 'keyValuePairs'] as const;
-export const DOCINT_OUTPUT_CONTENT_FORMAT = 'markdown';
-
 export type DocIntClientConfig = {
   endpoint: string;
   apiKey: string;
@@ -63,10 +60,9 @@ export class DocIntClient {
     const params = new URLSearchParams();
     params.set('api-version', this.config.apiVersion);
     params.set('locale', this.config.locale);
-    for (const feature of DOCINT_ANALYZE_FEATURES) {
-      params.append('features', feature);
-    }
-    params.set('outputContentFormat', DOCINT_OUTPUT_CONTENT_FORMAT);
+    params.append('features', 'ocrHighResolution');
+    params.append('features', 'keyValuePairs');
+    params.set('outputContentFormat', 'markdown');
     if (this.config.pagesLimit?.trim()) {
       params.set('pages', this.config.pagesLimit.trim());
     }

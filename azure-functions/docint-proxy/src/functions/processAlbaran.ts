@@ -1,10 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import {
-  DOCINT_ANALYZE_FEATURES,
-  DOCINT_OUTPUT_CONTENT_FORMAT,
-  DocIntClient,
-} from '../docint/client';
-import { parseLayoutOrRead, parsePrimaryInvoice, shouldUseFallbackModel } from '../docint/parsers';
+import { DocIntClient } from '../docint/client';
+import { parseLayoutOrRead, parsePrimaryInvoice, shouldFallbackToLayout } from '../docint/parsers';
 import type { ParsedDocIntOutput, ProcessAlbaranResponse } from '../schema';
 
 const toInt = (value: string | undefined, fallback: number): number => {
@@ -142,35 +138,6 @@ const isLikelyInvoiceValue = (value: string): boolean => {
   return true;
 };
 
-const buildDocIntMeta = (
-  config: ReturnType<typeof getConfig>,
-  modelUsed: string,
-) => ({
-  modelPrimary: config.modelPrimary,
-  modelFallback: config.modelFallback,
-  modelUsed,
-  apiVersion: config.apiVersion,
-  locale: config.locale,
-  pages: config.pagesLimit?.trim() || null,
-  features: [...DOCINT_ANALYZE_FEATURES],
-  outputContentFormat: DOCINT_OUTPUT_CONTENT_FORMAT,
-});
-
-const assertAzureTraceability = (response: ProcessAlbaranResponse): void => {
-  if (response.source !== 'azure') {
-    throw new Error('TraceabilityInvariant:InvalidSource');
-  }
-  if (!response.docIntMeta) {
-    throw new Error('TraceabilityInvariant:MissingDocIntMeta');
-  }
-  if (!response.docIntMeta.modelUsed?.trim()) {
-    throw new Error('TraceabilityInvariant:MissingModelUsed');
-  }
-  if (!response.docIntMeta.apiVersion?.trim()) {
-    throw new Error('TraceabilityInvariant:MissingApiVersion');
-  }
-};
-
 const processAlbaran = async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
   const startedAt = Date.now();
 
@@ -221,18 +188,15 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
       contentType: fileMimeType,
     });
     let selected = parseByModel(config.modelPrimary, primaryRaw);
-    let modelUsed = config.modelPrimary;
 
-    if (shouldUseFallbackModel(selected)) {
+    if (shouldFallbackToLayout(selected)) {
       const fallbackRaw = await client.analyzeWithModel({
         modelId: config.modelFallback,
         base64Source,
         contentType: fileMimeType,
       });
       const fallback = parseByModel(config.modelFallback, fallbackRaw);
-      const picked = pickBetter(selected, fallback);
-      modelUsed = picked === fallback ? config.modelFallback : config.modelPrimary;
-      selected = picked;
+      selected = pickBetter(selected, fallback);
     }
 
     const estimatedPageCount = estimatePdfPageCount(fileBytes, fileMimeType);
@@ -240,21 +204,11 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
       selected.warnings = [...new Set([...selected.warnings, 'DOCINT_F0_MAX_2_PAGES'])];
     }
 
-    const docIntMeta = buildDocIntMeta(config, modelUsed);
-    context.info(
-      `DocIntTrace modelUsed=${docIntMeta.modelUsed} apiVersion=${docIntMeta.apiVersion} ` +
-        `locale=${docIntMeta.locale} pages=${docIntMeta.pages ?? '-'} ` +
-        `features=${docIntMeta.features.join(',')} output=${docIntMeta.outputContentFormat}`,
-    );
-
     const response: ProcessAlbaranResponse = {
       success: true,
-      source: 'azure',
       ...selected,
-      docIntMeta,
       processingTimeMs: Date.now() - startedAt,
     };
-    assertAzureTraceability(response);
 
     return jsonResponse(200, response);
   } catch (error) {
@@ -295,14 +249,6 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
       return jsonResponse(429, {
         success: false,
         message: 'DocIntRateLimited',
-        detail: message,
-      });
-    }
-
-    if (message.startsWith('TraceabilityInvariant:')) {
-      return jsonResponse(500, {
-        success: false,
-        message: 'TraceabilityInvariantFailed',
         detail: message,
       });
     }

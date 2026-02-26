@@ -53,22 +53,8 @@ export type ProcessedTotals = {
   total: number | null;
 };
 
-export type OcrSource = 'azure' | 'offline';
-
-export type ProcessDocIntMeta = {
-  modelPrimary: string;
-  modelFallback: string;
-  modelUsed: string;
-  apiVersion: string;
-  locale: string;
-  pages: string | null;
-  features: string[];
-  outputContentFormat: string;
-};
-
 export type ProcessAlbaranResponse = {
   success: true;
-  source: 'azure';
   docType: AlbaranDocType;
   docSubtype?: AlbaranDocSubtype | null;
   supplier: FieldValue<string>;
@@ -79,7 +65,6 @@ export type ProcessAlbaranResponse = {
   fieldMeta?: ProcessFieldMeta;
   templateData?: Record<string, unknown> | null;
   warnings: string[];
-  docIntMeta: ProcessDocIntMeta;
   processingTimeMs: number;
 };
 
@@ -93,7 +78,4 @@ export type DocIntAnalyzeResponse = {
   error?: Record<string, unknown>;
 };
 
-export type ParsedDocIntOutput = Omit<
-  ProcessAlbaranResponse,
-  'success' | 'source' | 'docIntMeta' | 'processingTimeMs'
->;
+export type ParsedDocIntOutput = Omit<ProcessAlbaranResponse, 'success' | 'processingTimeMs'>;

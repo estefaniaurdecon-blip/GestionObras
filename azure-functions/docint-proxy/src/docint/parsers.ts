@@ -319,7 +319,7 @@ export const parseLayoutOrRead = (
 export const parseFallbackLayout = (payload: DocIntAnalyzeResponse): ParsedDocIntOutput =>
   parseLayoutOrRead(payload, 'prebuilt-layout');
 
-export const shouldUseFallbackModel = (primary: ParsedDocIntOutput): boolean => {
+export const shouldFallbackToLayout = (primary: ParsedDocIntOutput): boolean => {
   const keyScore =
     Number(Boolean(primary.supplier.value)) +
     Number(Boolean(primary.invoiceNumber.value)) +
