@@ -17,8 +17,6 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URI
@@ -31,10 +29,7 @@ class AlbaranScannerPlugin : Plugin() {
         private const val TAG = "ALBARAN_OCR"
     }
 
-    private lateinit var parser: AlbaranOcrParser
     private var docIntClient: AlbaranDocIntClient? = null
-    private var docTypeClassifier: AlbaranDocTypeClassifier? = null
-    private val textRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val workerExecutor = Executors.newSingleThreadExecutor()
 
     private var controller: AlbaranScanController? = null
@@ -55,13 +50,8 @@ class AlbaranScannerPlugin : Plugin() {
                 "Azure DocInt mode enabled baseUrl=${BuildConfig.AZURE_DOCINT_BASE_URL}",
             )
         } else {
-            Log.i(TAG, "Azure DocInt mode disabled. Using legacy offline OCR parser.")
+            Log.w(TAG, "Azure DocInt mode disabled. OCR offline deshabilitado.")
         }
-        docTypeClassifier = TfliteAlbaranDocTypeClassifier(context.applicationContext)
-        parser = AlbaranOcrParser(
-            dictionaries = AlbaranParserDictionaries.loadOrDefault(context.assets),
-            docTypeClassifier = docTypeClassifier,
-        )
 
         val componentActivity = activity as? ComponentActivity
         if (componentActivity == null) {
@@ -83,7 +73,7 @@ class AlbaranScannerPlugin : Plugin() {
             return
         }
 
-        if (isDocIntEnabled() && !hasNetworkConnection()) {
+        if (!hasNetworkConnection()) {
             call.reject("Sin conexion. No se puede escanear.")
             return
         }
@@ -119,7 +109,6 @@ class AlbaranScannerPlugin : Plugin() {
 
     override fun handleOnDestroy() {
         super.handleOnDestroy()
-        runCatching { textRecognizer.close() }
         workerExecutor.shutdown()
     }
 
@@ -147,57 +136,33 @@ class AlbaranScannerPlugin : Plugin() {
             call.reject("No se obtuvieron imagenes del albaran")
             return
         }
+        if (!isDocIntEnabled()) {
+            call.reject("OCR offline deshabilitado")
+            return
+        }
 
         workerExecutor.execute {
             try {
-                val parsedAndLines = if (isDocIntEnabled()) {
-                    val upload = scanController.buildUploadDocument(capture)
-                        ?: throw IllegalStateException("No se pudo preparar el archivo para subir")
-                    val cloudParsed = processWithDocInt(
-                        document = upload,
-                        authorizationHeader = authorizationHeader,
-                        baseUrlOverride = docIntBaseUrlOverride,
-                    ).copy(source = "azure")
+                val upload = scanController.buildUploadDocument(capture)
+                    ?: throw IllegalStateException("No se pudo preparar el archivo para subir")
+                val cloudParsed = processWithDocInt(
+                    document = upload,
+                    authorizationHeader = authorizationHeader,
+                    baseUrlOverride = docIntBaseUrlOverride,
+                ).copy(source = "azure")
 
-                    Log.i(
-                        TAG,
-                        "scanResult source=azure docType=${cloudParsed.docType.name} " +
-                            "supplier=${cloudParsed.supplier ?: "-"} invoice=${cloudParsed.invoiceNumber ?: "-"} " +
-                            "items=${cloudParsed.items.size} confidence=${cloudParsed.confidence} " +
-                            "warnings=${cloudParsed.warnings.joinToString(",")}",
-                    )
-
-                    Pair(cloudParsed, emptyList<OcrLine>())
-                } else {
-                    val ocr = scanController.runOcr(capture.imageUris, textRecognizer)
-                    val offlineParsed = parser.parse(
-                        lines = ocr.lines,
-                        tokens = ocr.tokens,
-                        pageWidth = ocr.pageWidth,
-                        profileUsed = ocr.profileUsed,
-                        ocrScore = ocr.score,
-                        ocrConfidence = ocr.confidence,
-                        ocrWarnings = ocr.warnings,
-                        rawText = ocr.rawText,
-                    ).copy(source = "offline", docIntMeta = null)
-
-                    Log.i(
-                        TAG,
-                        "scanResult source=offline profile=${ocr.profileUsed} score=${ocr.score} " +
-                            "lines=${ocr.lines.size} tokens=${ocr.tokens.size} ocrWarnings=${ocr.warnings.joinToString(",")} " +
-                            "parsedWarnings=${offlineParsed.warnings.joinToString(",")} " +
-                            "docType=${offlineParsed.docType.name} supplier=${offlineParsed.supplier ?: "-"} " +
-                            "invoice=${offlineParsed.invoiceNumber ?: "-"} items=${offlineParsed.items.size} confidence=${offlineParsed.confidence} " +
-                            "review=${offlineParsed.requiresReview}",
-                    )
-
-                    Pair(offlineParsed, ocr.ocrLinePreviews)
-                }
+                Log.i(
+                    TAG,
+                    "scanResult source=azure docType=${cloudParsed.docType.name} " +
+                        "supplier=${cloudParsed.supplier ?: "-"} invoice=${cloudParsed.invoiceNumber ?: "-"} " +
+                        "items=${cloudParsed.items.size} confidence=${cloudParsed.confidence} " +
+                        "warnings=${cloudParsed.warnings.joinToString(",")}",
+                )
 
                 val payload = toJsPayload(
-                    parsed = parsedAndLines.first,
+                    parsed = cloudParsed,
                     imageUris = capture.imageUris.map { uri -> uri.toString() },
-                    ocrLines = parsedAndLines.second,
+                    ocrLines = emptyList(),
                 )
                 activity.runOnUiThread {
                     call.resolve(payload)
@@ -274,7 +239,7 @@ class AlbaranScannerPlugin : Plugin() {
         payload.put("fieldWarnings", fieldWarnings)
         payload.put("fieldMeta", toJsDynamicValue(parsed.fieldMeta))
         payload.put("templateData", toJsDynamicValue(parsed.templateData))
-        payload.put("source", parsed.source ?: "offline")
+        payload.put("source", "azure")
         payload.put("docIntMeta", toJsDynamicValue(parsed.docIntMeta))
 
         val items = JSArray()
