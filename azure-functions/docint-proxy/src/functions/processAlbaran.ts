@@ -9,6 +9,22 @@ const toInt = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const toPositiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = toInt(value, fallback);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+};
+
+const DEFAULT_MAX_FILE_BYTES = 12 * 1024 * 1024;
+
+const isSupportedUploadMimeType = (mimeType: string): boolean => {
+  const normalized = mimeType.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'application/pdf') return true;
+  if (normalized.startsWith('image/')) return true;
+  return false;
+};
+
 const isPlaceholderValue = (value: string): boolean => {
   const normalized = value.trim();
   if (!normalized) return true;
@@ -49,6 +65,7 @@ const getConfig = () => {
     modelFallback: process.env.DOCINT_MODEL_FALLBACK?.trim() || 'prebuilt-read',
     pagesLimit: process.env.DOCINT_PAGES_LIMIT?.trim(),
     timeoutMs: toInt(process.env.DOCINT_TIMEOUT_MS, 60000),
+    maxFileBytes: toPositiveInt(process.env.DOCINT_MAX_FILE_BYTES, DEFAULT_MAX_FILE_BYTES),
     authPathPrimary: process.env.API_AUTH_ME_PATH?.trim() || '/api/v1/users/me',
     authPathFallback: process.env.API_AUTH_ME_FALLBACK_PATH?.trim() || '/api/v1/auth/me',
     authTimeoutMs: toInt(process.env.API_AUTH_TIMEOUT_MS, 15000),
@@ -162,11 +179,26 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
       });
     }
 
+    const fileMimeType = ((file as unknown as { type?: string }).type || '').trim().toLowerCase();
+    if (!isSupportedUploadMimeType(fileMimeType)) {
+      return jsonResponse(400, {
+        success: false,
+        message: 'Tipo de archivo no soportado. Usa PDF o imagen.',
+      });
+    }
+
     const fileBytes = Buffer.from(await file.arrayBuffer());
     if (fileBytes.length === 0) {
       return jsonResponse(400, {
         success: false,
         message: 'Archivo vacio',
+      });
+    }
+
+    if (fileBytes.length > config.maxFileBytes) {
+      return jsonResponse(413, {
+        success: false,
+        message: `Archivo demasiado grande. Maximo ${config.maxFileBytes} bytes`,
       });
     }
 
@@ -180,7 +212,6 @@ const processAlbaran = async (request: HttpRequest, context: InvocationContext):
     });
 
     const base64Source = fileBytes.toString('base64');
-    const fileMimeType = (file as unknown as { type?: string }).type || 'application/octet-stream';
 
     const primaryRaw = await client.analyzeWithModel({
       modelId: config.modelPrimary,

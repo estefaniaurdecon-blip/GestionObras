@@ -11,6 +11,7 @@
     "DOCINT_LOCALE": "es-ES",
     "DOCINT_PAGES_LIMIT": "1-2",
     "DOCINT_TIMEOUT_MS": "60000",
+    "DOCINT_MAX_FILE_BYTES": "12582912",
     "DOCINT_IS_F0": "1",
     "API_BASE_URL": "http://127.0.0.1:8000",
     "API_AUTH_ME_PATH": "/api/v1/users/me",

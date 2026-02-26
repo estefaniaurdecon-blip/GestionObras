@@ -197,7 +197,7 @@ class AlbaranScannerPlugin : Plugin() {
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-        return hasInternet || hasTransport
+        return hasInternet && hasTransport
     }
 
     private fun toJsPayload(

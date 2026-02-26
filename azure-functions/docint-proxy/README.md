@@ -20,6 +20,7 @@ guardados solo en App Settings.
 - `DOCINT_LOCALE`
 - `DOCINT_PAGES_LIMIT` (opcional)
 - `DOCINT_TIMEOUT_MS`
+- `DOCINT_MAX_FILE_BYTES` (opcional, por defecto `12582912`)
 - `DOCINT_IS_F0` (opcional)
 
 Validacion de autenticacion contra backend:
