@@ -56,6 +56,8 @@ data class ParsedDeliveryNote(
     val docSubtype: String? = null,
     val fieldMeta: Map<String, Any?>? = null,
     val templateData: Map<String, Any?>? = null,
+    val source: String? = null,
+    val docIntMeta: Map<String, Any?>? = null,
 )
 
 data class OcrToken(

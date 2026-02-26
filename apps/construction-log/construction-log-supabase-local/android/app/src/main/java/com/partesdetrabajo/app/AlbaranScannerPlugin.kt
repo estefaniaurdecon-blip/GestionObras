@@ -157,7 +157,7 @@ class AlbaranScannerPlugin : Plugin() {
                         document = upload,
                         authorizationHeader = authorizationHeader,
                         baseUrlOverride = docIntBaseUrlOverride,
-                    )
+                    ).copy(source = "azure")
 
                     Log.i(
                         TAG,
@@ -179,7 +179,7 @@ class AlbaranScannerPlugin : Plugin() {
                         ocrConfidence = ocr.confidence,
                         ocrWarnings = ocr.warnings,
                         rawText = ocr.rawText,
-                    )
+                    ).copy(source = "offline", docIntMeta = null)
 
                     Log.i(
                         TAG,
@@ -274,6 +274,8 @@ class AlbaranScannerPlugin : Plugin() {
         payload.put("fieldWarnings", fieldWarnings)
         payload.put("fieldMeta", toJsDynamicValue(parsed.fieldMeta))
         payload.put("templateData", toJsDynamicValue(parsed.templateData))
+        payload.put("source", parsed.source ?: "offline")
+        payload.put("docIntMeta", toJsDynamicValue(parsed.docIntMeta))
 
         val items = JSArray()
         parsed.items.forEach { item ->

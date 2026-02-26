@@ -48,6 +48,7 @@ private data class DocIntTotalsDto(
 
 private data class DocIntProxyResponse(
     val success: Boolean? = null,
+    val source: String? = null,
     val docType: String? = null,
     val docSubtype: String? = null,
     val supplier: DocIntFieldDto? = null,
@@ -57,6 +58,7 @@ private data class DocIntProxyResponse(
     val totals: DocIntTotalsDto? = null,
     val fieldMeta: Map<String, Any?>? = null,
     val templateData: Map<String, Any?>? = null,
+    val docIntMeta: Map<String, Any?>? = null,
     val warnings: List<String>? = null,
     val processingTimeMs: Long? = null,
 )
@@ -275,7 +277,14 @@ class AlbaranDocIntClient(
             docSubtype = payload.docSubtype?.trim()?.takeIf { it.isNotBlank() },
             fieldMeta = payload.fieldMeta,
             templateData = payload.templateData,
+            source = normalizeSource(payload.source),
+            docIntMeta = payload.docIntMeta,
         )
+    }
+
+    private fun normalizeSource(source: String?): String {
+        val normalized = source?.trim()?.lowercase()
+        return if (normalized == "offline") "offline" else "azure"
     }
 
     private fun mapItem(item: DocIntItemDto): ParsedItem? {
