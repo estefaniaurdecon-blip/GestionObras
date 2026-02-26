@@ -6,7 +6,6 @@ import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
 import {
   normalizeDocType,
   type ParsedAlbaranItem,
-  type ParsedDocIntMeta,
   type ParsedAlbaranResult,
   type ParsedFieldConfidence,
   type ParsedFieldWarnings,
@@ -214,8 +213,6 @@ export const GenerateWorkReportPanel = ({
   const [scanReviewFieldWarnings, setScanReviewFieldWarnings] = useState<ParsedFieldWarnings | null>(null);
   const [scanReviewFieldMeta, setScanReviewFieldMeta] = useState<ParsedAlbaranResult['fieldMeta']>(null);
   const [scanReviewTemplateData, setScanReviewTemplateData] = useState<ParsedAlbaranResult['templateData']>(null);
-  const [scanReviewSource, setScanReviewSource] = useState<ParsedAlbaranResult['source']>('azure');
-  const [scanReviewDocIntMeta, setScanReviewDocIntMeta] = useState<ParsedDocIntMeta | null>(null);
   const [scanReviewProfileUsed, setScanReviewProfileUsed] = useState<ParsedAlbaranResult['profileUsed']>('ORIGINAL');
   const [scanReviewScore, setScanReviewScore] = useState(0);
   const [scanReviewItems, setScanReviewItems] = useState<ParsedAlbaranItem[]>([]);
@@ -1124,8 +1121,6 @@ export const GenerateWorkReportPanel = ({
     setScanReviewFieldWarnings(parsed.fieldWarnings ?? null);
     setScanReviewFieldMeta(parsed.fieldMeta ?? null);
     setScanReviewTemplateData(parsed.templateData ?? null);
-    setScanReviewSource(parsed.source);
-    setScanReviewDocIntMeta(parsed.docIntMeta ?? null);
     setScanReviewProfileUsed(parsed.profileUsed || 'ORIGINAL');
     setScanReviewScore(typeof parsed.score === 'number' && Number.isFinite(parsed.score) ? parsed.score : 0);
     setScanReviewItems(
@@ -1476,8 +1471,6 @@ export const GenerateWorkReportPanel = ({
       fieldWarnings: scanReviewFieldWarnings ?? undefined,
       fieldMeta: scanReviewFieldMeta ?? null,
       templateData: scanReviewTemplateData ?? null,
-      source: scanReviewSource,
-      docIntMeta: scanReviewDocIntMeta,
       requiresReview: false,
       reviewReason: null,
       headerDetected: true,
@@ -1512,11 +1505,9 @@ export const GenerateWorkReportPanel = ({
     scanReviewProfileUsed,
     scanReviewRawText,
     scanReviewScore,
-    scanReviewSource,
     scanReviewServiceLines,
     scanReviewServiceDescription,
     scanReviewSupplier,
-    scanReviewDocIntMeta,
     scanReviewTemplateData,
     scanReviewTargetGroupId,
     scanReviewWarnings,
@@ -2448,8 +2439,6 @@ export const GenerateWorkReportPanel = ({
         fieldWarnings={scanReviewFieldWarnings}
         fieldMeta={scanReviewFieldMeta ?? null}
         templateData={scanReviewTemplateData ?? null}
-        source={scanReviewSource}
-        docIntMeta={scanReviewDocIntMeta}
         imageUris={scanReviewImageUris}
         items={scanReviewItems}
         serviceLines={scanReviewServiceLines}

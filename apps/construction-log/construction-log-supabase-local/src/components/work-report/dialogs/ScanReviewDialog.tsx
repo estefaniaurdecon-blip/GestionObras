@@ -9,7 +9,6 @@ import { sanitizeText } from '@/components/work-report/helpers';
 import {
   normalizeDocType,
   type ParsedAlbaranItem,
-  type ParsedDocIntMeta,
   type ParsedAlbaranResult,
   type ParsedFieldConfidence,
   type ParsedFieldWarnings,
@@ -33,8 +32,6 @@ type ScanReviewDialogProps = {
   fieldWarnings: ParsedFieldWarnings | null;
   fieldMeta: ParsedAlbaranResult['fieldMeta'] | null;
   templateData: ParsedAlbaranResult['templateData'] | null;
-  source: ParsedAlbaranResult['source'];
-  docIntMeta: ParsedDocIntMeta | null;
   imageUris: string[];
   items: ParsedAlbaranItem[];
   serviceLines: ServiceLine[];
@@ -72,8 +69,6 @@ export const ScanReviewDialog = ({
   fieldWarnings,
   fieldMeta,
   templateData,
-  source,
-  docIntMeta,
   imageUris,
   items,
   serviceLines,
@@ -130,7 +125,6 @@ export const ScanReviewDialog = ({
   const serviceInfoWarnings = new Set(['NO_PRICE_COLUMNS', 'NO_ECONOMIC_COLUMNS', 'MISSING_INVOICE_NUMBER', 'MISSING_DATE']);
   const fieldMetaJson = fieldMeta ? JSON.stringify(fieldMeta, null, 2) : null;
   const templateDataJson = templateData ? JSON.stringify(templateData, null, 2) : null;
-  const showRuntimeTrace = import.meta.env.DEV;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -202,18 +196,6 @@ export const ScanReviewDialog = ({
                     {warning}
                   </span>
                 ))}
-              </div>
-            ) : null}
-            {showRuntimeTrace ? (
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700">
-                  source: {source}
-                </span>
-                {source === 'azure' && docIntMeta ? (
-                  <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-700">
-                    {docIntMeta.modelUsed} @ {docIntMeta.apiVersion}
-                  </span>
-                ) : null}
               </div>
             ) : null}
           </div>

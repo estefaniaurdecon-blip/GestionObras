@@ -8,7 +8,6 @@ export type ParsedDocSubtype =
   | 'CONSTRUCCIONES_PARTE_TRABAJO';
 export type ParsedConfidence = 'high' | 'medium' | 'low';
 export type ParsedProfileUsed = 'ORIGINAL' | 'ENHANCED_GRAY' | 'ENHANCED_SHARP';
-export type ParsedScanSource = 'azure' | 'offline';
 export type ParsedJsonValue =
   | string
   | number
@@ -16,17 +15,6 @@ export type ParsedJsonValue =
   | null
   | ParsedJsonValue[]
   | { [key: string]: ParsedJsonValue };
-
-export type ParsedDocIntMeta = {
-  modelPrimary: string;
-  modelFallback: string;
-  modelUsed: string;
-  apiVersion: string;
-  locale: string;
-  pages: string | null;
-  features: string[];
-  outputContentFormat: string;
-};
 
 export type ParsedFieldConfidence = {
   supplier?: number;
@@ -80,8 +68,6 @@ export type ParsedAlbaranResult = {
   fieldWarnings?: ParsedFieldWarnings;
   fieldMeta?: { [key: string]: ParsedJsonValue } | null;
   templateData?: { [key: string]: ParsedJsonValue } | null;
-  source: ParsedScanSource;
-  docIntMeta?: ParsedDocIntMeta | null;
   requiresReview: boolean;
   reviewReason: string | null;
   headerDetected: boolean;
@@ -138,52 +124,6 @@ const normalizeProfileUsed = (value: unknown): ParsedProfileUsed => {
   return 'ORIGINAL';
 };
 
-const normalizeSource = (value: unknown): ParsedScanSource => {
-  const normalized = String(value ?? '').trim().toLowerCase();
-  return normalized === 'offline' ? 'offline' : 'azure';
-};
-
-const toNonEmptyString = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-};
-
-const normalizeDocIntMeta = (value: unknown): ParsedDocIntMeta | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-
-  const record = value as Record<string, unknown>;
-  const modelPrimary = toNonEmptyString(record.modelPrimary);
-  const modelFallback = toNonEmptyString(record.modelFallback);
-  const modelUsed = toNonEmptyString(record.modelUsed);
-  const apiVersion = toNonEmptyString(record.apiVersion);
-  const locale = toNonEmptyString(record.locale);
-  const outputContentFormat = toNonEmptyString(record.outputContentFormat);
-
-  if (!modelPrimary || !modelFallback || !modelUsed || !apiVersion || !locale || !outputContentFormat) {
-    return null;
-  }
-
-  const pagesRaw = record.pages;
-  const pages = pagesRaw === null ? null : toNonEmptyString(pagesRaw);
-  const features = Array.isArray(record.features)
-    ? record.features
-        .map((feature) => (typeof feature === 'string' ? feature.trim() : ''))
-        .filter((feature) => feature.length > 0)
-    : [];
-
-  return {
-    modelPrimary,
-    modelFallback,
-    modelUsed,
-    apiVersion,
-    locale,
-    pages,
-    features,
-    outputContentFormat,
-  };
-};
-
 const sanitizeWarnings = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -201,8 +141,6 @@ export const startAlbaranScan = async (
     docSubtype: normalizeDocSubtype(result.docSubtype),
     confidence: normalizeConfidence(result.confidence),
     profileUsed: normalizeProfileUsed(result.profileUsed),
-    source: normalizeSource(result.source),
-    docIntMeta: normalizeDocIntMeta(result.docIntMeta),
     warnings: sanitizeWarnings(result.warnings),
     items: Array.isArray(result.items) ? result.items : [],
     imageUris: Array.isArray(result.imageUris) ? result.imageUris : [],
