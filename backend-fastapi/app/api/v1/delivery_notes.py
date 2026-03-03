@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -245,17 +245,22 @@ def update_delivery_note(
     return _delivery_note_to_dict(note)
 
 
-@router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_delivery_note(
     note_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
-) -> None:
+) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     note = _load_delivery_note(session, note_id, tenant_id)
     session.delete(note)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{note_id}/validate")
