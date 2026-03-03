@@ -29,6 +29,7 @@ from app.main import app  # noqa: E402
 from app.db import session as db_session  # noqa: E402
 from app.db import base as _models  # noqa: F401, E402  # asegura que se registren los modelos
 from app.core.seed_rbac import run_seed  # noqa: E402
+from app.services import work_report_autoclone_service as autoclone_service  # noqa: E402
 
 
 # Creamos un engine de pruebas y lo inyectamos en el módulo de sesión.
@@ -39,6 +40,8 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 db_session.engine = test_engine
+# El servicio de autoclone importa `engine` a nivel de modulo; lo alineamos al engine de tests.
+autoclone_service.engine = test_engine
 
 # Creamos las tablas en la base de datos de pruebas.
 SQLModel.metadata.create_all(test_engine)

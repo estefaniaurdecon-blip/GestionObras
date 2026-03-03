@@ -5,6 +5,8 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app.api import deps as api_deps
+from app.main import app
 from app.core.security import hash_password
 from app.models.erp import Project, WorkReport
 from app.models.job_run_lock import JobRunLock
@@ -75,6 +77,12 @@ def _create_user_with_role(
     return user
 
 
+def _get_superadmin_user(session: Session) -> User:
+    return session.exec(
+        select(User).where(User.email == "dios@cortecelestial.god")
+    ).one()
+
+
 def test_autoclone_service_is_idempotent_per_tenant_job_and_date(
     db_session_fixture: Session,
 ) -> None:
@@ -131,6 +139,7 @@ def test_autoclone_service_is_idempotent_per_tenant_job_and_date(
     assert second_run.created_reports == 0
     assert second_run.lock_skips == 1
 
+    db_session_fixture.expire_all()
     source_after = db_session_fixture.get(WorkReport, source.id)
     assert source_after is not None
     assert source_after.payload.get("autoCloneNextDay") is False
@@ -152,22 +161,21 @@ def test_internal_job_endpoint_requires_permissions_and_returns_202(
     monkeypatch,
 ) -> None:
     tenant = _create_tenant(db_session_fixture, prefix="job-endpoint")
-    password = "user-pass-123"
-    user_email = f"user-{uuid4().hex[:8]}@example.com"
-    _create_user_with_role(
+    no_manage_user = _create_user_with_role(
         db_session_fixture,
         tenant_id=tenant.id,
-        email=user_email,
-        password=password,
+        email=f"user-{uuid4().hex[:8]}@example.com",
+        password="user-pass-123",
         role_name="user",
     )
-
-    login_user = client.post(
-        "/api/v1/auth/login",
-        data={"username": user_email, "password": password},
+    manage_user = _create_user_with_role(
+        db_session_fixture,
+        tenant_id=tenant.id,
+        email=f"manager-{uuid4().hex[:8]}@example.com",
+        password="manager-pass-123",
+        role_name="tenant_admin",
     )
-    assert login_user.status_code == status.HTTP_200_OK
-    user_token = login_user.json()["access_token"]
+    superadmin = _get_superadmin_user(db_session_fixture)
 
     captured_kwargs: dict = {}
 
@@ -186,26 +194,37 @@ def test_internal_job_endpoint_requires_permissions_and_returns_202(
         _fake_apply_async,
     )
 
+    app.dependency_overrides.pop(api_deps.get_current_active_user, None)
     unauthorized = client.post("/api/v1/internal/jobs/auto-duplicate-rental-machinery")
     assert unauthorized.status_code == status.HTTP_401_UNAUTHORIZED
 
-    forbidden = client.post(
-        "/api/v1/internal/jobs/auto-duplicate-rental-machinery",
-        headers={"Authorization": f"Bearer {user_token}"},
-        json={"run_date": "2026-02-12", "tenant_id": tenant.id},
-    )
-    assert forbidden.status_code == status.HTTP_403_FORBIDDEN
+    try:
+        app.dependency_overrides[api_deps.get_current_active_user] = lambda: no_manage_user
+        forbidden = client.post(
+            "/api/v1/internal/jobs/auto-duplicate-rental-machinery",
+            json={"run_date": "2026-02-12", "tenant_id": tenant.id},
+        )
+        assert forbidden.status_code == status.HTTP_403_FORBIDDEN
 
-    admin_token = _login_superadmin(client)
-    scheduled = client.post(
-        "/api/v1/internal/jobs/auto-duplicate-rental-machinery",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"run_date": "2026-02-12", "tenant_id": tenant.id},
-    )
-    assert scheduled.status_code == status.HTTP_202_ACCEPTED, scheduled.text
-    body = scheduled.json()
-    assert body["scheduled"] is True
-    assert body["job_id"] == "job-test-123"
-    assert body["task_name"] == "auto_duplicate_rental_machinery_daily"
-    assert captured_kwargs["run_date"] == "2026-02-12"
-    assert captured_kwargs["tenant_id"] == tenant.id
+        app.dependency_overrides[api_deps.get_current_active_user] = lambda: manage_user
+        scheduled = client.post(
+            "/api/v1/internal/jobs/auto-duplicate-rental-machinery",
+            json={"run_date": "2026-02-12", "tenant_id": tenant.id},
+        )
+        assert scheduled.status_code == status.HTTP_202_ACCEPTED, scheduled.text
+        body = scheduled.json()
+        assert body["scheduled"] is True
+        assert body["job_id"] == "job-test-123"
+        assert body["task_name"] == "auto_duplicate_rental_machinery_daily"
+        assert captured_kwargs["run_date"] == "2026-02-12"
+        assert captured_kwargs["tenant_id"] == tenant.id
+        assert captured_kwargs["requested_by_user_id"] == manage_user.id
+
+        app.dependency_overrides[api_deps.get_current_active_user] = lambda: superadmin
+        scheduled_superadmin = client.post(
+            "/api/v1/internal/jobs/auto-duplicate-rental-machinery",
+            json={"run_date": "2026-02-13", "tenant_id": tenant.id},
+        )
+        assert scheduled_superadmin.status_code == status.HTTP_202_ACCEPTED
+    finally:
+        app.dependency_overrides.pop(api_deps.get_current_active_user, None)
