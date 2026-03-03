@@ -1,13 +1,14 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { lazy, Suspense, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TabsContent } from '@/components/ui/tabs';
 import { DashboardToolsTabs, type DashboardToolsTab } from '@/components/DashboardToolsTabs';
 import { PartsTabContent, ToolsPanelContent } from '@/components/DashboardToolsTabContents';
-import { GenerateWorkReportPanel, type GenerateWorkReportDraft } from '@/components/GenerateWorkReportPanel';
-import { HistoryReportsPanel, type HistoryReportsPanelProps } from '@/components/HistoryReportsPanel';
+import type { GenerateWorkReportDraft } from '@/components/GenerateWorkReportPanel';
+import type { HistoryReportsPanelProps } from '@/components/HistoryReportsPanel';
 import { TenantPicker } from '@/components/TenantPicker';
+import { startupPerfEnd, startupPerfPoint, startupPerfStart } from '@/utils/startupPerf';
 import { apiFetch } from '@/integrations/api/client';
 import type { ApiTenant } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
@@ -18,6 +19,18 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
+
+const GenerateWorkReportPanel = lazy(() =>
+  import('@/components/GenerateWorkReportPanel').then((module) => ({
+    default: module.GenerateWorkReportPanel,
+  })),
+);
+
+const HistoryReportsPanel = lazy(() =>
+  import('@/components/HistoryReportsPanel').then((module) => ({
+    default: module.HistoryReportsPanel,
+  })),
+);
 
 type WorkReportsSummary = {
   completed: number;
@@ -123,6 +136,8 @@ export const WorkReportsTab = ({
   actions,
   history,
 }: WorkReportsTabProps) => {
+  const INITIAL_HEALTH_CHECK_DELAY_MS = 12000;
+
   const {
     open: generatePanelOpen,
     date: generatePanelDate,
@@ -179,11 +194,17 @@ export const WorkReportsTab = ({
   const [isSyncOnline, setIsSyncOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
+    startupPerfPoint('panel:WorkReportsTab mounted');
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
 
     const checkSyncConnectivity = async () => {
+      startupPerfStart('component:WorkReportsTab.checkSyncConnectivity');
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         if (!disposed) setIsSyncOnline(false);
+        startupPerfEnd('component:WorkReportsTab.checkSyncConnectivity', 'navigator.offline');
         return;
       }
 
@@ -197,8 +218,13 @@ export const WorkReportsTab = ({
         });
         window.clearTimeout(timeoutId);
         if (!disposed) setIsSyncOnline(response.ok);
+        startupPerfEnd(
+          'component:WorkReportsTab.checkSyncConnectivity',
+          `response.ok=${response.ok}`,
+        );
       } catch {
         if (!disposed) setIsSyncOnline(false);
+        startupPerfEnd('component:WorkReportsTab.checkSyncConnectivity', 'error');
       }
     };
 
@@ -211,7 +237,18 @@ export const WorkReportsTab = ({
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    void checkSyncConnectivity();
+    let initialTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let initialIdleId: number | null = null;
+    initialTimeoutId = globalThis.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        initialIdleId = window.requestIdleCallback(() => {
+          void checkSyncConnectivity();
+        }, { timeout: 2000 });
+        return;
+      }
+
+      void checkSyncConnectivity();
+    }, INITIAL_HEALTH_CHECK_DELAY_MS);
     const intervalId = window.setInterval(() => {
       void checkSyncConnectivity();
     }, 10000);
@@ -221,8 +258,14 @@ export const WorkReportsTab = ({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.clearInterval(intervalId);
+      if (initialTimeoutId !== null) {
+        globalThis.clearTimeout(initialTimeoutId);
+      }
+      if (initialIdleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(initialIdleId);
+      }
     };
-  }, []);
+  }, [INITIAL_HEALTH_CHECK_DELAY_MS]);
 
   const connectionPanelClass = isSyncOnline
     ? 'border-emerald-200 bg-emerald-50/60'
@@ -239,20 +282,22 @@ export const WorkReportsTab = ({
   return (
     <TabsContent value="work-reports" className="m-0 space-y-5">
       {generatePanelOpen ? (
-        <GenerateWorkReportPanel
-          initialDate={generatePanelDate}
-          initialDraft={manualCloneDraft ?? panelInitialDraft}
-          readOnly={panelReadOnly}
-          reportIdentifier={panelReportIdentifier}
-          saving={generatePanelSaving}
-          works={sortedWorks.map((work) => ({ id: String(work.id), number: work.number, name: work.name }))}
-          onBack={() => {
-            setGeneratePanelOpen(false);
-            setActiveReport(null);
-            setManualCloneDraft(null);
-          }}
-          onSave={handleSaveGeneratedWorkReport}
-        />
+        <Suspense fallback={<div className="min-h-[50vh] bg-slate-100" />}>
+          <GenerateWorkReportPanel
+            initialDate={generatePanelDate}
+            initialDraft={manualCloneDraft ?? panelInitialDraft}
+            readOnly={panelReadOnly}
+            reportIdentifier={panelReportIdentifier}
+            saving={generatePanelSaving}
+            works={sortedWorks.map((work) => ({ id: String(work.id), number: work.number, name: work.name }))}
+            onBack={() => {
+              setGeneratePanelOpen(false);
+              setActiveReport(null);
+              setManualCloneDraft(null);
+            }}
+            onSave={handleSaveGeneratedWorkReport}
+          />
+        </Suspense>
       ) : (
         <>
           <div className="text-center space-y-1">
@@ -374,7 +419,9 @@ export const WorkReportsTab = ({
                   </CardHeader>
                   <CardContent>
                     {history ? (
-                      <HistoryReportsPanel {...history} />
+                      <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando historial...</div>}>
+                        <HistoryReportsPanel {...history} />
+                      </Suspense>
                     ) : (
                       <div className="text-sm text-muted-foreground">
                         Historial no disponible en esta vista.
@@ -419,3 +466,4 @@ export const WorkReportsTab = ({
     </TabsContent>
   );
 };
+
