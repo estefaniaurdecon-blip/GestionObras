@@ -9,6 +9,7 @@ import {
   getTenantResolutionState,
   setActiveTenantId as persistActiveTenantId,
 } from '@/offline-db/tenantScope';
+import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
 
 export type TenantGateStatus = 'loading' | 'resolved' | 'picker' | 'error';
 
@@ -41,12 +42,14 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
   const [tenantResolutionMessage, setTenantResolutionMessage] = useState<string | null>(null);
 
   const resolveTenantGate = useCallback(async () => {
+    startupPerfStart('hook:useTenantGate.resolveTenantGate');
     if (!user) {
       setTenantGateStatus('loading');
       setResolvedTenantId(null);
       setTenantPickerOptions([]);
       setTenantPickerSelection('');
       setTenantResolutionMessage(null);
+      startupPerfEnd('hook:useTenantGate.resolveTenantGate', 'no-user');
       return;
     }
 
@@ -54,7 +57,9 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
     setTenantResolutionMessage(null);
 
     try {
+      startupPerfStart('hook:useTenantGate.getTenantResolutionState');
       const resolution = await getTenantResolutionState(user);
+      startupPerfEnd('hook:useTenantGate.getTenantResolutionState');
 
       if (resolution.isResolved && resolution.tenantId) {
         setResolvedTenantId(resolution.tenantId);
@@ -62,6 +67,7 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
         setTenantPickerOptions([]);
         setTenantPickerSelection('');
         setTenantResolutionMessage(null);
+        startupPerfEnd('hook:useTenantGate.resolveTenantGate', 'resolved-direct');
         return;
       }
 
@@ -72,7 +78,9 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
         setTenantPickerLoading(true);
 
         try {
+          startupPerfStart('hook:useTenantGate.listTenants');
           const tenants = await listTenants();
+          startupPerfEnd('hook:useTenantGate.listTenants', `count=${tenants.length}`);
           const activeTenants = tenants.filter((tenant) => tenant.is_active !== false);
           setTenantPickerOptions(activeTenants);
           setTenantPickerSelection((previous) => {
@@ -86,6 +94,7 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
           );
         } catch (pickerError) {
           console.error('[TenantPicker] Error loading tenants:', pickerError);
+          startupPerfEnd('hook:useTenantGate.listTenants', 'error');
           setTenantPickerOptions([]);
           setTenantPickerSelection('');
           setTenantResolutionMessage('No se pudieron cargar tenants. Reintenta o vuelve a iniciar sesión.');
@@ -93,6 +102,7 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
           setTenantPickerLoading(false);
         }
 
+        startupPerfEnd('hook:useTenantGate.resolveTenantGate', 'requires-picker');
         return;
       }
 
@@ -100,6 +110,7 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
       setTenantPickerOptions([]);
       setTenantPickerSelection('');
       setTenantResolutionMessage(resolution.errorMessage ?? TENANT_REQUIRED_MESSAGE);
+      startupPerfEnd('hook:useTenantGate.resolveTenantGate', 'unresolved');
     } catch (resolutionError) {
       console.error('[TenantScope] Error resolving tenant:', resolutionError);
       setTenantGateStatus('error');
@@ -107,6 +118,7 @@ export const useTenantGate = (user: ApiUser | null): UseTenantGateResult => {
       setTenantPickerOptions([]);
       setTenantPickerSelection('');
       setTenantResolutionMessage(TENANT_REQUIRED_MESSAGE);
+      startupPerfEnd('hook:useTenantGate.resolveTenantGate', 'error');
     }
   }, [user]);
 
