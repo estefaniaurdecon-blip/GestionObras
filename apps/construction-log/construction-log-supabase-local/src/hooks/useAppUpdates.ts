@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -6,6 +6,7 @@ import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { checkAppUpdates, type CheckAppUpdatesResponse, type UpdatePlatform } from '@/integrations/api/client';
+import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
 
 interface UpdateInfo {
   updateAvailable: boolean;
@@ -19,64 +20,72 @@ interface UpdateInfo {
 const DISMISSED_VERSIONS_KEY = 'dismissed_update_versions';
 const INSTALLED_VERSION_KEY = 'last_installed_version';
 
+interface RendererProcess {
+  type?: string;
+}
+
+declare global {
+  interface Window {
+    Capacitor?: unknown;
+    process?: RendererProcess;
+  }
+}
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { message?: unknown };
+    if (typeof candidate.message === 'string') {
+      return candidate.message;
+    }
+  }
+  return fallback;
+};
+
+const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as { then?: unknown };
+  return typeof candidate.then === 'function';
+};
+
 export const useAppUpdates = () => {
+  const INITIAL_UPDATE_CHECK_DELAY_MS = 15000;
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const getDismissedVersions = (): Set<string> => {
+  const getDismissedVersions = useCallback((): Set<string> => {
     const dismissed = localStorage.getItem(DISMISSED_VERSIONS_KEY);
     return new Set(dismissed ? JSON.parse(dismissed) : []);
-  };
+  }, []);
 
-  const dismissVersion = (version: string) => {
+  const dismissVersion = useCallback((version: string) => {
     const dismissed = getDismissedVersions();
     dismissed.add(version);
     localStorage.setItem(DISMISSED_VERSIONS_KEY, JSON.stringify([...dismissed]));
-  };
+  }, [getDismissedVersions]);
 
-  const markVersionAsInstalled = (version: string) => {
+  const markVersionAsInstalled = useCallback((version: string) => {
     localStorage.setItem(INSTALLED_VERSION_KEY, version);
     // Limpiar las versiones descartadas ya que instalamos una actualización
     const dismissed = getDismissedVersions();
     dismissed.delete(version);
     localStorage.setItem(DISMISSED_VERSIONS_KEY, JSON.stringify([...dismissed]));
-  };
+  }, [getDismissedVersions]);
 
-  const getInstalledVersion = (): string | null => {
+  const getInstalledVersion = useCallback((): string | null => {
     return localStorage.getItem(INSTALLED_VERSION_KEY);
-  };
+  }, []);
 
-  const getCurrentVersion = async (): Promise<string> => {
-    const platform = getPlatform();
-    
-    // Para Android, intentar obtener la versión nativa primero
-    if (platform === 'android') {
-      try {
-        // @ts-ignore - comprobación en tiempo de ejecución
-        if ((window as any).Capacitor && App?.getInfo) {
-          const info = await App.getInfo();
-          if (info?.version) {
-            console.log('Using native Android version:', info.version);
-            return info.version;
-          }
-        }
-      } catch (e) {
-        console.warn('No se pudo obtener la versión nativa:', e);
-      }
-    }
-    
-    // Fallback a la versión del entorno
-    return import.meta.env.VITE_APP_VERSION || '2.0.1';
-  };
-
-  const getPlatform = (): 'windows' | 'android' | 'web' => {
+  const getPlatform = useCallback((): 'windows' | 'android' | 'web' => {
     try {
       // Detectar Electron PRIMERO, antes de Capacitor
       const ua = window.navigator.userAgent || '';
-      const isElectron = (window as any).electronAPI !== undefined || 
+      const isElectron = window.electronAPI !== undefined || 
                         ua.toLowerCase().includes('electron') ||
-                        (window as any).process?.type === 'renderer';
+                        window.process?.type === 'renderer';
       
       if (isElectron) {
         console.log('[Updates] Electron detected via electronAPI or userAgent');
@@ -114,9 +123,31 @@ export const useAppUpdates = () => {
 
     console.log('[Updates] ⚠️ Defaulting to web - app may not be installed or running in browser');
     return 'web';
-  };
+  }, []);
 
-  const shouldIgnoreUpdate = (candidate: CheckAppUpdatesResponse): boolean => {
+  const getCurrentVersion = useCallback(async (): Promise<string> => {
+    const platform = getPlatform();
+    
+    // Para Android, intentar obtener la versión nativa primero
+    if (platform === 'android') {
+      try {
+        if (window.Capacitor && App?.getInfo) {
+          const info = await App.getInfo();
+          if (info?.version) {
+            console.log('Using native Android version:', info.version);
+            return info.version;
+          }
+        }
+      } catch (e) {
+        console.warn('No se pudo obtener la versión nativa:', e);
+      }
+    }
+    
+    // Fallback a la versión del entorno
+    return import.meta.env.VITE_APP_VERSION || '2.0.1';
+  }, [getPlatform]);
+
+  const shouldIgnoreUpdate = useCallback((candidate: CheckAppUpdatesResponse): boolean => {
     if (!candidate.version) return false;
     if (candidate.isMandatory) return false;
 
@@ -127,9 +158,10 @@ export const useAppUpdates = () => {
 
     const installedVersion = getInstalledVersion();
     return installedVersion === candidate.version;
-  };
+  }, [getDismissedVersions, getInstalledVersion]);
 
-  const checkForUpdates = async (silent: boolean = false, createNotification: boolean = false) => {
+  const checkForUpdates = useCallback(async (silent: boolean = false, createNotification: boolean = false) => {
+    startupPerfStart('hook:useAppUpdates.checkForUpdates');
     console.log('[Updates] checkForUpdates START', { silent, createNotification, timestamp: new Date().toISOString() });
     try {
       setChecking(true);
@@ -187,8 +219,12 @@ export const useAppUpdates = () => {
       return null;
     } finally {
       setChecking(false);
+      startupPerfEnd(
+        'hook:useAppUpdates.checkForUpdates',
+        `silent=${silent},notification=${createNotification}`,
+      );
     }
-  };
+  }, [getCurrentVersion, getPlatform, shouldIgnoreUpdate]);
 
   const downloadAndInstallUpdate = async () => {
     if (!updateInfo || !updateInfo.downloadUrl) {
@@ -300,15 +336,16 @@ export const useAppUpdates = () => {
                 
                 console.log('[Updates] ✓ FileOpener.open() completed successfully');
                 installerOpened = true;
-              } catch (fileOpenerError: any) {
+              } catch (fileOpenerError: unknown) {
                 console.error('[Updates] ✗ FileOpener failed:', fileOpenerError);
-                console.error('[Updates] Error message:', fileOpenerError?.message);
-                console.error('[Updates] Error code:', fileOpenerError?.code);
+                const fileOpenerDetails = fileOpenerError as { message?: string; code?: string | number };
+                console.error('[Updates] Error message:', fileOpenerDetails.message);
+                console.error('[Updates] Error code:', fileOpenerDetails.code);
                 
                 // Mostrar error específico al usuario
                 toast({
                   title: 'Error al abrir instalador',
-                  description: `${fileOpenerError?.message || 'Error desconocido'}. Abre el archivo manualmente desde Descargas.`,
+                  description: `${fileOpenerDetails.message || 'Error desconocido'}. Abre el archivo manualmente desde Descargas.`,
                   variant: 'destructive',
                   duration: 10000,
                 });
@@ -348,11 +385,11 @@ export const useAppUpdates = () => {
                 }, 4000);
               }
 
-            } catch (e: any) {
+            } catch (e: unknown) {
               console.error('[Updates] Error saving APK:', e);
               toast({
                 title: 'Error al guardar',
-                description: e?.message || 'No se pudo guardar el archivo. Descárgalo manualmente desde el navegador.',
+                description: getErrorMessage(e, 'No se pudo guardar el archivo. Descárgalo manualmente desde el navegador.'),
                 variant: 'destructive',
               });
               // Fallback: abrir URL en navegador
@@ -371,11 +408,11 @@ export const useAppUpdates = () => {
 
           reader.readAsDataURL(blob);
           
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error('[Updates] Error downloading APK:', e);
           toast({
             title: 'Error de descarga',
-            description: e?.message || 'Descargando desde el navegador...',
+            description: getErrorMessage(e, 'Descargando desde el navegador...'),
             variant: 'destructive',
           });
           // Fallback: abrir en navegador
@@ -383,7 +420,7 @@ export const useAppUpdates = () => {
         }
       } else if (platform === 'windows') {
         // Para Windows/Electron - actualización automática mejorada
-        const electronAPI = (window as any).electronAPI;
+        const electronAPI = window.electronAPI;
         console.log('[Updates] Windows platform detected, electronAPI available:', !!electronAPI);
         
         if (electronAPI?.downloadAndInstallFromUrl) {
@@ -490,25 +527,37 @@ export const useAppUpdates = () => {
 
   // Verificar actualizaciones al montar y al reanudar la app (silenciosamente)
   useEffect(() => {
-    console.log('[Updates] useEffect MOUNTED - will check in 2.5s');
-    const timer = setTimeout(() => {
-      console.log('[Updates] Timer triggered, calling checkForUpdates');
-      checkForUpdates(true);
-    }, 2500);
+    console.log('[Updates] useEffect MOUNTED - scheduling deferred update check');
+    startupPerfStart('hook:useAppUpdates.initialDelay');
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+    timer = globalThis.setTimeout(() => {
+      const triggerCheck = () => {
+        console.log('[Updates] Timer triggered, calling checkForUpdates');
+        startupPerfEnd('hook:useAppUpdates.initialDelay');
+        void checkForUpdates(true);
+      };
+
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(triggerCheck, { timeout: 4000 });
+        return;
+      }
+
+      triggerCheck();
+    }, INITIAL_UPDATE_CHECK_DELAY_MS);
 
     // Re-chequear al volver a primer plano en Android/iOS
     let removeListener: (() => void) | undefined;
     try {
-      // @ts-ignore - en web puede no existir
       const p = App.addListener?.('appStateChange', ({ isActive }: { isActive: boolean }) => {
         console.log('[Updates] App state changed:', isActive);
         if (isActive) {
           console.log('[Updates] App resumed, re-checking for updates');
-          checkForUpdates(true);
+          void checkForUpdates(true);
         }
       });
       // Manejo de handle async (Capacitor v7)
-      if (p && typeof (p as any).then === 'function') {
+      if (isPromiseLike<{ remove: () => void }>(p)) {
         (p as Promise<{ remove: () => void }>).then((handle) => {
           removeListener = () => handle.remove();
         });
@@ -519,10 +568,16 @@ export const useAppUpdates = () => {
 
     return () => {
       console.log('[Updates] useEffect CLEANUP');
-      clearTimeout(timer);
+      if (timer !== null) {
+        globalThis.clearTimeout(timer);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      startupPerfEnd('hook:useAppUpdates.initialDelay', 'cleanup');
       removeListener?.();
     };
-  }, []);
+  }, [INITIAL_UPDATE_CHECK_DELAY_MS, checkForUpdates]);
   
   const postponeUpdate = () => {
     if (updateInfo?.version && !updateInfo.isMandatory) {
@@ -540,4 +595,11 @@ export const useAppUpdates = () => {
     postponeUpdate,
   };
 };
+
+
+
+
+
+
+
 

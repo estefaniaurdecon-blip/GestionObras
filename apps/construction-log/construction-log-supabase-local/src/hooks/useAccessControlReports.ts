@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessEntry, AccessReport } from '@/types/accessControl';
 import { toast } from '@/hooks/use-toast';
 import { storage } from '@/utils/storage';
+import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
 import {
   ApiAccessControlReport,
   createAccessControlReport,
@@ -20,6 +21,7 @@ type StoredAccessReport = AccessReport & {
 
 interface UseAccessControlReportsOptions {
   tenantId?: string | null;
+  enabled?: boolean;
 }
 
 const STORAGE_KEY_PREFIX = 'access_control_reports_local::v1::';
@@ -129,6 +131,11 @@ function toLocalKey(tenantId?: string | null): string {
   return `${STORAGE_KEY_PREFIX}${normalized}`;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
 function sortStoredReports(reports: StoredAccessReport[]): StoredAccessReport[] {
   return [...reports].sort((left, right) => {
     if (left.date !== right.date) return right.date.localeCompare(left.date);
@@ -162,7 +169,7 @@ function resolveProjectId(workId?: string): number | null {
   return parsed;
 }
 
-export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOptions = {}) => {
+export const useAccessControlReports = ({ tenantId, enabled = true }: UseAccessControlReportsOptions = {}) => {
   const [storedReports, setStoredReports] = useState<StoredAccessReport[]>([]);
   const [loading, setLoading] = useState(false);
   const storedReportsRef = useRef<StoredAccessReport[]>([]);
@@ -214,8 +221,8 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
           syncStatus: 'synced',
           lastSyncError: null,
         };
-      } catch (error: any) {
-        const message = error?.message || 'No se pudo sincronizar con API.';
+      } catch (error: unknown) {
+        const message = getErrorMessage(error, 'No se pudo sincronizar con API.');
         return {
           ...report,
           syncStatus: 'error',
@@ -265,9 +272,15 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
   }, [pushToApi, saveLocalReports, tenantId]);
 
   const reloadReports = useCallback(async () => {
+    startupPerfStart('hook:useAccessControlReports.reloadReports');
     setLoading(true);
     try {
+      startupPerfStart('hook:useAccessControlReports.readLocalStorage');
       const rawLocal = await storage.getItem(storageKey);
+      startupPerfEnd(
+        'hook:useAccessControlReports.readLocalStorage',
+        `bytes=${rawLocal?.length ?? 0}`,
+      );
       const parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
       const localReports = Array.isArray(parsedLocal)
         ? parsedLocal.map(normalizeStoredReport).filter((item): item is StoredAccessReport => Boolean(item))
@@ -280,19 +293,24 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
 
       let mergedReports = localReports;
       try {
+        startupPerfStart('hook:useAccessControlReports.listRemote');
         const remote = await listAccessControlReports({
           tenantId,
           limit: 500,
           includeDeleted: false,
         });
+        startupPerfEnd('hook:useAccessControlReports.listRemote', `count=${remote.length}`);
         const remoteReports = remote.map(toApiStoredReport);
         mergedReports = mergeRemoteWithLocal(localReports, remoteReports);
       } catch (error) {
         console.warn('[AccessControl] No se pudieron cargar controles remotos, usando cache local.', error);
+        startupPerfEnd('hook:useAccessControlReports.listRemote', 'error');
       }
 
       await saveLocalReports(mergedReports);
+      startupPerfStart('hook:useAccessControlReports.syncPendingReports');
       await syncPendingReports();
+      startupPerfEnd('hook:useAccessControlReports.syncPendingReports');
     } catch (error) {
       console.error('[AccessControl] Error al recargar controles:', error);
       toast({
@@ -302,6 +320,7 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
       });
     } finally {
       setLoading(false);
+      startupPerfEnd('hook:useAccessControlReports.reloadReports');
     }
   }, [mergeRemoteWithLocal, saveLocalReports, storageKey, syncPendingReports, tenantId]);
 
@@ -354,10 +373,10 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
       if (report.serverId && tenantId) {
         try {
           await deleteAccessControlReportApi(report.serverId, tenantId);
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast({
             title: 'No se pudo eliminar',
-            description: error?.message || 'No se pudo eliminar en API.',
+            description: getErrorMessage(error, 'No se pudo eliminar en API.'),
             variant: 'destructive',
           });
           return;
@@ -380,8 +399,9 @@ export const useAccessControlReports = ({ tenantId }: UseAccessControlReportsOpt
   );
 
   useEffect(() => {
+    if (!enabled) return;
     void reloadReports();
-  }, [reloadReports]);
+  }, [enabled, reloadReports]);
 
   const reports = useMemo(
     () => storedReports.map(toAccessReport),

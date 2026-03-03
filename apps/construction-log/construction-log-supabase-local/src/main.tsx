@@ -5,7 +5,12 @@ import App from "./App.tsx";
 import "./index.css";
 import "./i18n/config";
 import { registerServiceWorker, unregisterServiceWorker } from "./utils/serviceWorkerRegistration";
-import { cleanElectronStorage } from "./utils/cleanElectronStorage";
+import { startupPerfEnd, startupPerfPoint, startupPerfStart } from "./utils/startupPerf";
+declare global {
+  interface Window {
+    __hideAppLoading?: () => void;
+  }
+}
 
 // Log para diagnóstico en APK (visible también en el loader HTML)
 const appendBootLog = (line: string) => {
@@ -53,6 +58,7 @@ const unregisterAllNativeServiceWorkers = async () => {
 
 logDebug("Script main.tsx iniciando...");
 logDebug(`Plataforma: ${Capacitor.getPlatform()}, isNative: ${Capacitor.isNativePlatform()}`);
+startupPerfPoint("main.tsx evaluado");
 
 // Ocultar el loading fallback cuando React se monta
 const hideLoading = () => {
@@ -66,7 +72,7 @@ const hideLoading = () => {
 };
 
 // Exponer helper para que la app decida cuándo ocultar el loader
-(window as any).__hideAppLoading = hideLoading;
+window.__hideAppLoading = hideLoading;
 
 // Ocultar splash nativo de forma segura
 const hideNativeSplashSafely = () => {
@@ -95,8 +101,10 @@ const showBootError = (title: string, detail: string) => {
 
 // Inicialización principal
 const initApp = async () => {
+  startupPerfStart("main:initApp");
   try {
     logDebug("initApp comenzando...");
+    startupPerfPoint("initApp start");
 
     // Forzar ocultado temprano del splash nativo
     hideNativeSplashSafely();
@@ -111,13 +119,28 @@ const initApp = async () => {
 
     // Clean any corrupted Electron storage before initializing
     logDebug("Limpiando storage de Electron...");
-    cleanElectronStorage();
+    void import("./utils/cleanElectronStorage")
+      .then(({ cleanElectronStorage }) => {
+        cleanElectronStorage();
+      })
+      .catch((error) => {
+        logDebug(`Error cargando limpieza de storage Electron: ${String(error)}`);
+      });
 
     // Evitar que WebView nativa conserve bundles antiguos.
     if (Capacitor.isNativePlatform()) {
-      logDebug("Modo nativo: limpiando Service Worker y cache web legado...");
-      await unregisterAllNativeServiceWorkers();
-      await clearNativeBrowserCaches();
+      logDebug("Modo nativo: programando limpieza de Service Worker/cache en segundo plano...");
+      window.setTimeout(() => {
+        void (async () => {
+          startupPerfStart("main:native-cache-cleanup");
+          try {
+            await unregisterAllNativeServiceWorkers();
+            await clearNativeBrowserCaches();
+          } finally {
+            startupPerfEnd("main:native-cache-cleanup");
+          }
+        })();
+      }, 15000);
     }
 
     // La DB offline se inicializa de forma lazy con scope de tenant al cargar el usuario.
@@ -140,6 +163,8 @@ const initApp = async () => {
     }
 
     logDebug("Montando React...");
+    startupPerfStart("main:react-mount");
+    startupPerfStart("main:root-render-to-app-mounted");
     const rootElement = document.getElementById("root");
     
     if (!rootElement) {
@@ -148,14 +173,18 @@ const initApp = async () => {
 
     const root = createRoot(rootElement);
     root.render(<App />);
+    startupPerfEnd("main:react-mount");
     
     logDebug("React montado correctamente");
+    startupPerfEnd("main:initApp");
     
   } catch (error) {
     console.error("[App] Error crítico durante inicialización:", error);
+    startupPerfEnd("main:initApp");
     showBootError("Error crítico", String(error));
   }
 };
 
 // Ejecutar inicialización
 initApp();
+

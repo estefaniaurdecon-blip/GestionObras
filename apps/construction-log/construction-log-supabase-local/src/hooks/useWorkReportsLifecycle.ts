@@ -8,6 +8,7 @@ import {
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
 import type { WorkReport } from '@/offline-db/types';
 import { isSyncAuthRequiredError, syncNow } from '@/sync/syncService';
+import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
 import {
   AUTO_CLONE_CHECK_INTERVAL_MS,
   WORK_REPORT_HISTORY_LIMIT,
@@ -63,6 +64,8 @@ export const useWorkReportsLifecycle = ({
   setWorkReportsLoading,
   setSyncing,
 }: UseWorkReportsLifecycleParams): UseWorkReportsLifecycleResult => {
+  const BOOTSTRAP_SYNC_DELAY_MS = 12000;
+  const AUTO_CLONE_INITIAL_DELAY_MS = 12000;
   const bootstrapSyncAttemptedRef = useRef<Record<string, boolean>>({});
 
   const processScheduledAutoClones = useCallback(
@@ -70,7 +73,12 @@ export const useWorkReportsLifecycle = ({
       tenantId: string,
       options: { notify?: boolean } = {},
     ): Promise<{ created: number; linkedExisting: number }> => {
+      startupPerfStart('hook:useWorkReportsLifecycle.processScheduledAutoClones');
       if (autoCloneProcessRunning) {
+        startupPerfEnd(
+          'hook:useWorkReportsLifecycle.processScheduledAutoClones',
+          'skipped-running',
+        );
         return { created: 0, linkedExisting: 0 };
       }
 
@@ -205,27 +213,37 @@ export const useWorkReportsLifecycle = ({
           });
         }
 
+        startupPerfEnd(
+          'hook:useWorkReportsLifecycle.processScheduledAutoClones',
+          `created=${created},linked=${linkedExisting}`,
+        );
         return { created, linkedExisting };
       } finally {
         autoCloneProcessRunning = false;
+        startupPerfEnd('hook:useWorkReportsLifecycle.processScheduledAutoClones', 'finalize');
       }
     },
     [],
   );
 
   const loadWorkReports = useCallback(async () => {
+    startupPerfStart('hook:useWorkReportsLifecycle.loadWorkReports');
     if (!user || !tenantResolved || !resolvedTenantId) {
       setWorkReports([]);
       setAllWorkReports([]);
+      startupPerfEnd('hook:useWorkReportsLifecycle.loadWorkReports', 'missing-context');
       return;
     }
 
     setWorkReportsLoading(true);
     try {
+      startupPerfStart('hook:useWorkReportsLifecycle.prepareOfflineTenantScope');
       const preparedTenantId = await prepareOfflineTenantScope(user, { tenantId: resolvedTenantId });
+      startupPerfEnd('hook:useWorkReportsLifecycle.prepareOfflineTenantScope');
       await workReportsRepo.init();
-      await processScheduledAutoClones(preparedTenantId);
+      startupPerfStart('hook:useWorkReportsLifecycle.listWorkReports');
       const reports = await workReportsRepo.list({ tenantId: preparedTenantId, limit: WORK_REPORT_HISTORY_LIMIT });
+      startupPerfEnd('hook:useWorkReportsLifecycle.listWorkReports', `count=${reports.length}`);
       const orderedReports = [...reports].sort((left, right) => right.createdAt - left.createdAt);
       setAllWorkReports(orderedReports);
       setWorkReports(filterRecentWorkReportsByCreationDay(orderedReports, WORK_REPORT_VISIBLE_DAYS));
@@ -243,9 +261,9 @@ export const useWorkReportsLifecycle = ({
       });
     } finally {
       setWorkReportsLoading(false);
+      startupPerfEnd('hook:useWorkReportsLifecycle.loadWorkReports');
     }
   }, [
-    processScheduledAutoClones,
     resolvedTenantId,
     setAllWorkReports,
     setWorkReports,
@@ -255,14 +273,19 @@ export const useWorkReportsLifecycle = ({
   ]);
 
   const handleSyncNow = useCallback(async (options: { silent?: boolean } = {}) => {
+    startupPerfStart('hook:useWorkReportsLifecycle.handleSyncNow');
     const silent = options.silent === true;
     if (tenantUnavailable) {
-      if (silent) return;
+      if (silent) {
+        startupPerfEnd('hook:useWorkReportsLifecycle.handleSyncNow', 'tenant-unavailable-silent');
+        return;
+      }
       toast({
         title: 'Sincronización bloqueada',
         description: tenantErrorMessage,
         variant: 'destructive',
       });
+      startupPerfEnd('hook:useWorkReportsLifecycle.handleSyncNow', 'tenant-unavailable');
       return;
     }
 
@@ -331,6 +354,7 @@ export const useWorkReportsLifecycle = ({
       });
     } finally {
       setSyncing(false);
+      startupPerfEnd('hook:useWorkReportsLifecycle.handleSyncNow');
     }
   }, [
     loadWorkReports,
@@ -351,9 +375,37 @@ export const useWorkReportsLifecycle = ({
     if (workReportsLength > 0) return;
     if (bootstrapSyncAttemptedRef.current[resolvedTenantId]) return;
 
-    bootstrapSyncAttemptedRef.current[resolvedTenantId] = true;
-    void handleSyncNow({ silent: true });
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const runBootstrapSync = () => {
+      if (cancelled) return;
+      if (bootstrapSyncAttemptedRef.current[resolvedTenantId]) return;
+      bootstrapSyncAttemptedRef.current[resolvedTenantId] = true;
+      void handleSyncNow({ silent: true });
+    };
+
+    timeoutId = globalThis.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(runBootstrapSync, { timeout: 2000 });
+        return;
+      }
+
+      runBootstrapSync();
+    }, BOOTSTRAP_SYNC_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+    };
   }, [
+    BOOTSTRAP_SYNC_DELAY_MS,
     handleSyncNow,
     resolvedTenantId,
     syncing,
@@ -367,6 +419,8 @@ export const useWorkReportsLifecycle = ({
     if (!user || !tenantResolved || !resolvedTenantId) return;
 
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
 
     const runAutoCloneTick = async () => {
       if (cancelled) return;
@@ -392,13 +446,36 @@ export const useWorkReportsLifecycle = ({
       void runAutoCloneTick();
     }, AUTO_CLONE_CHECK_INTERVAL_MS);
 
-    void runAutoCloneTick();
+    timeoutId = globalThis.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(() => {
+          void runAutoCloneTick();
+        }, { timeout: 2000 });
+        return;
+      }
+
+      void runAutoCloneTick();
+    }, AUTO_CLONE_INITIAL_DELAY_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
     };
-  }, [processScheduledAutoClones, resolvedTenantId, setAllWorkReports, setWorkReports, tenantResolved, user]);
+  }, [
+    AUTO_CLONE_INITIAL_DELAY_MS,
+    processScheduledAutoClones,
+    resolvedTenantId,
+    setAllWorkReports,
+    setWorkReports,
+    tenantResolved,
+    user,
+  ]);
 
   return {
     loadWorkReports,

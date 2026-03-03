@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Work } from '@/types/work';
+import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
 import {
   TENANT_REQUIRED_MESSAGE,
@@ -69,6 +70,23 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function getErrorStatus(error: unknown): number | null {
+  const record = asRecord(error);
+  if (!record) return null;
+  return typeof record.status === 'number' ? record.status : null;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  const record = asRecord(error);
+  if (record && typeof record.message === 'string') {
+    return record.message;
+  }
+  return 'Error desconocido';
+}
+
 async function loadWorksFromOfflineReports(tenantId: string): Promise<Work[]> {
   await workReportsRepo.init();
   const reports = await workReportsRepo.list({ tenantId, limit: 500 });
@@ -119,6 +137,7 @@ async function loadWorksFromOfflineReports(tenantId: string): Promise<Work[]> {
 }
 
 export const useWorks = () => {
+  const INITIAL_WORKS_LOAD_DELAY_MS = 12000;
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -127,16 +146,20 @@ export const useWorks = () => {
   const loadWorks = useCallback(async () => {
     if (!user) return;
 
+    startupPerfStart('hook:useWorks.loadWorks');
     setLoading(true);
     try {
+      startupPerfStart('hook:useWorks.listProjects');
       const projects = await listProjects();
+      startupPerfEnd('hook:useWorks.listProjects', `count=${projects.length}`);
       const mappedWorks = projects.map(mapApiProjectToWork);
       setWorks(mappedWorks);
       hasShownFallbackToastRef.current = false;
-    } catch (error: any) {
-      const status = typeof error?.status === 'number' ? error.status : undefined;
+    } catch (error: unknown) {
+      const status = getErrorStatus(error);
       if (status && status >= 500) {
         try {
+          startupPerfStart('hook:useWorks.offlineFallback');
           const activeTenantId = await getActiveTenantId(user);
           if (!activeTenantId) {
             setWorks([]);
@@ -144,6 +167,7 @@ export const useWorks = () => {
               toast.error(TENANT_REQUIRED_MESSAGE);
               hasShownFallbackToastRef.current = true;
             }
+            startupPerfEnd('hook:useWorks.offlineFallback', 'missing-tenant');
             return;
           }
 
@@ -155,6 +179,7 @@ export const useWorks = () => {
             hasShownFallbackToastRef.current = true;
           }
           console.warn('[useWorks] /api/v1/erp/projects devolvió 500. Fallback offline aplicado.');
+          startupPerfEnd('hook:useWorks.offlineFallback', `count=${offlineWorks.length}`);
         } catch (fallbackError) {
           if (isTenantResolutionError(fallbackError)) {
             setWorks([]);
@@ -162,24 +187,52 @@ export const useWorks = () => {
               toast.error(TENANT_REQUIRED_MESSAGE);
               hasShownFallbackToastRef.current = true;
             }
+            startupPerfEnd('hook:useWorks.offlineFallback', 'tenant-resolution-error');
             return;
           }
 
           console.error('Error loading works from offline fallback:', fallbackError);
           toast.error('Error al cargar las obras (API y fallback offline fallaron).');
+          startupPerfEnd('hook:useWorks.offlineFallback', 'error');
         }
       } else {
         console.error('Error loading works:', error);
-        toast.error(`Error al cargar las obras: ${error.message || 'Error desconocido'}`);
+        toast.error(`Error al cargar las obras: ${getErrorMessage(error)}`);
       }
     } finally {
       setLoading(false);
+      startupPerfEnd('hook:useWorks.loadWorks');
     }
   }, [user]);
 
   useEffect(() => {
-    void loadWorks();
-  }, [loadWorks]);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const run = () => {
+      if (cancelled) return;
+      void loadWorks();
+    };
+
+    timeoutId = globalThis.setTimeout(() => {
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(run, { timeout: 1500 });
+        return;
+      }
+      run();
+    }, INITIAL_WORKS_LOAD_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [INITIAL_WORKS_LOAD_DELAY_MS, loadWorks]);
 
   const createWork = async (workData: Partial<Work>) => {
     if (!user) {
@@ -204,12 +257,12 @@ export const useWorks = () => {
       toast.success('Obra creada correctamente');
       await loadWorks();
       return mapApiProjectToWork(newProject);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[createWork] Error creating work:', {
-        message: error.message,
-        stack: error.stack,
+        message: getErrorMessage(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
-      toast.error(`Error al crear la obra: ${error.message || 'Error desconocido'}`);
+      toast.error(`Error al crear la obra: ${getErrorMessage(error)}`);
       throw error;
     }
   };
@@ -238,9 +291,9 @@ export const useWorks = () => {
 
       toast.success('Obra actualizada correctamente');
       await loadWorks();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating work:', error);
-      toast.error(`Error al actualizar la obra: ${error.message || 'Error desconocido'}`);
+      toast.error(`Error al actualizar la obra: ${getErrorMessage(error)}`);
       throw error;
     }
   };
@@ -271,9 +324,9 @@ export const useWorks = () => {
 
       toast.success('Obra eliminada correctamente');
       await loadWorks();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting work:', error);
-      toast.error(`Error al eliminar la obra: ${error.message || 'Error desconocido'}`);
+      toast.error(`Error al eliminar la obra: ${getErrorMessage(error)}`);
       throw error;
     }
   };
@@ -290,3 +343,4 @@ export const useWorks = () => {
     removeUserFromWork,
   };
 };
+
