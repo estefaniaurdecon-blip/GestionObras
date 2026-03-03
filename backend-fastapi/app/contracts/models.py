@@ -6,8 +6,9 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Column, Index, Numeric, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+from app.db.types import JSONB_COMPAT
 
 
 class ContractType(str, Enum):
@@ -100,9 +101,9 @@ class Contract(SQLModel, table=True):
     total_amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(14, 2)))
     currency: Optional[str] = Field(default=None, max_length=16)
 
-    comparative_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
-    contract_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
-    ocr_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    comparative_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
+    contract_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
+    ocr_data: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -142,8 +143,8 @@ class ContractOffer(SQLModel, table=True):
     original_filename: Optional[str] = Field(default=None, max_length=255)
 
     extracted_text: Optional[str] = Field(default=None, sa_column=Column(Text))
-    extraction_raw_json: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
-    extraction_meta: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    extraction_raw_json: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
+    extraction_meta: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -219,7 +220,7 @@ class ContractEvent(SQLModel, table=True):
     contract_id: int = Field(foreign_key="contract.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     event_type: str = Field(index=True, max_length=64)
-    payload: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    payload: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 

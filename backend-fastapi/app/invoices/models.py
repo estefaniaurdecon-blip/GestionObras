@@ -6,8 +6,9 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Column, Index, Numeric, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+from app.db.types import JSONB_COMPAT
 
 
 class InvoiceStatus(str, Enum):
@@ -72,11 +73,11 @@ class Invoice(SQLModel, table=True):
 
     raw_text: Optional[str] = Field(default=None, sa_column=Column(Text))
     extraction_raw_json: Optional[dict] = Field(
-        default=None, sa_column=Column(JSONB)
+        default=None, sa_column=Column(JSONB_COMPAT)
     )
-    extraction_meta: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    extraction_meta: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
     classification_suggestions: Optional[dict] = Field(
-        default=None, sa_column=Column(JSONB)
+        default=None, sa_column=Column(JSONB_COMPAT)
     )
     extraction_error: Optional[str] = Field(default=None, sa_column=Column(Text))
 
@@ -104,7 +105,7 @@ class InvoiceEvent(SQLModel, table=True):
     invoice_id: int = Field(foreign_key="invoice.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     event_type: InvoiceEventType = Field(index=True)
-    payload: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    payload: Optional[dict] = Field(default=None, sa_column=Column(JSONB_COMPAT))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
