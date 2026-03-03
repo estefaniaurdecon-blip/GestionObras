@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TabsContent } from '@/components/ui/tabs';
 import { EconomicsOverviewPanel } from '@/components/api/EconomicsOverviewPanel';
 import { UsersAdminPanel } from '@/components/api/UsersAdminPanel';
+import { startupPerfPoint } from '@/utils/startupPerf';
 import { HelpCircle, RefreshCw, Users } from 'lucide-react';
 
 type WorkItem = {
@@ -33,6 +35,10 @@ export const IndexSecondaryTabs = ({
   onOpenProjects,
   onReloadWorks,
 }: IndexSecondaryTabsProps) => {
+  useEffect(() => {
+    startupPerfPoint('panel:IndexSecondaryTabs mounted');
+  }, []);
+
   return (
     <>
       <TabsContent value="works" className="m-0 space-y-4">
@@ -115,3 +121,4 @@ export const IndexSecondaryTabs = ({
     </>
   );
 };
+

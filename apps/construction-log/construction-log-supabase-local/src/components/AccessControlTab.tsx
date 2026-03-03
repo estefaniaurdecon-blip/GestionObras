@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject, SetStateAction, Dispatch } from 'react';
+import { useEffect, type ChangeEvent, type RefObject, type SetStateAction, type Dispatch } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import type { AccessReport } from '@/types/accessControl';
+import { startupPerfPoint } from '@/utils/startupPerf';
 import { FileDown, FileText, Plus, Save, Truck, Upload, Users } from 'lucide-react';
 
 type WorkOption = {
@@ -70,6 +71,10 @@ export const AccessControlTab = ({
   setAccessAdditionalTasks,
   handleSaveAccessControl,
 }: AccessControlTabProps) => {
+  useEffect(() => {
+    startupPerfPoint('panel:AccessControlTab mounted');
+  }, []);
+
   return (
     <TabsContent value="access-control" className="m-0 space-y-4">
       <Card className="bg-white">

@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,7 @@ import type { ApiUser } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
 import { payloadText, type HistoryFilterKey } from '@/pages/indexHelpers';
 import type { PendingOverwrite } from '@/hooks/useWorkReportMutations';
+import { startupPerfPoint } from '@/utils/startupPerf';
 
 type SettingsDialogConfig = {
   open: boolean;
@@ -115,6 +116,10 @@ export const IndexDialogs = ({
   clone,
   overwrite,
 }: IndexDialogsProps) => {
+  useEffect(() => {
+    startupPerfPoint('panel:IndexDialogs mounted');
+  }, []);
+
   return (
     <>
       <AccessPersonalDialog
