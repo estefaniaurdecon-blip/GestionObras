@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -1840,14 +1840,18 @@ def update_inventory_item(
     return _inventory_item_to_dict(item)
 
 
-@router.delete("/inventory-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/inventory-items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_inventory_item(
     item_id: str,
     work_id: str = Query(..., min_length=1),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
-) -> None:
+) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     item = session.exec(
         select(WorkInventoryItem).where(
@@ -1863,6 +1867,7 @@ def delete_inventory_item(
         )
     session.delete(item)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/inventory/merge-suppliers")
