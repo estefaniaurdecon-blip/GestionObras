@@ -25,6 +25,7 @@ Referencia completa vigente: `documentacion/ENDPOINTS_UNIFICADOS.md`.
 | GET/POST/PATCH/DELETE | `/api/v1/invoices*` | Requiere auth; upload multipart | multipart/json | Facturas + metadatos OCR |
 | GET/POST/PATCH | `/api/v1/contracts*` | Requiere auth | JSON/multipart segun endpoint | Contratos/ofertas/aprobaciones |
 | POST | `/api/v1/internal/notifications` | Header `X-SAAS-API-KEY` | JSON (`email`, `title`, `body`, `reference`) | `201` sin payload |
+| POST | `/api/v1/internal/jobs/auto-duplicate-rental-machinery` | Bearer + permiso `erp:manage` | JSON opcional (`run_date`, `tenant_id`, `force`) | `202` (`scheduled`, `job_id`, `task_name`) |
 | POST | `/public/sign/{token}` | Publico | multipart opcional (firma) | Estado de firma de contrato |
 | GET/POST | `/public/supplier-onboarding/{token}` | Publico | GET valida token; POST datos proveedor | Datos de proveedor onboarding |
 | POST | `/api/v1/albaranes/process` (Azure proxy) | Bearer requerido | `multipart/form-data` con `file` | JSON normalizado DocInt (supplier/date/invoice/items/warnings) |
@@ -35,7 +36,8 @@ Referencia completa vigente: `documentacion/ENDPOINTS_UNIFICADOS.md`.
   - Super admin: debe enviar `X-Tenant-Id` en operaciones de tenant.
   - Usuario tenant: se resuelve por `current_user.tenant_id` (o por subdominio en dependencias especificas).
 - API interna:
-  - `/api/v1/internal/*` exige `X-SAAS-API-KEY`.
+  - `/api/v1/internal/notifications` exige `X-SAAS-API-KEY`.
+  - `/api/v1/internal/jobs/auto-duplicate-rental-machinery` exige auth Bearer y permiso `erp:manage`.
 
 ### No encontrado
 - No se encontraron contratos GraphQL/gRPC.
@@ -62,9 +64,10 @@ Referencia completa vigente: `documentacion/ENDPOINTS_UNIFICADOS.md`.
 ## Eventos/Mensajeria
 - Celery + Redis (backend):
   - Broker: `CELERY_BROKER_URL` / `REDIS_URL`.
-  - Tareas incluidas: `app.workers.tasks.invoices`, `app.workers.tasks.health`, `app.workers.tasks.contracts`.
+  - Tareas incluidas: `app.workers.tasks.invoices`, `app.workers.tasks.health`, `app.workers.tasks.contracts`, `app.workers.tasks.erp`.
   - Beat:
     - `send_due_reminders_daily` (07:00 Europe/Madrid).
+    - `auto_duplicate_rental_machinery_daily` (06:00 Europe/Madrid).
     - `ai_health_check` (cada 3 minutos).
 - Señales internas en Redis:
   - Clave `ai:down` para circuit breaker de IA.

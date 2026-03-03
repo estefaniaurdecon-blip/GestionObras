@@ -13,6 +13,7 @@ from app.models.tool import Tool  # noqa: F401
 from app.models.tenant_tool import TenantTool  # noqa: F401
 from app.models.tenant_branding import TenantBranding  # noqa: F401
 from app.models.tenant_profile import TenantProfile  # noqa: F401
+from app.models.job_run_lock import JobRunLock  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401

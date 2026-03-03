@@ -42,8 +42,10 @@ Objetivo: evolucion incremental sin reescritura total.
   - DTOs clave versionados y testeados (auth, work-report sync, invoices, contracts).
 - Estabilizar plano asinc:
   - Mantener Celery, pero con contratos de tarea claros y observabilidad basica (reintentos, errores, idempotencia).
+  - Cron legado de Supabase sustituido por tarea backend `auto_duplicate_rental_machinery_daily` (Beat, Europe/Madrid) con lock DB por tenant/fecha.
 - Completar corte Supabase en `construction-log`:
   - Eliminar llamadas residuales `supabase.*` o encapsular temporalmente en un adapter de compatibilidad unico.
+  - Marcar `apps/construction-log/construction-log-supabase-local` como DEPRECATED hasta su retirada completa.
 
 ## Principios
 - Boundary first: cada capa/modulo depende solo de la capa inferior acordada.

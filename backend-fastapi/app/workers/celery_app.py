@@ -32,6 +32,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.invoices.send_due_reminders",
         "schedule": crontab(minute=0, hour=7),
     },
+    "auto_duplicate_rental_machinery_daily": {
+        "task": "app.workers.tasks.erp.auto_duplicate_rental_machinery_daily",
+        "schedule": crontab(minute=0, hour=6),
+    },
     "ai_health_check": {
         "task": "app.workers.tasks.health.ai_health_check",
         "schedule": crontab(minute="*/3"),
@@ -43,5 +47,6 @@ celery_app.conf.update(
         "app.workers.tasks.invoices",
         "app.workers.tasks.health",
         "app.workers.tasks.contracts",
+        "app.workers.tasks.erp",
     ]
 )

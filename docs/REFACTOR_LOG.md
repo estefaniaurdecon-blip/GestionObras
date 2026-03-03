@@ -78,3 +78,27 @@ Plantilla para registrar cada iteracion de refactor.
   - Exponer endpoint para asignaciones de operadores de maquinaria de alquiler si se requiere paridad completa.
 - Decision/es tomadas:
   - Priorizar corte de dependencia Supabase en runtime aunque una parte de funcionalidad quede degradada temporalmente (sin tracking multiusuario remoto).
+
+## Iteracion 2026-03-03 - FASE 1 / Modulo 1: reemplazo backend de cron Supabase
+- Objetivo: retirar dependencia del cron Supabase para duplicacion diaria de partes con maquinaria de alquiler.
+- Alcance: `backend-fastapi` (servicio, tarea Celery, endpoint interno, lock idempotente) + documentacion tecnica.
+- Cambios realizados:
+  - Nuevo servicio `work_report_autoclone_service.py` con `run_auto_duplicate_rental_machinery_for_date(...)`.
+  - Nuevo lock DB `job_run_lock` (unique por `tenant_id`, `job_name`, `run_date`) para idempotencia diaria.
+  - Nueva tarea Celery `app.workers.tasks.erp.auto_duplicate_rental_machinery_daily` y registro en Beat (06:00 Europe/Madrid).
+  - Nuevo endpoint interno manual `POST /api/v1/internal/jobs/auto-duplicate-rental-machinery` (auth + permiso `erp:manage`, respuesta `202`).
+  - Tests minimos: idempotencia/lock y endpoint interno (401/403/202).
+  - `construction-log-supabase-local` documentado como DEPRECATED por retiro de Supabase.
+- Contratos impactados:
+  - Nuevo contrato interno: `POST /api/v1/internal/jobs/auto-duplicate-rental-machinery`.
+  - Sin breaking changes en endpoints publicos existentes.
+- Riesgos/mitigaciones:
+  - Enumeracion multi-tenant depende de `tenant.is_active`; si cambia la estrategia de tenancy, debe ajustarse `_load_target_tenants`.
+  - El cron legado en Supabase sigue existiendo hasta ejecutar PASO C (desactivacion explícita).
+- Tests ejecutados:
+  - `pytest backend-fastapi/tests/test_internal_jobs_autoclone.py`
+- Pendientes:
+  - PASO C: desactivar/retirar cron legacy de Supabase (`auto-duplicate-rental-machinery*`).
+  - Continuar retiro de `apps/construction-log/construction-log-supabase-local` segun plan de migracion.
+- Decision/es tomadas:
+  - Migrar ejecucion periodica a backend FastAPI + Celery en lugar de endurecer Supabase.
