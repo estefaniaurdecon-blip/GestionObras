@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlmodel import Session, select
@@ -250,14 +250,18 @@ def update_work_report_attachment(
     return _serialize_work_report_attachment(row)
 
 
-@router.delete("/work-reports/{work_report_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/work-reports/{work_report_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_work_report_attachment(
     work_report_id: str,
     attachment_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
-) -> None:
+) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     row = session.exec(
         select(WorkReportAttachment).where(
@@ -276,6 +280,7 @@ def delete_work_report_attachment(
 
     session.delete(row)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/attachments/images", status_code=status.HTTP_201_CREATED)
@@ -482,13 +487,17 @@ def mark_shared_file_downloaded(
     return {"success": True}
 
 
-@router.delete("/shared-files/{shared_file_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/shared-files/{shared_file_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_shared_file(
     shared_file_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
-) -> None:
+) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     row = _load_shared_file_or_404(session, shared_file_id, tenant_id)
     current_user_id = str(current_user.id)
@@ -500,3 +509,4 @@ def delete_shared_file(
         target.unlink()
     session.delete(row)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
