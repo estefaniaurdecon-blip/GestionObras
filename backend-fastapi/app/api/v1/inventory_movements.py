@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -345,13 +345,17 @@ def update_inventory_movement(
     return _movement_to_dict(movement, inventory_map)
 
 
-@router.delete("/{movement_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{movement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def delete_inventory_movement(
     movement_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
-) -> None:
+) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     movement = session.exec(
         select(InventoryMovement).where(
@@ -366,3 +370,4 @@ def delete_inventory_movement(
         )
     session.delete(movement)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
