@@ -102,3 +102,23 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar retiro de `apps/construction-log/construction-log-supabase-local` segun plan de migracion.
 - Decision/es tomadas:
   - Migrar ejecucion periodica a backend FastAPI + Celery en lugar de endurecer Supabase.
+
+## Iteracion 2026-03-03 - FASE 1 / Modulo 1: PASO C desactivacion cron legacy Supabase
+- Objetivo: desactivar el cron legacy de Supabase para auto-duplicado de maquinaria de alquiler.
+- Alcance: `construction-log-supabase-local` (migracion SQL de apagado de jobs pg_cron) + documentacion tecnica.
+- Cambios realizados:
+  - Nueva migracion `20260303140004_disable_auto_duplicate_rental_machinery_cron.sql`.
+  - Unschedule idempotente de jobs `auto-duplicate-rental-machinery-daily` y `auto-duplicate-rental-machinery-daily-0700`.
+  - Fallback por `cron.job.command` para jobs legacy que invoquen `trigger_auto_duplicate_rental_machinery` o `/functions/v1/auto-duplicate-rental-machinery`.
+  - Comentario de deprecacion en migracion: `DEPRECATED: moved to backend celery beat task AUTO_DUPLICATE_JOB_NAME`.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP.
+- Riesgos/mitigaciones:
+  - Si `pg_cron` no esta instalado o `cron.job` no esta disponible, la migracion no falla (best effort).
+  - La periodicidad operativa queda centralizada en Celery Beat del backend.
+- Tests ejecutados:
+  - Verificacion estatica de SQL (sin levantar Supabase local): migracion sin `Authorization`, `Bearer` ni `net.http_post`.
+- Pendientes:
+  - Continuar retiro de `apps/construction-log/construction-log-supabase-local` segun plan de migracion.
+- Decision/es tomadas:
+  - No reforzar Supabase legacy; mantener unicamente el scheduler backend (`auto_duplicate_rental_machinery_daily` en Celery Beat).

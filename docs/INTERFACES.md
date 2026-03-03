@@ -69,6 +69,7 @@ Referencia completa vigente: `documentacion/ENDPOINTS_UNIFICADOS.md`.
     - `send_due_reminders_daily` (07:00 Europe/Madrid).
     - `auto_duplicate_rental_machinery_daily` (06:00 Europe/Madrid).
     - `ai_health_check` (cada 3 minutos).
+  - Cron legacy Supabase `auto-duplicate-rental-machinery*` desactivado via migracion `20260303140004_disable_auto_duplicate_rental_machinery_cron.sql`.
 - Señales internas en Redis:
   - Clave `ai:down` para circuit breaker de IA.
 - Cola local offline (construction-log):
