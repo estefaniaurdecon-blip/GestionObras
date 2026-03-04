@@ -132,7 +132,7 @@ export const IndexHeader = ({
 
       <div className="w-full px-2 sm:px-4 lg:px-6 py-3 border-b bg-slate-100">
         <div className="overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
-          <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-slate-200/90 p-1 sm:grid-cols-4">
+          <TabsList className="grid h-auto min-h-12 w-full grid-cols-2 gap-2 rounded-xl bg-slate-200/90 p-1 sm:grid-cols-4">
             <TabsTrigger
               value="work-reports"
               className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"

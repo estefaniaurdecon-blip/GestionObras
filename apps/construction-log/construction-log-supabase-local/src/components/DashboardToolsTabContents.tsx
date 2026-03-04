@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  CirclePlus,
   ClipboardPen,
   ClipboardList,
   CloudUpload,
@@ -19,7 +20,6 @@ import {
   FileOutput,
   FileText,
   Pencil,
-  Plus,
   Trash2,
 } from 'lucide-react';
 
@@ -256,8 +256,11 @@ export const PartsTabContent = ({
 }: PartsTabContentProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const generatePartButtonClass = isAndroidPlatform
-    ? 'h-11 w-full sm:w-[200px] justify-center bg-blue-600 text-[16px] text-white hover:bg-blue-700'
-    : 'h-10 w-full sm:w-[160px] justify-center bg-blue-600 text-white hover:bg-blue-700';
+    ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800'
+    : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800';
+  const headerSpacerClass = isAndroidPlatform
+    ? 'hidden sm:block sm:w-[158px]'
+    : 'hidden sm:block sm:w-[148px]';
   const reportNameClass = isAndroidPlatform
     ? 'text-[19px] font-semibold text-slate-900 truncate leading-snug'
     : 'text-[17px] font-medium text-slate-900 truncate';
@@ -276,7 +279,7 @@ export const PartsTabContent = ({
                 disabled={!canCreateWorkReport}
                 onClick={onGenerateWorkReport}
               >
-                <Plus className={`mr-2 ${isAndroidPlatform ? 'h-5 w-5' : 'h-4 w-4'}`} />
+                <CirclePlus className={isAndroidPlatform ? 'h-5 w-5' : 'h-[18px] w-[18px]'} />
                 Generar parte
               </Button>
             </div>
@@ -298,7 +301,7 @@ export const PartsTabContent = ({
               </CardDescription>
             </div>
 
-            <div aria-hidden className="hidden sm:block sm:w-[200px]" />
+            <div aria-hidden className={headerSpacerClass} />
           </div>
         </CardHeader>
         {workReports.length === 0 ? (
