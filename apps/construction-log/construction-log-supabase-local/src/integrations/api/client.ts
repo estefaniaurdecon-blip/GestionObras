@@ -11,6 +11,9 @@ export { decodeJwtExpiryMs, getTokenExpiryMs, isTokenExpired } from './storage';
 
 const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').trim();
 const RAW_NATIVE_API_BASE_URL = (import.meta.env.VITE_NATIVE_API_BASE_URL || '').trim();
+const RAW_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 2000);
+const API_REQUEST_TIMEOUT_MS =
+  Number.isFinite(RAW_API_TIMEOUT_MS) && RAW_API_TIMEOUT_MS > 0 ? RAW_API_TIMEOUT_MS : 2000;
 
 function normalizeBaseUrl(url: string): string {
   if (url.length > 1 && url.endsWith('/')) return url.slice(0, -1);
@@ -121,11 +124,56 @@ function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const timeoutMs = API_REQUEST_TIMEOUT_MS;
+  const upstreamSignal = init.signal;
+
+  if (timeoutMs <= 0 && !upstreamSignal) {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  let timeoutTriggered = false;
+
+  const onUpstreamAbort = () => controller.abort();
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      controller.abort();
+    } else {
+      upstreamSignal.addEventListener('abort', onUpstreamAbort, { once: true });
+    }
+  }
+
+  const timeoutId =
+    timeoutMs > 0
+      ? setTimeout(() => {
+          timeoutTriggered = true;
+          controller.abort();
+        }, timeoutMs)
+      : null;
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timeoutTriggered) {
+      throw new TypeError(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+    if (upstreamSignal) {
+      upstreamSignal.removeEventListener('abort', onUpstreamAbort);
+    }
+  }
+}
+
 async function fetchWithNativeFallback(path: string, init: RequestInit): Promise<Response> {
   const primaryUrl = buildApiUrl(path);
 
   try {
-    return await fetch(primaryUrl, init);
+    return await fetchWithTimeout(primaryUrl, init);
   } catch (error) {
     if (!isNetworkError(error)) {
       throw error;
@@ -141,7 +189,7 @@ async function fetchWithNativeFallback(path: string, init: RequestInit): Promise
       if (fallbackBaseUrl === activeApiBaseUrl) continue;
       try {
         const fallbackUrl = buildApiUrl(path, fallbackBaseUrl);
-        const response = await fetch(fallbackUrl, init);
+        const response = await fetchWithTimeout(fallbackUrl, init);
         activeApiBaseUrl = fallbackBaseUrl;
         console.warn(`[api] Fallback nativo aplicado. Nueva base URL: ${activeApiBaseUrl}`);
         return response;
@@ -725,6 +773,36 @@ export interface AccessControlReportUpdatePayload {
   expected_updated_at?: string;
 }
 
+export interface ApiRentalMachinery {
+  id: number;
+  tenant_id: number;
+  project_id: number;
+  is_rental: boolean;
+  name: string;
+  description?: string | null;
+  provider?: string | null;
+  start_date: string;
+  end_date?: string | null;
+  price?: number | string | null;
+  price_unit: string;
+  status: string;
+  created_by_id?: number | null;
+  updated_by_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface ListRentalMachineryParams {
+  tenantId?: string | number | null;
+  projectId?: number;
+  date?: string;
+  status?: string;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface ListAccessControlReportsParams {
   tenantId?: string | number | null;
   projectId?: number;
@@ -783,6 +861,22 @@ export async function deleteAccessControlReport(
   return apiFetchJson<void>(`/api/v1/erp/access-control-reports/${reportId}`, {
     method: 'DELETE',
     headers: tenantHeader(tenantId),
+  });
+}
+
+export async function listRentalMachinery(
+  params: ListRentalMachineryParams = {}
+): Promise<ApiRentalMachinery[]> {
+  const query = buildQueryParams({
+    project_id: params.projectId,
+    date: params.date,
+    status: params.status,
+    include_deleted: params.includeDeleted,
+    limit: params.limit,
+    offset: params.offset,
+  });
+  return apiFetchJson<ApiRentalMachinery[]>(`/api/v1/erp/rental-machinery${query}`, {
+    headers: tenantHeader(params.tenantId),
   });
 }
 

@@ -1,8 +1,6 @@
-import type { Database } from '@/integrations/supabase/types';
+import { listRentalMachinery, type ApiRentalMachinery } from '@/integrations/api/client';
 
-type WorkRentalMachineryRow = Database['public']['Tables']['work_rental_machinery']['Row'];
-
-export type RentalPriceUnit = 'día' | 'hora' | 'mes';
+export type RentalPriceUnit = 'dia' | 'hora' | 'mes';
 
 export type RentalMachineStatus = 'active' | 'inactive' | string;
 
@@ -59,43 +57,71 @@ export const isActiveForDate = (machine: RentalMachine, fechaParte: string): boo
 export const filterActiveMachines = (
   machines: RentalMachine[],
   obraId: string,
-  fechaParte: string,
+  fechaParte: string
 ): RentalMachine[] => {
   return machines.filter((machine) => machine.obraId === obraId && isActiveForDate(machine, fechaParte));
 };
 
-const mapRowToRentalMachine = (row: WorkRentalMachineryRow): RentalMachine => ({
-  id: row.id,
-  obraId: row.work_id,
-  isRental: true,
-  name: row.type || row.machine_number || 'Maquinaria de alquiler',
-  description: row.machine_number || undefined,
+const parsePositiveInt = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const parsePriceUnit = (value: string | null | undefined): RentalPriceUnit => {
+  switch ((value || '').toLowerCase()) {
+    case 'hour':
+    case 'hora':
+      return 'hora';
+    case 'month':
+    case 'mes':
+      return 'mes';
+    default:
+      return 'dia';
+  }
+};
+
+const parsePrice = (value: number | string | null | undefined): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const mapApiToRentalMachine = (row: ApiRentalMachinery): RentalMachine => ({
+  id: String(row.id),
+  obraId: String(row.project_id),
+  isRental: Boolean(row.is_rental),
+  name: row.name || 'Maquinaria de alquiler',
+  description: row.description || undefined,
   provider: row.provider || undefined,
-  startDate: row.delivery_date,
-  endDate: row.removal_date,
-  price: typeof row.daily_rate === 'number' ? row.daily_rate : null,
-  priceUnit: 'día',
-  status: (row as unknown as { status?: string }).status ?? 'active',
+  startDate: row.start_date,
+  endDate: row.end_date || null,
+  price: parsePrice(row.price),
+  priceUnit: parsePriceUnit(row.price_unit),
+  status: row.status || 'active',
 });
 
 export const getRentalMachinesByWorksite = async (
   obraId: string,
-  organizationId?: string | null,
+  organizationId?: string | null
 ): Promise<RentalMachine[]> => {
-  if (!obraId) return [];
+  const projectId = parsePositiveInt(obraId);
+  if (!projectId) return [];
 
-  let query = supabase
-    .from('work_rental_machinery')
-    .select('*')
-    .eq('work_id', obraId)
-    .order('delivery_date', { ascending: false });
+  const tenantId = parsePositiveInt(organizationId ?? null);
+  const rows = await listRentalMachinery({
+    tenantId: tenantId ?? undefined,
+    projectId,
+    limit: 500,
+  });
 
-  if (organizationId) {
-    query = query.eq('organization_id', organizationId);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  return (data || []).map(mapRowToRentalMachine);
+  return rows.map(mapApiToRentalMachine);
 };

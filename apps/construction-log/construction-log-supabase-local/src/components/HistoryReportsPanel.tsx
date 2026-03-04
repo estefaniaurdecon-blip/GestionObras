@@ -92,8 +92,7 @@ export const HistoryReportsPanel = ({
       </div>
 
       <div className="rounded-md border bg-slate-100 p-2">
-        <div className="flex justify-center overflow-x-auto">
-          <div className="flex min-w-max items-center justify-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-center">
             {HISTORY_FILTER_OPTIONS.map((filterOption) => {
               const isEnabled = historyEnabledFilters.includes(filterOption.key);
               return (
@@ -102,7 +101,7 @@ export const HistoryReportsPanel = ({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className={`h-9 rounded-md px-3 text-sm sm:text-[15px] ${
+                  className={`h-9 w-full rounded-md px-2 text-sm sm:w-auto sm:px-3 sm:text-[15px] ${
                     isEnabled
                       ? 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
                       : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
@@ -113,7 +112,6 @@ export const HistoryReportsPanel = ({
                 </Button>
               );
             })}
-          </div>
         </div>
       </div>
 
@@ -250,7 +248,7 @@ export const HistoryReportsPanel = ({
             const isClosed = (payloadBoolean(report.payload, 'isClosed') ?? false) || report.status === 'completed';
 
             return (
-              <div key={report.id} className="p-3 flex items-start justify-between gap-3">
+              <div key={report.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 space-y-1">
                   <div className="text-base font-medium text-slate-900 truncate">{reportName}</div>
                   <div className="text-sm text-muted-foreground">Nº obra: {workNumber}</div>
@@ -260,8 +258,8 @@ export const HistoryReportsPanel = ({
                   <div className="text-sm text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
                   <div className="text-sm text-muted-foreground">Horas totales: {totalHoursLabel}</div>
                 </div>
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-0.5 px-1 py-1">
+                <div className="flex flex-col items-start gap-2 sm:flex-shrink-0 sm:items-end">
+                  <div className="flex flex-wrap items-center gap-0.5 px-1 py-1 sm:justify-end">
                     <Button
                       variant="ghost"
                       size="icon"

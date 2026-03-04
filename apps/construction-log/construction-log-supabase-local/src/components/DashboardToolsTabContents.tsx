@@ -7,6 +7,7 @@ import type { WorkReport } from '@/offline-db/types';
 import { payloadBoolean, payloadNumber, payloadText } from '@/pages/indexHelpers';
 import {
   AlarmClockCheck,
+  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   ClipboardPen,
@@ -66,6 +67,7 @@ export type PartsTabContentProps = BaseToolsProps & {
 export type ToolsPanelContentProps = BaseToolsProps & {
   activeToolsTab: ToolsActionTab;
   onOpenMetrics: () => void;
+  onBackToParts: () => void;
 };
 
 type ToolsOptionButtonProps = {
@@ -94,10 +96,12 @@ const ToolsOptionButton = ({ icon, label, disabled, onClick }: ToolsOptionButton
     variant="outline"
     disabled={disabled}
     onClick={onClick}
-    className="h-28 w-[150px] shrink-0 flex-col justify-center gap-2 rounded-2xl border-slate-300 bg-white px-3 text-slate-700 shadow-sm hover:bg-slate-50 [&_svg]:h-9 [&_svg]:w-9 md:h-32 md:w-[170px] md:[&_svg]:h-10 md:[&_svg]:w-10 lg:h-28 lg:w-[170px]"
+    className="h-24 w-full flex-col items-center justify-start gap-2 rounded-2xl border-slate-300 bg-white px-3 pt-3 text-slate-700 shadow-sm hover:bg-slate-50 sm:h-28 sm:pt-4 md:h-32 md:pt-5 lg:h-28 lg:pt-4"
   >
-    {icon}
-    <span className="max-w-full whitespace-normal break-words text-center text-[15px] font-medium leading-snug sm:text-base">
+    <span className="flex h-9 items-center justify-center sm:h-10 md:h-11 [&_svg]:h-8 [&_svg]:w-8 sm:[&_svg]:h-9 sm:[&_svg]:w-9 md:[&_svg]:h-10 md:[&_svg]:w-10">
+      {icon}
+    </span>
+    <span className="min-h-[2.25rem] max-w-full whitespace-normal break-words text-center text-[14px] font-medium leading-snug sm:min-h-[2.75rem] sm:text-base">
       {label}
     </span>
   </Button>
@@ -188,6 +192,7 @@ export const ToolsPanelContent = ({
   tenantUnavailable,
   onOpenMetrics,
   onPending,
+  onBackToParts,
 }: ToolsPanelContentProps) => {
   const subtitle =
     activeToolsTab === 'bulk-export'
@@ -196,12 +201,26 @@ export const ToolsPanelContent = ({
 
   return (
     <Card className="bg-white">
-      <CardHeader className="pb-3 text-center">
-        <CardTitle className="text-xl sm:text-2xl">{TOOLS_LABELS[activeToolsTab]}</CardTitle>
-        <CardDescription className="text-sm sm:text-[15px]">{subtitle}</CardDescription>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-start">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBackToParts}
+            className="h-8 px-2 text-slate-600 hover:text-slate-900"
+          >
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Volver
+          </Button>
+        </div>
+        <div className="space-y-1 text-center">
+          <CardTitle className="text-xl sm:text-2xl">{TOOLS_LABELS[activeToolsTab]}</CardTitle>
+          <CardDescription className="text-sm sm:text-[15px]">{subtitle}</CardDescription>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div className="mx-auto grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <ToolActions
             activeToolsTab={activeToolsTab}
             tenantUnavailable={tenantUnavailable}
@@ -237,8 +256,8 @@ export const PartsTabContent = ({
 }: PartsTabContentProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const generatePartButtonClass = isAndroidPlatform
-    ? 'h-11 w-[160px] justify-center bg-blue-600 text-[16px] text-white hover:bg-blue-700'
-    : 'h-10 w-[140px] justify-center bg-blue-600 text-white hover:bg-blue-700';
+    ? 'h-11 w-full sm:w-[200px] justify-center bg-blue-600 text-[16px] text-white hover:bg-blue-700'
+    : 'h-10 w-full sm:w-[160px] justify-center bg-blue-600 text-white hover:bg-blue-700';
   const reportNameClass = isAndroidPlatform
     ? 'text-[19px] font-semibold text-slate-900 truncate leading-snug'
     : 'text-[17px] font-medium text-slate-900 truncate';
@@ -279,7 +298,7 @@ export const PartsTabContent = ({
               </CardDescription>
             </div>
 
-            <div aria-hidden className="hidden sm:block sm:w-[140px]" />
+            <div aria-hidden className="hidden sm:block sm:w-[200px]" />
           </div>
         </CardHeader>
         {workReports.length === 0 ? (
@@ -291,14 +310,6 @@ export const PartsTabContent = ({
             <Button variant="outline" disabled={syncing || tenantUnavailable} onClick={() => void onSyncNow()}>
               <CloudUpload className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
               Sincronizar
-            </Button>
-            <Button
-              className={`${isAndroidPlatform ? 'text-[16px]' : ''} bg-blue-600 hover:bg-blue-700 text-white`}
-              disabled={!canCreateWorkReport}
-              onClick={onGenerateWorkReport}
-            >
-              <Plus className={`${isAndroidPlatform ? 'h-5 w-5' : 'h-4 w-4'} mr-2`} />
-              Generar Primer Parte
             </Button>
           </CardContent>
         ) : (
@@ -339,7 +350,7 @@ export const PartsTabContent = ({
                 const isClosed = (payloadBoolean(report.payload, 'isClosed') ?? false) || report.status === 'completed';
 
                 return (
-                  <div key={report.id} className="p-3 flex items-start justify-between gap-3">
+                  <div key={report.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 space-y-1">
                       <div className={reportNameClass}>{reportName}</div>
                       <div className={reportDetailClass}>Identificador: {reportIdentifier}</div>
@@ -347,8 +358,8 @@ export const PartsTabContent = ({
                       <div className={reportDetailClass}>Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
                       <div className={reportDetailClass}>Horas totales: {totalHoursLabel}</div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <div className="flex items-center gap-0.5 px-1 py-1">
+                    <div className="flex flex-col items-start gap-2 sm:flex-shrink-0 sm:items-end">
+                      <div className="flex flex-wrap items-center gap-0.5 px-1 py-1 sm:justify-end">
                         <Button
                           variant="ghost"
                           size="icon"

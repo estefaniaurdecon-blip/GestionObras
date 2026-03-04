@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TabsContent } from '@/components/ui/tabs';
 import { DashboardToolsTabs, type DashboardToolsTab } from '@/components/DashboardToolsTabs';
@@ -13,6 +14,7 @@ import { apiFetch } from '@/integrations/api/client';
 import type { ApiTenant } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
 import {
+  ArrowLeft,
   CheckCircle2,
   Clock3,
   ShieldCheck,
@@ -301,10 +303,10 @@ export const WorkReportsTab = ({
       ) : (
         <>
           <div className="text-center space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900">Partes de Trabajo</h2>
+            <h2 className="text-xl sm:text-3xl font-semibold text-slate-900">Partes de Trabajo</h2>
             <p className="text-[15px] text-muted-foreground">Gestiona tus partes diarios</p>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
             <Card className="border-emerald-200 bg-emerald-50/60">
               <CardContent className="p-3">
                 <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
@@ -413,9 +415,23 @@ export const WorkReportsTab = ({
 
               {activeToolsTab === 'history' ? (
                 <Card className="bg-white">
-                  <CardHeader className="pb-3 text-center">
-                    <CardTitle>Historial de partes</CardTitle>
-                    <CardDescription>Busqueda y filtros de partes guardados.</CardDescription>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-start">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveToolsTab('parts')}
+                        className="h-8 px-2 text-slate-600 hover:text-slate-900"
+                      >
+                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        Volver
+                      </Button>
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <CardTitle>Historial de partes</CardTitle>
+                      <CardDescription>Busqueda y filtros de partes guardados.</CardDescription>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {history ? (
@@ -435,6 +451,7 @@ export const WorkReportsTab = ({
                   tenantUnavailable={tenantUnavailable}
                   onOpenMetrics={() => setMetricsOpen(true)}
                   onPending={handlePending}
+                  onBackToParts={() => setActiveToolsTab('parts')}
                 />
               ) : (
                 <PartsTabContent

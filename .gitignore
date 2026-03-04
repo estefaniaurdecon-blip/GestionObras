@@ -9,6 +9,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.*.example
 *.sqlite3
 
 # Python / FastAPI (backend-fastapi, backend-django)
@@ -56,6 +57,8 @@ temp_remote_*.html
 
 # Azure Functions local secrets/config
 azure-functions/docint-proxy/local.settings.json
+**/local.settings*.json
+!**/local.settings.example.json
 
 # === Cross-project build artifacts ===
 **/node_modules/

@@ -303,8 +303,7 @@ const Index = () => {
   const shouldRenderSecondaryTabs =
     activeTab === 'works' ||
     activeTab === 'economics' ||
-    activeTab === 'help' ||
-    (activeTab === 'users' && showUserManagementTab);
+    activeTab === 'help';
   const shouldRenderDialogs =
     settingsOpen ||
     metricsOpen ||
@@ -335,7 +334,6 @@ const Index = () => {
           syncing={syncing}
           tenantUnavailable={tenantUnavailable}
           tenantErrorMessage={tenantErrorMessage}
-          showUserManagementTab={showUserManagementTab}
           hasPendingUpdate={hasPendingUpdate}
           onReloadWorks={loadWorks}
           onSyncNow={handleSyncNow}
@@ -462,9 +460,6 @@ const Index = () => {
               <IndexSecondaryTabs
                 sortedWorks={sortedWorks}
                 worksLoading={worksLoading}
-                showUserManagementTab={showUserManagementTab}
-                userTenantId={user.tenant_id}
-                isSuperAdmin={Boolean(user.is_super_admin)}
                 onOpenProjects={() => navigate('/projects')}
                 onReloadWorks={loadWorks}
               />
@@ -479,6 +474,7 @@ const Index = () => {
                 setOpen: setSettingsOpen,
                 user,
                 onProfileUpdated: refreshUser,
+                showUserManagementTab,
                 showUpdatesTab,
                 hasPendingUpdate,
               }}

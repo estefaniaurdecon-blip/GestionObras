@@ -86,7 +86,7 @@ export const AccessControlTab = ({
             Supervisión de Obra
           </CardDescription>
           <Button
-            className="mt-2 bg-blue-600 text-white hover:bg-blue-700"
+            className="mt-2 w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
             onClick={handleNewAccessControlRecord}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -223,7 +223,7 @@ export const AccessControlTab = ({
             <CardDescription>Registro de acceso del personal</CardDescription>
             <Button
               onClick={handleOpenAccessPersonalDialog}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
             >
               <Plus className="mr-2 h-4 w-4" />
               Añadir Personal
@@ -279,7 +279,7 @@ export const AccessControlTab = ({
             <CardDescription>Registro de acceso de maquinaria</CardDescription>
             <Button
               onClick={() => handlePending('Añadir maquinaria en control de accesos')}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
             >
               <Plus className="mr-2 h-4 w-4" />
               Añadir Máquina
@@ -334,3 +334,4 @@ export const AccessControlTab = ({
     </TabsContent>
   );
 };
+

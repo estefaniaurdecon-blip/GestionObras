@@ -73,14 +73,14 @@ export function TenantPicker({
           </Select>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={onContinue} disabled={!canContinue}>
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+          <Button onClick={onContinue} disabled={!canContinue} className="w-full sm:w-auto">
             {submitting ? 'Aplicando...' : 'Continuar'}
           </Button>
-          <Button variant="outline" onClick={onRetry} disabled={loading || submitting}>
+          <Button variant="outline" onClick={onRetry} disabled={loading || submitting} className="w-full sm:w-auto">
             Reintentar
           </Button>
-          <Button variant="ghost" onClick={onLogout} disabled={submitting}>
+          <Button variant="ghost" onClick={onLogout} disabled={submitting} className="w-full sm:w-auto">
             Cerrar sesión
           </Button>
         </div>
@@ -88,3 +88,4 @@ export function TenantPicker({
     </Card>
   );
 }
+

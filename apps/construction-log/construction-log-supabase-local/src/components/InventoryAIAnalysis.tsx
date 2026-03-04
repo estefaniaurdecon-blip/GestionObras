@@ -77,7 +77,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
           description: `${analysisMsg}${supplierMsg} Revisa los resultados.`,
         });
       } else {
-        throw new Error(data.error || 'Error en el análisis');
+        throw new Error(data.message || 'Error en el análisis');
       }
     } catch (error: any) {
       console.error('Error analyzing inventory:', error);

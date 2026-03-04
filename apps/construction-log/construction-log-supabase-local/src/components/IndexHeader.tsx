@@ -15,7 +15,6 @@ type IndexHeaderProps = {
   syncing: boolean;
   tenantUnavailable: boolean;
   tenantErrorMessage: string;
-  showUserManagementTab: boolean;
   // Optional for backwards compatibility with old Index prop wiring.
   showUpdatesTab?: boolean;
   hasPendingUpdate?: boolean;
@@ -33,7 +32,6 @@ export const IndexHeader = ({
   syncing,
   tenantUnavailable,
   tenantErrorMessage,
-  showUserManagementTab,
   showUpdatesTab: _showUpdatesTab,
   hasPendingUpdate = false,
   onReloadWorks,
@@ -56,12 +54,12 @@ export const IndexHeader = ({
               : undefined
           }
         >
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
               <AppIcon size={34} className="flex-shrink-0" />
               <div className="min-w-0 leading-tight">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h1 className="text-base sm:text-lg font-semibold truncate">Partes de Trabajo y C.A. 2.0</h1>
+                  <h1 className="text-[15px] sm:text-lg font-semibold truncate">Partes de Trabajo y C.A. 2.0</h1>
                   <Badge className="hidden sm:inline-flex bg-white/15 text-white border-white/20">
                     {roleLabel}
                   </Badge>
@@ -73,7 +71,7 @@ export const IndexHeader = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <div className="flex w-full items-center justify-end gap-1 sm:w-auto sm:gap-2 flex-shrink-0">
               <NetworkStatusIcon />
 
               <Button
@@ -134,42 +132,32 @@ export const IndexHeader = ({
 
       <div className="w-full px-2 sm:px-4 lg:px-6 py-3 border-b bg-slate-100">
         <div className="overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
-          <div className="flex w-max min-w-full justify-start md:justify-center">
-            <TabsList className="h-auto w-max min-w-max flex-nowrap bg-slate-200/90 p-1 rounded-xl justify-center gap-1">
-              <TabsTrigger
-                value="work-reports"
-                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Partes de Trabajo
-              </TabsTrigger>
-              <TabsTrigger
-                value="access-control"
-                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Control de Accesos
-              </TabsTrigger>
-              <TabsTrigger
-                value="works"
-                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Obras
-              </TabsTrigger>
-              <TabsTrigger
-                value="economics"
-                className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                Analisis Economico
-              </TabsTrigger>
-              {showUserManagementTab ? (
-                <TabsTrigger
-                  value="users"
-                  className="shrink-0 rounded-lg px-3 sm:px-4 py-2 text-sm sm:text-[15px] data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                >
-                  Gestion de Usuarios
-                </TabsTrigger>
-              ) : null}
-            </TabsList>
-          </div>
+          <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-slate-200/90 p-1 sm:grid-cols-4">
+            <TabsTrigger
+              value="work-reports"
+              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            >
+              Partes de Trabajo
+            </TabsTrigger>
+            <TabsTrigger
+              value="access-control"
+              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            >
+              Control de Accesos
+            </TabsTrigger>
+            <TabsTrigger
+              value="works"
+              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            >
+              Obras
+            </TabsTrigger>
+            <TabsTrigger
+              value="economics"
+              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            >
+              Analisis Economico
+            </TabsTrigger>
+          </TabsList>
         </div>
       </div>
     </>

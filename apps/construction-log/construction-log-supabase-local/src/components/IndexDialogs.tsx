@@ -22,6 +22,7 @@ import { CloneOptionsDialog, type CloneOptions } from '@/components/CloneOptions
 import { DashboardSummaryPanel } from '@/components/api/DashboardSummaryPanel';
 import { ProfileSettingsPanel } from '@/components/api/ProfileSettingsPanel';
 import { ToolsSettingsPanel } from '@/components/api/ToolsSettingsPanel';
+import { UsersAdminPanel } from '@/components/api/UsersAdminPanel';
 import { UpdatesViewer } from '@/components/UpdatesViewer';
 import { HistoryReportsDialog } from '@/components/HistoryReportsDialog';
 import { toast } from '@/hooks/use-toast';
@@ -36,6 +37,7 @@ type SettingsDialogConfig = {
   setOpen: Dispatch<SetStateAction<boolean>>;
   user: ApiUser;
   onProfileUpdated: () => Promise<void>;
+  showUserManagementTab: boolean;
   showUpdatesTab?: boolean;
   hasPendingUpdate?: boolean;
 };
@@ -145,6 +147,11 @@ export const IndexDialogs = ({
               <TabsTrigger value="tools" className="text-sm sm:text-[15px]">
                 Herramientas
               </TabsTrigger>
+              {settings.showUserManagementTab ? (
+                <TabsTrigger value="users" className="text-sm sm:text-[15px]">
+                  Gestion de usuarios
+                </TabsTrigger>
+              ) : null}
               {settings.showUpdatesTab ? (
                 <TabsTrigger value="updates" className="relative text-sm sm:text-[15px]">
                   Actualizaciones
@@ -171,6 +178,15 @@ export const IndexDialogs = ({
                 isSuperAdmin={Boolean(settings.user.is_super_admin)}
               />
             </TabsContent>
+
+            {settings.showUserManagementTab ? (
+              <TabsContent value="users" className="mt-4 max-h-[70vh] overflow-y-auto">
+                <UsersAdminPanel
+                  tenantId={settings.user.tenant_id}
+                  isSuperAdmin={Boolean(settings.user.is_super_admin)}
+                />
+              </TabsContent>
+            ) : null}
 
             {settings.showUpdatesTab ? (
               <TabsContent value="updates" className="mt-4 max-h-[70vh] overflow-y-auto">

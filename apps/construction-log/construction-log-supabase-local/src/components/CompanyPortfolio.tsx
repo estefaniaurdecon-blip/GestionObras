@@ -1017,7 +1017,14 @@ export const CompanyPortfolio: React.FC = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCompanies.map((company) => (
+          {filteredCompanies.map((company) => {
+            const isOwnedByCurrentUser =
+              company.created_by != null &&
+              user?.id != null &&
+              String(company.created_by) === String(user.id);
+            const canEditCompany = canEditAll || isOwnedByCurrentUser;
+
+            return (
             <Card 
               key={company.id} 
               className="hover:shadow-2xl transition-all duration-300 shadow-[0_4px_30px_rgba(128,145,85,0.35)] hover:shadow-[0_8px_40px_rgba(128,145,85,0.5)] relative"
@@ -1056,8 +1063,8 @@ export const CompanyPortfolio: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEdit(company)}
-                      disabled={!canEditAll && company.created_by !== user?.id}
-                      title={!canEditAll && company.created_by !== user?.id ? t('companyPortfolio.cannotEditOthers') : ''}
+                      disabled={!canEditCompany}
+                      title={!canEditCompany ? t('companyPortfolio.cannotEditOthers') : ''}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -1127,7 +1134,8 @@ export const CompanyPortfolio: React.FC = () => {
                 )}
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>
