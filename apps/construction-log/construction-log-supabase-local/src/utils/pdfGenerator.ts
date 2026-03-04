@@ -699,11 +699,23 @@ export const generateWorkReportPDF = async (
     invoice?: string;
     date?: string;
   }> = [];
+  const imageDedup = new Set<string>();
+  const pushImage = (image: {
+    data: string;
+    section: string;
+    company: string;
+    invoice?: string;
+    date?: string;
+  }) => {
+    if (!image.data || imageDedup.has(image.data)) return;
+    imageDedup.add(image.data);
+    images.push(image);
+  };
 
   // Recopilar imágenes de mano de obra
   report.workGroups?.forEach((group) => {
     if (group.documentImage) {
-      images.push({
+      pushImage({
         data: group.documentImage,
         section: 'MANO DE OBRA',
         company: group.company,
@@ -714,7 +726,7 @@ export const generateWorkReportPDF = async (
   // Recopilar imágenes de maquinaria
   report.machineryGroups?.forEach((group) => {
     if (group.documentImage) {
-      images.push({
+      pushImage({
         data: group.documentImage,
         section: 'MAQUINARIA',
         company: group.company,
@@ -725,7 +737,7 @@ export const generateWorkReportPDF = async (
   // Recopilar imágenes de materiales
   report.materialGroups?.forEach((group) => {
     if (group.documentImage) {
-      images.push({
+      pushImage({
         data: group.documentImage,
         section: 'MATERIALES',
         company: group.supplier,
@@ -733,12 +745,22 @@ export const generateWorkReportPDF = async (
         date: group.extractedDate,
       });
     }
+    group.imageUris?.forEach((imageUri) => {
+      if (!imageUri) return;
+      pushImage({
+        data: imageUri,
+        section: 'MATERIALES',
+        company: group.supplier,
+        invoice: group.invoiceNumber,
+        date: group.extractedDate,
+      });
+    });
   });
 
   // Recopilar imágenes de subcontratas
   report.subcontractGroups?.forEach((group) => {
     if (group.documentImage) {
-      images.push({
+      pushImage({
         data: group.documentImage,
         section: 'SUBCONTRATA',
         company: group.company,

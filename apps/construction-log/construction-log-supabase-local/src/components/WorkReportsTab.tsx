@@ -103,6 +103,7 @@ type WorkReportsTenantConfig = {
 type WorkReportsListConfig = {
   workReportsLoading: boolean;
   workReports: WorkReport[];
+  allWorkReports: WorkReport[];
   workReportVisibleDays: number;
   syncing: boolean;
   workReportsReadOnlyByRole: boolean;
@@ -110,6 +111,7 @@ type WorkReportsListConfig = {
 
 type WorkReportsActionsConfig = {
   handleSyncNow: () => Promise<void>;
+  reloadWorkReports: () => Promise<void>;
   openGenerateWorkReport: (targetDate?: string) => void;
   setMetricsOpen: Dispatch<SetStateAction<boolean>>;
   handlePending: (featureName: string) => void;
@@ -180,12 +182,14 @@ export const WorkReportsTab = ({
   const {
     workReportsLoading,
     workReports,
+    allWorkReports,
     workReportVisibleDays,
     syncing,
     workReportsReadOnlyByRole,
   } = reports;
   const {
     handleSyncNow,
+    reloadWorkReports,
     openGenerateWorkReport,
     setMetricsOpen,
     handlePending,
@@ -448,9 +452,11 @@ export const WorkReportsTab = ({
               ) : activeToolsTab !== 'parts' ? (
                 <ToolsPanelContent
                   activeToolsTab={activeToolsTab}
+                  workReports={allWorkReports}
                   tenantUnavailable={tenantUnavailable}
                   onOpenMetrics={() => setMetricsOpen(true)}
                   onPending={handlePending}
+                  onDataChanged={reloadWorkReports}
                   onBackToParts={() => setActiveToolsTab('parts')}
                 />
               ) : (

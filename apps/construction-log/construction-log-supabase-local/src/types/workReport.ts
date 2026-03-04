@@ -79,6 +79,7 @@ export interface MaterialGroup {
   invoiceNumber: string;
   items: MaterialItem[];
   documentImage?: string;
+  imageUris?: string[];
   extractedDate?: string; // Fecha extraida del albaran por IA
   docType?: 'MATERIALS_TABLE' | 'SERVICE_MACHINERY' | 'UNKNOWN' | null;
   serviceLines?: Array<{

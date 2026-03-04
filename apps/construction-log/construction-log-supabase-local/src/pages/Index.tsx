@@ -387,12 +387,14 @@ const Index = () => {
             reports={{
               workReportsLoading,
               workReports,
+              allWorkReports,
               workReportVisibleDays: WORK_REPORT_VISIBLE_DAYS,
               syncing,
               workReportsReadOnlyByRole,
             }}
             actions={{
               handleSyncNow,
+              reloadWorkReports: loadWorkReports,
               openGenerateWorkReport,
               setMetricsOpen,
               handlePending,
