@@ -6,7 +6,8 @@ from math import ceil
 from typing import Any, Optional
 
 from sqlmodel import Session, select
-from sqlalchemy import func
+from sqlalchemy import delete, func
+from sqlalchemy.exc import IntegrityError
 
 from app.models.erp import (
     Activity,
@@ -26,6 +27,7 @@ from app.models.erp import (
     WorkReport,
     WorkReportSyncLog,
 )
+from app.models.inventory import WorkInventorySyncLog
 from app.models.hr import Department, EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
@@ -1622,6 +1624,29 @@ def _get_work_report_by_external_id(
     return session.exec(stmt).one_or_none()
 
 
+def _get_work_report_by_report_identifier(
+    session: Session,
+    report_identifier: str,
+    *,
+    include_deleted: bool = False,
+) -> Optional[WorkReport]:
+    stmt = select(WorkReport).where(WorkReport.report_identifier == report_identifier)
+    if not include_deleted:
+        stmt = stmt.where(WorkReport.deleted_at.is_(None))
+    return session.exec(stmt).one_or_none()
+
+
+def _raise_work_report_integrity_error(exc: IntegrityError) -> None:
+    detail = str(getattr(exc, "orig", exc)).lower()
+    if "ix_erp_work_report_report_identifier_uq" in detail or "report_identifier" in detail:
+        raise ValueError("Ya existe otro parte con ese identificador.") from exc
+    if "ix_erp_work_report_tenant_external" in detail or "external_id" in detail:
+        raise ValueError("Ya existe otro parte con ese external_id.") from exc
+    if "ix_erp_work_report_tenant_idem" in detail or "idempotency_key" in detail:
+        raise ValueError("La operacion ya fue procesada previamente.") from exc
+    raise ValueError("No se pudo guardar el parte por un conflicto de datos.") from exc
+
+
 def list_work_reports(
     session: Session,
     tenant_id: Optional[int],
@@ -1695,6 +1720,18 @@ def create_work_report(
         if existing_by_external and existing_by_external.deleted_at is not None:
             raise ValueError("Ya existe un parte eliminado con ese external_id.")
 
+    normalized_report_identifier = (payload.report_identifier or "").strip() or None
+    if normalized_report_identifier:
+        existing_by_identifier = _get_work_report_by_report_identifier(
+            session,
+            normalized_report_identifier,
+            include_deleted=True,
+        )
+        if existing_by_identifier and existing_by_identifier.deleted_at is None:
+            raise ValueError("Ya existe otro parte con ese identificador.")
+        if existing_by_identifier and existing_by_identifier.deleted_at is not None:
+            raise ValueError("Ya existe un parte eliminado con ese identificador.")
+
     status = _normalize_work_report_status(payload.status)
     is_closed = bool(payload.is_closed or status in WORK_REPORT_CLOSED_STATUSES)
     if is_closed:
@@ -1705,7 +1742,7 @@ def create_work_report(
         tenant_id=resolved_tenant_id,
         project_id=payload.project_id,
         external_id=normalized_external_id,
-        report_identifier=(payload.report_identifier or "").strip() or None,
+        report_identifier=normalized_report_identifier,
         idempotency_key=normalized_idempotency,
         title=(payload.title or "").strip() or None,
         date=payload.date,
@@ -1718,7 +1755,11 @@ def create_work_report(
         updated_at=now,
     )
     session.add(report)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        _raise_work_report_integrity_error(exc)
     session.refresh(report)
     return report
 
@@ -1759,7 +1800,16 @@ def update_work_report(
         report.external_id = normalized_external_id
 
     if payload.report_identifier is not None:
-        report.report_identifier = payload.report_identifier.strip() or None
+        normalized_report_identifier = payload.report_identifier.strip() or None
+        if normalized_report_identifier:
+            existing_identifier = _get_work_report_by_report_identifier(
+                session,
+                normalized_report_identifier,
+                include_deleted=True,
+            )
+            if existing_identifier and existing_identifier.id != report.id:
+                raise ValueError("Ya existe otro parte con ese identificador.")
+        report.report_identifier = normalized_report_identifier
     if payload.title is not None:
         report.title = payload.title.strip() or None
     if payload.date is not None:
@@ -1780,7 +1830,11 @@ def update_work_report(
     report.updated_by_id = current_user_id
     report.updated_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(report)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        _raise_work_report_integrity_error(exc)
     session.refresh(report)
     return report
 
@@ -1804,6 +1858,29 @@ def delete_work_report(
     session.commit()
     session.refresh(report)
     return report
+
+
+def hard_delete_work_report(
+    session: Session,
+    report_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> None:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    report = _get_work_report_or_404(session, report_id, resolved_tenant_id, include_deleted=True)
+    _validate_work_report_open(report)
+    if report.id is None:
+        raise ValueError("Parte no encontrado.")
+
+    session.execute(
+        delete(WorkReportSyncLog).where(WorkReportSyncLog.server_report_id == report.id)
+    )
+    session.execute(
+        delete(WorkInventorySyncLog).where(WorkInventorySyncLog.work_report_id == report.id)
+    )
+    session.delete(report)
+    session.commit()
 
 
 def _coerce_date(value: Any, *, field_name: str) -> date:

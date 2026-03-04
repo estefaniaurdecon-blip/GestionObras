@@ -690,6 +690,16 @@ export async function deleteProject(projectId: number): Promise<void> {
   });
 }
 
+export async function deleteErpWorkReport(
+  reportId: number,
+  tenantId?: string | number | null
+): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/erp/work-reports/${reportId}`, {
+    method: 'DELETE',
+    headers: tenantHeader(tenantId),
+  });
+}
+
 function buildQueryParams(params: Record<string, string | number | boolean | undefined | null>): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {

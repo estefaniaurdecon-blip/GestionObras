@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, RefreshCw, Ticket, Users, Wrench } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getDashboardSummary, type DashboardSummary } from '@/integrations/api/client';
+import type { WorkReport } from '@/offline-db/types';
+
+type DashboardSummaryPanelProps = {
+  workReports?: WorkReport[];
+};
 
 const emptySummary: DashboardSummary = {
   tenants_activos: 0,
@@ -16,7 +21,76 @@ const emptySummary: DashboardSummary = {
   tickets_cerrados_ultima_semana: 0,
 };
 
-export function DashboardSummaryPanel() {
+function toNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(',', '.').trim();
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function parseIsoDay(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getReportDate(report: WorkReport): Date | null {
+  const payload = asRecord(report.payload);
+  const candidates = [report.date, payload?.date];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const parsed = parseIsoDay(candidate);
+    if (parsed) return parsed;
+    const fallback = new Date(candidate);
+    if (!Number.isNaN(fallback.getTime())) {
+      fallback.setHours(0, 0, 0, 0);
+      return fallback;
+    }
+  }
+  return null;
+}
+
+function getApprovedDate(report: WorkReport): Date | null {
+  const payload = asRecord(report.payload);
+  const approvedAt = payload?.approvedAt ?? payload?.approved_at;
+  if (typeof approvedAt === 'string' && approvedAt.trim()) {
+    const parsed = new Date(approvedAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    }
+  }
+  return getReportDate(report);
+}
+
+function getTotalHours(report: WorkReport): number {
+  const payload = asRecord(report.payload);
+  if (!payload) return 0;
+  return toNumber(payload.totalHours ?? payload.total_hours ?? payload.foremanHours ?? payload.foreman_hours);
+}
+
+export function DashboardSummaryPanel({ workReports = [] }: DashboardSummaryPanelProps) {
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +111,80 @@ export function DashboardSummaryPanel() {
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
+
+  const reportMetrics = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const last7Days = new Date(today);
+    last7Days.setDate(last7Days.getDate() - 6);
+
+    let abiertos = 0;
+    let enProgreso = 0;
+    let resueltosHoy = 0;
+    let cerrados7dias = 0;
+    let horasHoy = 0;
+    let horasUltimaSemana = 0;
+
+    for (const report of workReports) {
+      const payload = asRecord(report.payload);
+      const statusText = String(report.status ?? '').toLowerCase();
+      const isClosedByPayload = payload?.isClosed === true || payload?.is_closed === true;
+      const isApprovedByPayload = payload?.approved === true || payload?.isApproved === true;
+      const isApproved = isApprovedByPayload || statusText === 'approved' || statusText === 'closed';
+      const isOpenNotApproved = !isApproved && !isClosedByPayload;
+      const isPorCompletar =
+        statusText === 'draft' ||
+        statusText === 'pending' ||
+        statusText === 'missing_data' ||
+        statusText === 'missing_delivery_notes';
+
+      if (isOpenNotApproved) abiertos += 1;
+      if (isPorCompletar) enProgreso += 1;
+
+      const approvedDate = isApproved ? getApprovedDate(report) : null;
+      if (approvedDate) {
+        if (approvedDate.getTime() === today.getTime()) {
+          resueltosHoy += 1;
+        }
+        if (approvedDate >= last7Days && approvedDate <= today) {
+          cerrados7dias += 1;
+        }
+      }
+
+      const reportDate = getReportDate(report);
+      const hours = getTotalHours(report);
+      if (reportDate && hours > 0) {
+        if (reportDate.getTime() === today.getTime()) {
+          horasHoy += hours;
+        }
+        if (reportDate >= last7Days && reportDate <= today) {
+          horasUltimaSemana += hours;
+        }
+      }
+    }
+
+    return {
+      abiertos,
+      enProgreso,
+      resueltosHoy,
+      cerrados7dias,
+      horasHoy,
+      horasUltimaSemana,
+    };
+  }, [workReports]);
+
+  const effectiveSummary = useMemo<DashboardSummary>(
+    () => ({
+      ...summary,
+      horas_hoy: reportMetrics.horasHoy,
+      horas_ultima_semana: reportMetrics.horasUltimaSemana,
+      tickets_abiertos: reportMetrics.abiertos,
+      tickets_en_progreso: reportMetrics.enProgreso,
+      tickets_resueltos_hoy: reportMetrics.resueltosHoy,
+      tickets_cerrados_ultima_semana: reportMetrics.cerrados7dias,
+    }),
+    [reportMetrics, summary],
+  );
 
   return (
     <Card>
@@ -62,7 +210,7 @@ export function DashboardSummaryPanel() {
                 <Users className="h-3 w-3" />
                 Usuarios activos
               </div>
-              <div className="text-2xl font-semibold">{summary.usuarios_activos}</div>
+              <div className="text-2xl font-semibold">{effectiveSummary.usuarios_activos}</div>
             </CardContent>
           </Card>
 
@@ -72,21 +220,21 @@ export function DashboardSummaryPanel() {
                 <Wrench className="h-3 w-3" />
                 Herramientas activas
               </div>
-              <div className="text-2xl font-semibold">{summary.herramientas_activas}</div>
+              <div className="text-2xl font-semibold">{effectiveSummary.herramientas_activas}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-white">
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">Horas hoy</div>
-              <div className="text-2xl font-semibold">{summary.horas_hoy.toFixed(2)}</div>
+              <div className="text-2xl font-semibold">{effectiveSummary.horas_hoy.toFixed(2)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-white">
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">Horas ultima semana</div>
-              <div className="text-2xl font-semibold">{summary.horas_ultima_semana.toFixed(2)}</div>
+              <div className="text-2xl font-semibold">{effectiveSummary.horas_ultima_semana.toFixed(2)}</div>
             </CardContent>
           </Card>
         </div>
@@ -98,25 +246,25 @@ export function DashboardSummaryPanel() {
                 <Ticket className="h-3 w-3" />
                 Abiertos
               </div>
-              <div className="text-xl font-semibold">{summary.tickets_abiertos}</div>
+              <div className="text-xl font-semibold">{effectiveSummary.tickets_abiertos}</div>
             </CardContent>
           </Card>
           <Card className="bg-white">
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">En progreso</div>
-              <div className="text-xl font-semibold">{summary.tickets_en_progreso}</div>
+              <div className="text-xl font-semibold">{effectiveSummary.tickets_en_progreso}</div>
             </CardContent>
           </Card>
           <Card className="bg-white">
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">Resueltos hoy</div>
-              <div className="text-xl font-semibold">{summary.tickets_resueltos_hoy}</div>
+              <div className="text-xl font-semibold">{effectiveSummary.tickets_resueltos_hoy}</div>
             </CardContent>
           </Card>
           <Card className="bg-white">
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">Cerrados 7 dias</div>
-              <div className="text-xl font-semibold">{summary.tickets_cerrados_ultima_semana}</div>
+              <div className="text-xl font-semibold">{effectiveSummary.tickets_cerrados_ultima_semana}</div>
             </CardContent>
           </Card>
         </div>

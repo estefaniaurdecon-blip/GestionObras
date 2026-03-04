@@ -4,6 +4,7 @@ import type { GenerateWorkReportDraft } from '@/components/GenerateWorkReportPan
 import { normalizeNoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { toast } from '@/hooks/use-toast';
 import type { ApiUser } from '@/integrations/api/client';
+import { deleteErpWorkReport } from '@/integrations/api/client';
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
 import {
   isTenantResolutionError,
@@ -14,6 +15,7 @@ import {
   asRecord,
   cloneSerializableValue,
   payloadBoolean,
+  payloadNumber,
   payloadText,
 } from '@/pages/indexHelpers';
 
@@ -48,6 +50,7 @@ type UseWorkReportMutationsResult = {
   openExistingReport: (report: WorkReport) => void;
   openHistoryReport: (report: WorkReport) => void;
   openCloneFromHistoryDialog: (report: WorkReport) => void;
+  handleDeleteWorkReportPermanently: (report: WorkReport) => Promise<boolean>;
   handleCloneFromHistory: (options: CloneOptions) => void;
   handleSaveGeneratedWorkReport: (draft: GenerateWorkReportDraft) => Promise<void>;
   handleConfirmOverwrite: () => Promise<void>;
@@ -75,7 +78,7 @@ export const useWorkReportMutations = ({
 }: UseWorkReportMutationsParams): UseWorkReportMutationsResult => {
   const generateReportIdentifier = useCallback((date: string) => {
     const compactDate = date.replace(/-/g, '');
-    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
+    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
     return `PRT-${compactDate}-${suffix}`;
   }, []);
 
@@ -467,11 +470,116 @@ export const useWorkReportMutations = ({
     await persistGeneratedWorkReport(draftToPersist, { skipOverwritePrompt: true });
   }, [pendingOverwrite, persistGeneratedWorkReport, setPendingOverwrite]);
 
+  const handleDeleteWorkReportPermanently = useCallback(
+    async (report: WorkReport): Promise<boolean> => {
+      if (!user) return false;
+      if (tenantUnavailable) {
+        toast({
+          title: 'Operacion bloqueada',
+          description: tenantErrorMessage,
+          variant: 'destructive',
+        });
+        return false;
+      }
+      if (workReportsReadOnlyByRole) {
+        toast({
+          title: 'Solo lectura',
+          description: 'Este perfil no puede eliminar partes.',
+          variant: 'destructive',
+        });
+        return false;
+      }
+
+      try {
+        setWorkReportsLoading(true);
+        const preparedTenantId = await prepareOfflineTenantScope(user, { tenantId: resolvedTenantId });
+        const currentReport = await workReportsRepo.getById(report.id);
+        if (!currentReport) {
+          toast({
+            title: 'Parte no encontrado',
+            description: 'El parte ya no existe en almacenamiento local.',
+            variant: 'destructive',
+          });
+          return false;
+        }
+
+        const payload = asRecord(currentReport.payload);
+        let serverReportId = payloadNumber(payload, 'serverReportId');
+        if (serverReportId === null) {
+          const rawServerId = payloadText(payload, 'serverReportId') ?? payloadText(payload, 'server_report_id');
+          const parsedServerId = rawServerId ? Number(rawServerId) : Number.NaN;
+          if (Number.isFinite(parsedServerId) && parsedServerId > 0) {
+            serverReportId = parsedServerId;
+          }
+        }
+        if (serverReportId === null) {
+          const prefixedIdMatch = /^srv-(\d+)$/i.exec(currentReport.id);
+          if (prefixedIdMatch) {
+            const parsed = Number(prefixedIdMatch[1]);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              serverReportId = parsed;
+            }
+          }
+        }
+
+        if (serverReportId !== null) {
+          await deleteErpWorkReport(serverReportId, preparedTenantId);
+        }
+
+        const deleted = await workReportsRepo.hardDelete(currentReport.id);
+        if (!deleted) {
+          toast({
+            title: 'No se pudo eliminar',
+            description: 'El parte no existe o no se pudo borrar.',
+            variant: 'destructive',
+          });
+          return false;
+        }
+
+        await loadWorkReports();
+        toast({
+          title: 'Parte eliminado',
+          description: 'El parte se elimino de forma permanente.',
+        });
+        return true;
+      } catch (error) {
+        if (isTenantResolutionError(error)) {
+          toast({
+            title: 'No se pudo eliminar',
+            description: tenantErrorMessage,
+            variant: 'destructive',
+          });
+          return false;
+        }
+
+        console.error('[WorkReports] Error deleting report permanently:', error);
+        toast({
+          title: 'No se pudo eliminar',
+          description: 'No se pudo completar la eliminacion permanente del parte.',
+          variant: 'destructive',
+        });
+        return false;
+      } finally {
+        setWorkReportsLoading(false);
+      }
+    },
+    [
+      loadWorkReports,
+      resolvedTenantId,
+      setWorkReportsLoading,
+      tenantErrorMessage,
+      tenantUnavailable,
+      user,
+      workReportsReadOnlyByRole,
+    ],
+  );
+
   return {
     openGenerateWorkReport,
     openExistingReport,
     openHistoryReport,
     openCloneFromHistoryDialog,
+    handleDeleteWorkReportPermanently,
     handleCloneFromHistory,
     handleSaveGeneratedWorkReport,
     handleConfirmOverwrite,

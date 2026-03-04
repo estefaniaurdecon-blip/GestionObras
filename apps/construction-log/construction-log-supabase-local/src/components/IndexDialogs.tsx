@@ -45,6 +45,7 @@ type SettingsDialogConfig = {
 type MetricsDialogConfig = {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
+  workReports: WorkReport[];
 };
 
 type AccessPersonalDialogConfig = {
@@ -84,6 +85,7 @@ type HistoryDialogConfig = {
   onPending: (featureName: string) => void;
   onOpenCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenHistoryReport: (report: WorkReport) => void;
+  onDeleteReport?: (report: WorkReport) => void;
 };
 
 type CloneDialogConfig = {
@@ -215,7 +217,7 @@ export const IndexDialogs = ({
             <DialogTitle>Resumen en tiempo real</DialogTitle>
             <DialogDescription>Datos desde `/api/v1/dashboard/summary`.</DialogDescription>
           </DialogHeader>
-          <DashboardSummaryPanel />
+          <DashboardSummaryPanel workReports={metrics.workReports} />
         </DialogContent>
       </Dialog>
 
@@ -247,6 +249,7 @@ export const IndexDialogs = ({
         onPending={history.onPending}
         onOpenCloneFromHistoryDialog={history.onOpenCloneFromHistoryDialog}
         onOpenHistoryReport={history.onOpenHistoryReport}
+        onDeleteReport={history.onDeleteReport}
       />
 
       <CloneOptionsDialog

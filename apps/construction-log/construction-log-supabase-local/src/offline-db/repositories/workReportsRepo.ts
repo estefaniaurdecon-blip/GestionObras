@@ -386,6 +386,28 @@ export const workReportsRepo = {
     return true;
   },
 
+  async hardDelete(id: string): Promise<boolean> {
+    const existing = await workReportsRepo.getById(id);
+    if (!existing) return false;
+
+    await offlineDb.transaction(async (tx) => {
+      await tx.run(
+        `DELETE FROM outbox
+         WHERE entity = 'work_report'
+           AND entity_id = ?;`,
+        [id]
+      );
+
+      await tx.run(
+        `DELETE FROM work_reports
+         WHERE id = ?;`,
+        [id]
+      );
+    });
+
+    return true;
+  },
+
   async importLegacySnapshot(params: {
     tenantId: string;
     legacyUserScope?: string | null;

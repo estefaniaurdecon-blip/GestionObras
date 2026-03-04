@@ -282,6 +282,156 @@ def test_work_report_idempotency_is_namespaced_by_tenant(client: TestClient) -> 
     assert len(list_b.json()) == 1
 
 
+def test_work_report_report_identifier_is_unique_globally(client: TestClient) -> None:
+    token = _login_superadmin(client)
+    tenant_a = _create_tenant(client, token, prefix="erp-ident-a")
+    tenant_b = _create_tenant(client, token, prefix="erp-ident-b")
+    project_a = _create_project(client, token, tenant_a, name="Proyecto Ident A")
+    project_b = _create_project(client, token, tenant_b, name="Proyecto Ident B")
+
+    create_a = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_a)},
+        json={
+            "project_id": project_a,
+            "date": "2026-02-12",
+            "title": "Parte A",
+            "status": "draft",
+            "report_identifier": "20260212-abcd1234",
+            "payload": {},
+        },
+    )
+    assert create_a.status_code == status.HTTP_201_CREATED, create_a.text
+
+    duplicate_same_tenant = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_a)},
+        json={
+            "project_id": project_a,
+            "date": "2026-02-13",
+            "title": "Parte A duplicado",
+            "status": "draft",
+            "report_identifier": "20260212-abcd1234",
+            "payload": {},
+        },
+    )
+    assert duplicate_same_tenant.status_code == status.HTTP_409_CONFLICT
+
+    same_identifier_other_tenant = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_b)},
+        json={
+            "project_id": project_b,
+            "date": "2026-02-12",
+            "title": "Parte B",
+            "status": "draft",
+            "report_identifier": "20260212-abcd1234",
+            "payload": {},
+        },
+    )
+    assert same_identifier_other_tenant.status_code == status.HTTP_409_CONFLICT
+
+
+def test_work_report_delete_is_permanent_and_releases_identifier(client: TestClient) -> None:
+    token = _login_superadmin(client)
+    tenant_a = _create_tenant(client, token, prefix="erp-ident-delete-a")
+    tenant_b = _create_tenant(client, token, prefix="erp-ident-delete-b")
+    project_a = _create_project(client, token, tenant_a, name="Proyecto Delete A")
+    project_b = _create_project(client, token, tenant_b, name="Proyecto Delete B")
+    identifier = "20260225-zxyw9876"
+
+    created = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_a)},
+        json={
+            "project_id": project_a,
+            "date": "2026-02-25",
+            "title": "Parte a eliminar",
+            "status": "draft",
+            "report_identifier": identifier,
+            "payload": {},
+        },
+    )
+    assert created.status_code == status.HTTP_201_CREATED, created.text
+    report_id = created.json()["id"]
+
+    deleted = client.delete(
+        f"/api/v1/erp/work-reports/{report_id}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_a)},
+    )
+    assert deleted.status_code == status.HTTP_204_NO_CONTENT, deleted.text
+
+    should_be_gone = client.get(
+        f"/api/v1/erp/work-reports/{report_id}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_a)},
+    )
+    assert should_be_gone.status_code == status.HTTP_404_NOT_FOUND
+
+    recreated_on_other_tenant = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_b)},
+        json={
+            "project_id": project_b,
+            "date": "2026-02-26",
+            "title": "Parte recreado",
+            "status": "draft",
+            "report_identifier": identifier,
+            "payload": {},
+        },
+    )
+    assert recreated_on_other_tenant.status_code == status.HTTP_201_CREATED, recreated_on_other_tenant.text
+
+
+def test_work_report_update_rejects_existing_identifier(client: TestClient) -> None:
+    token = _login_superadmin(client)
+    tenant_id = _create_tenant(client, token, prefix="erp-ident-update")
+    project_id = _create_project(client, token, tenant_id, name="Proyecto Ident Update")
+
+    create_one = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        json={
+            "project_id": project_id,
+            "date": "2026-02-12",
+            "title": "Parte Uno",
+            "status": "draft",
+            "report_identifier": "20260212-aaaa1111",
+            "payload": {},
+        },
+    )
+    assert create_one.status_code == status.HTTP_201_CREATED, create_one.text
+    report_one_id = create_one.json()["id"]
+
+    create_two = client.post(
+        "/api/v1/erp/work-reports",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        json={
+            "project_id": project_id,
+            "date": "2026-02-13",
+            "title": "Parte Dos",
+            "status": "draft",
+            "report_identifier": "20260213-bbbb2222",
+            "payload": {},
+        },
+    )
+    assert create_two.status_code == status.HTTP_201_CREATED, create_two.text
+    report_two_id = create_two.json()["id"]
+
+    update_conflict = client.patch(
+        f"/api/v1/erp/work-reports/{report_two_id}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        json={"report_identifier": "20260212-aaaa1111"},
+    )
+    assert update_conflict.status_code == status.HTTP_409_CONFLICT
+
+    unchanged = client.get(
+        f"/api/v1/erp/work-reports/{report_one_id}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+    )
+    assert unchanged.status_code == status.HTTP_200_OK
+    assert unchanged.json()["report_identifier"] == "20260212-aaaa1111"
+
+
 def test_rental_machinery_active_on_filters_by_interval_and_status(client: TestClient) -> None:
     token = _login_superadmin(client)
     tenant_id = _create_tenant(client, token, prefix="erp-rental")

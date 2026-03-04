@@ -26,6 +26,7 @@ import { prepareOfflineTenantScope } from '@/offline-db/tenantScope';
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
 import {
   asRecord,
+  generateUniqueReportIdentifier,
   payloadBoolean,
   payloadNumber,
   payloadText,
@@ -40,17 +41,16 @@ import {
   AlarmClockCheck,
   ChevronLeft,
   CalendarDays,
-  CheckCircle2,
   CirclePlus,
   ClipboardPen,
   ClipboardList,
   CloudUpload,
   ChevronDown,
   Copy,
-  FileDown,
   FileInput,
   FileOutput,
   FileText,
+  Eye,
   Loader2,
   Paintbrush,
   Pencil,
@@ -97,6 +97,7 @@ export type PartsTabContentProps = BaseToolsProps & {
   onGenerateWorkReport: () => void;
   onCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenExistingReport: (report: WorkReport) => void;
+  onDeleteReport: (report: WorkReport) => void;
 };
 
 export type ToolsPanelContentProps = BaseToolsProps & {
@@ -211,10 +212,12 @@ const sanitizeFilenameSegment = (value: string) =>
     .replace(/_+/g, '_')
     .trim();
 
+const EXPORT_SUBDIRECTORY = 'PartesTrabajo';
+const PUBLIC_DOWNLOADS_EXPORT_PATH = `Download/${EXPORT_SUBDIRECTORY}`;
 const PREFERRED_NATIVE_EXPORT_DIRECTORIES: Directory[] = [
   Directory.ExternalStorage,
-  Directory.External,
   Directory.Documents,
+  Directory.External,
 ];
 
 const isNativePlatform = () => Capacitor.isNativePlatform?.() === true;
@@ -243,11 +246,11 @@ const sanitizeExportFilename = (filename: string) => {
 const getDirectoryLabel = (directory: Directory) => {
   switch (directory) {
     case Directory.ExternalStorage:
-      return 'Almacenamiento externo publico';
-    case Directory.External:
-      return 'Almacenamiento externo';
+      return `Descargas/${EXPORT_SUBDIRECTORY}`;
     case Directory.Documents:
-      return 'Documentos';
+      return `Documentos/${EXPORT_SUBDIRECTORY}`;
+    case Directory.External:
+      return `${EXPORT_SUBDIRECTORY} (almacenamiento de la app)`;
     default:
       return 'almacenamiento local';
   }
@@ -259,16 +262,21 @@ const saveBlobToNativeFile = async (blob: Blob, filename: string): Promise<{ uri
   let lastError: unknown;
 
   for (const directory of PREFERRED_NATIVE_EXPORT_DIRECTORIES) {
+    const path =
+      directory === Directory.ExternalStorage
+        ? `${PUBLIC_DOWNLOADS_EXPORT_PATH}/${safeFilename}`
+        : `${EXPORT_SUBDIRECTORY}/${safeFilename}`;
+
     try {
       const writeResult = await Filesystem.writeFile({
-        path: safeFilename,
+        path,
         data: base64,
         directory,
         recursive: true,
       });
       let uri = writeResult.uri;
       try {
-        const resolved = await Filesystem.getUri({ path: safeFilename, directory });
+        const resolved = await Filesystem.getUri({ path, directory });
         if (resolved?.uri) uri = resolved.uri;
       } catch {
         // Keep write URI as fallback
@@ -346,6 +354,19 @@ type ImportableReportPayload = {
   projectId: string | null;
   payload: unknown;
   sourceId?: string;
+};
+
+const normalizeReportIdentifierKey = (value: unknown): string => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return normalized;
+};
+
+const getReportIdentifierFromPayload = (payload: unknown): string | null => {
+  const payloadRecord = asRecord(payload);
+  if (!payloadRecord) return null;
+  const candidate = safeText(payloadRecord.reportIdentifier) || safeText(payloadRecord.report_identifier);
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : null;
 };
 
 const toImportableReportFromRecord = (record: Record<string, unknown>): ImportableReportPayload | null => {
@@ -803,27 +824,36 @@ const BulkExportCustomDialog = ({
   const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return undefined;
+      return { directory: undefined as Directory | undefined, uris: [] as string[] };
     }
 
     let directoryUsed: Directory | undefined;
+    const uris: string[] = [];
     for (const file of files) {
       const saved = await saveBlobToNativeFile(file.blob, file.filename);
       if (!directoryUsed) directoryUsed = saved.directory;
+      uris.push(saved.uri);
     }
-    return directoryUsed;
+    return { directory: directoryUsed, uris };
   };
 
-  const shareFiles = async (files: Array<{ filename: string; blob: Blob }>, title: string, text: string) => {
+  const shareFiles = async (
+    files: Array<{ filename: string; blob: Blob }>,
+    title: string,
+    text: string,
+    savedUris: string[] = [],
+  ) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
       return false;
     }
 
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      uris.push(saved.uri);
+    const uris = [...savedUris];
+    if (uris.length === 0) {
+      for (const file of files) {
+        const saved = await saveBlobToNativeFile(file.blob, file.filename);
+        uris.push(saved.uri);
+      }
     }
 
     await Share.share({
@@ -840,6 +870,7 @@ const BulkExportCustomDialog = ({
     title: string,
     text: string,
     exportedDescription: string,
+    savedUris: string[] = [],
   ) => {
     if (!isNativePlatform()) {
       toast({
@@ -859,7 +890,7 @@ const BulkExportCustomDialog = ({
           onClick={() => {
             void (async () => {
               try {
-                await shareFiles(files, title, text);
+                await shareFiles(files, title, text, savedUris);
                 toast({
                   title: 'Panel de compartir abierto',
                   description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -887,11 +918,18 @@ const BulkExportCustomDialog = ({
     setExportingFormat('pdf');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const nativeDirectory = await downloadFiles(files);
+      const downloadResult = await downloadFiles(files);
+      const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
         ? `Se guardaron ${exportReports.length} PDF en ${getDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${exportReports.length} PDF.`;
-      notifyExportReadyToShare(files, 'Partes en PDF', 'Partes de trabajo exportados', exportedDescription);
+      notifyExportReadyToShare(
+        files,
+        'Partes en PDF',
+        'Partes de trabajo exportados',
+        exportedDescription,
+        downloadResult.uris,
+      );
       setOpen(false);
     } catch (error) {
       console.error('[BulkExportCustomDialog] Error exportando PDF:', error);
@@ -920,11 +958,18 @@ const BulkExportCustomDialog = ({
       const stamp = new Date().toISOString().slice(0, 10);
       const zipFilename = `Partes_personalizados_${stamp}.zip`;
       const zipFiles = [{ filename: zipFilename, blob: zipBlob }];
-      const nativeDirectory = await downloadFiles(zipFiles);
+      const downloadResult = await downloadFiles(zipFiles);
+      const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
         ? `Se guardo el ZIP en ${getDirectoryLabel(nativeDirectory)}.`
         : `Se generaron ${exportReports.length} partes en ZIP.`;
-      notifyExportReadyToShare(zipFiles, 'Partes en ZIP', 'ZIP de partes', exportedDescription);
+      notifyExportReadyToShare(
+        zipFiles,
+        'Partes en ZIP',
+        'ZIP de partes',
+        exportedDescription,
+        downloadResult.uris,
+      );
       setOpen(false);
     } catch (error) {
       console.error('[BulkExportCustomDialog] Error exportando ZIP:', error);
@@ -1327,27 +1372,36 @@ const BulkExportSinglePeriodDialog = ({
   const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return undefined;
+      return { directory: undefined as Directory | undefined, uris: [] as string[] };
     }
 
     let directoryUsed: Directory | undefined;
+    const uris: string[] = [];
     for (const file of files) {
       const saved = await saveBlobToNativeFile(file.blob, file.filename);
       if (!directoryUsed) directoryUsed = saved.directory;
+      uris.push(saved.uri);
     }
-    return directoryUsed;
+    return { directory: directoryUsed, uris };
   };
 
-  const shareFiles = async (files: Array<{ filename: string; blob: Blob }>, title: string, text: string) => {
+  const shareFiles = async (
+    files: Array<{ filename: string; blob: Blob }>,
+    title: string,
+    text: string,
+    savedUris: string[] = [],
+  ) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
       return false;
     }
 
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      uris.push(saved.uri);
+    const uris = [...savedUris];
+    if (uris.length === 0) {
+      for (const file of files) {
+        const saved = await saveBlobToNativeFile(file.blob, file.filename);
+        uris.push(saved.uri);
+      }
     }
 
     await Share.share({
@@ -1364,6 +1418,7 @@ const BulkExportSinglePeriodDialog = ({
     title: string,
     text: string,
     exportedDescription: string,
+    savedUris: string[] = [],
   ) => {
     if (!isNativePlatform()) {
       toast({
@@ -1383,7 +1438,7 @@ const BulkExportSinglePeriodDialog = ({
           onClick={() => {
             void (async () => {
               try {
-                await shareFiles(files, title, text);
+                await shareFiles(files, title, text, savedUris);
                 toast({
                   title: 'Panel de compartir abierto',
                   description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -1423,11 +1478,18 @@ const BulkExportSinglePeriodDialog = ({
     setExportingFormat('pdf');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const nativeDirectory = await downloadFiles(files);
+      const downloadResult = await downloadFiles(files);
+      const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
         ? `Se guardaron ${exportReports.length} PDF en ${getDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${exportReports.length} PDF.`;
-      notifyExportReadyToShare(files, 'Partes en PDF', 'Partes de trabajo exportados', exportedDescription);
+      notifyExportReadyToShare(
+        files,
+        'Partes en PDF',
+        'Partes de trabajo exportados',
+        exportedDescription,
+        downloadResult.uris,
+      );
       setOpen(false);
     } catch (error) {
       console.error('[BulkExportSinglePeriodDialog] Error exportando PDF:', error);
@@ -1455,11 +1517,18 @@ const BulkExportSinglePeriodDialog = ({
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       const zipFilename = getZipFilename();
       const zipFiles = [{ filename: zipFilename, blob: zipBlob }];
-      const nativeDirectory = await downloadFiles(zipFiles);
+      const downloadResult = await downloadFiles(zipFiles);
+      const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
         ? `Se guardo el ZIP en ${getDirectoryLabel(nativeDirectory)}.`
         : `Se generaron ${exportReports.length} partes en ZIP.`;
-      notifyExportReadyToShare(zipFiles, 'Partes en ZIP', 'ZIP de partes', exportedDescription);
+      notifyExportReadyToShare(
+        zipFiles,
+        'Partes en ZIP',
+        'ZIP de partes',
+        exportedDescription,
+        downloadResult.uris,
+      );
       setOpen(false);
     } catch (error) {
       console.error('[BulkExportSinglePeriodDialog] Error exportando ZIP:', error);
@@ -1757,27 +1826,31 @@ const DataManagementExportDialog = ({
   const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return undefined;
+      return { directory: undefined as Directory | undefined, uris: [] as string[] };
     }
 
     let directoryUsed: Directory | undefined;
+    const uris: string[] = [];
     for (const file of files) {
       const saved = await saveBlobToNativeFile(file.blob, file.filename);
       if (!directoryUsed) directoryUsed = saved.directory;
+      uris.push(saved.uri);
     }
-    return directoryUsed;
+    return { directory: directoryUsed, uris };
   };
 
-  const shareFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
+  const shareFiles = async (files: Array<{ filename: string; blob: Blob }>, savedUris: string[] = []) => {
     if (!isNativePlatform()) {
       files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
       return;
     }
 
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      uris.push(saved.uri);
+    const uris = [...savedUris];
+    if (uris.length === 0) {
+      for (const file of files) {
+        const saved = await saveBlobToNativeFile(file.blob, file.filename);
+        uris.push(saved.uri);
+      }
     }
 
     await Share.share({
@@ -1828,7 +1901,8 @@ const DataManagementExportDialog = ({
         };
       });
 
-      const nativeDirectory = await downloadFiles(files);
+      const downloadResult = await downloadFiles(files);
+      const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
         ? `Se guardaron ${files.length} JSON en ${getDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${files.length} JSON.`;
@@ -1852,7 +1926,7 @@ const DataManagementExportDialog = ({
             onClick={() => {
               void (async () => {
                 try {
-                  await shareFiles(files);
+                  await shareFiles(files, downloadResult.uris);
                   toast({
                     title: 'Panel de compartir abierto',
                     description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -1967,11 +2041,13 @@ const DataManagementImportDialog = ({
   disabled: boolean;
   onDataChanged: () => Promise<void>;
 }) => {
+  type ImportConflictPolicy = 'renumber' | 'overwrite';
   const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
+  const [pendingConflictCount, setPendingConflictCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resetFiles = () => {
@@ -1990,15 +2066,33 @@ const DataManagementImportDialog = ({
     setSelectedFiles(files);
   };
 
-  const handleImport = async () => {
+  const handleImport = async (selectedConflictPolicy?: ImportConflictPolicy) => {
     if (selectedFiles.length === 0) return;
     setImporting(true);
 
     try {
       const tenantId = await prepareOfflineTenantScope(user);
-      let importedCount = 0;
+      const existingReports = await workReportsRepo.list({ tenantId, limit: 5000 });
+      const existingByIdentifier = new Map<string, WorkReport>();
+      const reservedIdentifiers = new Set<string>();
+
+      existingReports.forEach((report) => {
+        const identifier = getReportIdentifierFromPayload(report.payload);
+        if (!identifier) return;
+        const key = normalizeReportIdentifierKey(identifier);
+        if (!key) return;
+        reservedIdentifiers.add(identifier);
+        if (!existingByIdentifier.has(key)) {
+          existingByIdentifier.set(key, report);
+        }
+      });
+
+      let createdCount = 0;
+      let overwrittenCount = 0;
+      let renumberedCount = 0;
       let invalidFilesCount = 0;
       let invalidReportsCount = 0;
+      const reportsToImport: Array<{ fileName: string; report: ImportableReportPayload }> = [];
 
       for (const file of selectedFiles) {
         try {
@@ -2016,31 +2110,7 @@ const DataManagementImportDialog = ({
               invalidReportsCount += 1;
               continue;
             }
-
-            const payloadRecord = asRecord(importable.payload);
-            const payloadWithImportMeta = payloadRecord
-              ? {
-                  ...payloadRecord,
-                  importedAt: new Date().toISOString(),
-                  importedFromFile: file.name,
-                  importedOriginalReportId: importable.sourceId ?? null,
-                }
-              : {
-                  value: importable.payload,
-                  importedAt: new Date().toISOString(),
-                  importedFromFile: file.name,
-                  importedOriginalReportId: importable.sourceId ?? null,
-                };
-
-            await workReportsRepo.create({
-              tenantId,
-              projectId: importable.projectId,
-              title: importable.title ?? `Parte ${importable.date}`,
-              date: importable.date,
-              status: importable.status,
-              payload: payloadWithImportMeta,
-            });
-            importedCount += 1;
+            reportsToImport.push({ fileName: file.name, report: importable });
           }
         } catch (error) {
           console.error('[DataManagementImportDialog] Error procesando archivo JSON:', file.name, error);
@@ -2048,7 +2118,7 @@ const DataManagementImportDialog = ({
         }
       }
 
-      if (importedCount === 0) {
+      if (reportsToImport.length === 0) {
         toast({
           title: 'Importacion sin cambios',
           description: 'No se encontraron partes validos en los archivos seleccionados.',
@@ -2057,18 +2127,100 @@ const DataManagementImportDialog = ({
         return;
       }
 
+      const conflictMatchesCount = reportsToImport.reduce((count, entry) => {
+        const sourceIdentifier = getReportIdentifierFromPayload(entry.report.payload);
+        const targetIdentifier = sourceIdentifier ?? '';
+        const identifierKey = normalizeReportIdentifierKey(targetIdentifier);
+        if (!identifierKey) return count;
+        return existingByIdentifier.has(identifierKey) ? count + 1 : count;
+      }, 0);
+
+      if (conflictMatchesCount > 0 && !selectedConflictPolicy) {
+        setPendingConflictCount(conflictMatchesCount);
+        return;
+      }
+
+      const conflictPolicy = selectedConflictPolicy ?? 'overwrite';
+
+      for (const { fileName, report: importable } of reportsToImport) {
+        const payloadRecord = asRecord(importable.payload);
+        const sourceIdentifier = getReportIdentifierFromPayload(importable.payload);
+        let targetIdentifier = sourceIdentifier ?? generateUniqueReportIdentifier(importable.date, reservedIdentifiers);
+        let identifierKey = normalizeReportIdentifierKey(targetIdentifier);
+        const existingMatch = identifierKey ? existingByIdentifier.get(identifierKey) : undefined;
+        const hasConflict = Boolean(existingMatch);
+
+        if (hasConflict && conflictPolicy === 'renumber') {
+          targetIdentifier = generateUniqueReportIdentifier(importable.date, reservedIdentifiers);
+          identifierKey = normalizeReportIdentifierKey(targetIdentifier);
+          renumberedCount += 1;
+        }
+
+        const payloadWithImportMeta = payloadRecord
+          ? {
+              ...payloadRecord,
+              reportIdentifier: targetIdentifier,
+              importedAt: new Date().toISOString(),
+              importedFromFile: fileName,
+              importedOriginalReportId: importable.sourceId ?? null,
+              importConflictPolicy: conflictPolicy,
+            }
+          : {
+              value: importable.payload,
+              reportIdentifier: targetIdentifier,
+              importedAt: new Date().toISOString(),
+              importedFromFile: fileName,
+              importedOriginalReportId: importable.sourceId ?? null,
+              importConflictPolicy: conflictPolicy,
+            };
+
+        if (hasConflict && conflictPolicy === 'overwrite' && existingMatch) {
+          await workReportsRepo.update(existingMatch.id, {
+            projectId: importable.projectId,
+            title: importable.title ?? `Parte ${importable.date}`,
+            date: importable.date,
+            status: importable.status,
+            payload: payloadWithImportMeta,
+          });
+          overwrittenCount += 1;
+        } else {
+          const createdReport = await workReportsRepo.create({
+            tenantId,
+            projectId: importable.projectId,
+            title: importable.title ?? `Parte ${importable.date}`,
+            date: importable.date,
+            status: importable.status,
+            payload: payloadWithImportMeta,
+          });
+          createdCount += 1;
+          if (identifierKey) {
+            existingByIdentifier.set(identifierKey, createdReport);
+          }
+        }
+
+        reservedIdentifiers.add(targetIdentifier);
+      }
+
+      const importedCount = createdCount + overwrittenCount;
+
       await onDataChanged();
 
       const errorsSummary =
         invalidFilesCount > 0 || invalidReportsCount > 0
           ? ` (archivos invalidos: ${invalidFilesCount}, partes invalidos: ${invalidReportsCount})`
           : '';
+      const conflictSummary =
+        conflictMatchesCount > 0
+          ? ` Conflictos de identificador: ${conflictMatchesCount}.`
+          : '';
+      const importSummary = `Nuevos: ${createdCount}. Sobrescritos: ${overwrittenCount}. Identificador cambiado: ${renumberedCount}.`;
 
       toast({
-        title: importedCount > 1 ? 'Partes importados' : 'Parte importado',
-        description: `Se importaron ${importedCount} parte(s) correctamente${errorsSummary}.`,
+        title: 'Importacion completada',
+        description: `Se procesaron ${importedCount} parte(s). ${importSummary}${conflictSummary}${errorsSummary}`,
       });
 
+      setPendingConflictCount(null);
       resetFiles();
       setOpen(false);
     } catch (error) {
@@ -2087,6 +2239,7 @@ const DataManagementImportDialog = ({
     if (!open) {
       resetFiles();
       setImporting(false);
+      setPendingConflictCount(null);
     }
   }, [open]);
 
@@ -2104,7 +2257,7 @@ const DataManagementImportDialog = ({
         <DialogHeader>
           <DialogTitle>Importar datos</DialogTitle>
           <DialogDescription>
-            Selecciona uno o varios archivos JSON para crear partes nuevos con su informacion.
+            Selecciona uno o varios archivos JSON para crear o actualizar partes con su informacion.
           </DialogDescription>
         </DialogHeader>
 
@@ -2124,6 +2277,9 @@ const DataManagementImportDialog = ({
 
           <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700">
             Archivos seleccionados: {selectedFiles.length}
+          </div>
+          <div className="rounded-md border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Si un identificador ya existe, se mostrara un aviso para elegir entre sobrescribir o cambiar identificador.
           </div>
 
           {selectedFiles.length > 0 ? (
@@ -2162,6 +2318,50 @@ const DataManagementImportDialog = ({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <Dialog
+        open={pendingConflictCount !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !importing) {
+            setPendingConflictCount(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Parte ya existente</DialogTitle>
+            <DialogDescription>
+              Se detectaron {pendingConflictCount ?? 0} conflicto(s) de identificador. Elige como continuar.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row flex-wrap justify-end gap-2 sm:space-x-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingConflictCount(null)}
+              disabled={importing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleImport('renumber')}
+              disabled={importing}
+            >
+              Cambiar identificador
+            </Button>
+            <Button
+              type="button"
+              className="!bg-blue-600 !text-white hover:!bg-blue-700 border border-blue-600"
+              onClick={() => void handleImport('overwrite')}
+              disabled={importing}
+            >
+              Sobrescribir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
@@ -2319,6 +2519,7 @@ export const PartsTabContent = ({
   onPending,
   onCloneFromHistoryDialog,
   onOpenExistingReport,
+  onDeleteReport,
 }: PartsTabContentProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const generatePartButtonClass = isAndroidPlatform
@@ -2333,6 +2534,10 @@ export const PartsTabContent = ({
   const reportDetailClass = isAndroidPlatform
     ? 'text-[16px] text-muted-foreground leading-snug'
     : 'text-[15px] text-muted-foreground';
+  const unsyncedReportsCount = useMemo(
+    () => workReports.filter((report) => report.syncStatus !== 'synced').length,
+    [workReports],
+  );
 
   return (
     <div className="space-y-2">
@@ -2363,6 +2568,8 @@ export const PartsTabContent = ({
                         ? 'Cargando partes locales...'
                         : workReports.length === 0
                           ? `No hay partes de trabajo en los ultimos ${workReportVisibleDays} dias`
+                          : unsyncedReportsCount > 0
+                            ? `Mostrando ultimos ${workReportVisibleDays} dias + ${unsyncedReportsCount} sin sincronizar`
                           : `Mostrando partes de los ultimos ${workReportVisibleDays} dias`}
               </CardDescription>
             </div>
@@ -2416,7 +2623,16 @@ export const PartsTabContent = ({
                 const reportIdentifier = payloadText(report.payload, 'reportIdentifier') ?? report.id.slice(0, 8);
                 const totalHours = payloadNumber(report.payload, 'totalHours');
                 const totalHoursLabel = typeof totalHours === 'number' ? totalHours.toFixed(2) : '--';
-                const isClosed = (payloadBoolean(report.payload, 'isClosed') ?? false) || report.status === 'completed';
+                const statusText = String(report.status ?? '').toLowerCase();
+                const isClosed =
+                  (payloadBoolean(report.payload, 'isClosed') ?? false) ||
+                  statusText === 'completed' ||
+                  statusText === 'closed';
+                const importedAt = payloadText(report.payload, 'importedAt');
+                const isImportedPending =
+                  report.syncStatus === 'pending' &&
+                  typeof importedAt === 'string' &&
+                  importedAt.trim().length > 0;
 
                 return (
                   <div key={report.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2433,16 +2649,6 @@ export const PartsTabContent = ({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                          title="Validar parte"
-                          onClick={() => onPending('Validar parte desde lista principal')}
-                          disabled={tenantUnavailable || workReportsReadOnlyByRole}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-500 hover:text-slate-800"
                           title="Clonar parte"
                           onClick={() => onCloneFromHistoryDialog(report)}
                           disabled={tenantUnavailable || workReportsReadOnlyByRole}
@@ -2453,38 +2659,22 @@ export const PartsTabContent = ({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                          title="Documento resumen del parte"
-                          onClick={() => onPending('Documento resumen de parte desde lista principal')}
-                          disabled={tenantUnavailable}
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                          title="Exportar parte"
-                          onClick={() => onPending('Exportar parte desde lista principal')}
-                          disabled={tenantUnavailable}
-                        >
-                          <FileDown className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-slate-500 hover:text-slate-800"
                           title={isClosed || workReportsReadOnlyByRole ? 'Ver parte' : 'Editar parte'}
                           onClick={() => onOpenExistingReport(report)}
                           disabled={tenantUnavailable}
                         >
-                          <Pencil className="h-4 w-4" />
+                          {isClosed || workReportsReadOnlyByRole ? (
+                            <Eye className="h-4 w-4" />
+                          ) : (
+                            <Pencil className="h-4 w-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-red-500 hover:text-red-700"
                           title="Eliminar parte"
-                          onClick={() => onPending('Eliminar parte desde lista principal')}
+                          onClick={() => onDeleteReport(report)}
                           disabled={tenantUnavailable || workReportsReadOnlyByRole}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -2496,6 +2686,14 @@ export const PartsTabContent = ({
                           className="border-amber-400 bg-amber-50 text-[13px] sm:text-sm text-amber-700"
                         >
                           Por completar
+                        </Badge>
+                      ) : null}
+                      {isImportedPending ? (
+                        <Badge
+                          variant="outline"
+                          className="border-sky-300 bg-sky-50 text-[13px] sm:text-sm text-sky-700"
+                        >
+                          Importado
                         </Badge>
                       ) : null}
                       <Badge

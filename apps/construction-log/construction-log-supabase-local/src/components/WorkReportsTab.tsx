@@ -1,8 +1,18 @@
-import { lazy, Suspense, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+﻿import { lazy, Suspense, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { TabsContent } from '@/components/ui/tabs';
 import { DashboardToolsTabs, type DashboardToolsTab } from '@/components/DashboardToolsTabs';
 import { PartsTabContent, ToolsPanelContent } from '@/components/DashboardToolsTabContents';
@@ -117,6 +127,7 @@ type WorkReportsActionsConfig = {
   handlePending: (featureName: string) => void;
   openCloneFromHistoryDialog: (report: WorkReport) => void;
   openExistingReport: (report: WorkReport) => void;
+  deleteWorkReportPermanently: (report: WorkReport) => Promise<boolean>;
   // Optional for backwards compatibility with old Index action wiring.
   setHistoryOpen?: Dispatch<SetStateAction<boolean>>;
 };
@@ -195,9 +206,12 @@ export const WorkReportsTab = ({
     handlePending,
     openCloneFromHistoryDialog,
     openExistingReport,
+    deleteWorkReportPermanently,
   } = actions;
   const [activeToolsTab, setActiveToolsTab] = useState<DashboardToolsTab>('parts');
   const [isSyncOnline, setIsSyncOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [reportToDelete, setReportToDelete] = useState<WorkReport | null>(null);
+  const [deletingReport, setDeletingReport] = useState(false);
 
   useEffect(() => {
     startupPerfPoint('panel:WorkReportsTab mounted');
@@ -284,6 +298,19 @@ export const WorkReportsTab = ({
     ? 'bg-emerald-100 text-emerald-600'
     : 'bg-rose-100 text-rose-600';
   const connectionStatusLabel = isSyncOnline ? 'Online' : 'Offline';
+
+  const handleConfirmDeleteReport = async () => {
+    if (!reportToDelete || deletingReport) return;
+    setDeletingReport(true);
+    try {
+      const deleted = await deleteWorkReportPermanently(reportToDelete);
+      if (deleted) {
+        setReportToDelete(null);
+      }
+    } finally {
+      setDeletingReport(false);
+    }
+  };
 
   return (
     <TabsContent value="work-reports" className="m-0 space-y-5">
@@ -387,7 +414,7 @@ export const WorkReportsTab = ({
           {tenantResolving ? (
             <Alert>
               <AlertTitle>Resolviendo tenant...</AlertTitle>
-              <AlertDescription>Esperando contexto de tenant para habilitar el módulo offline.</AlertDescription>
+              <AlertDescription>Esperando contexto de tenant para habilitar el mÃ³dulo offline.</AlertDescription>
             </Alert>
           ) : tenantNeedsPicker ? (
             <TenantPicker
@@ -440,7 +467,7 @@ export const WorkReportsTab = ({
                   <CardContent>
                     {history ? (
                       <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando historial...</div>}>
-                        <HistoryReportsPanel {...history} />
+                        <HistoryReportsPanel {...history} onDeleteReport={setReportToDelete} />
                       </Suspense>
                     ) : (
                       <div className="text-sm text-muted-foreground">
@@ -480,13 +507,47 @@ export const WorkReportsTab = ({
                   onPending={handlePending}
                   onCloneFromHistoryDialog={openCloneFromHistoryDialog}
                   onOpenExistingReport={openExistingReport}
+                  onDeleteReport={setReportToDelete}
                 />
               )}
             </div>
           </div>
+
+          <AlertDialog
+            open={Boolean(reportToDelete)}
+            onOpenChange={(open) => {
+              if (!open && !deletingReport) {
+                setReportToDelete(null);
+              }
+            }}
+          >
+              <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Eliminar parte de forma permanente?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  ¿Deseas eliminar de forma permanente este parte? Esta accion lo elimina tambien de base de datos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletingReport}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void handleConfirmDeleteReport();
+                  }}
+                  disabled={deletingReport}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deletingReport ? 'Eliminando...' : 'Aceptar'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </TabsContent>
   );
 };
+
+
 

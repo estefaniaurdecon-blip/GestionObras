@@ -66,7 +66,7 @@ export function toOptionalString(value: unknown): string | undefined {
 
 function generateReportIdentifier(date: string): string {
   const datePart = date.replace(/-/g, '');
-  const randomPart = crypto.randomUUID().split('-')[0].toUpperCase();
+  const randomPart = crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
   return `PRT-${datePart}-${randomPart}`;
 }
 

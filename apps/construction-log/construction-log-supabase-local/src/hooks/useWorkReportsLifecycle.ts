@@ -226,6 +226,15 @@ export const useWorkReportsLifecycle = ({
     [],
   );
 
+  const buildVisibleWorkReports = useCallback((orderedReports: WorkReport[]): WorkReport[] => {
+    const recentReports = filterRecentWorkReportsByCreationDay(orderedReports, WORK_REPORT_VISIBLE_DAYS);
+    const recentIds = new Set(recentReports.map((report) => report.id));
+    const unsyncedOutsideRecent = orderedReports
+      .filter((report) => !recentIds.has(report.id) && report.syncStatus !== 'synced')
+      .sort((left, right) => right.createdAt - left.createdAt);
+    return [...unsyncedOutsideRecent, ...recentReports];
+  }, []);
+
   const loadWorkReports = useCallback(async () => {
     startupPerfStart('hook:useWorkReportsLifecycle.loadWorkReports');
     if (!user || !tenantResolved || !resolvedTenantId) {
@@ -246,7 +255,7 @@ export const useWorkReportsLifecycle = ({
       startupPerfEnd('hook:useWorkReportsLifecycle.listWorkReports', `count=${reports.length}`);
       const orderedReports = [...reports].sort((left, right) => right.createdAt - left.createdAt);
       setAllWorkReports(orderedReports);
-      setWorkReports(filterRecentWorkReportsByCreationDay(orderedReports, WORK_REPORT_VISIBLE_DAYS));
+      setWorkReports(buildVisibleWorkReports(orderedReports));
     } catch (error) {
       if (isTenantResolutionError(error)) {
         setWorkReports([]);
@@ -270,6 +279,7 @@ export const useWorkReportsLifecycle = ({
     setWorkReportsLoading,
     tenantResolved,
     user,
+    buildVisibleWorkReports,
   ]);
 
   const handleSyncNow = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -434,7 +444,7 @@ export const useWorkReportsLifecycle = ({
           });
           const orderedReports = [...refreshedReports].sort((left, right) => right.createdAt - left.createdAt);
           setAllWorkReports(orderedReports);
-          setWorkReports(filterRecentWorkReportsByCreationDay(orderedReports, WORK_REPORT_VISIBLE_DAYS));
+          setWorkReports(buildVisibleWorkReports(orderedReports));
         }
       } catch (error) {
         if (isTenantResolutionError(error)) return;
@@ -475,6 +485,7 @@ export const useWorkReportsLifecycle = ({
     setWorkReports,
     tenantResolved,
     user,
+    buildVisibleWorkReports,
   ]);
 
   return {

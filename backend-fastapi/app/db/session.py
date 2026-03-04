@@ -15,6 +15,95 @@ engine = create_engine(
 )
 
 
+def _normalize_report_identifier(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _build_unique_report_identifier(base: str, row_id: int, used: set[str]) -> str:
+    # Keep identifier length bounded by the model max_length (64).
+    suffix = f"-{row_id}"
+    room = max(1, 64 - len(suffix))
+    candidate_base = (base or "parte")[:room]
+    candidate = f"{candidate_base}{suffix}"
+    counter = 1
+    while candidate in used:
+        counter_suffix = f"-{row_id}-{counter}"
+        room = max(1, 64 - len(counter_suffix))
+        candidate_base = (base or "parte")[:room]
+        candidate = f"{candidate_base}{counter_suffix}"
+        counter += 1
+    return candidate
+
+
+def _enforce_work_report_identifier_uniqueness() -> None:
+    from sqlmodel import select
+
+    from app.models.erp import WorkReport
+
+    with Session(engine) as session:
+        reports = session.exec(
+            select(WorkReport)
+            .where(WorkReport.report_identifier.is_not(None))
+            .order_by(WorkReport.tenant_id.asc(), WorkReport.created_at.asc(), WorkReport.id.asc())
+        ).all()
+
+        used_identifiers: set[str] = set()
+        has_changes = False
+
+        for report in reports:
+            original_identifier = report.report_identifier
+            normalized_identifier = _normalize_report_identifier(original_identifier)
+
+            final_identifier = normalized_identifier
+            if final_identifier is not None and final_identifier in used_identifiers:
+                final_identifier = _build_unique_report_identifier(
+                    final_identifier, int(report.id or 0), used_identifiers
+                )
+
+            if final_identifier is not None:
+                used_identifiers.add(final_identifier)
+
+            if final_identifier != original_identifier:
+                report.report_identifier = final_identifier
+                has_changes = True
+
+            payload = dict(report.payload or {})
+            payload_identifier = _normalize_report_identifier(
+                payload.get("reportIdentifier") or payload.get("report_identifier")
+            )
+            if final_identifier is None:
+                if payload_identifier is not None:
+                    payload.pop("reportIdentifier", None)
+                    payload.pop("report_identifier", None)
+                    report.payload = payload
+                    has_changes = True
+            elif payload_identifier != final_identifier:
+                payload["reportIdentifier"] = final_identifier
+                payload["report_identifier"] = final_identifier
+                report.payload = payload
+                has_changes = True
+
+        if has_changes:
+            session.commit()
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "DROP INDEX IF EXISTS ix_erp_work_report_tenant_report_identifier_uq"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "ix_erp_work_report_report_identifier_uq "
+                "ON erp_work_report (report_identifier)"
+            )
+        )
+
+
 def init_db() -> None:
     """
     Crea todas las tablas definidas en los modelos SQLModel.
@@ -29,6 +118,9 @@ def init_db() -> None:
 
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
+
+    if "erp_work_report" in table_names:
+        _enforce_work_report_identifier_uniqueness()
 
     if "erp_task" in table_names:
         task_columns = {col["name"] for col in inspector.get_columns("erp_task")}

@@ -18,10 +18,8 @@ import {
 } from '@/pages/indexHelpers';
 import {
   CalendarDays,
-  CheckCircle2,
   Copy,
-  FileDown,
-  FileText,
+  Eye,
   Pencil,
   Search,
   Trash2,
@@ -53,6 +51,7 @@ export type HistoryReportsPanelProps = {
   onPending: (featureName: string) => void;
   onOpenCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenHistoryReport: (report: WorkReport) => void;
+  onDeleteReport?: (report: WorkReport) => void;
 };
 
 export const HistoryReportsPanel = ({
@@ -81,6 +80,7 @@ export const HistoryReportsPanel = ({
   onPending,
   onOpenCloneFromHistoryDialog,
   onOpenHistoryReport,
+  onDeleteReport,
 }: HistoryReportsPanelProps) => {
   return (
     <div className="space-y-4">
@@ -245,7 +245,11 @@ export const HistoryReportsPanel = ({
             const workNumber = payloadText(report.payload, 'workNumber') ?? '-';
             const totalHours = payloadNumber(report.payload, 'totalHours');
             const totalHoursLabel = typeof totalHours === 'number' ? totalHours.toFixed(2) : '--';
-            const isClosed = (payloadBoolean(report.payload, 'isClosed') ?? false) || report.status === 'completed';
+            const statusText = String(report.status ?? '').toLowerCase();
+            const isClosed =
+              (payloadBoolean(report.payload, 'isClosed') ?? false) ||
+              statusText === 'completed' ||
+              statusText === 'closed';
 
             return (
               <div key={report.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between">
@@ -264,16 +268,6 @@ export const HistoryReportsPanel = ({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                      title="Validar parte"
-                      onClick={() => onPending('Validar parte desde historial')}
-                      disabled={tenantUnavailable || workReportsReadOnlyByRole}
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-slate-500 hover:text-slate-800"
                       title="Clonar parte"
                       onClick={() => onOpenCloneFromHistoryDialog(report)}
                       disabled={tenantUnavailable || workReportsReadOnlyByRole}
@@ -284,43 +278,41 @@ export const HistoryReportsPanel = ({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                      title="Documento resumen del parte"
-                      onClick={() => onPending('Documento resumen de parte desde historial')}
-                      disabled={tenantUnavailable}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                      title="Exportar parte"
-                      onClick={() => onPending('Exportar parte desde historial')}
-                      disabled={tenantUnavailable}
-                    >
-                      <FileDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-slate-500 hover:text-slate-800"
                       title={isClosed || workReportsReadOnlyByRole ? 'Ver parte' : 'Editar parte'}
                       onClick={() => onOpenHistoryReport(report)}
                       disabled={tenantUnavailable}
                     >
-                      <Pencil className="h-4 w-4" />
+                      {isClosed || workReportsReadOnlyByRole ? (
+                        <Eye className="h-4 w-4" />
+                      ) : (
+                        <Pencil className="h-4 w-4" />
+                      )}
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-red-500 hover:text-red-700"
                       title="Eliminar parte"
-                      onClick={() => onPending('Eliminar parte desde historial')}
+                      onClick={() => {
+                        if (onDeleteReport) {
+                          onDeleteReport(report);
+                          return;
+                        }
+                        onPending('Eliminar parte desde historial');
+                      }}
                       disabled={tenantUnavailable || workReportsReadOnlyByRole}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  {!isClosed ? (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-400 bg-amber-50 text-amber-700"
+                    >
+                      Por completar
+                    </Badge>
+                  ) : null}
                   <Badge
                     variant="outline"
                     className={

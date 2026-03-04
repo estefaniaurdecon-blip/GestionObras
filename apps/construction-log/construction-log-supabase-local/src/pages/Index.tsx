@@ -257,6 +257,7 @@ const Index = () => {
     openExistingReport,
     openHistoryReport,
     openCloneFromHistoryDialog,
+    handleDeleteWorkReportPermanently,
     handleCloneFromHistory,
     handleSaveGeneratedWorkReport,
     handleConfirmOverwrite,
@@ -400,6 +401,7 @@ const Index = () => {
               handlePending,
               openCloneFromHistoryDialog,
               openExistingReport,
+              deleteWorkReportPermanently: handleDeleteWorkReportPermanently,
             }}
             history={{
               historyEnabledFilters,
@@ -483,6 +485,7 @@ const Index = () => {
               metrics={{
                 open: metricsOpen,
                 setOpen: setMetricsOpen,
+                workReports: allWorkReports,
               }}
               accessPersonal={{
                 open: accessPersonalDialogOpen,

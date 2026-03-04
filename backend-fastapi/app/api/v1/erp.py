@@ -89,9 +89,9 @@ from app.services.erp_service import (
     get_work_report,
     get_access_control_report,
     create_work_report,
+    hard_delete_work_report,
     update_work_report,
     update_access_control_report,
-    delete_work_report,
     sync_work_reports,
     list_rental_machinery,
     create_rental_machinery,
@@ -911,7 +911,7 @@ def _map_work_report_error(detail: str) -> int:
     lower = detail.lower()
     if "no encontrado" in lower:
         return status.HTTP_404_NOT_FOUND
-    if "cerrado" in lower or "concurrencia" in lower:
+    if "cerrado" in lower or "concurrencia" in lower or "ya existe" in lower:
         return status.HTTP_409_CONFLICT
     return status.HTTP_400_BAD_REQUEST
 
@@ -1022,7 +1022,7 @@ def api_delete_work_report(
 ) -> None:
     try:
         tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
-        delete_work_report(
+        hard_delete_work_report(
             session,
             report_id,
             tenant_id,
