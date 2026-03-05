@@ -30,30 +30,66 @@ const logDebug = (msg: string) => {
   appendBootLog(`[AppBoot] ${msg}`);
 };
 
-const clearNativeBrowserCaches = async () => {
-  if (!("caches" in window)) return;
+const clearNativeBrowserCaches = async (): Promise<number> => {
+  if (!("caches" in window)) return 0;
   try {
     const cacheKeys = await caches.keys();
     await Promise.all(cacheKeys.map((key) => caches.delete(key)));
     logDebug(`Cache Storage limpiado en nativo (${cacheKeys.length} entradas)`);
+    return cacheKeys.length;
   } catch (error) {
     logDebug(`Error limpiando Cache Storage en nativo: ${String(error)}`);
+    return 0;
   }
 };
 
-const unregisterAllNativeServiceWorkers = async () => {
-  if (!("serviceWorker" in navigator)) return;
+const unregisterAllNativeServiceWorkers = async (): Promise<number> => {
+  if (!("serviceWorker" in navigator)) return 0;
   try {
     if ("getRegistrations" in navigator.serviceWorker) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(registrations.map((registration) => registration.unregister()));
       logDebug(`Service Workers desregistrados en nativo (${registrations.length})`);
-      return;
+      return registrations.length;
     }
-    await unregisterServiceWorker();
+    const unregistered = await unregisterServiceWorker();
+    return unregistered ? 1 : 0;
   } catch (error) {
     logDebug(`Error desregistrando Service Workers en nativo: ${String(error)}`);
+    return 0;
   }
+};
+
+const NATIVE_ASSET_REFRESH_SESSION_KEY = "__native_assets_refresh_v2__";
+
+const ensureFreshNativeAssets = async (): Promise<boolean> => {
+  if (!Capacitor.isNativePlatform()) return false;
+
+  try {
+    if (window.sessionStorage.getItem(NATIVE_ASSET_REFRESH_SESSION_KEY) === "done") {
+      return false;
+    }
+  } catch {
+    // ignore sessionStorage errors
+  }
+
+  logDebug("Modo nativo: limpiando Service Worker/cache antes de montar React...");
+  const serviceWorkersRemoved = await unregisterAllNativeServiceWorkers();
+  const cachesRemoved = await clearNativeBrowserCaches();
+
+  try {
+    window.sessionStorage.setItem(NATIVE_ASSET_REFRESH_SESSION_KEY, "done");
+  } catch {
+    // ignore sessionStorage errors
+  }
+
+  if (serviceWorkersRemoved > 0 || cachesRemoved > 0) {
+    logDebug("Se detectaron assets cacheados. Recargando WebView para aplicar la version actual...");
+    window.location.reload();
+    return true;
+  }
+
+  return false;
 };
 
 logDebug("Script main.tsx iniciando...");
@@ -108,6 +144,10 @@ const initApp = async () => {
 
     // Forzar ocultado temprano del splash nativo
     hideNativeSplashSafely();
+
+    if (await ensureFreshNativeAssets()) {
+      return;
+    }
     
     // Múltiples intentos de ocultar splash en caso de timing issues
     if (Capacitor.isNativePlatform()) {
@@ -126,22 +166,6 @@ const initApp = async () => {
       .catch((error) => {
         logDebug(`Error cargando limpieza de storage Electron: ${String(error)}`);
       });
-
-    // Evitar que WebView nativa conserve bundles antiguos.
-    if (Capacitor.isNativePlatform()) {
-      logDebug("Modo nativo: programando limpieza de Service Worker/cache en segundo plano...");
-      window.setTimeout(() => {
-        void (async () => {
-          startupPerfStart("main:native-cache-cleanup");
-          try {
-            await unregisterAllNativeServiceWorkers();
-            await clearNativeBrowserCaches();
-          } finally {
-            startupPerfEnd("main:native-cache-cleanup");
-          }
-        })();
-      }, 15000);
-    }
 
     // La DB offline se inicializa de forma lazy con scope de tenant al cargar el usuario.
     logDebug("DB offline: inicialización diferida por tenant");

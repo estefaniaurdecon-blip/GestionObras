@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Accordion } from '@/components/ui/accordion';
 import { normalizeNoteCategory, type NoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
@@ -124,6 +124,10 @@ interface GenerateWorkReportPanelProps {
   initialDraft?: GenerateWorkReportDraft | null;
   readOnly?: boolean;
   reportIdentifier?: string | null;
+  navigationCurrentIndex?: number;
+  navigationTotalCount?: number;
+  onNavigatePrevious?: () => void;
+  onNavigateNext?: () => void;
   saving?: boolean;
   works?: Array<{ id: string; number?: string | null; name?: string | null }>;
 }
@@ -135,9 +139,14 @@ export const GenerateWorkReportPanel = ({
   initialDraft,
   readOnly = false,
   reportIdentifier,
+  navigationCurrentIndex = 0,
+  navigationTotalCount = 0,
+  onNavigatePrevious,
+  onNavigateNext,
   saving = false,
   works = [],
 }: GenerateWorkReportPanelProps) => {
+  const panelTopRef = useRef<HTMLDivElement | null>(null);
   const [workNumber, setWorkNumber] = useState('');
   const [workName, setWorkName] = useState('');
   const [date, setDate] = useState(initialDate || todayDate());
@@ -553,7 +562,46 @@ export const GenerateWorkReportPanel = ({
     return parts.join(' + ');
   }, [saveStatusSelection]);
 
-  const panelTitle = readOnly ? 'Parte (solo lectura)' : initialDraft ? 'Editar Parte' : 'Nuevo Parte';
+  const panelTitle = initialDraft
+    ? sanitizeText(initialDraft.workName || workName).trim() || 'Parte'
+    : readOnly
+      ? 'Parte (solo lectura)'
+      : 'Nuevo Parte';
+
+  useLayoutEffect(() => {
+    const panelTop = panelTopRef.current;
+    if (!panelTop || typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    const forceScrollToTop = () => {
+      panelTop.scrollIntoView({ block: 'start' });
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      if (document.scrollingElement) {
+        document.scrollingElement.scrollTop = 0;
+      }
+
+      let current: HTMLElement | null = panelTop.parentElement;
+      while (current) {
+        if (current.scrollHeight > current.clientHeight) {
+          current.scrollTop = 0;
+        }
+        current = current.parentElement;
+      }
+    };
+
+    forceScrollToTop();
+
+    const rafId = window.requestAnimationFrame(() => {
+      forceScrollToTop();
+    });
+    const timeoutShort = window.setTimeout(forceScrollToTop, 80);
+    const timeoutLong = window.setTimeout(forceScrollToTop, 220);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutShort);
+      window.clearTimeout(timeoutLong);
+    };
+  }, [reportIdentifier, initialDate, initialDraft?.date, initialDraft?.id]);
 
   const handleGalleryUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -2226,10 +2274,14 @@ export const GenerateWorkReportPanel = ({
   };
 
   return (
-    <div className={`space-y-4 text-[15px] ${androidTypographyClass}`}>
+    <div ref={panelTopRef} className={`space-y-4 text-[15px] ${androidTypographyClass}`}>
       <WorkReportHeaderCard
         panelTitle={panelTitle}
         onBack={onBack}
+        navigationCurrentIndex={navigationCurrentIndex}
+        navigationTotalCount={navigationTotalCount}
+        onNavigatePrevious={onNavigatePrevious}
+        onNavigateNext={onNavigateNext}
         reportIdentifier={reportIdentifier}
         readOnly={readOnly}
         isClonedReport={isClonedReport}

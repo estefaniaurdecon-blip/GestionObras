@@ -215,7 +215,6 @@ export const IndexDialogs = ({
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Resumen en tiempo real</DialogTitle>
-            <DialogDescription>Datos desde `/api/v1/dashboard/summary`.</DialogDescription>
           </DialogHeader>
           <DashboardSummaryPanel workReports={metrics.workReports} />
         </DialogContent>

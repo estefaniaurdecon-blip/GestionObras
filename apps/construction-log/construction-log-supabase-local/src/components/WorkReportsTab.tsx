@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { TabsContent } from '@/components/ui/tabs';
 import { DashboardToolsTabs, type DashboardToolsTab } from '@/components/DashboardToolsTabs';
-import { PartsTabContent, ToolsPanelContent } from '@/components/DashboardToolsTabContents';
+import { PartsTabContent, ToolsPanelContent, type OpenExistingReportOptions } from '@/components/DashboardToolsTabContents';
 import type { GenerateWorkReportDraft } from '@/components/GenerateWorkReportPanel';
 import type { HistoryReportsPanelProps } from '@/components/HistoryReportsPanel';
 import { TenantPicker } from '@/components/TenantPicker';
@@ -209,6 +209,9 @@ export const WorkReportsTab = ({
     deleteWorkReportPermanently,
   } = actions;
   const [activeToolsTab, setActiveToolsTab] = useState<DashboardToolsTab>('parts');
+  const [summaryReportAnalysisOpen, setSummaryReportAnalysisOpen] = useState(false);
+  const [reportNavigationIds, setReportNavigationIds] = useState<string[]>([]);
+  const [openedReportId, setOpenedReportId] = useState<string | null>(null);
   const [isSyncOnline, setIsSyncOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [reportToDelete, setReportToDelete] = useState<WorkReport | null>(null);
   const [deletingReport, setDeletingReport] = useState(false);
@@ -216,6 +219,78 @@ export const WorkReportsTab = ({
   useEffect(() => {
     startupPerfPoint('panel:WorkReportsTab mounted');
   }, []);
+
+  useEffect(() => {
+    if (activeToolsTab !== 'summary-report') {
+      setSummaryReportAnalysisOpen(false);
+    }
+  }, [activeToolsTab]);
+
+  useEffect(() => {
+    if (generatePanelOpen) return;
+    setOpenedReportId(null);
+    setReportNavigationIds([]);
+  }, [generatePanelOpen]);
+
+  const reportsById = useMemo(() => new Map(allWorkReports.map((report) => [report.id, report])), [allWorkReports]);
+
+  const effectiveNavigationIds = useMemo(() => {
+    if (!openedReportId) return [];
+
+    const seenIds = new Set<string>();
+    const validIds: string[] = [];
+
+    reportNavigationIds.forEach((reportId) => {
+      if (seenIds.has(reportId)) return;
+      if (!reportsById.has(reportId)) return;
+      seenIds.add(reportId);
+      validIds.push(reportId);
+    });
+
+    if (reportsById.has(openedReportId) && !seenIds.has(openedReportId)) {
+      validIds.unshift(openedReportId);
+    }
+
+    return validIds;
+  }, [openedReportId, reportNavigationIds, reportsById]);
+
+  const currentNavigationIndex = useMemo(() => {
+    if (!openedReportId) return -1;
+    return effectiveNavigationIds.indexOf(openedReportId);
+  }, [effectiveNavigationIds, openedReportId]);
+
+  const navigationIndex = currentNavigationIndex >= 0 ? currentNavigationIndex : 0;
+  const navigationTotalCount = effectiveNavigationIds.length;
+  const canNavigatePrevious = navigationTotalCount > 0 && navigationIndex > 0;
+  const canNavigateNext = navigationTotalCount > 0 && navigationIndex < navigationTotalCount - 1;
+
+  const openExistingReportWithContext = useCallback(
+    (report: WorkReport, options?: OpenExistingReportOptions) => {
+      setOpenedReportId(report.id);
+      if (options?.navigationReportIds?.length) {
+        setReportNavigationIds(options.navigationReportIds);
+      } else {
+        setReportNavigationIds([report.id]);
+      }
+      if (options?.returnToSummaryAnalysis) {
+        setSummaryReportAnalysisOpen(true);
+      }
+      openExistingReport(report);
+    },
+    [openExistingReport],
+  );
+
+  const navigateToReportByIndex = useCallback(
+    (nextIndex: number) => {
+      if (nextIndex < 0 || nextIndex >= navigationTotalCount) return;
+      const nextReportId = effectiveNavigationIds[nextIndex];
+      const nextReport = reportsById.get(nextReportId);
+      if (!nextReport) return;
+      setOpenedReportId(nextReport.id);
+      openExistingReport(nextReport);
+    },
+    [effectiveNavigationIds, navigationTotalCount, openExistingReport, reportsById],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -292,8 +367,8 @@ export const WorkReportsTab = ({
     : 'border-rose-200 bg-rose-50/60';
   const connectionTitleClass = isSyncOnline ? 'text-emerald-800' : 'text-rose-800';
   const connectionBadgeClass = isSyncOnline
-    ? 'border-emerald-300 bg-emerald-100 text-[15px] sm:text-[16px] text-emerald-700'
-    : 'border-rose-300 bg-rose-100 text-[15px] sm:text-[16px] text-rose-700';
+    ? 'border-emerald-300 bg-emerald-100 text-xs sm:text-sm text-emerald-700'
+    : 'border-rose-300 bg-rose-100 text-xs sm:text-sm text-rose-700';
   const connectionIconBubbleClass = isSyncOnline
     ? 'bg-emerald-100 text-emerald-600'
     : 'bg-rose-100 text-rose-600';
@@ -317,16 +392,23 @@ export const WorkReportsTab = ({
       {generatePanelOpen ? (
         <Suspense fallback={<div className="min-h-[50vh] bg-slate-100" />}>
           <GenerateWorkReportPanel
+            key={`${panelReportIdentifier ?? generatePanelDate ?? manualCloneDraft?.date ?? panelInitialDraft?.date ?? 'new-report'}`}
             initialDate={generatePanelDate}
             initialDraft={manualCloneDraft ?? panelInitialDraft}
             readOnly={panelReadOnly}
             reportIdentifier={panelReportIdentifier}
+            navigationCurrentIndex={navigationIndex}
+            navigationTotalCount={navigationTotalCount}
+            onNavigatePrevious={canNavigatePrevious ? () => navigateToReportByIndex(navigationIndex - 1) : undefined}
+            onNavigateNext={canNavigateNext ? () => navigateToReportByIndex(navigationIndex + 1) : undefined}
             saving={generatePanelSaving}
             works={sortedWorks.map((work) => ({ id: String(work.id), number: work.number, name: work.name }))}
             onBack={() => {
               setGeneratePanelOpen(false);
               setActiveReport(null);
               setManualCloneDraft(null);
+              setOpenedReportId(null);
+              setReportNavigationIds([]);
             }}
             onSave={handleSaveGeneratedWorkReport}
           />
@@ -337,18 +419,18 @@ export const WorkReportsTab = ({
             <h2 className="text-xl sm:text-3xl font-semibold text-slate-900">Partes de Trabajo</h2>
             <p className="text-[15px] text-muted-foreground">Gestiona tus partes diarios</p>
           </div>
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 xl:grid-cols-4">
             <Card className="border-emerald-200 bg-emerald-50/60">
-              <CardContent className="p-3">
-                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
-                  <div className="rounded-full bg-emerald-100 p-2 text-emerald-600">
-                    <CheckCircle2 className="h-4 w-4" />
+              <CardContent className="p-2.5">
+                <div className="flex min-h-[74px] flex-col items-center justify-center gap-1.5 text-center">
+                  <div className="rounded-full bg-emerald-100 p-1.5 text-emerald-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                   </div>
-                  <div className="text-[17px] sm:text-[18px] font-medium text-emerald-800">Completados</div>
-                  <div className="text-2xl font-semibold text-emerald-700">{workReportsSummary.completed}</div>
+                  <div className="text-[15px] sm:text-base font-medium text-emerald-800">Completados</div>
+                  <div className="text-xl font-semibold text-emerald-700">{workReportsSummary.completed}</div>
                   <Badge
                     variant="outline"
-                    className="border-emerald-300 bg-emerald-100 text-[15px] sm:text-[16px] text-emerald-700"
+                    className="border-emerald-300 bg-emerald-100 text-xs sm:text-sm text-emerald-700"
                   >
                     {workReportsSummary.completedPctTotal}% Total
                   </Badge>
@@ -357,16 +439,16 @@ export const WorkReportsTab = ({
             </Card>
 
             <Card className="border-amber-200 bg-amber-50/60">
-              <CardContent className="p-3">
-                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
-                  <div className="rounded-full bg-amber-100 p-2 text-amber-600">
-                    <Clock3 className="h-4 w-4" />
+              <CardContent className="p-2.5">
+                <div className="flex min-h-[74px] flex-col items-center justify-center gap-1.5 text-center">
+                  <div className="rounded-full bg-amber-100 p-1.5 text-amber-600">
+                    <Clock3 className="h-3.5 w-3.5" />
                   </div>
-                  <div className="text-[17px] sm:text-[18px] font-medium text-amber-800">Pendientes</div>
-                  <div className="text-2xl font-semibold text-amber-700">{workReportsSummary.pending}</div>
+                  <div className="text-[15px] sm:text-base font-medium text-amber-800">Pendientes</div>
+                  <div className="text-xl font-semibold text-amber-700">{workReportsSummary.pending}</div>
                   <Badge
                     variant="outline"
-                    className="border-amber-300 bg-amber-100 text-[15px] sm:text-[16px] text-amber-700"
+                    className="border-amber-300 bg-amber-100 text-xs sm:text-sm text-amber-700"
                   >
                     {workReportsSummary.pending > 0 ? 'Por completar' : 'Sin pendientes'}
                   </Badge>
@@ -375,16 +457,16 @@ export const WorkReportsTab = ({
             </Card>
 
             <Card className="border-blue-200 bg-blue-50/60">
-              <CardContent className="p-3">
-                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
-                  <div className="rounded-full bg-blue-100 p-2 text-blue-600">
-                    <ShieldCheck className="h-4 w-4" />
+              <CardContent className="p-2.5">
+                <div className="flex min-h-[74px] flex-col items-center justify-center gap-1.5 text-center">
+                  <div className="rounded-full bg-blue-100 p-1.5 text-blue-600">
+                    <ShieldCheck className="h-3.5 w-3.5" />
                   </div>
-                  <div className="text-[17px] sm:text-[18px] font-medium text-blue-800">Aprobados</div>
-                  <div className="text-2xl font-semibold text-blue-700">{workReportsSummary.approved}</div>
+                  <div className="text-[15px] sm:text-base font-medium text-blue-800">Aprobados</div>
+                  <div className="text-xl font-semibold text-blue-700">{workReportsSummary.approved}</div>
                   <Badge
                     variant="outline"
-                    className="border-blue-300 bg-blue-100 text-[15px] sm:text-[16px] text-blue-700"
+                    className="border-blue-300 bg-blue-100 text-xs sm:text-sm text-blue-700"
                   >
                     {workReportsSummary.approvedPctCompleted}% de completados
                   </Badge>
@@ -393,15 +475,15 @@ export const WorkReportsTab = ({
             </Card>
 
             <Card className={connectionPanelClass}>
-              <CardContent className="p-3">
-                <div className="flex min-h-[88px] flex-col items-center justify-center gap-2 text-center">
-                  <div className={`rounded-full p-2 ${connectionIconBubbleClass}`}>
-                    {isSyncOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+              <CardContent className="p-2.5">
+                <div className="flex min-h-[74px] flex-col items-center justify-center gap-1.5 text-center">
+                  <div className={`rounded-full p-1.5 ${connectionIconBubbleClass}`}>
+                    {isSyncOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
                   </div>
-                  <div className={`text-[17px] sm:text-[18px] font-medium ${connectionTitleClass}`}>
+                  <div className={`text-[15px] sm:text-base font-medium ${connectionTitleClass}`}>
                     Estado de conexion
                   </div>
-                  <div aria-hidden className="invisible select-none text-2xl font-semibold leading-tight">
+                  <div aria-hidden className="invisible select-none text-xl font-semibold leading-tight">
                     0
                   </div>
                   <Badge variant="outline" className={connectionBadgeClass}>
@@ -481,7 +563,10 @@ export const WorkReportsTab = ({
                   activeToolsTab={activeToolsTab}
                   workReports={allWorkReports}
                   tenantUnavailable={tenantUnavailable}
+                  summaryReportAnalysisOpen={summaryReportAnalysisOpen}
+                  onSummaryReportAnalysisOpenChange={setSummaryReportAnalysisOpen}
                   onOpenMetrics={() => setMetricsOpen(true)}
+                  onOpenExistingReport={openExistingReportWithContext}
                   onPending={handlePending}
                   onDataChanged={reloadWorkReports}
                   onBackToParts={() => setActiveToolsTab('parts')}
@@ -506,7 +591,7 @@ export const WorkReportsTab = ({
                   onGenerateWorkReport={() => openGenerateWorkReport()}
                   onPending={handlePending}
                   onCloneFromHistoryDialog={openCloneFromHistoryDialog}
-                  onOpenExistingReport={openExistingReport}
+                  onOpenExistingReport={openExistingReportWithContext}
                   onDeleteReport={setReportToDelete}
                 />
               )}
@@ -548,6 +633,3 @@ export const WorkReportsTab = ({
     </TabsContent>
   );
 };
-
-
-

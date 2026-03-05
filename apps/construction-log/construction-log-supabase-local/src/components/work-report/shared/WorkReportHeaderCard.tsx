@@ -6,11 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type WorkReportHeaderCardProps = {
   panelTitle: string;
   onBack: () => void;
+  navigationCurrentIndex?: number;
+  navigationTotalCount?: number;
+  onNavigatePrevious?: () => void;
+  onNavigateNext?: () => void;
   reportIdentifier?: string | null;
   readOnly: boolean;
   isClonedReport: boolean;
@@ -28,6 +32,10 @@ type WorkReportHeaderCardProps = {
 export const WorkReportHeaderCard = ({
   panelTitle,
   onBack,
+  navigationCurrentIndex = 0,
+  navigationTotalCount = 0,
+  onNavigatePrevious,
+  onNavigateNext,
   reportIdentifier,
   readOnly,
   isClonedReport,
@@ -41,20 +49,45 @@ export const WorkReportHeaderCard = ({
   workName,
   onWorkNameChange,
 }: WorkReportHeaderCardProps) => {
+  const normalizedTotal = Number.isFinite(navigationTotalCount) && navigationTotalCount > 0 ? navigationTotalCount : 0;
+  const normalizedCurrent =
+    normalizedTotal > 0
+      ? Math.min(Math.max(navigationCurrentIndex + 1, 1), normalizedTotal)
+      : 0;
+  const canNavigatePrevious = normalizedTotal > 0 && normalizedCurrent > 1 && typeof onNavigatePrevious === 'function';
+  const canNavigateNext =
+    normalizedTotal > 0 && normalizedCurrent < normalizedTotal && typeof onNavigateNext === 'function';
+
   return (
     <div className="rounded-xl border bg-white p-3 sm:p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={onBack} className="h-8 px-2 text-slate-600 hover:text-slate-900">
+            <ChevronLeft className="mr-1 h-4 w-4" />
             Volver
           </Button>
-          <Button variant="outline" disabled>
+          <Button
+            variant="outline"
+            disabled={!canNavigatePrevious}
+            onClick={() => {
+              if (!canNavigatePrevious) return;
+              onNavigatePrevious?.();
+            }}
+          >
             <ChevronLeft className="mr-2 h-4 w-4" />
             Anterior
           </Button>
-          <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">0 / 0</div>
-          <Button variant="outline" disabled>
+          <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+            {normalizedCurrent} / {normalizedTotal}
+          </div>
+          <Button
+            variant="outline"
+            disabled={!canNavigateNext}
+            onClick={() => {
+              if (!canNavigateNext) return;
+              onNavigateNext?.();
+            }}
+          >
             Siguiente
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
