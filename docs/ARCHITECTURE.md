@@ -24,6 +24,8 @@
 ### Dependencias observadas
 - `frontend-react` consume backend via `src/api/*` (axios `apiClient`).
 - `construction-log` consume backend via `src/integrations/api/client.ts` y mantiene restos de migracion Supabase en varios modulos.
+- `construction-log` tiene componentes UI con logica de dominio acoplada (ej.: `src/components/DashboardToolsTabContents.tsx`); a 2026-03-05 se movieron piezas a `services/workReportImportService.ts`, `services/workReportExportInfrastructure.ts`, `services/workReportExportDomain.ts` y hooks `useWorkReportExportCalendar.ts`/`useWorkReportExportPeriodSelection.ts`/`useWorkReportExportImageSelection.ts` (incluyendo ensamblado de `ExportWorkReport`), pero la orquestacion final sigue concentrada en el componente.
+- En migracion Supabase/API, `useNotifications.ts` y `NotificationsCenter.tsx` ya no usan `supabase` directo y consumen endpoints API via `integrations/api/client.ts`; `useWorkReports.ts` sigue desacoplado mediante `services/workReportsSupabaseGateway.ts` como capa legacy temporal.
 - FastAPI routers llaman mayormente a `app/services/*`; modulos `invoices` y `contracts` tienen subdominio propio.
 - `init_db()` crea tablas y aplica alteraciones ad-hoc en cada arranque.
 - Celery tasks consumen servicios de facturas/contratos/IA y usan Redis para señalizacion.
@@ -36,6 +38,8 @@ Objetivo: evolucion incremental sin reescritura total.
   - `backend-fastapi`: `api` (IO HTTP) -> `application services` (casos de uso) -> `domain/persistence`.
   - `construction-log`: `ui` -> `hooks` -> `gateways` (`integrations/api`, `offline-db`), sin acceso directo a proveedores legacy.
   - `frontend-react`: `pages/components` -> `hooks` -> `api`.
+- En `construction-log`, mover casos de uso pesados (importacion/exportacion masiva y persistencia local) desde componentes UI a hooks/servicios dedicados.
+  - Estado 2026-03-05: importacion, transferencia de archivos, reglas de exportacion, estado/reglas de calendario-periodos, seleccion/sincronizacion de imagenes y ensamblado de `ExportWorkReport` ya extraidos; pendiente seguir reduciendo orquestacion UI.
 - Sustituir migraciones runtime por pipeline de migraciones controladas (Alembic/SQL scripts versionados y ejecutados por entorno).
 - Formalizar contratos compartidos:
   - OpenAPI + docs unificadas como fuente unica.
@@ -45,6 +49,7 @@ Objetivo: evolucion incremental sin reescritura total.
   - Cron legado de Supabase sustituido por tarea backend `auto_duplicate_rental_machinery_daily` (Beat, Europe/Madrid) con lock DB por tenant/fecha.
 - Completar corte Supabase en `construction-log`:
   - Eliminar llamadas residuales `supabase.*` o encapsular temporalmente en un adapter de compatibilidad unico.
+  - Estado parcial: `useNotifications.ts` y `NotificationsCenter.tsx` ya migrados a API/endpoints; `useWorkReports.ts` sigue en gateway legacy mientras se exponen endpoints faltantes para reemplazo total.
   - Marcar `apps/construction-log/construction-log-supabase-local` como DEPRECATED hasta su retirada completa.
 
 ## Principios

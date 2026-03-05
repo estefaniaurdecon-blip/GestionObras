@@ -6,7 +6,7 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 
 ## Cobertura
 
-- Backend FastAPI detectado desde codigo: **138** endpoints (rutas `@router.*`).
+- Backend FastAPI detectado desde codigo: **144** endpoints (rutas `@router.*`).
 - Azure Functions DocInt proxy: 1 endpoint operativo de procesado de albaranes.
 - Funciones heredadas de Supabase: inventario de migracion incluido al final.
 
@@ -296,6 +296,17 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | GET | `/api/v1/notifications` | `backend-fastapi/app/api/v1/notifications.py` |
 | POST | `/api/v1/notifications/read-all` | `backend-fastapi/app/api/v1/notifications.py` |
 | POST | `/api/v1/notifications/{notification_id}/read` | `backend-fastapi/app/api/v1/notifications.py` |
+| DELETE | `/api/v1/notifications/{notification_id}` | `backend-fastapi/app/api/v1/notifications.py` |
+
+### Modulo `messages`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/messages` | `backend-fastapi/app/api/v1/messages.py` |
+| POST | `/api/v1/messages` | `backend-fastapi/app/api/v1/messages.py` |
+| POST | `/api/v1/messages/{message_id}/read` | `backend-fastapi/app/api/v1/messages.py` |
+| DELETE | `/api/v1/messages/conversation/{other_user_id}` | `backend-fastapi/app/api/v1/messages.py` |
+| DELETE | `/api/v1/messages/clear-all` | `backend-fastapi/app/api/v1/messages.py` |
 
 ### Modulo `invoices`
 

@@ -18,6 +18,8 @@ Referencia completa vigente: `documentacion/ENDPOINTS_UNIFICADOS.md`.
 | GET | `/api/v1/users/me` | Bearer o cookie | Sin body | Usuario actual (`id`, `email`, `roles`, `tenant_id`, etc.) |
 | GET/POST/PATCH/DELETE | `/api/v1/erp/projects*` | Requiere auth; superadmin con `X-Tenant-Id` | JSON params/body | Entidades proyecto ERP |
 | GET/POST/PATCH/DELETE | `/api/v1/erp/work-reports*` | Requiere auth | JSON/query | Partes de trabajo |
+| GET/POST/DELETE | `/api/v1/notifications*` | Requiere auth | query (`only_unread`,`limit`,`offset`) y path param `notification_id` | Listado (`items`,`total`), marcar leidas y eliminar notificacion |
+| GET/POST/DELETE | `/api/v1/messages*` | Requiere auth | query (`limit`,`offset`), body (`to_user_id`,`message`,`work_report_id`) | Mensajes del chat interno (listar, enviar, marcar leido, borrar conversacion, vaciar) |
 | POST | `/api/v1/erp/work-reports/sync` | Requiere auth + `X-Tenant-Id` | `{ since, operations[], include_deleted, limit }` | `{ ack[], id_map?, server_changes? }` |
 | GET/POST/PATCH/DELETE | `/api/v1/delivery-notes*` | Requiere auth | JSON/query | Albaranes internos/estado |
 | GET/POST/PATCH/DELETE | `/api/v1/inventory-movements*` | Requiere auth | JSON/query | Movimientos e indicadores |

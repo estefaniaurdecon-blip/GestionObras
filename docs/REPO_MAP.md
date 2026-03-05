@@ -9,7 +9,7 @@ El backend expone API versionada en `/api/v1`, auth JWT+cookie con MFA y modulos
 `infra/` contiene Docker Compose para levantar DB, Redis, backend, workers y frontend, con override de produccion y configuracion de Cloudflare Tunnel.  
 `documentacion/ENDPOINTS_UNIFICADOS.md` es la referencia central de rutas API detectadas (138 endpoints backend + proxy DocInt).  
 Hay evidencia de migracion parcial desde Supabase hacia API propia en la app de `construction-log`.  
-Hay tests backend y frontend web; no se encontraron tests automatizados para `construction-log` ni para `azure-functions/docint-proxy`.
+Hay tests backend y frontend web; en `construction-log` se detectan tests unitarios puntuales (`tests/reportsAnalysisWorkGrouping.test.ts`, `tests/workReportImportService.test.ts`, `tests/workReportExportDomain.test.ts`, `tests/workReportExportPeriodSelection.test.ts`) y no se detectaron tests fuente en `azure-functions/docint-proxy/src`.
 
 ## Arbol alto nivel
 - `apps/`: apps de negocio; actualmente `construction-log` (wrapper + app principal, `construction-log-supabase-local` marcado DEPRECATED).
@@ -43,7 +43,7 @@ Hay tests backend y frontend web; no se encontraron tests automatizados para `co
 | Contratos | `backend-fastapi/app/contracts/` | Flujo de contratos/ofertas/aprobaciones/firma publica | JSON + uploads + tokens publicos | storage local, email, modelos contratos | API `/api/v1/contracts/*`, `/public/*` |
 | Jobs asinc | `backend-fastapi/app/workers/` | Extraccion OCR/IA de facturas, recordatorios, health AI y auto-clonado diario de maquinaria alquilada | Tareas Celery/Redis | Redis, Celery, servicios backend | Invoices/Contracts/API startup |
 | Dashboard web | `frontend-react/src/` | UI admin/ERP multi-modulo con rutas TanStack | HTTP a backend via `apiClient` | Backend API, React Query, Chakra | Usuarios web admin |
-| Construction Log app (DEPRECATED) | `apps/construction-log/construction-log-supabase-local/src/` | UI operativa de obra, auth MFA, partes, inventario, OCR albaranes | API REST + almacenamiento local + capacidades nativas | `integrations/api`, `offline-db`, plugins/Capacitor, restos de migracion Supabase | Usuarios obra (web/android/electron) |
+| Construction Log app (DEPRECATED) | `apps/construction-log/construction-log-supabase-local/src/` | UI operativa de obra, auth MFA, partes, inventario, OCR albaranes | API REST + almacenamiento local + capacidades nativas | `integrations/api`, `offline-db`, `services/workReportImportService`, `services/workReportExportInfrastructure`, `services/workReportExportDomain`, `services/workReportsSupabaseGateway`, `hooks/useWorkReportExportCalendar`, `hooks/useWorkReportExportPeriodSelection`, `hooks/useWorkReportExportImageSelection`, plugins/Capacitor, restos de migracion Supabase | Usuarios obra (web/android/electron) |
 | Auto-clonado de partes (backend) | `backend-fastapi/app/services/work_report_autoclone_service.py`, `backend-fastapi/app/workers/tasks/erp.py` | Reemplazo del cron Supabase `/functions/v1/auto-duplicate-rental-machinery` con tarea diaria idempotente por tenant | Task Celery + lock DB (`job_run_lock`) + endpoint interno manual | FastAPI DB, Celery Beat/Worker | Operacion ERP diaria |
 | Offline sync | `apps/.../src/offline-db`, `src/sync/syncService.ts` | Base local SQLite + outbox + pull/push incremental | tablas `work_reports/outbox/local_meta`, endpoint `/api/v1/erp/work-reports/sync` | sql.js, API backend | Construction Log app |
 | DocInt proxy | `azure-functions/docint-proxy/src/` | Proxy a Azure DocInt con normalizacion de salida y validacion token backend | `POST multipart file`, respuesta JSON normalizada | Azure Functions SDK, DocInt API, backend `/users/me` | Construction Log (scan albaran) |
@@ -58,11 +58,13 @@ Hay tests backend y frontend web; no se encontraron tests automatizados para `co
 - Dashboard ERP: `frontend-react` -> endpoints `/api/v1/erp/*`, `/api/v1/hr/*`, `/api/v1/tickets/*`, `/api/v1/contracts/*`, `/api/v1/invoices/*`.
 
 ## Riesgos detectados
-- Archivos monoliticos grandes (ej.: `backend-fastapi/app/services/erp_service.py`, `backend-fastapi/app/api/v1/ai_runtime.py`, `apps/.../src/components/WorkReportList.tsx`, `GenerateWorkReportPanel.tsx`).
-- Migracion incompleta de Supabase en `construction-log`: hay muchas referencias a `supabase.*` pese al cliente marcado como deprecated.
+- Archivos monoliticos grandes (ej.: `backend-fastapi/app/services/erp_service.py`, `backend-fastapi/app/api/v1/ai_runtime.py`, `apps/.../src/components/DashboardToolsTabContents.tsx`, `WorkReportList.tsx`, `GenerateWorkReportPanel.tsx`).
+- Mitigacion parcial aplicada en `DashboardToolsTabContents.tsx`: importacion, capa IO/dominio de exportacion extraidas a `services/*`, estado/reglas de calendario-periodos e imagenes de exportacion extraidas a hooks reutilizables y ensamblado de `ExportWorkReport` movido a `workReportExportDomain`; el componente bajo de ~3068 a ~2698 lineas, pero sigue siendo monolitico.
+- Monolitos relevantes tambien en `frontend-react` (ej.: `src/pages/TimeControlPage.tsx`, `src/components/erp/contracts/ContractsModule.tsx`, `src/pages/ErpTasksPage.tsx`, `src/pages/HrPage.tsx`).
+- Migracion incompleta de Supabase en `construction-log`: se detectan 22 referencias `supabase.*` en 12 archivos de `src` (aunque `useNotifications.ts` y `NotificationsCenter.tsx` ya operan por API/endpoints y `useWorkReports.ts` mantiene gateway legacy temporal).
 - `backend-fastapi/app/db/session.py` ejecuta DDL/migraciones ad-hoc al startup; alto riesgo de deriva de esquema entre entornos.
 - Se detecto `backend-fastapi/app/api/v1/albaran.py` con endpoints definidos pero no incluido en `app/api/v1/router.py`.
 - Pipeline `.github/workflows/deploy.yml` despliega directo con `git reset --hard` y no ejecuta test/lint.
-- No se encontraron tests automatizados en `apps/construction-log/...` ni en `azure-functions/docint-proxy`.
+- Cobertura de tests baja fuera de backend: `apps/construction-log/...` tiene tests puntuales (4 detectados) y `azure-functions/docint-proxy` no muestra tests fuente en `src`.
 - Duplicidad/deriva documental y de codigo: `frontend-react/` + `apps/construction-log/` + `referencias/saas_original_companero/`.
 - Archivos de logs/build (`*.log`, `dist/`, caches) presentes en el repo, aumentando ruido operativo.

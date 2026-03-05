@@ -56,6 +56,7 @@ from app.models.attachments import (  # noqa: F401
     WorkReportAttachment,
     SharedFile,
 )
+from app.models.message import Message  # noqa: F401
 from app.invoices.models import Invoice, InvoiceEvent, NotificationLog  # noqa: F401
 from app.contracts.models import (  # noqa: F401
     Contract,

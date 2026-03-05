@@ -117,3 +117,17 @@ def mark_all_as_read(session: Session, *, user: User) -> None:
         n.read_at = datetime.utcnow()
         session.add(n)
     session.commit()
+
+
+def delete_notification(
+    session: Session,
+    *,
+    user: User,
+    notification_id: int,
+) -> None:
+    notification = session.get(Notification, notification_id)
+    if not notification or notification.user_id != user.id:
+        raise ValueError("Notificación no encontrada")
+
+    session.delete(notification)
+    session.commit()

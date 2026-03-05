@@ -1,9 +1,23 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { WorkReport } from '@/types/workReport';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from './use-toast';
 import { storage } from '@/utils/storage';
+import {
+  deleteWorkReportRow,
+  findWorkReportByUniqueFields,
+  getOrganizationIdByUser,
+  getUserProfileFullName,
+  insertNotificationsRows,
+  listAssignedWorkUserIds,
+  listSiteManagerUserIds,
+  listWorkReportDownloads,
+  listWorkReportRows,
+  subscribeWorkReportsRealtime,
+  updateWorkReportRow,
+  upsertWorkReportRow,
+  uploadWorkReportImageAndGetPublicUrl,
+} from '@/services/workReportsSupabaseGateway';
 
 const STORAGE_KEY = 'work_reports_cache';
 const PENDING_SYNC_KEY = 'work_reports_pending_sync';
@@ -26,42 +40,7 @@ async function uploadImageAndGetUrl(
   section: string,
   index: number
 ): Promise<string> {
-  // Convertir data URL a Blob de forma robusta (sin depender de fetch en Android WebView)
-  const dataURLtoBlob = (dataUrl: string): Blob => {
-    const [header, base64] = dataUrl.split(',');
-    const mimeMatch = header.match(/data:(.*?);base64/);
-    const mime = mimeMatch?.[1] || 'image/jpeg';
-    const binary = atob(base64 || '');
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-    return new Blob([bytes], { type: mime });
-  };
-
-  let blob: Blob;
-  try {
-    // Intento rápido si el entorno soporta fetch sobre data URLs
-    blob = await (await fetch(base64DataUrl)).blob();
-  } catch {
-    // Fallback seguro para Android
-    blob = dataURLtoBlob(base64DataUrl);
-  }
-
-  const ext = (blob.type?.split('/')?.[1] || 'jpeg').toLowerCase();
-  const filePath = `${userId}/${reportId}/${section}_${index}_${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('work-report-images')
-    .upload(filePath, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
-
-  if (uploadError) throw uploadError;
-
-  // Use public URL (bucket is now public) - URLs don't expire
-  const { data } = supabase.storage
-    .from('work-report-images')
-    .getPublicUrl(filePath);
-
-  return data.publicUrl;
+  return uploadWorkReportImageAndGetPublicUrl(base64DataUrl, userId, reportId, section, index);
 }
 
 async function ensureImagesUploaded(report: WorkReport, userId: string | number): Promise<WorkReport> {
@@ -106,12 +85,12 @@ export const useWorkReports = () => {
   useEffect(() => {
     const loadOrg = async () => {
       if (!user) { setOrganizationId(null); return; }
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (!error) setOrganizationId(data?.organization_id ?? null);
+      try {
+        const orgId = await getOrganizationIdByUser(user.id);
+        setOrganizationId(orgId);
+      } catch (error) {
+        console.error('[WorkReports] Error loading organization:', error);
+      }
     };
     loadOrg();
   }, [user?.id]);
@@ -218,20 +197,12 @@ export const useWorkReports = () => {
   useEffect(() => {
     if (!user || !organizationId) return;
 
-    console.log('🔴 Configurando realtime para work_reports...');
+    console.log('Configurando realtime para work_reports...');
     
-    const channel = supabase
-      .channel('work_reports_realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'work_reports',
-          filter: `organization_id=eq.${organizationId}`
-        },
-        async (payload) => {
-          console.log('🔴 Cambio detectado en work_reports:', payload);
+    const unsubscribe = subscribeWorkReportsRealtime(
+      organizationId,
+      async (payload) => {
+          console.log('Cambio detectado en work_reports:', payload);
           
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newReport = payload.new as any;
@@ -288,15 +259,15 @@ export const useWorkReports = () => {
               return updated;
             });
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('🔴 Estado de suscripción realtime:', status);
-      });
+        },
+      (status) => {
+        console.log(' Estado de suscripción realtime:', status);
+      },
+    );
 
     return () => {
-      console.log('🔴 Limpiando suscripción realtime...');
-      supabase.removeChannel(channel);
+      console.log('Limpiando suscripción realtime...');
+      unsubscribe();
     };
   }, [user, organizationId]);
 
@@ -328,12 +299,7 @@ export const useWorkReports = () => {
       // Asegurar organization_id para cumplir RLS
       let orgId = organizationId as string | null;
       if (!orgId) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('organization_id')
-          .eq('id', user.id)
-          .maybeSingle();
-        orgId = prof?.organization_id ?? null;
+        orgId = await getOrganizationIdByUser(user.id);
       }
       
       for (const op of operations) {
@@ -375,37 +341,35 @@ export const useWorkReports = () => {
               }
               
               // Intentar upsert primero
-              let { error } = await supabase.from('work_reports').upsert([reportData], { onConflict: 'id' });
+              let error: any = null;
+              try {
+                await upsertWorkReportRow(reportData);
+              } catch (upsertError) {
+                error = upsertError;
+              }
               
               // Si falla por duplicado (unique constraint en work_id+date+work_number), 
               // buscar el parte existente y actualizar sus datos
               if (error?.code === '23505') {
-                console.log(`⚠️ Parte duplicado detectado, buscando existente para fusionar...`);
+                console.log(`Parte duplicado detectado, buscando existente para fusionar...`);
                 
                 // Buscar el parte existente por los campos únicos
-                const { data: existing } = await supabase
-                  .from('work_reports')
-                  .select('id')
-                  .eq('work_id', processed.workId)
-                  .eq('date', processed.date)
-                  .eq('work_number', processed.workNumber)
-                  .maybeSingle();
+                const existing = await findWorkReportByUniqueFields(
+                  processed.workId,
+                  processed.date,
+                  processed.workNumber,
+                );
                 
                 if (existing) {
                   // Actualizar el parte existente con los datos del local
                   const { id: _localId, ...dataWithoutId } = reportData;
-                  const { error: updateError } = await supabase
-                    .from('work_reports')
-                    .update({
-                      ...dataWithoutId,
-                      last_edited_by: user.id,
-                      last_edited_at: new Date().toISOString(),
-                    })
-                    .eq('id', existing.id);
+                  await updateWorkReportRow(existing.id, {
+                    ...dataWithoutId,
+                    last_edited_by: user.id,
+                    last_edited_at: new Date().toISOString(),
+                  });
                   
-                  if (updateError) throw updateError;
-                  
-                  console.log(`✅ Parte fusionado con existente: ${existing.id}`);
+                  console.log(` Parte fusionado con existente: ${existing.id}`);
                   syncedCount++;
                   
                   // Actualizar el estado local para reflejar el ID correcto
@@ -420,16 +384,15 @@ export const useWorkReports = () => {
               
               if (error) throw error;
               syncedCount++;
-              console.log(`✅ Sincronizado: ${op.type} - ${processed.workName}`);
+              console.log(` Sincronizado: ${op.type} - ${processed.workName}`);
             }
           } else if (op.type === 'delete' && op.reportId) {
-            const { error } = await supabase.from('work_reports').delete().eq('id', op.reportId);
-            if (error) throw error;
+            await deleteWorkReportRow(op.reportId);
             syncedCount++;
-            console.log(`✅ Sincronizado: delete - ${op.reportId}`);
+            console.log(`Sincronizado: delete - ${op.reportId}`);
           }
         } catch (error) {
-          console.error('❌ Error syncing operation:', error);
+          console.error('Error syncing operation:', error);
           failedOps.push(op);
         }
       }
@@ -503,12 +466,7 @@ export const useWorkReports = () => {
 
     try {
       // Cargar con RLS: el backend devolverá solo lo que puedes ver (si eres ADMIN, todo)
-      const { data: allReports, error: allError } = await supabase
-        .from('work_reports')
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(200);
-      if (allError) throw allError;
+      const allReports = await listWorkReportRows(200);
 
       const normalizedReports = normalize(allReports || []);
 
@@ -576,12 +534,7 @@ export const useWorkReports = () => {
       // Asegurar organization_id para cumplir RLS en curación
       let orgId = organizationId as string | null;
       if (!orgId) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('organization_id')
-          .eq('id', user.id)
-          .maybeSingle();
-        orgId = prof?.organization_id ?? null;
+        orgId = await getOrganizationIdByUser(user.id);
       }
       
       for (const r of deduplicatedReports) {
@@ -612,9 +565,12 @@ export const useWorkReports = () => {
               created_by: processed.createdBy || user.id,
               organization_id: orgId,
             };
-            const { error: upsertError } = await supabase
-              .from('work_reports')
-              .upsert([reportData], { onConflict: 'id' });
+            let upsertError: unknown = null;
+            try {
+              await upsertWorkReportRow(reportData);
+            } catch (error) {
+              upsertError = error;
+            }
             if (upsertError) {
               console.warn('No se pudo curar el parte (upsert falló):', upsertError);
               healedReports.push(r);
@@ -751,12 +707,7 @@ export const useWorkReports = () => {
         // Asegurar organization_id para cumplir RLS
         let orgId = organizationId as string | null;
         if (!orgId) {
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('organization_id')
-            .eq('id', user.id)
-            .maybeSingle();
-          orgId = prof?.organization_id ?? null;
+          orgId = await getOrganizationIdByUser(user.id);
         }
         const reportData: any = {
           id: processed.id,
@@ -794,34 +745,30 @@ export const useWorkReports = () => {
         const wasCompleted = previousReport?.status === 'completed';
         const isNowCompleted = processed.status === 'completed';
 
-        let { error } = await supabase
-          .from('work_reports')
-          .upsert([reportData], { onConflict: 'id' });
+        let error: any = null;
+        try {
+          await upsertWorkReportRow(reportData);
+        } catch (upsertError) {
+          error = upsertError;
+        }
 
         // Si falla por duplicado, buscar el existente y actualizar
         if (error?.code === '23505') {
-          console.log(`⚠️ Parte duplicado detectado en guardado directo, fusionando...`);
+          console.log(`Parte duplicado detectado en guardado directo, fusionando...`);
           
-          const { data: existing } = await supabase
-            .from('work_reports')
-            .select('id')
-            .eq('work_id', processed.workId)
-            .eq('date', processed.date)
-            .eq('work_number', processed.workNumber)
-            .maybeSingle();
+          const existing = await findWorkReportByUniqueFields(
+                  processed.workId,
+                  processed.date,
+                  processed.workNumber,
+                );
           
           if (existing) {
             const { id: _localId, ...dataWithoutId } = reportData;
-            const { error: updateError } = await supabase
-              .from('work_reports')
-              .update({
-                ...dataWithoutId,
-                last_edited_by: user.id,
-                last_edited_at: new Date().toISOString(),
-              })
-              .eq('id', existing.id);
-            
-            if (updateError) throw updateError;
+            await updateWorkReportRow(existing.id, {
+                    ...dataWithoutId,
+                    last_edited_by: user.id,
+                    last_edited_at: new Date().toISOString(),
+                  });
             
             // Actualizar el estado local con el ID correcto
             setReports(prev => prev.map(r => 
@@ -854,21 +801,16 @@ export const useWorkReports = () => {
         if (isNowCompleted && !wasCompleted && orgId && processed.workId) {
           try {
             // Buscar jefes de obra asignados a esta obra específica
-            const { data: siteManagers } = await supabase
-              .from('user_roles')
-              .select('user_id')
-              .eq('organization_id', orgId)
-              .eq('role', 'site_manager');
+            const siteManagers = await listSiteManagerUserIds(orgId);
 
             if (siteManagers && siteManagers.length > 0) {
               // Filtrar solo los que están asignados a esta obra
-              const { data: assignedSiteManagers } = await supabase
-                .from('work_assignments')
-                .select('user_id')
-                .eq('work_id', processed.workId)
-                .in('user_id', siteManagers.map(sm => sm.user_id));
+              const assignedSiteManagerIds = await listAssignedWorkUserIds(
+                processed.workId,
+                siteManagers,
+              );
 
-              if (assignedSiteManagers && assignedSiteManagers.length > 0) {
+              if (assignedSiteManagerIds.length > 0) {
                 // Formatear la fecha del parte
                 const formattedDate = new Date(processed.date).toLocaleDateString('es-ES', {
                   day: '2-digit',
@@ -877,8 +819,8 @@ export const useWorkReports = () => {
                 });
 
                 // Crear notificaciones para los jefes de obra asignados a esta obra
-                const notifications = assignedSiteManagers.map(sm => ({
-                  user_id: sm.user_id,
+                const notifications = assignedSiteManagerIds.map((siteManagerUserId) => ({
+                  user_id: siteManagerUserId,
                   organization_id: orgId,
                   type: 'work_report_completed',
                   title: 'Parte completado',
@@ -887,7 +829,7 @@ export const useWorkReports = () => {
                   read: false,
                 }));
 
-                await supabase.from('notifications').insert(notifications);
+                await insertNotificationsRows(notifications);
               }
             }
           } catch (notifError) {
@@ -902,11 +844,7 @@ export const useWorkReports = () => {
             const modificationTime = new Date().toISOString();
             
             // Buscar usuarios que descargaron este parte antes de la modificación
-            const { data: downloads } = await (supabase as any)
-              .from('work_report_downloads')
-              .select('user_id, downloaded_at')
-              .eq('work_report_id', processed.id)
-              .neq('user_id', user.id); // No notificar al que modifica
+            const downloads = await listWorkReportDownloads(processed.id, user.id);
 
             if (downloads && downloads.length > 0) {
               // Determinar qué secciones fueron modificadas
@@ -952,13 +890,7 @@ export const useWorkReports = () => {
                   : '';
 
                 // Obtener nombre del editor
-                const { data: editorProfile } = await supabase
-                  .from('profiles')
-                  .select('full_name')
-                  .eq('id', user.id)
-                  .maybeSingle();
-
-                const editorName = editorProfile?.full_name || 'Un usuario';
+                const editorName = (await getUserProfileFullName(user.id)) || 'Un usuario';
 
                 // Crear notificaciones para los usuarios que descargaron el parte
                 const notifications = downloads.map((d: any) => ({
@@ -976,7 +908,7 @@ export const useWorkReports = () => {
                   })
                 }));
 
-                await supabase.from('notifications').insert(notifications);
+                await insertNotificationsRows(notifications);
               }
             }
           } catch (notifError) {
@@ -1032,12 +964,7 @@ export const useWorkReports = () => {
 
       // Sincronizar con servidor si hay conexión
       if (isOnline) {
-        const { error } = await supabase
-          .from('work_reports')
-          .delete()
-          .eq('id', reportId);
-
-        if (error) throw error;
+        await deleteWorkReportRow(reportId);
 
         // Eliminar de operaciones pendientes
         const pending = await storage.getItem(PENDING_SYNC_KEY);
@@ -1076,16 +1003,11 @@ export const useWorkReports = () => {
       await saveToCache(updatedReports);
 
       // Actualizar en el backend
-      const { error } = await supabase
-        .from('work_reports')
-        .update({
-          approved: true,
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', reportId);
-
-      if (error) throw error;
+      await updateWorkReportRow(reportId, {
+        approved: true,
+        approved_by: user.id,
+        approved_at: new Date().toISOString(),
+      });
       
       toast({
         title: "Parte aprobado",
@@ -1118,16 +1040,11 @@ export const useWorkReports = () => {
       await saveToCache(updatedReports);
 
       // Actualizar en el backend
-      const { error } = await supabase
-        .from('work_reports')
-        .update({
-          approved: false,
-          approved_by: null,
-          approved_at: null,
-        })
-        .eq('id', reportId);
-
-      if (error) throw error;
+      await updateWorkReportRow(reportId, {
+        approved: false,
+        approved_by: null,
+        approved_at: null,
+      });
       
       toast({
         title: "Aprobación revocada",
@@ -1167,16 +1084,15 @@ export const useWorkReports = () => {
       await saveToCache(updatedReports);
 
       // Actualizar en el backend - UNA SOLA OPERACIÓN para todos los IDs
-      const { error } = await supabase
-        .from('work_reports')
-        .update({
-          is_archived: true,
-          archived_by: user.id,
-          archived_at: now,
-        })
-        .in('id', reportIds);
-
-      if (error) throw error;
+      await Promise.all(
+        reportIds.map((reportId) =>
+          updateWorkReportRow(reportId, {
+            is_archived: true,
+            archived_by: user.id,
+            archived_at: now,
+          }),
+        ),
+      );
       
       if (showToast) {
         const count = reportIds.length;
@@ -1215,16 +1131,11 @@ export const useWorkReports = () => {
       await saveToCache(updatedReports);
 
       // Actualizar en el backend
-      const { error } = await supabase
-        .from('work_reports')
-        .update({
-          is_archived: false,
-          archived_by: null,
-          archived_at: null,
-        })
-        .eq('id', reportId);
-
-      if (error) throw error;
+      await updateWorkReportRow(reportId, {
+        is_archived: false,
+        archived_by: null,
+        archived_at: null,
+      });
       
       toast({
         title: "Parte restaurado",
@@ -1340,12 +1251,7 @@ export const useWorkReports = () => {
           // Get organization_id
           let orgId = organizationId as string | null;
           if (!orgId) {
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('organization_id')
-              .eq('id', user.id)
-              .maybeSingle();
-            orgId = prof?.organization_id ?? null;
+            orgId = await getOrganizationIdByUser(user.id);
           }
 
           for (const report of updatedReports) {
@@ -1373,12 +1279,9 @@ export const useWorkReports = () => {
               organization_id: orgId,
             };
             
-            const { error } = await supabase
-              .from('work_reports')
-              .update(reportData)
-              .eq('id', report.id);
-            
-            if (error) {
+            try {
+              await updateWorkReportRow(report.id, reportData);
+            } catch (error) {
               console.error('Error updating report during deduplication:', error);
             }
           }

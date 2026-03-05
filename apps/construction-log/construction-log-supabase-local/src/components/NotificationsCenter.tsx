@@ -27,11 +27,133 @@ import { exportWeeklyReports, exportMonthlyReports } from '@/utils/weeklyMonthly
 import { exportToExcel } from '@/utils/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import type { WorkReport } from '@/types/workReport';
+import {
+  getErpWorkReport,
+  listErpWorkReports,
+  type ApiErpWorkReport,
+} from '@/integrations/api/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
+import type { Notification as AppNotification } from '@/types/notifications';
+import type { WorkReport } from '@/types/workReport';
+
+type NotificationWorkDetail = { workName: string; workNumber: string; date: string };
+
+const toApiReportId = (raw: string | undefined): number | null => {
+  if (!raw) return null;
+  const normalized = raw.trim();
+  if (!normalized) return null;
+  const direct = Number(normalized);
+  if (Number.isInteger(direct) && direct > 0) return direct;
+
+  const match = normalized.match(/(\d+)(?!.*\d)/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const toArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+const toText = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return '';
+};
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toBoolean = (value: unknown, fallback = false): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+  }
+  return fallback;
+};
+
+const extractWorkDetail = (report: ApiErpWorkReport): NotificationWorkDetail => {
+  const payload = toRecord(report.payload);
+  return {
+    workName: toText(
+      payload.workName,
+      payload.work_name,
+      payload.projectName,
+      payload.project_name,
+      report.title,
+      `Obra ${report.project_id}`,
+    ),
+    workNumber: toText(
+      payload.workNumber,
+      payload.work_number,
+      payload.reportIdentifier,
+      payload.report_identifier,
+      report.report_identifier,
+      report.id,
+    ),
+    date: toText(payload.date, report.date),
+  };
+};
+
+const mapApiReportToWorkReport = (report: ApiErpWorkReport): WorkReport => {
+  const payload = toRecord(report.payload);
+  const detail = extractWorkDetail(report);
+
+  return {
+    id: String(report.id),
+    workId: toText(payload.workId, payload.work_id, report.project_id) || undefined,
+    workNumber: detail.workNumber,
+    date: detail.date,
+    workName: detail.workName,
+    foreman: toText(payload.foreman),
+    foremanHours: toNumber(payload.foremanHours ?? payload.foreman_hours, 0),
+    foremanEntries: toArray(payload.foremanEntries ?? payload.foreman_entries),
+    foremanSignature: toText(payload.foremanSignature, payload.foreman_signature) || undefined,
+    siteManager: toText(payload.siteManager, payload.site_manager),
+    siteManagerSignature: toText(payload.siteManagerSignature, payload.site_manager_signature) || undefined,
+    observations: toText(payload.observations),
+    workGroups: toArray(payload.workGroups ?? payload.work_groups),
+    machineryGroups: toArray(payload.machineryGroups ?? payload.machinery_groups),
+    materialGroups: toArray(payload.materialGroups ?? payload.material_groups),
+    subcontractGroups: toArray(payload.subcontractGroups ?? payload.subcontract_groups),
+    createdAt: toText(report.created_at, report.updated_at, new Date().toISOString()),
+    updatedAt: toText(report.updated_at, report.created_at, new Date().toISOString()),
+    createdBy:
+      toText(payload.createdBy, payload.created_by, report.created_by_id) || undefined,
+    approved: toBoolean(payload.approved, report.status === 'approved'),
+    approvedBy: toText(payload.approvedBy, payload.approved_by) || undefined,
+    approvedAt: toText(payload.approvedAt, payload.approved_at) || undefined,
+    lastEditedBy: toText(payload.lastEditedBy, payload.last_edited_by, report.updated_by_id) || undefined,
+    lastEditedAt: toText(payload.lastEditedAt, payload.last_edited_at) || undefined,
+    status:
+      (toText(payload.status, report.status) as WorkReport['status']) || 'missing_data',
+    missingDeliveryNotes: toBoolean(payload.missingDeliveryNotes, false),
+    autoCloneNextDay: toBoolean(payload.autoCloneNextDay, false),
+    completedSections: toArray(payload.completedSections ?? payload.completed_sections),
+    isArchived: report.status === 'archived',
+    archivedAt: report.deleted_at || undefined,
+    archivedBy: toText(payload.archivedBy, payload.archived_by) || undefined,
+  };
+};
 
 export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) => {
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
@@ -40,42 +162,53 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
   const { reports } = useWorkReports();
   const [open, setOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState<any>(null);
+  const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [workReportDetails, setWorkReportDetails] = useState<Record<string, { workName: string; workNumber: string; date: string }>>({});
+  const [workReportDetails, setWorkReportDetails] = useState<Record<string, NotificationWorkDetail>>({});
   const [expandedWorks, setExpandedWorks] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const { organization } = useOrganization();
+
+  // Filter notifications for 'ofi' role - only show completed/approved work reports
+  const filteredNotifications = isOfi
+    ? notifications.filter(n => n.type === 'work_report_approved' || n.type === 'work_report_created')
+    : notifications;
+
+  const filteredUnreadCount = isOfi
+    ? filteredNotifications.filter(n => !n.read).length
+    : unreadCount;
 
   // Load work report details for ofi role notifications
   useEffect(() => {
     if (!isOfi) return;
     
     const loadWorkReportDetails = async () => {
-      const notificationIds = filteredNotifications
+      const pendingNotifications = filteredNotifications
         .filter(n => n.related_id && !workReportDetails[n.related_id])
-        .map(n => n.related_id)
-        .filter((id): id is string => id !== null && id !== undefined);
+        .map((n) => ({ relatedId: n.related_id as string, reportId: toApiReportId(n.related_id) }))
+        .filter((entry): entry is { relatedId: string; reportId: number } => entry.reportId !== null);
 
-      if (notificationIds.length === 0) return;
+      if (pendingNotifications.length === 0) return;
 
       try {
-        const { data, error } = await supabase
-          .from('work_reports')
-          .select('id, work_name, work_number, date')
-          .in('id', notificationIds);
+        const fetched = await Promise.all(
+          pendingNotifications.map(async ({ relatedId, reportId }) => {
+            try {
+              const report = await getErpWorkReport(reportId);
+              return { relatedId, detail: extractWorkDetail(report) };
+            } catch {
+              return null;
+            }
+          }),
+        );
 
-        if (error) throw error;
-        
-        if (data) {
-          const details: Record<string, { workName: string; workNumber: string; date: string }> = {};
-          data.forEach(report => {
-            details[report.id] = {
-              workName: report.work_name,
-              workNumber: report.work_number,
-              date: report.date
-            };
-          });
+        const details: Record<string, NotificationWorkDetail> = {};
+        fetched.forEach((row) => {
+          if (!row) return;
+          details[row.relatedId] = row.detail;
+        });
+
+        if (Object.keys(details).length > 0) {
           setWorkReportDetails(prev => ({ ...prev, ...details }));
         }
       } catch (error) {
@@ -84,19 +217,10 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
     };
 
     loadWorkReportDetails();
-  }, [isOfi, notifications]);
-
-  // Filter notifications for 'ofi' role - only show completed/approved work reports
-  const filteredNotifications = isOfi 
-    ? notifications.filter(n => n.type === 'work_report_approved' || n.type === 'work_report_created')
-    : notifications;
-
-  const filteredUnreadCount = isOfi
-    ? filteredNotifications.filter(n => !n.read).length
-    : unreadCount;
+  }, [isOfi, notifications, filteredNotifications, workReportDetails]);
 
   // Format notification message for ofi role
-  const getNotificationMessage = (notification: any) => {
+  const getNotificationMessage = (notification: AppNotification) => {
     if (!isOfi || !notification.related_id) {
       return notification.message;
     }
@@ -119,7 +243,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
   const groupedNotifications = useMemo(() => {
     if (!isOfi) return null;
 
-    const groups = new Map<string, { workName: string; workNumber: string; notifications: any[] }>();
+    const groups = new Map<string, { workName: string; workNumber: string; notifications: AppNotification[] }>();
 
     filteredNotifications.forEach(notification => {
       if (!notification.related_id) return;
@@ -162,7 +286,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
     });
   };
 
-  const handleNotificationClick = async (notification: any) => {
+  const handleNotificationClick = async (notification: AppNotification) => {
     if (!notification.read) {
       await markAsRead(notification.id);
     }
@@ -175,7 +299,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
     }
   };
 
-  const handleDownloadClick = (notification: any, e: React.MouseEvent) => {
+  const handleDownloadClick = (notification: AppNotification, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedNotification(notification);
     setDownloadDialogOpen(true);
@@ -187,18 +311,26 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
     setIsDownloading(true);
 
     try {
+      const apiReportId = toApiReportId(selectedNotification.related_id);
+      if (apiReportId === null) {
+        toast({
+          title: "Error",
+          description: "La notificación no está vinculada a un parte válido",
+          variant: "destructive",
+        });
+        setIsDownloading(false);
+        return;
+      }
+
       // Try to find in local reports first
-      let relatedReport = reports.find(r => r.id === selectedNotification.related_id);
+      let relatedReport = reports.find(r => r.id === String(apiReportId));
+      let relatedApiReport: ApiErpWorkReport | null = null;
       
       // If not found locally, fetch from database
       if (!relatedReport) {
-        const { data: fetchedReport, error } = await supabase
-          .from('work_reports')
-          .select('*')
-          .eq('id', selectedNotification.related_id)
-          .maybeSingle();
+        relatedApiReport = await getErpWorkReport(apiReportId);
 
-        if (error || !fetchedReport) {
+        if (!relatedApiReport) {
           toast({
             title: "Error",
             description: "No se encontró el parte de trabajo",
@@ -208,27 +340,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
           return;
         }
 
-        // Convert to WorkReport type
-        relatedReport = {
-          id: fetchedReport.id,
-          workId: fetchedReport.work_id || undefined,
-          workNumber: fetchedReport.work_number,
-          workName: fetchedReport.work_name,
-          date: fetchedReport.date,
-          foreman: fetchedReport.foreman || undefined,
-          foremanHours: fetchedReport.foreman_hours || 0,
-          siteManager: fetchedReport.site_manager || undefined,
-          workGroups: (fetchedReport.work_groups as any) || [],
-          machineryGroups: (fetchedReport.machinery_groups as any) || [],
-          materialGroups: (fetchedReport.material_groups as any) || [],
-          subcontractGroups: (fetchedReport.subcontract_groups as any) || [],
-          rentalMachineryGroups: (fetchedReport.rental_machinery_groups as any) || [],
-          observations: fetchedReport.observations || undefined,
-          approved: fetchedReport.approved || false,
-          createdBy: fetchedReport.created_by || undefined,
-          createdAt: fetchedReport.created_at,
-          updatedAt: fetchedReport.updated_at,
-        } as WorkReport;
+        relatedReport = mapApiReportToWorkReport(relatedApiReport);
       }
 
       const reportDate = new Date(relatedReport.date);
@@ -238,35 +350,22 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
       if (period === 'day') {
         filteredReports = [relatedReport]; // Single day only
       } else if (period === 'week' || period === 'month') {
+        if (!relatedApiReport) {
+          relatedApiReport = await getErpWorkReport(apiReportId);
+        }
+        if (!relatedApiReport?.project_id) {
+          throw new Error('No se encontró project_id para el parte');
+        }
+
         // Fetch reports for the period from database
-        const { data: periodReports, error: periodError } = await supabase
-          .from('work_reports')
-          .select('*')
-          .eq('work_id', relatedReport.workId)
-          .order('date', { ascending: true });
+        const apiReports = await listErpWorkReports({
+          projectId: relatedApiReport.project_id,
+          limit: 500,
+          offset: 0,
+        });
+        const allReports = apiReports.map(mapApiReportToWorkReport);
 
-        if (!periodError && periodReports) {
-          const allReports = periodReports.map(r => ({
-            id: r.id,
-            workId: r.work_id || undefined,
-            workNumber: r.work_number,
-            workName: r.work_name,
-            date: r.date,
-            foreman: r.foreman || undefined,
-            foremanHours: r.foreman_hours || 0,
-            siteManager: r.site_manager || undefined,
-            workGroups: (r.work_groups as any) || [],
-            machineryGroups: (r.machinery_groups as any) || [],
-            materialGroups: (r.material_groups as any) || [],
-            subcontractGroups: (r.subcontract_groups as any) || [],
-            rentalMachineryGroups: (r.rental_machinery_groups as any) || [],
-            observations: r.observations || undefined,
-            approved: r.approved || false,
-            createdBy: r.created_by || undefined,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
-          } as WorkReport));
-
+        if (allReports.length > 0) {
           if (period === 'week') {
             const weekStart = subWeeks(reportDate, 0);
             filteredReports = allReports.filter(r => 
@@ -306,8 +405,8 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
       }
 
       // Registrar la descarga para notificaciones de modificación
-      if ((isSiteManager || isAdmin || isMaster) && selectedNotification?.related_id) {
-        await trackDownload(selectedNotification.related_id, format);
+      if (isSiteManager || isAdmin || isMaster) {
+        await trackDownload(String(apiReportId), format);
       }
 
       toast({

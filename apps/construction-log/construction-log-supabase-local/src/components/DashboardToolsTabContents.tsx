@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -30,14 +28,39 @@ import {
 } from '@/components/ui/dialog';
 import { ToastAction } from '@/components/ui/toast';
 import type { WorkReport } from '@/offline-db/types';
-import type { WorkReportStatus } from '@/offline-db/types';
 import { useToast } from '@/hooks/use-toast';
+import { useWorkReportExportCalendar } from '@/hooks/useWorkReportExportCalendar';
+import { useWorkReportExportImageSelection } from '@/hooks/useWorkReportExportImageSelection';
+import {
+  formatDateLabel,
+  toDateKey,
+  useCustomExportPeriodSelection,
+  useMultiDayExportSelection,
+  useSinglePeriodExportSelection,
+  type SinglePeriodMode,
+} from '@/hooks/useWorkReportExportPeriodSelection';
 import { useAuth } from '@/contexts/AuthContext';
 import { prepareOfflineTenantScope } from '@/offline-db/tenantScope';
 import { workReportsRepo } from '@/offline-db/repositories/workReportsRepo';
+import { executeWorkReportImport, type ImportConflictPolicy } from '@/services/workReportImportService';
+import {
+  buildPdfExportFilesFromReports,
+  buildZipExportFile,
+  downloadExportFiles,
+  getExportDirectoryLabel,
+  isNativeExportPlatform,
+  isShareCancellationError,
+  shareExportFiles,
+} from '@/services/workReportExportInfrastructure';
+import {
+  buildExportWorkReport,
+  buildJsonExportFilesFromReports,
+  buildPdfExportFilename,
+  getOfflineReportDateKey,
+  getSinglePeriodZipFilename,
+} from '@/services/workReportExportDomain';
 import {
   asRecord,
-  generateUniqueReportIdentifier,
   payloadBoolean,
   payloadNumber,
   payloadText,
@@ -50,21 +73,14 @@ import {
   normalizeWorkSearchFilters,
   type WorkSearchFilters,
 } from '@/components/reportsAnalysisWorkGrouping';
-import type { WorkReport as ExportWorkReport } from '@/types/workReport';
-import { generateWorkReportPDF } from '@/utils/pdfGenerator';
-import JSZip from 'jszip';
 import {
-  endOfMonth,
-  endOfWeek,
   format,
   isAfter,
   isBefore,
   startOfMonth,
-  startOfWeek,
   subDays,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { DateRange } from 'react-day-picker';
 import {
   AlarmClockCheck,
   BarChart3,
@@ -198,34 +214,6 @@ const ToolsOptionButton = ({ icon, label, disabled, onClick }: ToolsOptionButton
   </Button>
 );
 
-type CustomExportMode = 'single-days' | 'range';
-type SinglePeriodMode = 'day' | 'week' | 'month';
-
-type CustomSelection = {
-  id: string;
-  mode: CustomExportMode;
-  dateKeys: string[];
-  label: string;
-};
-
-type ReportImageCandidate = {
-  id: string;
-  reportId: string;
-  reportLabel: string;
-  groupId: string;
-  supplier: string;
-  invoiceNumber: string;
-  uri: string;
-  label: string;
-};
-
-const toDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const parseDateKey = (value: string): Date | null => {
   const normalized = value.trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
@@ -240,8 +228,6 @@ const parseDateKey = (value: string): Date | null => {
   }
   return parsed;
 };
-
-const formatDateLabel = (date: Date) => date.toLocaleDateString('es-ES');
 
 const safeText = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
 const safeNumber = (value: unknown, fallback = 0) =>
@@ -266,468 +252,6 @@ const pickCostReference = (...values: unknown[]) => {
 
 const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
 
-const expandRangeToDateKeys = (from: Date, to: Date): string[] => {
-  const [start, end] = from <= to ? [from, to] : [to, from];
-  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const limit = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  const result: string[] = [];
-
-  while (cursor <= limit) {
-    result.push(toDateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return result;
-};
-
-const sanitizeFilenameSegment = (value: string) =>
-  value
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .trim();
-
-const EXPORT_SUBDIRECTORY = 'PartesTrabajo';
-const PUBLIC_DOWNLOADS_EXPORT_PATH = `Download/${EXPORT_SUBDIRECTORY}`;
-const PREFERRED_NATIVE_EXPORT_DIRECTORIES: Directory[] = [
-  Directory.ExternalStorage,
-  Directory.Documents,
-  Directory.External,
-];
-
-const isNativePlatform = () => Capacitor.isNativePlatform?.() === true;
-
-const blobToBase64 = async (blob: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      resolve(dataUrl.split(',')[1] || '');
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-
-const sanitizeExportFilename = (filename: string) => {
-  const cleaned = filename
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^\.+/, '')
-    .trim();
-  return cleaned.length > 0 ? cleaned : `archivo_${Date.now()}`;
-};
-
-const getDirectoryLabel = (directory: Directory) => {
-  switch (directory) {
-    case Directory.ExternalStorage:
-      return `Descargas/${EXPORT_SUBDIRECTORY}`;
-    case Directory.Documents:
-      return `Documentos/${EXPORT_SUBDIRECTORY}`;
-    case Directory.External:
-      return `${EXPORT_SUBDIRECTORY} (almacenamiento de la app)`;
-    default:
-      return 'almacenamiento local';
-  }
-};
-
-const saveBlobToNativeFile = async (blob: Blob, filename: string): Promise<{ uri: string; directory: Directory }> => {
-  const safeFilename = sanitizeExportFilename(filename);
-  const base64 = await blobToBase64(blob);
-  let lastError: unknown;
-
-  for (const directory of PREFERRED_NATIVE_EXPORT_DIRECTORIES) {
-    const path =
-      directory === Directory.ExternalStorage
-        ? `${PUBLIC_DOWNLOADS_EXPORT_PATH}/${safeFilename}`
-        : `${EXPORT_SUBDIRECTORY}/${safeFilename}`;
-
-    try {
-      const writeResult = await Filesystem.writeFile({
-        path,
-        data: base64,
-        directory,
-        recursive: true,
-      });
-      let uri = writeResult.uri;
-      try {
-        const resolved = await Filesystem.getUri({ path, directory });
-        if (resolved?.uri) uri = resolved.uri;
-      } catch {
-        // Keep write URI as fallback
-      }
-      return { uri, directory };
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError ?? new Error('No se pudo guardar el archivo en el dispositivo.');
-};
-
-const triggerBrowserBlobDownload = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
-
-const isShareCancellationError = (error: unknown) => {
-  const raw =
-    typeof error === 'string'
-      ? error
-      : error instanceof Error
-        ? error.message
-        : (() => {
-            try {
-              return JSON.stringify(error);
-            } catch {
-              return '';
-            }
-          })();
-  const normalized = raw.toLowerCase();
-  return (
-    normalized.includes('cancel') ||
-    normalized.includes('dismiss') ||
-    normalized.includes('aborted') ||
-    normalized.includes('user did not share')
-  );
-};
-
-const getOfflineReportDateKey = (report: WorkReport) => {
-  const payload = asRecord(report.payload);
-  const payloadDate = payload ? safeText(payload.date) : '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(payloadDate)) return payloadDate;
-  return report.date;
-};
-
-const isDateKey = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
-
-const normalizeWorkReportStatus = (value: unknown): WorkReportStatus => {
-  const normalized = safeText(value).trim().toLowerCase();
-  if (
-    normalized === 'draft' ||
-    normalized === 'pending' ||
-    normalized === 'approved' ||
-    normalized === 'completed' ||
-    normalized === 'missing_data' ||
-    normalized === 'missing_delivery_notes'
-  ) {
-    return normalized;
-  }
-  return 'draft';
-};
-
-type ImportableReportPayload = {
-  date: string;
-  title: string | null;
-  status: WorkReportStatus;
-  projectId: string | null;
-  payload: unknown;
-  sourceId?: string;
-};
-
-const normalizeReportIdentifierKey = (value: unknown): string => {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  return normalized;
-};
-
-const getReportIdentifierFromPayload = (payload: unknown): string | null => {
-  const payloadRecord = asRecord(payload);
-  if (!payloadRecord) return null;
-  const candidate = safeText(payloadRecord.reportIdentifier) || safeText(payloadRecord.report_identifier);
-  const normalized = candidate.trim();
-  return normalized.length > 0 ? normalized : null;
-};
-
-const toImportableReportFromRecord = (record: Record<string, unknown>): ImportableReportPayload | null => {
-  const nestedReport = asRecord(record.report);
-  const source = nestedReport ?? record;
-  const sourcePayload = source.payload;
-  const payloadRecord = asRecord(sourcePayload) ?? asRecord(source);
-
-  const dateCandidate = safeText(source.date) || safeText(payloadRecord?.date);
-  if (!isDateKey(dateCandidate)) return null;
-
-  const titleCandidate =
-    safeText(source.title) ||
-    safeText(source.workName) ||
-    safeText(payloadRecord?.workName) ||
-    safeText(payloadRecord?.title) ||
-    null;
-
-  const projectIdCandidate =
-    safeText(source.projectId) ||
-    safeText(source.workId) ||
-    safeText(payloadRecord?.projectId) ||
-    safeText(payloadRecord?.workId) ||
-    null;
-
-  const statusCandidate =
-    source.status ??
-    source.workReportStatus ??
-    payloadRecord?.workReportStatus ??
-    payloadRecord?.status;
-
-  const payload =
-    sourcePayload !== undefined
-      ? sourcePayload
-      : payloadRecord
-        ? payloadRecord
-        : source;
-
-  return {
-    date: dateCandidate,
-    title: titleCandidate,
-    status: normalizeWorkReportStatus(statusCandidate),
-    projectId: projectIdCandidate,
-    payload,
-    sourceId: safeText(source.id),
-  };
-};
-
-const extractImportableReports = (value: unknown): ImportableReportPayload[] => {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => extractImportableReports(item));
-  }
-
-  const record = asRecord(value);
-  if (!record) return [];
-
-  const parsed = toImportableReportFromRecord(record);
-  return parsed ? [parsed] : [];
-};
-
-const buildReportLabel = (report: WorkReport) => {
-  const workName = payloadText(report.payload, 'workName') ?? report.title ?? 'Parte';
-  return `${getOfflineReportDateKey(report)} - ${workName}`;
-};
-
-const collectAlbaranImageCandidates = (report: WorkReport): ReportImageCandidate[] => {
-  const payload = asRecord(report.payload);
-  const reportLabel = buildReportLabel(report);
-  if (!payload) return [];
-
-  const materialGroups = safeArray(payload.materialGroups);
-  return materialGroups.flatMap((rawGroup, groupIndex) => {
-    const group = asRecord(rawGroup);
-    if (!group) return [];
-
-    const groupId = safeText(group.id, `group-${groupIndex}`);
-    const supplier = safeText(group.supplier, 'Proveedor');
-    const invoiceNumber = safeText(group.invoiceNumber);
-    const fromImageUris = safeArray(group.imageUris).map((uri) => safeText(uri)).filter(Boolean);
-    const documentImage = safeText(group.documentImage);
-    const allUris = uniqueStrings(documentImage ? [documentImage, ...fromImageUris] : fromImageUris);
-
-    return allUris.map((uri, imageIndex) => {
-      const id = `${report.id}::${groupId}::${imageIndex}`;
-      const invoiceLabel = invoiceNumber ? ` - Alb. ${invoiceNumber}` : '';
-      return {
-        id,
-        reportId: report.id,
-        reportLabel,
-        groupId,
-        supplier,
-        invoiceNumber,
-        uri,
-        label: `${reportLabel} - ${supplier}${invoiceLabel}`,
-      };
-    });
-  });
-};
-
-const buildExportWorkReport = (
-  report: WorkReport,
-  selectedImageUrisByGroup?: Map<string, Set<string>>,
-): ExportWorkReport => {
-  const payload = asRecord(report.payload) ?? {};
-  const workGroupsSource = safeArray(payload.workGroups).length > 0 ? safeArray(payload.workGroups) : safeArray(payload.workforceGroups);
-  const machineryGroupsSource =
-    safeArray(payload.machineryGroups).length > 0
-      ? safeArray(payload.machineryGroups)
-      : safeArray(payload.subcontractedMachineryGroups);
-
-  const workGroups = workGroupsSource
-    .map((rawGroup, groupIndex) => {
-      const group = asRecord(rawGroup);
-      if (!group) return null;
-      const rows = safeArray(group.items).length > 0 ? safeArray(group.items) : safeArray(group.rows);
-      const items = rows
-        .map((rawRow, rowIndex) => {
-          const row = asRecord(rawRow);
-          if (!row) return null;
-          return {
-            id: safeText(row.id, `w-${groupIndex}-${rowIndex}`),
-            name: safeText(row.name, safeText(row.workerName)),
-            activity: safeText(row.activity),
-            hours: safeNumber(row.hours),
-            total: safeNumber(row.total, safeNumber(row.hours)),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-      return {
-        id: safeText(group.id, `wg-${groupIndex}`),
-        company: safeText(group.company, safeText(group.companyName)),
-        items,
-      };
-    })
-    .filter((group): group is NonNullable<typeof group> => group !== null);
-
-  const machineryGroups = machineryGroupsSource
-    .map((rawGroup, groupIndex) => {
-      const group = asRecord(rawGroup);
-      if (!group) return null;
-      const rows = safeArray(group.items).length > 0 ? safeArray(group.items) : safeArray(group.rows);
-      const items = rows
-        .map((rawRow, rowIndex) => {
-          const row = asRecord(rawRow);
-          if (!row) return null;
-          return {
-            id: safeText(row.id, `m-${groupIndex}-${rowIndex}`),
-            type: safeText(row.type, safeText(row.machineType)),
-            activity: safeText(row.activity),
-            hours: safeNumber(row.hours),
-            total: safeNumber(row.total, safeNumber(row.hours)),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-      return {
-        id: safeText(group.id, `mg-${groupIndex}`),
-        company: safeText(group.company, safeText(group.companyName)),
-        documentImage: safeText(group.documentImage) || undefined,
-        items,
-      };
-    })
-    .filter((group): group is NonNullable<typeof group> => group !== null);
-
-  const materialGroups = safeArray(payload.materialGroups)
-    .map((rawGroup, groupIndex) => {
-      const group = asRecord(rawGroup);
-      if (!group) return null;
-      const groupId = safeText(group.id, `mat-${groupIndex}`);
-      const rows = safeArray(group.items).length > 0 ? safeArray(group.items) : safeArray(group.rows);
-      const items = rows
-        .map((rawRow, rowIndex) => {
-          const row = asRecord(rawRow);
-          if (!row) return null;
-          return {
-            id: safeText(row.id, `mat-row-${groupIndex}-${rowIndex}`),
-            name: safeText(row.name),
-            quantity: safeNumber(row.quantity),
-            unit: safeText(row.unit),
-            unitPrice: safeNumber(row.unitPrice),
-            total: safeNumber(row.total, safeNumber(row.quantity) * safeNumber(row.unitPrice)),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-      const fromImageUris = safeArray(group.imageUris).map((uri) => safeText(uri)).filter(Boolean);
-      const fromDocumentImage = safeText(group.documentImage);
-      const allUris = uniqueStrings(fromDocumentImage ? [fromDocumentImage, ...fromImageUris] : fromImageUris);
-      const allowedUris = selectedImageUrisByGroup?.get(groupId);
-      const filteredUris = allowedUris
-        ? allUris.filter((uri) => allowedUris.has(uri))
-        : allUris;
-
-      return {
-        id: groupId,
-        supplier: safeText(group.supplier),
-        invoiceNumber: safeText(group.invoiceNumber),
-        items,
-        documentImage: filteredUris[0] || undefined,
-        imageUris: filteredUris,
-      };
-    })
-    .filter((group): group is NonNullable<typeof group> => group !== null);
-
-  const subcontractGroups = safeArray(payload.subcontractGroups)
-    .map((rawGroup, groupIndex) => {
-      const group = asRecord(rawGroup);
-      if (!group) return null;
-      const rows = safeArray(group.items).length > 0 ? safeArray(group.items) : safeArray(group.rows);
-      const items = rows
-        .map((rawRow, rowIndex) => {
-          const row = asRecord(rawRow);
-          if (!row) return null;
-          return {
-            id: safeText(row.id, `s-${groupIndex}-${rowIndex}`),
-            contractedPart: safeText(row.contractedPart, safeText(row.partida)),
-            company: safeText(row.company, safeText(group.company, safeText(group.companyName))),
-            activity: safeText(row.activity),
-            workers: safeNumber(row.workers, safeArray(row.workersAssigned).length),
-            hours: safeNumber(row.hours),
-            unitType: safeText(row.unitType, safeText(row.unit)) as
-              | 'hora'
-              | 'm3'
-              | 'm2'
-              | 'ml'
-              | 'unidad'
-              | undefined,
-            quantity: safeNumber(row.quantity, safeNumber(row.cantPerWorker)),
-            unitPrice: safeNumber(row.unitPrice),
-            total: safeNumber(row.total),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-      return {
-        id: safeText(group.id, `sg-${groupIndex}`),
-        company: safeText(group.company, safeText(group.companyName)),
-        items,
-        documentImage: safeText(group.documentImage) || undefined,
-      };
-    })
-    .filter((group): group is NonNullable<typeof group> => group !== null);
-
-  const createdAtIso = new Date(report.createdAt || Date.now()).toISOString();
-  const updatedAtIso = new Date(report.updatedAt || Date.now()).toISOString();
-  const workDate = getOfflineReportDateKey(report);
-  const statusText = safeText(payload.workReportStatus, report.status);
-  const exportStatus: ExportWorkReport['status'] =
-    statusText === 'missing_data' || statusText === 'missing_delivery_notes' || statusText === 'completed'
-      ? statusText
-      : undefined;
-
-  return {
-    id: report.id,
-    workNumber: safeText(payload.workNumber),
-    date: workDate,
-    workName: safeText(payload.workName, report.title ?? 'Parte'),
-    workId: safeText(payload.workId, report.projectId ?? '') || undefined,
-    foreman: safeText(payload.mainForeman, safeText(payload.foreman)),
-    foremanHours: safeNumber(payload.mainForemanHours, safeNumber(payload.foremanHours)),
-    foremanEntries: safeArray(payload.foremanEntries)
-      .map((rawEntry, entryIndex) => {
-        const entry = asRecord(rawEntry);
-        if (!entry) return null;
-        const rawRole = safeText(entry.role).toLowerCase();
-        const role: 'encargado' | 'capataz' | 'recurso_preventivo' =
-          rawRole === 'capataz' || rawRole === 'recurso_preventivo' ? rawRole : 'encargado';
-        return {
-          id: safeText(entry.id, `f-${entryIndex}`),
-          name: safeText(entry.name),
-          role,
-          hours: safeNumber(entry.hours),
-        };
-      })
-      .filter((entry): entry is NonNullable<typeof entry> => entry !== null),
-    foremanSignature: safeText(payload.foremanSignature) || undefined,
-    siteManager: safeText(payload.siteManager),
-    siteManagerSignature: safeText(payload.siteManagerSignature) || undefined,
-    observations: safeText(payload.observationsText, safeText(payload.observations)),
-    workGroups,
-    machineryGroups,
-    materialGroups,
-    subcontractGroups,
-    createdAt: createdAtIso,
-    updatedAt: updatedAtIso,
-    status: exportStatus,
-  };
-};
-
 const BulkExportCustomDialog = ({
   disabled,
   reports,
@@ -737,207 +261,56 @@ const BulkExportCustomDialog = ({
 }) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<CustomExportMode>('single-days');
-  const [selectedDays, setSelectedDays] = useState<Date[] | undefined>([]);
-  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(undefined);
-  const [customSelections, setCustomSelections] = useState<CustomSelection[]>([]);
-  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const {
+    mode,
+    setMode,
+    selectedDays,
+    setSelectedDays,
+    selectedRange,
+    setSelectedRange,
+    customSelections,
+    normalizedSelectedDays,
+    canAddRange,
+    selectedDateKeys,
+    hasCustomSelections,
+    addCurrentSingleSelection,
+    addCurrentRangeSelection,
+    removeSelection,
+  } = useCustomExportPeriodSelection();
+  const { calendarStartMonth, calendarEndMonth, calendarClassNames } = useWorkReportExportCalendar();
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'zip' | null>(null);
 
-  const normalizedSelectedDays = useMemo(() => {
-    const deduped = new Map<string, Date>();
-    (selectedDays ?? []).forEach((day) => {
-      deduped.set(toDateKey(day), day);
-    });
-    return [...deduped.values()].sort((a, b) => a.getTime() - b.getTime());
-  }, [selectedDays]);
-  const calendarStartMonth = useMemo(() => new Date(2020, 0, 1), []);
-  const calendarEndMonth = useMemo(() => new Date(new Date().getFullYear() + 2, 11, 31), []);
-
-  const canAddRange = Boolean(selectedRange?.from && selectedRange?.to);
-  const selectedDateKeys = useMemo(
-    () => uniqueStrings(customSelections.flatMap((selection) => selection.dateKeys)),
-    [customSelections],
-  );
   const selectedDateSet = useMemo(() => new Set(selectedDateKeys), [selectedDateKeys]);
   const matchedReports = useMemo(
     () => reports.filter((report) => selectedDateSet.has(getOfflineReportDateKey(report))),
     [reports, selectedDateSet],
   );
-  const imageCandidates = useMemo(
-    () => matchedReports.flatMap((report) => collectAlbaranImageCandidates(report)),
-    [matchedReports],
-  );
-  const customCalendarClassNames = useMemo(
-    () => ({
-      root: 'relative w-full',
-      months: 'w-full',
-      month: 'relative mx-auto flex w-full max-w-[540px] flex-col gap-4',
-      month_grid: 'mx-auto border-collapse',
-      weekdays: 'mx-auto flex w-fit',
-      week: 'mx-auto mt-2 flex w-fit',
-      month_caption: 'relative flex h-10 items-center justify-center',
-      dropdowns: 'flex items-center justify-center gap-3',
-      dropdown_root:
-        'relative inline-flex h-9 min-w-[108px] items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm',
-      dropdown: 'absolute inset-0 cursor-pointer appearance-none opacity-0',
-      caption_label:
-        'inline-flex w-full flex-row-reverse items-center justify-center gap-2 truncate text-sm font-medium capitalize text-slate-700',
-      chevron: 'h-3.5 w-3.5 text-slate-500',
-      nav: 'pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-2',
-      button_previous:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-      button_next:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-    }),
-    [],
-  );
-  const hasCustomSelections = customSelections.length > 0;
+  const {
+    imageCandidates,
+    selectedImageIds,
+    includeImagesInExport,
+    selectedImageMapByReport,
+    toggleImageSelection,
+    selectAllImages,
+    clearImageSelection,
+  } = useWorkReportExportImageSelection({
+    reports: matchedReports,
+    enabled: open,
+  });
   const hasMatchedReports = matchedReports.length > 0;
   const canExport = hasCustomSelections && hasMatchedReports && exportingFormat === null;
-  const includeImagesInExport = selectedImageIds.length > 0;
-
-  const addCurrentSingleSelection = () => {
-    if (normalizedSelectedDays.length === 0) return;
-    const label = normalizedSelectedDays.map((day) => formatDateLabel(day)).join(', ');
-    const dateKeys = normalizedSelectedDays.map((day) => toDateKey(day));
-    setCustomSelections((previous) => [
-      ...previous,
-      { id: crypto.randomUUID(), mode: 'single-days', dateKeys, label: `Dias: ${label}` },
-    ]);
-    setSelectedDays([]);
-  };
-
-  const addCurrentRangeSelection = () => {
-    if (!selectedRange?.from || !selectedRange?.to) return;
-    const fromDate = selectedRange.from;
-    const toDate = selectedRange.to;
-    const [from, to] = fromDate <= toDate ? [fromDate, toDate] : [toDate, fromDate];
-    const dateKeys = expandRangeToDateKeys(from, to);
-    const label = `Rango: ${formatDateLabel(from)} - ${formatDateLabel(to)}`;
-    setCustomSelections((previous) => [
-      ...previous,
-      { id: crypto.randomUUID(), mode: 'range', dateKeys, label },
-    ]);
-    setSelectedRange(undefined);
-  };
-
-  const removeSelection = (selectionId: string) => {
-    setCustomSelections((previous) => previous.filter((selection) => selection.id !== selectionId));
-  };
-
-  const toggleImageSelection = (candidateId: string) => {
-    setSelectedImageIds((previous) =>
-      previous.includes(candidateId)
-        ? previous.filter((id) => id !== candidateId)
-        : [...previous, candidateId],
-    );
-  };
-
-  const selectAllImages = () => {
-    setSelectedImageIds(imageCandidates.map((candidate) => candidate.id));
-  };
-
-  const clearImageSelection = () => {
-    setSelectedImageIds([]);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    setSelectedImageIds((previous) => {
-      const currentCandidateIds = new Set(imageCandidates.map((candidate) => candidate.id));
-      const kept = previous.filter((id) => currentCandidateIds.has(id));
-      if (kept.length > 0 || imageCandidates.length === 0) return kept;
-      return imageCandidates.map((candidate) => candidate.id);
-    });
-  }, [imageCandidates, open]);
-
-  const buildSelectedImageMapByReport = () => {
-    const selectedIds = new Set(selectedImageIds);
-    const byReport = new Map<string, Map<string, Set<string>>>();
-
-    imageCandidates.forEach((candidate) => {
-      if (!selectedIds.has(candidate.id)) return;
-      const reportMap = byReport.get(candidate.reportId) ?? new Map<string, Set<string>>();
-      const groupSet = reportMap.get(candidate.groupId) ?? new Set<string>();
-      groupSet.add(candidate.uri);
-      reportMap.set(candidate.groupId, groupSet);
-      byReport.set(candidate.reportId, reportMap);
-    });
-
-    return byReport;
-  };
-
-  const buildFileName = (report: ExportWorkReport) => {
-    const workNumber = sanitizeFilenameSegment(report.workNumber || 'sin_numero');
-    const workName = sanitizeFilenameSegment(report.workName || 'sin_obra');
-    const date = sanitizeFilenameSegment(report.date || 'sin_fecha');
-    return `Parte_${date}_${workNumber}_${workName}`;
-  };
 
   const buildPdfExportFiles = async () => {
-    const selectedImageMapByReport = buildSelectedImageMapByReport();
     const exportReports = matchedReports.map((report) =>
       buildExportWorkReport(report, selectedImageMapByReport.get(report.id)),
     );
-    const files: Array<{ filename: string; blob: Blob }> = [];
-
-    for (const exportReport of exportReports) {
-      const pdfBlob = (await generateWorkReportPDF(
-        exportReport,
-        includeImagesInExport,
-        undefined,
-        undefined,
-        true,
-      )) as Blob;
-      files.push({ filename: `${buildFileName(exportReport)}.pdf`, blob: pdfBlob });
-    }
+    const files = await buildPdfExportFilesFromReports({
+      reports: exportReports,
+      includeImages: includeImagesInExport,
+      buildFileName: buildPdfExportFilename,
+    });
 
     return { exportReports, files };
-  };
-
-  const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return { directory: undefined as Directory | undefined, uris: [] as string[] };
-    }
-
-    let directoryUsed: Directory | undefined;
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      if (!directoryUsed) directoryUsed = saved.directory;
-      uris.push(saved.uri);
-    }
-    return { directory: directoryUsed, uris };
-  };
-
-  const shareFiles = async (
-    files: Array<{ filename: string; blob: Blob }>,
-    title: string,
-    text: string,
-    savedUris: string[] = [],
-  ) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return false;
-    }
-
-    const uris = [...savedUris];
-    if (uris.length === 0) {
-      for (const file of files) {
-        const saved = await saveBlobToNativeFile(file.blob, file.filename);
-        uris.push(saved.uri);
-      }
-    }
-
-    await Share.share({
-      title,
-      text,
-      files: uris,
-      dialogTitle: 'Compartir exportacion',
-    });
-    return true;
   };
 
   const notifyExportReadyToShare = (
@@ -947,7 +320,7 @@ const BulkExportCustomDialog = ({
     exportedDescription: string,
     savedUris: string[] = [],
   ) => {
-    if (!isNativePlatform()) {
+    if (!isNativeExportPlatform()) {
       toast({
         title: 'Exportacion completada',
         description: exportedDescription,
@@ -965,7 +338,12 @@ const BulkExportCustomDialog = ({
           onClick={() => {
             void (async () => {
               try {
-                await shareFiles(files, title, text, savedUris);
+                await shareExportFiles({
+                  files,
+                  title,
+                  text,
+                  savedUris,
+                });
                 toast({
                   title: 'Panel de compartir abierto',
                   description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -993,10 +371,10 @@ const BulkExportCustomDialog = ({
     setExportingFormat('pdf');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const downloadResult = await downloadFiles(files);
+      const downloadResult = await downloadExportFiles(files);
       const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
-        ? `Se guardaron ${exportReports.length} PDF en ${getDirectoryLabel(nativeDirectory)}.`
+        ? `Se guardaron ${exportReports.length} PDF en ${getExportDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${exportReports.length} PDF.`;
       notifyExportReadyToShare(
         files,
@@ -1023,20 +401,14 @@ const BulkExportCustomDialog = ({
     setExportingFormat('zip');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const zip = new JSZip();
-
-      for (const file of files) {
-        zip.file(file.filename, file.blob);
-      }
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
       const stamp = new Date().toISOString().slice(0, 10);
       const zipFilename = `Partes_personalizados_${stamp}.zip`;
-      const zipFiles = [{ filename: zipFilename, blob: zipBlob }];
-      const downloadResult = await downloadFiles(zipFiles);
+      const zipFile = await buildZipExportFile({ files, filename: zipFilename });
+      const zipFiles = [zipFile];
+      const downloadResult = await downloadExportFiles(zipFiles);
       const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
-        ? `Se guardo el ZIP en ${getDirectoryLabel(nativeDirectory)}.`
+        ? `Se guardo el ZIP en ${getExportDirectoryLabel(nativeDirectory)}.`
         : `Se generaron ${exportReports.length} partes en ZIP.`;
       notifyExportReadyToShare(
         zipFiles,
@@ -1112,7 +484,7 @@ const BulkExportCustomDialog = ({
                   startMonth={calendarStartMonth}
                   endMonth={calendarEndMonth}
                   reverseYears
-                  classNames={customCalendarClassNames}
+                  classNames={calendarClassNames}
                 />
               </div>
               <Button
@@ -1137,7 +509,7 @@ const BulkExportCustomDialog = ({
                   startMonth={calendarStartMonth}
                   endMonth={calendarEndMonth}
                   reverseYears
-                  classNames={customCalendarClassNames}
+                  classNames={calendarClassNames}
                 />
               </div>
               <Button
@@ -1284,208 +656,59 @@ const BulkExportSinglePeriodDialog = ({
 }) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
-  const [selectedWeek, setSelectedWeek] = useState<DateRange | undefined>(undefined);
-  const [selectedMonthAnchor, setSelectedMonthAnchor] = useState<Date | undefined>(
-    mode === 'month' ? new Date() : undefined,
-  );
-  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const {
+    selectedDay,
+    setSelectedDay,
+    selectedWeek,
+    selectedMonthAnchor,
+    selectedDateKeys,
+    selectedLabel,
+    hasSelection,
+    clearSelection,
+    handleSelectWeekByDay,
+    handleMonthChange,
+    handleYearChange,
+  } = useSinglePeriodExportSelection(mode);
+  const {
+    calendarStartMonth,
+    calendarEndMonth,
+    calendarClassNames,
+    monthOptions,
+    yearOptions,
+  } = useWorkReportExportCalendar();
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'zip' | null>(null);
-
-  const calendarStartMonth = useMemo(() => new Date(2020, 0, 1), []);
-  const calendarEndMonth = useMemo(() => new Date(new Date().getFullYear() + 2, 11, 31), []);
-  const monthOptions = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, monthIndex) => ({
-        value: monthIndex,
-        label: format(new Date(2026, monthIndex, 1), 'MMMM', { locale: es }),
-      })),
-    [],
-  );
-  const yearOptions = useMemo(
-    () =>
-      Array.from(
-        { length: calendarEndMonth.getFullYear() - calendarStartMonth.getFullYear() + 1 },
-        (_, index) => calendarStartMonth.getFullYear() + index,
-      ),
-    [calendarEndMonth, calendarStartMonth],
-  );
-  const customCalendarClassNames = useMemo(
-    () => ({
-      root: 'relative w-full',
-      months: 'w-full',
-      month: 'relative mx-auto flex w-full max-w-[540px] flex-col gap-4',
-      month_grid: 'mx-auto border-collapse',
-      weekdays: 'mx-auto flex w-fit',
-      week: 'mx-auto mt-2 flex w-fit',
-      month_caption: 'relative flex h-10 items-center justify-center',
-      dropdowns: 'flex items-center justify-center gap-3',
-      dropdown_root:
-        'relative inline-flex h-9 min-w-[108px] items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm',
-      dropdown: 'absolute inset-0 cursor-pointer appearance-none opacity-0',
-      caption_label:
-        'inline-flex w-full flex-row-reverse items-center justify-center gap-2 truncate text-sm font-medium capitalize text-slate-700',
-      chevron: 'h-3.5 w-3.5 text-slate-500',
-      nav: 'pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-2',
-      button_previous:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-      button_next:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-    }),
-    [],
-  );
-
-  const selectedMonthRange = useMemo<DateRange | undefined>(() => {
-    if (!selectedMonthAnchor) return undefined;
-    return { from: startOfMonth(selectedMonthAnchor), to: endOfMonth(selectedMonthAnchor) };
-  }, [selectedMonthAnchor]);
-
-  const selectedDateKeys = useMemo(() => {
-    if (mode === 'day') return selectedDay ? [toDateKey(selectedDay)] : [];
-    if (mode === 'week') {
-      if (!selectedWeek?.from || !selectedWeek?.to) return [];
-      return expandRangeToDateKeys(selectedWeek.from, selectedWeek.to);
-    }
-    if (!selectedMonthRange?.from || !selectedMonthRange?.to) return [];
-    return expandRangeToDateKeys(selectedMonthRange.from, selectedMonthRange.to);
-  }, [mode, selectedDay, selectedWeek, selectedMonthRange]);
-
-  const selectedLabel = useMemo(() => {
-    if (mode === 'day') return selectedDay ? `Dia: ${formatDateLabel(selectedDay)}` : '';
-    if (mode === 'week') {
-      if (!selectedWeek?.from || !selectedWeek?.to) return '';
-      return `Semana: ${formatDateLabel(selectedWeek.from)} - ${formatDateLabel(selectedWeek.to)}`;
-    }
-    if (!selectedMonthAnchor) return '';
-    return `Mes: ${format(selectedMonthAnchor, 'MMMM yyyy', { locale: es })}`;
-  }, [mode, selectedDay, selectedWeek, selectedMonthAnchor]);
 
   const selectedDateSet = useMemo(() => new Set(selectedDateKeys), [selectedDateKeys]);
   const matchedReports = useMemo(
     () => reports.filter((report) => selectedDateSet.has(getOfflineReportDateKey(report))),
     [reports, selectedDateSet],
   );
-  const imageCandidates = useMemo(
-    () => matchedReports.flatMap((report) => collectAlbaranImageCandidates(report)),
-    [matchedReports],
-  );
-  const hasSelection = selectedDateKeys.length > 0;
+  const {
+    imageCandidates,
+    selectedImageIds,
+    includeImagesInExport,
+    selectedImageMapByReport,
+    toggleImageSelection,
+    selectAllImages,
+    clearImageSelection,
+  } = useWorkReportExportImageSelection({
+    reports: matchedReports,
+    enabled: open,
+  });
   const hasMatchedReports = matchedReports.length > 0;
   const canExport = hasSelection && hasMatchedReports && exportingFormat === null;
-  const includeImagesInExport = selectedImageIds.length > 0;
-
-  const clearSelection = () => {
-    setSelectedDay(undefined);
-    setSelectedWeek(undefined);
-    setSelectedMonthAnchor(mode === 'month' ? new Date() : undefined);
-  };
-
-  const handleSelectWeekByDay = (day?: Date) => {
-    if (!day) {
-      setSelectedWeek(undefined);
-      return;
-    }
-    const weekStart = startOfWeek(day, { locale: es, weekStartsOn: 1 });
-    const weekEnd = endOfWeek(day, { locale: es, weekStartsOn: 1 });
-    setSelectedWeek({ from: weekStart, to: weekEnd });
-  };
-
-  const handleMonthChange = (monthValue: number) => {
-    const base = selectedMonthAnchor ?? new Date();
-    setSelectedMonthAnchor(new Date(base.getFullYear(), monthValue, 1));
-  };
-
-  const handleYearChange = (yearValue: number) => {
-    const base = selectedMonthAnchor ?? new Date();
-    setSelectedMonthAnchor(new Date(yearValue, base.getMonth(), 1));
-  };
-
-  const buildSelectedImageMapByReport = () => {
-    const selectedIds = new Set(selectedImageIds);
-    const byReport = new Map<string, Map<string, Set<string>>>();
-
-    imageCandidates.forEach((candidate) => {
-      if (!selectedIds.has(candidate.id)) return;
-      const reportMap = byReport.get(candidate.reportId) ?? new Map<string, Set<string>>();
-      const groupSet = reportMap.get(candidate.groupId) ?? new Set<string>();
-      groupSet.add(candidate.uri);
-      reportMap.set(candidate.groupId, groupSet);
-      byReport.set(candidate.reportId, reportMap);
-    });
-
-    return byReport;
-  };
-
-  const buildFileName = (report: ExportWorkReport) => {
-    const workNumber = sanitizeFilenameSegment(report.workNumber || 'sin_numero');
-    const workName = sanitizeFilenameSegment(report.workName || 'sin_obra');
-    const date = sanitizeFilenameSegment(report.date || 'sin_fecha');
-    return `Parte_${date}_${workNumber}_${workName}`;
-  };
 
   const buildPdfExportFiles = async () => {
-    const selectedImageMapByReport = buildSelectedImageMapByReport();
     const exportReports = matchedReports.map((report) =>
       buildExportWorkReport(report, selectedImageMapByReport.get(report.id)),
     );
-    const files: Array<{ filename: string; blob: Blob }> = [];
-
-    for (const exportReport of exportReports) {
-      const pdfBlob = (await generateWorkReportPDF(
-        exportReport,
-        includeImagesInExport,
-        undefined,
-        undefined,
-        true,
-      )) as Blob;
-      files.push({ filename: `${buildFileName(exportReport)}.pdf`, blob: pdfBlob });
-    }
+    const files = await buildPdfExportFilesFromReports({
+      reports: exportReports,
+      includeImages: includeImagesInExport,
+      buildFileName: buildPdfExportFilename,
+    });
 
     return { exportReports, files };
-  };
-
-  const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return { directory: undefined as Directory | undefined, uris: [] as string[] };
-    }
-
-    let directoryUsed: Directory | undefined;
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      if (!directoryUsed) directoryUsed = saved.directory;
-      uris.push(saved.uri);
-    }
-    return { directory: directoryUsed, uris };
-  };
-
-  const shareFiles = async (
-    files: Array<{ filename: string; blob: Blob }>,
-    title: string,
-    text: string,
-    savedUris: string[] = [],
-  ) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return false;
-    }
-
-    const uris = [...savedUris];
-    if (uris.length === 0) {
-      for (const file of files) {
-        const saved = await saveBlobToNativeFile(file.blob, file.filename);
-        uris.push(saved.uri);
-      }
-    }
-
-    await Share.share({
-      title,
-      text,
-      files: uris,
-      dialogTitle: 'Compartir exportacion',
-    });
-    return true;
   };
 
   const notifyExportReadyToShare = (
@@ -1495,7 +718,7 @@ const BulkExportSinglePeriodDialog = ({
     exportedDescription: string,
     savedUris: string[] = [],
   ) => {
-    if (!isNativePlatform()) {
+    if (!isNativeExportPlatform()) {
       toast({
         title: 'Exportacion completada',
         description: exportedDescription,
@@ -1513,7 +736,12 @@ const BulkExportSinglePeriodDialog = ({
           onClick={() => {
             void (async () => {
               try {
-                await shareFiles(files, title, text, savedUris);
+                await shareExportFiles({
+                  files,
+                  title,
+                  text,
+                  savedUris,
+                });
                 toast({
                   title: 'Panel de compartir abierto',
                   description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -1536,27 +764,15 @@ const BulkExportSinglePeriodDialog = ({
     });
   };
 
-  const getZipFilename = () => {
-    if (mode === 'day' && selectedDay) return `Partes_dia_${toDateKey(selectedDay)}.zip`;
-    if (mode === 'week' && selectedWeek?.from && selectedWeek?.to) {
-      return `Partes_semana_${toDateKey(selectedWeek.from)}_a_${toDateKey(selectedWeek.to)}.zip`;
-    }
-    if (mode === 'month' && selectedMonthAnchor) {
-      return `Partes_mes_${format(selectedMonthAnchor, 'yyyy-MM', { locale: es })}.zip`;
-    }
-    const stamp = new Date().toISOString().slice(0, 10);
-    return `Partes_${stamp}.zip`;
-  };
-
   const handleExportPdf = async () => {
     if (!canExport) return;
     setExportingFormat('pdf');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const downloadResult = await downloadFiles(files);
+      const downloadResult = await downloadExportFiles(files);
       const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
-        ? `Se guardaron ${exportReports.length} PDF en ${getDirectoryLabel(nativeDirectory)}.`
+        ? `Se guardaron ${exportReports.length} PDF en ${getExportDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${exportReports.length} PDF.`;
       notifyExportReadyToShare(
         files,
@@ -1583,19 +799,18 @@ const BulkExportSinglePeriodDialog = ({
     setExportingFormat('zip');
     try {
       const { exportReports, files } = await buildPdfExportFiles();
-      const zip = new JSZip();
-
-      for (const file of files) {
-        zip.file(file.filename, file.blob);
-      }
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const zipFilename = getZipFilename();
-      const zipFiles = [{ filename: zipFilename, blob: zipBlob }];
-      const downloadResult = await downloadFiles(zipFiles);
+      const zipFilename = getSinglePeriodZipFilename({
+        mode,
+        selectedDay,
+        selectedWeek,
+        selectedMonthAnchor,
+      });
+      const zipFile = await buildZipExportFile({ files, filename: zipFilename });
+      const zipFiles = [zipFile];
+      const downloadResult = await downloadExportFiles(zipFiles);
       const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
-        ? `Se guardo el ZIP en ${getDirectoryLabel(nativeDirectory)}.`
+        ? `Se guardo el ZIP en ${getExportDirectoryLabel(nativeDirectory)}.`
         : `Se generaron ${exportReports.length} partes en ZIP.`;
       notifyExportReadyToShare(
         zipFiles,
@@ -1615,35 +830,6 @@ const BulkExportSinglePeriodDialog = ({
     } finally {
       setExportingFormat(null);
     }
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    if (mode === 'month' && !selectedMonthAnchor) {
-      setSelectedMonthAnchor(new Date());
-    }
-    setSelectedImageIds((previous) => {
-      const currentCandidateIds = new Set(imageCandidates.map((candidate) => candidate.id));
-      const kept = previous.filter((id) => currentCandidateIds.has(id));
-      if (kept.length > 0 || imageCandidates.length === 0) return kept;
-      return imageCandidates.map((candidate) => candidate.id);
-    });
-  }, [imageCandidates, mode, open, selectedMonthAnchor]);
-
-  const selectAllImages = () => {
-    setSelectedImageIds(imageCandidates.map((candidate) => candidate.id));
-  };
-
-  const clearImageSelection = () => {
-    setSelectedImageIds([]);
-  };
-
-  const toggleImageSelection = (candidateId: string) => {
-    setSelectedImageIds((previous) =>
-      previous.includes(candidateId)
-        ? previous.filter((id) => id !== candidateId)
-        : [...previous, candidateId],
-    );
   };
 
   const dialogTitle =
@@ -1687,7 +873,7 @@ const BulkExportSinglePeriodDialog = ({
                 startMonth={calendarStartMonth}
                 endMonth={calendarEndMonth}
                 reverseYears
-                classNames={customCalendarClassNames}
+                classNames={calendarClassNames}
               />
             ) : mode === 'week' ? (
               <Calendar
@@ -1701,7 +887,7 @@ const BulkExportSinglePeriodDialog = ({
                 endMonth={calendarEndMonth}
                 reverseYears
                 classNames={{
-                  ...customCalendarClassNames,
+                  ...calendarClassNames,
                   range_start: 'bg-cyan-500 text-white rounded-md',
                   range_middle: 'bg-cyan-100 text-cyan-900',
                   range_end: 'bg-cyan-500 text-white rounded-md',
@@ -1849,48 +1035,12 @@ const DataManagementExportDialog = ({
 }) => {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [selectedDays, setSelectedDays] = useState<Date[] | undefined>([]);
+  const { selectedDays, setSelectedDays, normalizedSelectedDays, selectedDateKeys, clearSelection } =
+    useMultiDayExportSelection();
+  const { calendarStartMonth, calendarEndMonth, calendarClassNames } = useWorkReportExportCalendar();
   const [exporting, setExporting] = useState(false);
 
-  const calendarStartMonth = useMemo(() => new Date(2020, 0, 1), []);
-  const calendarEndMonth = useMemo(() => new Date(new Date().getFullYear() + 2, 11, 31), []);
-  const customCalendarClassNames = useMemo(
-    () => ({
-      root: 'relative w-full',
-      months: 'w-full',
-      month: 'relative mx-auto flex w-full max-w-[540px] flex-col gap-4',
-      month_grid: 'mx-auto border-collapse',
-      weekdays: 'mx-auto flex w-fit',
-      week: 'mx-auto mt-2 flex w-fit',
-      month_caption: 'relative flex h-10 items-center justify-center',
-      dropdowns: 'flex items-center justify-center gap-3',
-      dropdown_root:
-        'relative inline-flex h-9 min-w-[108px] items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm',
-      dropdown: 'absolute inset-0 cursor-pointer appearance-none opacity-0',
-      caption_label:
-        'inline-flex w-full flex-row-reverse items-center justify-center gap-2 truncate text-sm font-medium capitalize text-slate-700',
-      chevron: 'h-3.5 w-3.5 text-slate-500',
-      nav: 'pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-2',
-      button_previous:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-      button_next:
-        'pointer-events-auto z-10 h-8 w-8 rounded-md border border-slate-200 bg-white p-0 text-slate-600 shadow-sm hover:bg-slate-100',
-    }),
-    [],
-  );
-
-  const normalizedSelectedDays = useMemo(() => {
-    const deduped = new Map<string, Date>();
-    (selectedDays ?? []).forEach((day) => {
-      deduped.set(toDateKey(day), day);
-    });
-    return [...deduped.values()].sort((a, b) => a.getTime() - b.getTime());
-  }, [selectedDays]);
-
-  const selectedDateSet = useMemo(
-    () => new Set(normalizedSelectedDays.map((date) => toDateKey(date))),
-    [normalizedSelectedDays],
-  );
+  const selectedDateSet = useMemo(() => new Set(selectedDateKeys), [selectedDateKeys]);
   const matchedReports = useMemo(
     () => reports.filter((report) => selectedDateSet.has(getOfflineReportDateKey(report))),
     [reports, selectedDateSet],
@@ -1898,91 +1048,20 @@ const DataManagementExportDialog = ({
 
   const canExport = normalizedSelectedDays.length > 0 && matchedReports.length > 0 && !exporting;
 
-  const downloadFiles = async (files: Array<{ filename: string; blob: Blob }>) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return { directory: undefined as Directory | undefined, uris: [] as string[] };
-    }
-
-    let directoryUsed: Directory | undefined;
-    const uris: string[] = [];
-    for (const file of files) {
-      const saved = await saveBlobToNativeFile(file.blob, file.filename);
-      if (!directoryUsed) directoryUsed = saved.directory;
-      uris.push(saved.uri);
-    }
-    return { directory: directoryUsed, uris };
-  };
-
-  const shareFiles = async (files: Array<{ filename: string; blob: Blob }>, savedUris: string[] = []) => {
-    if (!isNativePlatform()) {
-      files.forEach((file) => triggerBrowserBlobDownload(file.blob, file.filename));
-      return;
-    }
-
-    const uris = [...savedUris];
-    if (uris.length === 0) {
-      for (const file of files) {
-        const saved = await saveBlobToNativeFile(file.blob, file.filename);
-        uris.push(saved.uri);
-      }
-    }
-
-    await Share.share({
-      title: 'Partes exportados en JSON',
-      text: 'Exportacion de partes en formato JSON',
-      files: uris,
-      dialogTitle: 'Compartir exportacion',
-    });
-  };
-
   const handleExport = async () => {
     if (!canExport) return;
     setExporting(true);
 
     try {
-      const files = matchedReports.map((report) => {
-        const date = getOfflineReportDateKey(report);
-        const identifier = sanitizeFilenameSegment(
-          payloadText(report.payload, 'reportIdentifier') ?? report.id.slice(0, 8),
-        );
-        const workName = sanitizeFilenameSegment(
-          payloadText(report.payload, 'workName') ?? report.title ?? 'sin_obra',
-        );
-        const filename = `Parte_${date}_${identifier}_${workName}.json`;
-        const content = JSON.stringify(
-          {
-            version: 1,
-            exportedAt: new Date().toISOString(),
-            format: 'work-report-json',
-            report: {
-              id: report.id,
-              title: report.title,
-              date: date,
-              status: report.status,
-              projectId: report.projectId,
-              payload: report.payload,
-              createdAt: report.createdAt,
-              updatedAt: report.updatedAt,
-            },
-          },
-          null,
-          2,
-        );
+      const files = buildJsonExportFilesFromReports(matchedReports);
 
-        return {
-          filename,
-          blob: new Blob([content], { type: 'application/json;charset=utf-8' }),
-        };
-      });
-
-      const downloadResult = await downloadFiles(files);
+      const downloadResult = await downloadExportFiles(files);
       const nativeDirectory = downloadResult.directory;
       const exportedDescription = nativeDirectory
-        ? `Se guardaron ${files.length} JSON en ${getDirectoryLabel(nativeDirectory)}.`
+        ? `Se guardaron ${files.length} JSON en ${getExportDirectoryLabel(nativeDirectory)}.`
         : `Se descargaron ${files.length} JSON.`;
 
-      if (!isNativePlatform()) {
+      if (!isNativeExportPlatform()) {
         toast({
           title: files.length > 1 ? 'Archivos exportados con exito' : 'Archivo exportado con exito',
           description: exportedDescription,
@@ -2001,7 +1080,12 @@ const DataManagementExportDialog = ({
             onClick={() => {
               void (async () => {
                 try {
-                  await shareFiles(files, downloadResult.uris);
+                  await shareExportFiles({
+                    files,
+                    savedUris: downloadResult.uris,
+                    title: 'Partes exportados en JSON',
+                    text: 'Exportacion de partes en formato JSON',
+                  });
                   toast({
                     title: 'Panel de compartir abierto',
                     description: 'Revisa la app elegida y pulsa Enviar para completar el envio.',
@@ -2037,10 +1121,10 @@ const DataManagementExportDialog = ({
 
   useEffect(() => {
     if (!open) {
-      setSelectedDays([]);
+      clearSelection();
       setExporting(false);
     }
-  }, [open]);
+  }, [clearSelection, open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -2072,7 +1156,7 @@ const DataManagementExportDialog = ({
               startMonth={calendarStartMonth}
               endMonth={calendarEndMonth}
               reverseYears
-              classNames={customCalendarClassNames}
+              classNames={calendarClassNames}
             />
           </div>
 
@@ -2116,7 +1200,6 @@ const DataManagementImportDialog = ({
   disabled: boolean;
   onDataChanged: () => Promise<void>;
 }) => {
-  type ImportConflictPolicy = 'renumber' | 'overwrite';
   const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -2148,52 +1231,16 @@ const DataManagementImportDialog = ({
     try {
       const tenantId = await prepareOfflineTenantScope(user);
       const existingReports = await workReportsRepo.list({ tenantId, limit: 5000 });
-      const existingByIdentifier = new Map<string, WorkReport>();
-      const reservedIdentifiers = new Set<string>();
-
-      existingReports.forEach((report) => {
-        const identifier = getReportIdentifierFromPayload(report.payload);
-        if (!identifier) return;
-        const key = normalizeReportIdentifierKey(identifier);
-        if (!key) return;
-        reservedIdentifiers.add(identifier);
-        if (!existingByIdentifier.has(key)) {
-          existingByIdentifier.set(key, report);
-        }
+      const importResult = await executeWorkReportImport({
+        tenantId,
+        existingReports,
+        files: selectedFiles,
+        selectedConflictPolicy,
+        createReport: (draft) => workReportsRepo.create(draft),
+        updateReport: (id, patch) => workReportsRepo.update(id, patch),
       });
 
-      let createdCount = 0;
-      let overwrittenCount = 0;
-      let renumberedCount = 0;
-      let invalidFilesCount = 0;
-      let invalidReportsCount = 0;
-      const reportsToImport: Array<{ fileName: string; report: ImportableReportPayload }> = [];
-
-      for (const file of selectedFiles) {
-        try {
-          const rawText = await file.text();
-          const parsed = JSON.parse(rawText) as unknown;
-          const importableReports = extractImportableReports(parsed);
-
-          if (importableReports.length === 0) {
-            invalidFilesCount += 1;
-            continue;
-          }
-
-          for (const importable of importableReports) {
-            if (!isDateKey(importable.date)) {
-              invalidReportsCount += 1;
-              continue;
-            }
-            reportsToImport.push({ fileName: file.name, report: importable });
-          }
-        } catch (error) {
-          console.error('[DataManagementImportDialog] Error procesando archivo JSON:', file.name, error);
-          invalidFilesCount += 1;
-        }
-      }
-
-      if (reportsToImport.length === 0) {
+      if (importResult.reportsToImportCount === 0) {
         toast({
           title: 'Importacion sin cambios',
           description: 'No se encontraron partes validos en los archivos seleccionados.',
@@ -2202,97 +1249,26 @@ const DataManagementImportDialog = ({
         return;
       }
 
-      const conflictMatchesCount = reportsToImport.reduce((count, entry) => {
-        const sourceIdentifier = getReportIdentifierFromPayload(entry.report.payload);
-        const targetIdentifier = sourceIdentifier ?? '';
-        const identifierKey = normalizeReportIdentifierKey(targetIdentifier);
-        if (!identifierKey) return count;
-        return existingByIdentifier.has(identifierKey) ? count + 1 : count;
-      }, 0);
-
-      if (conflictMatchesCount > 0 && !selectedConflictPolicy) {
-        setPendingConflictCount(conflictMatchesCount);
+      if (importResult.requiresConflictResolution) {
+        setPendingConflictCount(importResult.conflictMatchesCount);
         return;
       }
-
-      const conflictPolicy = selectedConflictPolicy ?? 'overwrite';
-
-      for (const { fileName, report: importable } of reportsToImport) {
-        const payloadRecord = asRecord(importable.payload);
-        const sourceIdentifier = getReportIdentifierFromPayload(importable.payload);
-        let targetIdentifier = sourceIdentifier ?? generateUniqueReportIdentifier(importable.date, reservedIdentifiers);
-        let identifierKey = normalizeReportIdentifierKey(targetIdentifier);
-        const existingMatch = identifierKey ? existingByIdentifier.get(identifierKey) : undefined;
-        const hasConflict = Boolean(existingMatch);
-
-        if (hasConflict && conflictPolicy === 'renumber') {
-          targetIdentifier = generateUniqueReportIdentifier(importable.date, reservedIdentifiers);
-          identifierKey = normalizeReportIdentifierKey(targetIdentifier);
-          renumberedCount += 1;
-        }
-
-        const payloadWithImportMeta = payloadRecord
-          ? {
-              ...payloadRecord,
-              reportIdentifier: targetIdentifier,
-              importedAt: new Date().toISOString(),
-              importedFromFile: fileName,
-              importedOriginalReportId: importable.sourceId ?? null,
-              importConflictPolicy: conflictPolicy,
-            }
-          : {
-              value: importable.payload,
-              reportIdentifier: targetIdentifier,
-              importedAt: new Date().toISOString(),
-              importedFromFile: fileName,
-              importedOriginalReportId: importable.sourceId ?? null,
-              importConflictPolicy: conflictPolicy,
-            };
-
-        if (hasConflict && conflictPolicy === 'overwrite' && existingMatch) {
-          await workReportsRepo.update(existingMatch.id, {
-            projectId: importable.projectId,
-            title: importable.title ?? `Parte ${importable.date}`,
-            date: importable.date,
-            status: importable.status,
-            payload: payloadWithImportMeta,
-          });
-          overwrittenCount += 1;
-        } else {
-          const createdReport = await workReportsRepo.create({
-            tenantId,
-            projectId: importable.projectId,
-            title: importable.title ?? `Parte ${importable.date}`,
-            date: importable.date,
-            status: importable.status,
-            payload: payloadWithImportMeta,
-          });
-          createdCount += 1;
-          if (identifierKey) {
-            existingByIdentifier.set(identifierKey, createdReport);
-          }
-        }
-
-        reservedIdentifiers.add(targetIdentifier);
-      }
-
-      const importedCount = createdCount + overwrittenCount;
 
       await onDataChanged();
 
       const errorsSummary =
-        invalidFilesCount > 0 || invalidReportsCount > 0
-          ? ` (archivos invalidos: ${invalidFilesCount}, partes invalidos: ${invalidReportsCount})`
+        importResult.invalidFilesCount > 0 || importResult.invalidReportsCount > 0
+          ? ` (archivos invalidos: ${importResult.invalidFilesCount}, partes invalidos: ${importResult.invalidReportsCount})`
           : '';
       const conflictSummary =
-        conflictMatchesCount > 0
-          ? ` Conflictos de identificador: ${conflictMatchesCount}.`
+        importResult.conflictMatchesCount > 0
+          ? ` Conflictos de identificador: ${importResult.conflictMatchesCount}.`
           : '';
-      const importSummary = `Nuevos: ${createdCount}. Sobrescritos: ${overwrittenCount}. Identificador cambiado: ${renumberedCount}.`;
+      const importSummary = `Nuevos: ${importResult.createdCount}. Sobrescritos: ${importResult.overwrittenCount}. Identificador cambiado: ${importResult.renumberedCount}.`;
 
       toast({
         title: 'Importacion completada',
-        description: `Se procesaron ${importedCount} parte(s). ${importSummary}${conflictSummary}${errorsSummary}`,
+        description: `Se procesaron ${importResult.importedCount} parte(s). ${importSummary}${conflictSummary}${errorsSummary}`,
       });
 
       setPendingConflictCount(null);

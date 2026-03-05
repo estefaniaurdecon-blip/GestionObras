@@ -1,143 +1,152 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Message } from '@/types/notifications';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from './use-toast';
+import {
+  clearAllMessages as clearAllApiMessages,
+  createMessage,
+  deleteConversationMessages,
+  listMessages,
+  markMessageAsRead,
+  type ApiMessageRead,
+} from '@/integrations/api/client';
+
+const POLL_INTERVAL_MS = 15000;
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Error inesperado';
+};
+
+const toApiMessageId = (messageId: string): number | null => {
+  const parsed = Number(messageId);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const toLegacyMessage = (row: ApiMessageRead): Message => ({
+  id: String(row.id),
+  from_user_id: String(row.from_user_id),
+  to_user_id: String(row.to_user_id),
+  work_report_id: row.work_report_id ?? undefined,
+  message: row.message,
+  read: Boolean(row.read),
+  created_at: row.created_at,
+  from_user: row.from_user ? { full_name: row.from_user.full_name } : undefined,
+  to_user: row.to_user ? { full_name: row.to_user.full_name } : undefined,
+});
 
 export const useMessages = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const { user } = useAuth();
 
-  const loadMessages = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          from_user:profiles!messages_from_user_id_fkey(full_name),
-          to_user:profiles!messages_to_user_id_fkey(full_name)
-        `)
-        .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) {
-        setMessages(data as any);
-        setUnreadCount(data.filter(m => !m.read && m.to_user_id === user.id).length);
+  const loadMessages = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!user) {
+        setMessages([]);
+        setUnreadCount(0);
+        knownMessageIdsRef.current = new Set();
+        setLoading(false);
+        return;
       }
-    } catch (error: any) {
-      console.error('Error loading messages:', error);
-      toast({
-        title: "Error al cargar mensajes",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+
+      const currentUserId = String(user.id);
+      if (!options?.silent) {
+        setLoading(true);
+      }
+
+      try {
+        const response = await listMessages({ limit: 300, offset: 0 });
+        const mapped = response.items.map(toLegacyMessage);
+        setMessages(mapped);
+        setUnreadCount(
+          mapped.filter((message) => !message.read && message.to_user_id === currentUserId).length
+        );
+        if (options?.silent) {
+          const newIncoming = mapped.filter(
+            (message) =>
+              !knownMessageIdsRef.current.has(message.id) &&
+              !message.read &&
+              message.to_user_id === currentUserId
+          );
+          if (newIncoming.length > 0) {
+            const first = newIncoming[0];
+            const fromName = first.from_user?.full_name || 'Nuevo mensaje';
+            const snippet =
+              first.message.length > 50 ? `${first.message.slice(0, 50)}...` : first.message;
+            toast({
+              title: 'Nuevo mensaje',
+              description: `${fromName}: ${snippet}`,
+            });
+          }
+        }
+        knownMessageIdsRef.current = new Set(mapped.map((message) => message.id));
+      } catch (error: unknown) {
+        console.error('Error loading messages:', error);
+        if (!options?.silent) {
+          toast({
+            title: 'Error al cargar mensajes',
+            description: getErrorMessage(error),
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        if (!options?.silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [user]
+  );
 
   useEffect(() => {
-    loadMessages();
+    void loadMessages();
 
     if (!user) return;
 
-    // Subscribe to realtime messages
-    const channel = supabase
-      .channel('messages-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `to_user_id=eq.${user.id}`
-        },
-        async (payload) => {
-          const newMessage = payload.new as Message;
-          
-          // Fetch user details
-          const { data: fromUser } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', newMessage.from_user_id)
-            .single();
-
-          const messageWithUser = {
-            ...newMessage,
-            from_user: fromUser
-          };
-
-          setMessages(prev => [messageWithUser as any, ...prev]);
-          setUnreadCount(prev => prev + 1);
-          
-          // Show notification
-          toast({
-            title: "Nuevo mensaje",
-            description: `${fromUser?.full_name}: ${newMessage.message.substring(0, 50)}...`,
-          });
-        }
-      )
-      .subscribe();
+    const pollId = window.setInterval(() => {
+      void loadMessages({ silent: true });
+    }, POLL_INTERVAL_MS);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(pollId);
     };
-  }, [user]);
+  }, [user, loadMessages]);
 
   const sendMessage = async (toUserId: string, message: string, workReportId?: string) => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          from_user_id: user.id,
-          to_user_id: toUserId,
-          message,
-          work_report_id: workReportId
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Notificación: ahora la gestiona un trigger en la BD (notify_message_received)
-      // No insertamos directamente en notifications para cumplir RLS y evitar duplicados.
-
-      // No mostramos toast de éxito, se usa el sistema de checks
-      await loadMessages();
-    } catch (error: any) {
+      await createMessage({
+        to_user_id: String(toUserId),
+        message,
+        work_report_id: workReportId,
+      });
+      await loadMessages({ silent: true });
+    } catch (error: unknown) {
       console.error('Error sending message:', error);
       toast({
-        title: "Error al enviar",
-        description: error.message,
-        variant: "destructive",
+        title: 'Error al enviar',
+        description: getErrorMessage(error),
+        variant: 'destructive',
       });
     }
   };
 
   const markAsRead = async (messageId: string) => {
+    const apiMessageId = toApiMessageId(messageId);
+    if (apiMessageId === null) return;
+
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ read: true })
-        .eq('id', messageId);
-
-      if (error) throw error;
-
-      setMessages(prev =>
-        prev.map(m => m.id === messageId ? { ...m, read: true } : m)
+      await markMessageAsRead(apiMessageId);
+      setMessages((prev) =>
+        prev.map((message) => (message.id === messageId ? { ...message, read: true } : message))
       );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error: any) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (error: unknown) {
       console.error('Error marking message as read:', error);
     }
   };
@@ -146,25 +155,20 @@ export const useMessages = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${otherUserId}),and(from_user_id.eq.${otherUserId},to_user_id.eq.${user.id})`);
-
-      if (error) throw error;
+      await deleteConversationMessages(String(otherUserId));
 
       toast({
-        title: "Conversación eliminada",
-        description: "Se han eliminado todos los mensajes de esta conversación.",
+        title: 'Conversacion eliminada',
+        description: 'Se han eliminado todos los mensajes de esta conversacion.',
       });
 
-      await loadMessages();
-    } catch (error: any) {
+      await loadMessages({ silent: true });
+    } catch (error: unknown) {
       console.error('Error deleting conversation:', error);
       toast({
-        title: "Error al eliminar",
-        description: error.message,
-        variant: "destructive",
+        title: 'Error al eliminar',
+        description: getErrorMessage(error),
+        variant: 'destructive',
       });
     }
   };
@@ -173,25 +177,20 @@ export const useMessages = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
-
-      if (error) throw error;
+      await clearAllApiMessages();
 
       toast({
-        title: "Mensajes eliminados",
-        description: "Se han eliminado todos tus mensajes.",
+        title: 'Mensajes eliminados',
+        description: 'Se han eliminado todos tus mensajes.',
       });
 
-      await loadMessages();
-    } catch (error: any) {
+      await loadMessages({ silent: true });
+    } catch (error: unknown) {
       console.error('Error clearing all messages:', error);
       toast({
-        title: "Error al eliminar",
-        description: error.message,
-        variant: "destructive",
+        title: 'Error al eliminar',
+        description: getErrorMessage(error),
+        variant: 'destructive',
       });
     }
   };

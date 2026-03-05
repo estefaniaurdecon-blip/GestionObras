@@ -10,7 +10,11 @@ export type NotificationType =
   | 'work_assigned'
   | 'work_expiry_warning'
   | 'machinery_expiry_warning'
-  | 'anomaly_detected';
+  | 'anomaly_detected'
+  | 'ticket_assigned'
+  | 'ticket_comment'
+  | 'ticket_status'
+  | 'generic';
 
 export interface Notification {
   id: string;
