@@ -1,0 +1,77 @@
+type ApiFetchJsonFn = <T>(
+  path: string,
+  init?: RequestInit & { skipAuth?: boolean }
+) => Promise<T>;
+
+type BuildQueryParamsFn = (
+  params: Record<string, string | number | boolean | undefined | null>
+) => string;
+
+export interface NotificationsApiDeps {
+  apiFetchJson: ApiFetchJsonFn;
+  buildQueryParams: BuildQueryParamsFn;
+}
+
+export type ApiNotificationType = 'ticket_assigned' | 'ticket_comment' | 'ticket_status' | 'generic';
+
+export interface ApiNotificationRead {
+  id: number;
+  tenant_id: number;
+  user_id: number;
+  type: ApiNotificationType;
+  title: string;
+  body?: string | null;
+  reference?: string | null;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+}
+
+export interface ApiNotificationListResponse {
+  items: ApiNotificationRead[];
+  total: number;
+}
+
+export interface ListNotificationsParams {
+  onlyUnread?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export function createNotificationsApi(deps: NotificationsApiDeps) {
+  const listNotifications = async (
+    params: ListNotificationsParams = {}
+  ): Promise<ApiNotificationListResponse> => {
+    const query = deps.buildQueryParams({
+      only_unread: params.onlyUnread,
+      limit: params.limit,
+      offset: params.offset,
+    });
+    return deps.apiFetchJson<ApiNotificationListResponse>(`/api/v1/notifications${query}`);
+  };
+
+  const markNotificationAsRead = async (notificationId: number): Promise<ApiNotificationRead> => {
+    return deps.apiFetchJson<ApiNotificationRead>(`/api/v1/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+  };
+
+  const markAllNotificationsAsRead = async (): Promise<void> => {
+    return deps.apiFetchJson<void>('/api/v1/notifications/read-all', {
+      method: 'POST',
+    });
+  };
+
+  const deleteNotification = async (notificationId: number): Promise<void> => {
+    return deps.apiFetchJson<void>(`/api/v1/notifications/${notificationId}`, {
+      method: 'DELETE',
+    });
+  };
+
+  return {
+    listNotifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    deleteNotification,
+  };
+}

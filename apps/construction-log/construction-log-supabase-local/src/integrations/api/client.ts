@@ -4,6 +4,13 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { clearToken, getAuthHeader } from './storage';
+import { createNotificationsApi } from './modules/notifications';
+import { createMessagesApi } from './modules/messages';
+import { createAttachmentsApi } from './modules/attachments';
+import { createUsersApi, normalizeApiUser } from './modules/users';
+import { createOrganizationApi } from './modules/organization';
+import { createToolsApi } from './modules/tools';
+import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
 export { clearToken, getAuthHeader, getToken, setToken, TokenData } from './storage';
@@ -325,22 +332,6 @@ export interface MFAVerifyResponse {
   mfa_required?: boolean;
 }
 
-export interface ApiUser {
-  id: number;
-  email: string;
-  full_name?: string;
-  is_active: boolean;
-  is_super_admin?: boolean;
-  tenant_id?: number;
-  roles?: string[];
-  role_name?: string | null;
-  role_id?: number | null;
-  permissions?: string[];
-  language?: string | null;
-  avatar_url?: string;
-  created_at?: string;
-}
-
 export interface DashboardSummary {
   tenants_activos: number;
   usuarios_activos: number;
@@ -362,74 +353,6 @@ export interface YearlySummary {
   projectJustify: Record<string, number>;
   projectJustified: Record<string, number>;
   summaryMilestones: Record<string, SummaryMilestone[]>;
-}
-
-export interface UserCreateRequest {
-  email: string;
-  full_name: string;
-  password: string;
-  tenant_id?: number | null;
-  is_super_admin?: boolean;
-  role_name?: string | null;
-}
-
-export interface UserUpdateRequest {
-  email?: string;
-  full_name?: string;
-  role_name?: string | null;
-}
-
-export interface UserStatusUpdateRequest {
-  is_active: boolean;
-}
-
-export interface UserProfileUpdateRequest {
-  full_name: string;
-  language?: string | null;
-  avatar_url?: string | null;
-}
-
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
-  new_password_confirm: string;
-}
-
-export interface ApiTool {
-  id: number;
-  name: string;
-  slug: string;
-  base_url: string;
-  description?: string | null;
-}
-
-export interface ApiTenant {
-  id: number;
-  name: string;
-  subdomain: string;
-  is_active: boolean;
-  created_at?: string;
-}
-
-export interface ToolLaunchResponse {
-  launch_url: string;
-  tool_id: number;
-  tool_name: string;
-}
-
-function normalizeApiUser(user: ApiUser): ApiUser {
-  if (!user) return user;
-
-  const normalizedRoles = Array.isArray(user.roles)
-    ? user.roles
-    : user.role_name
-      ? [String(user.role_name)]
-      : [];
-
-  return {
-    ...user,
-    roles: normalizedRoles,
-  };
 }
 
 /**
@@ -700,6 +623,65 @@ export async function deleteErpWorkReport(
   });
 }
 
+export interface ApiErpWorkReport {
+  id: number;
+  tenant_id: number;
+  project_id: number;
+  external_id?: string | null;
+  report_identifier?: string | null;
+  idempotency_key?: string | null;
+  title?: string | null;
+  date: string;
+  status: string;
+  is_closed: boolean;
+  payload: Record<string, unknown>;
+  created_by_id?: number | null;
+  updated_by_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface ListErpWorkReportsParams {
+  tenantId?: string | number | null;
+  projectId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  updatedSince?: string;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listErpWorkReports(
+  params: ListErpWorkReportsParams = {}
+): Promise<ApiErpWorkReport[]> {
+  const query = buildQueryParams({
+    project_id: params.projectId,
+    date_from: params.dateFrom,
+    date_to: params.dateTo,
+    status: params.status,
+    updated_since: params.updatedSince,
+    include_deleted: params.includeDeleted,
+    limit: params.limit,
+    offset: params.offset,
+  });
+
+  return apiFetchJson<ApiErpWorkReport[]>(`/api/v1/erp/work-reports${query}`, {
+    headers: tenantHeader(params.tenantId),
+  });
+}
+
+export async function getErpWorkReport(
+  reportId: number,
+  tenantId?: string | number | null
+): Promise<ApiErpWorkReport> {
+  return apiFetchJson<ApiErpWorkReport>(`/api/v1/erp/work-reports/${reportId}`, {
+    headers: tenantHeader(tenantId),
+  });
+}
+
 function buildQueryParams(params: Record<string, string | number | boolean | undefined | null>): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -934,194 +916,110 @@ export async function getYearlySummary(year: number): Promise<YearlySummary> {
 }
 
 // ============================================================
+// NOTIFICATIONS API
+// ============================================================
+
+export type {
+  ApiNotificationListResponse,
+  ApiNotificationRead,
+  ApiNotificationType,
+  ListNotificationsParams,
+} from './modules/notifications';
+
+const notificationsApi = createNotificationsApi({
+  apiFetchJson,
+  buildQueryParams,
+});
+
+export const listNotifications = notificationsApi.listNotifications;
+export const markNotificationAsRead = notificationsApi.markNotificationAsRead;
+export const markAllNotificationsAsRead = notificationsApi.markAllNotificationsAsRead;
+export const deleteNotification = notificationsApi.deleteNotification;
+
+// ============================================================
+// MESSAGES API
+// ============================================================
+
+export type {
+  ApiMessageListResponse,
+  ApiMessageRead,
+  ApiMessageUserRead,
+  ListMessagesParams,
+  MessageCreatePayload,
+} from './modules/messages';
+
+const messagesApi = createMessagesApi({
+  apiFetchJson,
+  buildQueryParams,
+});
+
+export const listMessages = messagesApi.listMessages;
+export const createMessage = messagesApi.createMessage;
+export const markMessageAsRead = messagesApi.markMessageAsRead;
+export const deleteConversationMessages = messagesApi.deleteConversationMessages;
+export const clearAllMessages = messagesApi.clearAllMessages;
+
+// ============================================================
 // USERS API
 // ============================================================
 
-export async function listUsersByTenant(tenantId: number, excludeAssigned = false): Promise<ApiUser[]> {
-  const users = await apiFetchJson<ApiUser[]>(
-    `/api/v1/users/by-tenant/${tenantId}?exclude_assigned=${excludeAssigned ? 'true' : 'false'}`
-  );
-  return users.map(normalizeApiUser);
-}
+export type {
+  ApiTenant,
+  ApiUser,
+  ChangePasswordRequest,
+  UserCreateRequest,
+  UserProfileUpdateRequest,
+  UserStatusUpdateRequest,
+  UserUpdateRequest,
+} from './modules/users';
 
-export async function listTenants(): Promise<ApiTenant[]> {
-  return apiFetchJson<ApiTenant[]>('/api/v1/tenants/');
-}
+const usersApi = createUsersApi({
+  apiFetchJson,
+});
 
-export async function createUser(request: UserCreateRequest): Promise<ApiUser> {
-  const user = await apiFetchJson<ApiUser>('/api/v1/users/', {
-    method: 'POST',
-    body: JSON.stringify(request),
-  });
-  return normalizeApiUser(user);
-}
+export const listUsersByTenant = usersApi.listUsersByTenant;
+export const listTenants = usersApi.listTenants;
+export const createUser = usersApi.createUser;
+export const updateUser = usersApi.updateUser;
+export const updateUserStatus = usersApi.updateUserStatus;
+export const deleteUser = usersApi.deleteUser;
+export const updateCurrentUserProfile = usersApi.updateCurrentUserProfile;
+export const changePassword = usersApi.changePassword;
 
-export async function updateUser(userId: number, request: UserUpdateRequest): Promise<ApiUser> {
-  const user = await apiFetchJson<ApiUser>(`/api/v1/users/${userId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(request),
-  });
-  return normalizeApiUser(user);
-}
+export type {
+  ApiOrganization,
+  BrandingTenantApi,
+  UpdateOrganizationPayload,
+  UserPlatformPreference,
+  UserPreferencesApi,
+} from './modules/organization';
 
-export async function updateUserStatus(userId: number, isActive: boolean): Promise<ApiUser> {
-  const user = await apiFetchJson<ApiUser>(`/api/v1/users/${userId}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ is_active: isActive } satisfies UserStatusUpdateRequest),
-  });
-  return normalizeApiUser(user);
-}
+const organizationApi = createOrganizationApi({
+  apiFetchJson,
+});
 
-export async function deleteUser(userId: number): Promise<void> {
-  return apiFetchJson<void>(`/api/v1/users/${userId}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function updateCurrentUserProfile(request: UserProfileUpdateRequest): Promise<ApiUser> {
-  const user = await apiFetchJson<ApiUser>('/api/v1/users/me', {
-    method: 'PATCH',
-    body: JSON.stringify(request),
-  });
-  return normalizeApiUser(user);
-}
-
-export async function changePassword(request: ChangePasswordRequest): Promise<void> {
-  return apiFetchJson<void>('/api/v1/auth/change-password', {
-    method: 'POST',
-    body: JSON.stringify(request),
-  });
-}
-
-export interface ApiOrganization {
-  id: string;
-  name: string;
-  commercial_name?: string | null;
-  logo?: string | null;
-  subscription_status?: string | null;
-  subscription_end_date?: string | null;
-  trial_end_date?: string | null;
-  updated_at?: string | null;
-  invitation_code?: string | null;
-  brand_color?: string | null;
-  fiscal_id?: string | null;
-  legal_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
-  max_users: number;
-  current_users: number;
-}
-
-export interface UpdateOrganizationPayload {
-  name?: string;
-  commercial_name?: string | null;
-  fiscal_id?: string | null;
-  legal_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
-  brand_color?: string | null;
-  max_users?: number;
-  subscription_status?: string | null;
-}
-
-export interface BrandingTenantApi {
-  logo?: string | null;
-  accent_color: string;
-  company_name?: string | null;
-}
-
-export type UserPlatformPreference = 'all' | 'windows' | 'android' | 'web';
-
-export interface UserPreferencesApi {
-  user_platform: UserPlatformPreference;
-  updated_at?: string | null;
-}
-
-export async function getMyOrganization(): Promise<ApiOrganization> {
-  return apiFetchJson<ApiOrganization>('/api/v1/organization/me');
-}
-
-export async function updateMyOrganization(
-  payload: UpdateOrganizationPayload
-): Promise<ApiOrganization> {
-  return apiFetchJson<ApiOrganization>('/api/v1/organization/me', {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function uploadMyOrganizationLogo(
-  file: Blob | File,
-  filename = 'logo.png'
-): Promise<ApiOrganization> {
-  const formData = new FormData();
-  formData.append('logo', file, filename);
-  return apiFetchJson<ApiOrganization>('/api/v1/organization/me/logo', {
-    method: 'POST',
-    body: formData,
-  });
-}
-
-export async function removeMyOrganizationLogo(): Promise<ApiOrganization> {
-  return apiFetchJson<ApiOrganization>('/api/v1/organization/me/logo', {
-    method: 'DELETE',
-  });
-}
-
-export async function getBrandingByTenant(tenantId: string | number): Promise<BrandingTenantApi> {
-  return apiFetchJson<BrandingTenantApi>(`/api/v1/branding/${encodeURIComponent(String(tenantId))}`);
-}
-
-export async function getMyUserPreferences(): Promise<UserPreferencesApi> {
-  return apiFetchJson<UserPreferencesApi>('/api/v1/users/me/preferences');
-}
-
-export async function updateMyUserPreferences(
-  userPlatform: UserPlatformPreference
-): Promise<UserPreferencesApi> {
-  return apiFetchJson<UserPreferencesApi>('/api/v1/users/me/preferences', {
-    method: 'PATCH',
-    body: JSON.stringify({ user_platform: userPlatform }),
-  });
-}
+export const getMyOrganization = organizationApi.getMyOrganization;
+export const updateMyOrganization = organizationApi.updateMyOrganization;
+export const uploadMyOrganizationLogo = organizationApi.uploadMyOrganizationLogo;
+export const removeMyOrganizationLogo = organizationApi.removeMyOrganizationLogo;
+export const getBrandingByTenant = organizationApi.getBrandingByTenant;
+export const getMyUserPreferences = organizationApi.getMyUserPreferences;
+export const updateMyUserPreferences = organizationApi.updateMyUserPreferences;
 
 // ============================================================
 // TOOLS API
 // ============================================================
 
-export async function listToolCatalog(): Promise<ApiTool[]> {
-  return apiFetchJson<ApiTool[]>('/api/v1/tools/catalog');
-}
+export type { ApiTool, ToolLaunchResponse } from './modules/tools';
 
-export async function listToolsByTenant(tenantId?: number | null): Promise<ApiTool[]> {
-  const tenantQuery = tenantId ? `?tenant_id=${tenantId}` : '';
-  return apiFetchJson<ApiTool[]>(`/api/v1/tools/by-tenant${tenantQuery}`);
-}
+const toolsApi = createToolsApi({
+  apiFetchJson,
+});
 
-export async function launchTool(toolId: number): Promise<ToolLaunchResponse> {
-  return apiFetchJson<ToolLaunchResponse>(`/api/v1/tools/${toolId}/launch`, {
-    method: 'POST',
-  });
-}
-
-export async function setToolEnabledForTenant(
-  toolId: number,
-  tenantId: number,
-  isEnabled: boolean
-): Promise<void> {
-  return apiFetchJson<void>(`/api/v1/tools/${toolId}/by-tenant/${tenantId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ is_enabled: isEnabled }),
-  });
-}
+export const listToolCatalog = toolsApi.listToolCatalog;
+export const listToolsByTenant = toolsApi.listToolsByTenant;
+export const launchTool = toolsApi.launchTool;
+export const setToolEnabledForTenant = toolsApi.setToolEnabledForTenant;
 
 // ============================================================
 // AI RUNTIME API
@@ -1710,191 +1608,32 @@ export async function rejectDeliveryNote(
   });
 }
 
-export interface WorkReportAttachmentApi {
-  id: string;
-  work_report_id: string;
-  image_url: string;
-  description: string | null;
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-  created_by: string | null;
-}
+export type {
+  GenericImageUploadResponse,
+  SharedFileApi,
+  SharedFileCreatePayload,
+  SharedFilesDirection,
+  UploadGenericImagePayload,
+  WorkReportAttachmentApi,
+} from './modules/attachments';
 
-export interface UploadGenericImagePayload {
-  category: string;
-  entity_id: string;
-  image_type?: string;
-  file: Blob | File;
-  filename?: string;
-}
+const attachmentsApi = createAttachmentsApi({
+  apiFetchJson,
+  apiFetch,
+  buildQueryParams,
+});
 
-export interface GenericImageUploadResponse {
-  url: string;
-  file_path: string;
-  file_size: number;
-  content_type: string;
-}
-
-export interface SharedFileApi {
-  id: string;
-  file_name: string;
-  file_path: string;
-  file_size: number;
-  file_type: string;
-  from_user_id: string;
-  to_user_id: string;
-  work_report_id?: string | null;
-  message?: string | null;
-  downloaded: boolean;
-  created_at: string;
-  from_user?: { full_name: string };
-  to_user?: { full_name: string };
-}
-
-export type SharedFilesDirection = 'sent' | 'received' | 'all';
-
-export interface SharedFileCreatePayload {
-  file: File;
-  to_user_id: string;
-  message?: string;
-  work_report_id?: string;
-}
-
-export async function listWorkReportAttachments(
-  workReportId: string
-): Promise<WorkReportAttachmentApi[]> {
-  return apiFetchJson<WorkReportAttachmentApi[]>(
-    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments`
-  );
-}
-
-export async function createWorkReportAttachment(
-  workReportId: string,
-  payload: { file: Blob | File; description?: string | null; display_order?: number; filename?: string }
-): Promise<WorkReportAttachmentApi> {
-  const formData = new FormData();
-  const fileName = payload.filename || `image-${Date.now()}.jpg`;
-  formData.append('file', payload.file, fileName);
-  if (payload.description !== undefined && payload.description !== null) {
-    formData.append('description', payload.description);
-  }
-  if (payload.display_order !== undefined && payload.display_order !== null) {
-    formData.append('display_order', String(payload.display_order));
-  }
-  return apiFetchJson<WorkReportAttachmentApi>(
-    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments`,
-    {
-      method: 'POST',
-      body: formData,
-    }
-  );
-}
-
-export async function updateWorkReportAttachment(
-  workReportId: string,
-  attachmentId: string,
-  payload: { description?: string | null }
-): Promise<WorkReportAttachmentApi> {
-  return apiFetchJson<WorkReportAttachmentApi>(
-    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments/${encodeURIComponent(
-      attachmentId
-    )}`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    }
-  );
-}
-
-export async function deleteWorkReportAttachment(
-  workReportId: string,
-  attachmentId: string
-): Promise<void> {
-  return apiFetchJson<void>(
-    `/api/v1/work-reports/${encodeURIComponent(workReportId)}/attachments/${encodeURIComponent(
-      attachmentId
-    )}`,
-    {
-      method: 'DELETE',
-    }
-  );
-}
-
-export async function uploadGenericImage(
-  payload: UploadGenericImagePayload
-): Promise<GenericImageUploadResponse> {
-  const formData = new FormData();
-  const fileName = payload.filename || `image-${Date.now()}.jpg`;
-  formData.append('category', payload.category);
-  formData.append('entity_id', payload.entity_id);
-  if (payload.image_type) {
-    formData.append('image_type', payload.image_type);
-  }
-  formData.append('file', payload.file, fileName);
-  return apiFetchJson<GenericImageUploadResponse>('/api/v1/attachments/images', {
-    method: 'POST',
-    body: formData,
-  });
-}
-
-export async function deleteGenericImageByUrl(url: string): Promise<{ success: boolean; deleted: boolean }> {
-  return apiFetchJson<{ success: boolean; deleted: boolean }>('/api/v1/attachments/images/by-url', {
-    method: 'DELETE',
-    body: JSON.stringify({ url }),
-  });
-}
-
-export async function listSharedFiles(
-  direction: SharedFilesDirection = 'all'
-): Promise<SharedFileApi[]> {
-  const query = buildQueryParams({ direction });
-  return apiFetchJson<SharedFileApi[]>(`/api/v1/shared-files${query}`);
-}
-
-export async function createSharedFile(
-  payload: SharedFileCreatePayload
-): Promise<SharedFileApi> {
-  const formData = new FormData();
-  formData.append('file', payload.file, payload.file.name || `file-${Date.now()}`);
-  formData.append('to_user_id', payload.to_user_id);
-  if (payload.message) {
-    formData.append('message', payload.message);
-  }
-  if (payload.work_report_id) {
-    formData.append('work_report_id', payload.work_report_id);
-  }
-  return apiFetchJson<SharedFileApi>('/api/v1/shared-files', {
-    method: 'POST',
-    body: formData,
-  });
-}
-
-export async function downloadSharedFile(sharedFileId: string): Promise<Blob> {
-  const response = await apiFetch(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/download`, {
-    method: 'GET',
-  });
-  if (!response.ok) {
-    const error: ApiError = new Error(
-      `API Error: ${response.status} ${response.statusText}`
-    );
-    error.status = response.status;
-    throw error;
-  }
-  return response.blob();
-}
-
-export async function markSharedFileDownloaded(sharedFileId: string): Promise<void> {
-  return apiFetchJson<void>(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/mark-downloaded`, {
-    method: 'POST',
-  });
-}
-
-export async function deleteSharedFile(sharedFileId: string): Promise<void> {
-  return apiFetchJson<void>(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}`, {
-    method: 'DELETE',
-  });
-}
+export const listWorkReportAttachments = attachmentsApi.listWorkReportAttachments;
+export const createWorkReportAttachment = attachmentsApi.createWorkReportAttachment;
+export const updateWorkReportAttachment = attachmentsApi.updateWorkReportAttachment;
+export const deleteWorkReportAttachment = attachmentsApi.deleteWorkReportAttachment;
+export const uploadGenericImage = attachmentsApi.uploadGenericImage;
+export const deleteGenericImageByUrl = attachmentsApi.deleteGenericImageByUrl;
+export const listSharedFiles = attachmentsApi.listSharedFiles;
+export const createSharedFile = attachmentsApi.createSharedFile;
+export const downloadSharedFile = attachmentsApi.downloadSharedFile;
+export const markSharedFileDownloaded = attachmentsApi.markSharedFileDownloaded;
+export const deleteSharedFile = attachmentsApi.deleteSharedFile;
 
 // ============================================================
 // PLACEHOLDER - For unimplemented features
