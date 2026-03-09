@@ -8,6 +8,7 @@ from . import (
     auth,
     dashboard,
     delivery_notes,
+    company_portfolio,
     custom_holidays,
     erp,
     external_collaborations,
@@ -96,6 +97,11 @@ api_router.include_router(
 )
 api_router.include_router(
     external_collaborations.router,
+    prefix="/erp",
+    tags=["erp"],
+)
+api_router.include_router(
+    company_portfolio.router,
     prefix="/erp",
     tags=["erp"],
 )

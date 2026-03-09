@@ -13,6 +13,7 @@ import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
 import { createCustomHolidaysApi } from './modules/customHolidays';
+import { createCompanyPortfolioApi } from './modules/companyPortfolio';
 import { createPhasesApi } from './modules/phases';
 import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
@@ -1021,6 +1022,30 @@ export const listCustomHolidays = customHolidaysApi.listCustomHolidays;
 export const createCustomHoliday = customHolidaysApi.createCustomHoliday;
 export const updateCustomHoliday = customHolidaysApi.updateCustomHoliday;
 export const deleteCustomHoliday = customHolidaysApi.deleteCustomHoliday;
+
+// ============================================================
+// COMPANY PORTFOLIO API
+// ============================================================
+
+export type {
+  ApiCompanyPortfolioItem,
+  ApiCompanyType,
+  CreateCompanyPortfolioPayload,
+  UpdateCompanyPortfolioPayload,
+} from './modules/companyPortfolio';
+
+const companyPortfolioApi = createCompanyPortfolioApi({
+  apiFetchJson,
+});
+
+export const listCompanyTypes = companyPortfolioApi.listCompanyTypes;
+export const createCompanyType = companyPortfolioApi.createCompanyType;
+export const renameCompanyType = companyPortfolioApi.renameCompanyType;
+export const deleteCompanyType = companyPortfolioApi.deleteCompanyType;
+export const listCompanyPortfolio = companyPortfolioApi.listCompanyPortfolio;
+export const createCompanyPortfolioItem = companyPortfolioApi.createCompanyPortfolioItem;
+export const updateCompanyPortfolioItem = companyPortfolioApi.updateCompanyPortfolioItem;
+export const deleteCompanyPortfolioItem = companyPortfolioApi.deleteCompanyPortfolioItem;
 
 // ============================================================
 // PHASES API

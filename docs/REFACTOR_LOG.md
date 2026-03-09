@@ -1041,3 +1041,57 @@ Plantilla para registrar cada iteracion de refactor.
   - Atacar bloque critico `pdfGenerator` / `exportUtils` / `AdvancedReports` (confirmando uso real antes de cortes agresivos).
 - Decision/es tomadas:
   - Mantener `useUsers` estable para consumidores actuales y encapsular la compatibilidad en endpoints de `user-management`.
+
+## Iteracion 2026-03-09 - API-first: `company_portfolio` + migracion de `CompanyPortfolio`
+- Objetivo: eliminar dependencias `supabase.*` del componente `CompanyPortfolio` sin perder operaciones de tipos, CRUD y carga de nombres creador/editor.
+- Alcance:
+  - Backend FastAPI: nuevo dominio de cartera de empresas (`company types` + `company portfolio`) con test API.
+  - Frontend `construction-log`: nuevo modulo API `companyPortfolio`, fachada en `client.ts` y migracion de `components/CompanyPortfolio.tsx`.
+  - Documentacion: actualizacion de `ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Backend:
+    - Nuevos modelos:
+      - `CompanyType` (`erp_company_type`).
+      - `CompanyPortfolio` (`erp_company_portfolio`) con `company_type` JSON array y metadatos de creador/editor.
+    - Nuevos schemas `company_portfolio.py` para tipos y empresas.
+    - Nuevo servicio `company_portfolio_service.py` con:
+      - CRUD de tipos,
+      - renombrado de tipo con propagacion a empresas existentes,
+      - bloqueo de borrado de tipo en uso (`TYPE_IN_USE`),
+      - CRUD de empresas con `creator_name`/`editor_name`.
+    - Nuevo router `api/v1/company_portfolio.py` bajo `/api/v1/erp`.
+    - Registro en `app/api/v1/router.py` y `app/db/base.py`.
+    - Test nuevo `test_company_portfolio_api.py`.
+  - Frontend:
+    - Nuevo modulo `src/integrations/api/modules/companyPortfolio.ts`.
+    - `client.ts` expone operaciones:
+      - `listCompanyTypes`, `createCompanyType`, `renameCompanyType`, `deleteCompanyType`.
+      - `listCompanyPortfolio`, `createCompanyPortfolioItem`, `updateCompanyPortfolioItem`, `deleteCompanyPortfolioItem`.
+    - `CompanyPortfolio.tsx` migra todas las llamadas Supabase a cliente API, incluyendo importacion VCF.
+    - Se mantiene contrato de UI (shape local `CompanyPortfolioItem`) via mapeo API->UI.
+- Contratos impactados:
+  - Nuevas rutas:
+    - `GET /api/v1/erp/company-types`
+    - `POST /api/v1/erp/company-types`
+    - `PATCH /api/v1/erp/company-types/{type_name}`
+    - `DELETE /api/v1/erp/company-types/{type_name}`
+    - `GET /api/v1/erp/company-portfolio`
+    - `POST /api/v1/erp/company-portfolio`
+    - `PATCH /api/v1/erp/company-portfolio/{company_id}`
+    - `DELETE /api/v1/erp/company-portfolio/{company_id}`
+- Riesgos/mitigaciones:
+  - Renombrado de tipo actualiza empresas en backend para evitar inconsistencias parciales en frontend.
+  - Borrado de tipo en uso devuelve `409 TYPE_IN_USE` y mantiene validacion local previa del componente.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_company_portfolio_api.py backend-fastapi/tests/test_user_management_api.py backend-fastapi/tests/test_phases_api.py` -> `3 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+  - `npm run build` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 12 matches / 4 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 150 matches / 18 archivos.
+- Pendientes:
+  - Validar residual de `WorkReportComments` y confirmar cero uso legacy activo.
+  - Resolver bloque critico `pdfGenerator` / `AdvancedReports`.
+  - Reducir/eliminar `workReportsSupabaseGateway` cuando se cierre el flujo de partes legacy restante.
+- Decision/es tomadas:
+  - Sustituir el RPC legacy `get_company_portfolio_with_names` por servicio backend equivalente con enriquecimiento de nombres en servidor.

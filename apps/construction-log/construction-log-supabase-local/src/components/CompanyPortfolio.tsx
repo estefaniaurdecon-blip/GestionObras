@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Pencil, Trash2, Plus, Search, Building2, Phone, Mail, MapPin, FileText, Settings, Upload, Users } from 'lucide-react';
 import { readVCFFile, VCFContact } from '@/utils/vcfParser';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +13,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import {
+  createCompanyPortfolioItem,
+  createCompanyType,
+  deleteCompanyPortfolioItem,
+  deleteCompanyType,
+  listCompanyPortfolio,
+  listCompanyTypes,
+  renameCompanyType,
+  updateCompanyPortfolioItem,
+  type ApiCompanyPortfolioItem,
+} from '@/integrations/api/client';
 
 import { useTranslation } from 'react-i18next';
 
@@ -36,6 +46,34 @@ interface CompanyPortfolioItem {
   creator_name?: string;
   editor_name?: string;
 }
+
+const mapApiCompany = (item: ApiCompanyPortfolioItem): CompanyPortfolioItem => ({
+  id: String(item.id),
+  company_name: item.company_name,
+  company_type: item.company_type || [],
+  contact_person: item.contact_person ?? undefined,
+  contact_phone: item.contact_phone ?? undefined,
+  contact_email: item.contact_email ?? undefined,
+  address: item.address ?? undefined,
+  city: item.city ?? undefined,
+  postal_code: item.postal_code ?? undefined,
+  country: item.country ?? undefined,
+  fiscal_id: item.fiscal_id ?? undefined,
+  notes: item.notes ?? undefined,
+  created_at: item.created_at,
+  created_by: item.created_by_id != null ? String(item.created_by_id) : undefined,
+  updated_by: item.updated_by_id != null ? String(item.updated_by_id) : undefined,
+  creator_name: item.creator_name ?? undefined,
+  editor_name: item.editor_name ?? undefined,
+});
+
+const toNumericId = (value: string): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('ID invalido');
+  }
+  return parsed;
+};
 
 
 export const CompanyPortfolio: React.FC = () => {
@@ -73,7 +111,7 @@ export const CompanyPortfolio: React.FC = () => {
     address: '',
     city: '',
     postal_code: '',
-    country: 'España',
+    country: 'EspaÃ±a',
     fiscal_id: '',
     notes: ''
   });
@@ -87,13 +125,8 @@ export const CompanyPortfolio: React.FC = () => {
 
   const loadCustomTypes = async () => {
     try {
-      const { data, error } = await supabase
-        .from('company_types')
-        .select('type_name')
-        .order('type_name');
-
-      if (error) throw error;
-      setCustomTypes(data?.map(t => t.type_name) || []);
+      const data = await listCompanyTypes();
+      setCustomTypes((data || []).map((item) => item.type_name));
     } catch (error) {
       console.error('Error loading company types:', error);
     }
@@ -105,21 +138,7 @@ export const CompanyPortfolio: React.FC = () => {
     if (!newTypeName.trim() || allCompanyTypes.includes(newTypeName.trim())) return;
 
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user?.id)
-        .single();
-
-      const { error } = await supabase
-        .from('company_types')
-        .insert({
-          organization_id: profile?.organization_id,
-          type_name: newTypeName.trim(),
-          created_by: user?.id
-        });
-
-      if (error) throw error;
+      await createCompanyType(newTypeName.trim());
 
       setNewTypeName('');
       setIsAddingNewType(false);
@@ -153,19 +172,7 @@ export const CompanyPortfolio: React.FC = () => {
     }
 
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user?.id)
-        .single();
-
-      const { error } = await supabase
-        .from('company_types')
-        .delete()
-        .eq('organization_id', profile?.organization_id)
-        .eq('type_name', typeName);
-
-      if (error) throw error;
+      await deleteCompanyType(typeName);
 
       await loadCustomTypes();
       
@@ -204,31 +211,7 @@ export const CompanyPortfolio: React.FC = () => {
     }
 
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user?.id)
-        .single();
-
-      // Update the type in company_types table
-      const { error: typeError } = await supabase
-        .from('company_types')
-        .update({ type_name: editingTypeName.trim() })
-        .eq('organization_id', profile?.organization_id)
-        .eq('type_name', oldTypeName);
-
-      if (typeError) throw typeError;
-
-      // Update companies that use this type
-      const companiesToUpdate = companies.filter(c => c.company_type?.includes(oldTypeName));
-      
-      for (const company of companiesToUpdate) {
-        const newTypes = company.company_type.map(t => t === oldTypeName ? editingTypeName.trim() : t);
-        await supabase
-          .from('company_portfolio')
-          .update({ company_type: newTypes })
-          .eq('id', company.id);
-      }
+      await renameCompanyType(oldTypeName, editingTypeName.trim());
 
       setEditingTypeIndex(null);
       setEditingTypeName('');
@@ -259,14 +242,8 @@ export const CompanyPortfolio: React.FC = () => {
   const loadCompanies = async () => {
     try {
       setLoading(true);
-
-      // Usar RPC con SECURITY DEFINER para obtener nombres de creador/editor sin chocar con RLS de profiles
-      const { data, error } = await supabase.rpc('get_company_portfolio_with_names');
-
-      if (error) throw error;
-
-      // data ya incluye creator_name y editor_name
-      setCompanies((data as any[]) as CompanyPortfolioItem[]);
+      const data = await listCompanyPortfolio();
+      setCompanies((data || []).map(mapApiCompany));
     } catch (error) {
       console.error('Error loading companies:', error);
       toast({
@@ -292,34 +269,29 @@ export const CompanyPortfolio: React.FC = () => {
     }
 
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user?.id)
-        .single();
+      const payload = {
+        company_name: formData.company_name,
+        company_type: formData.company_type,
+        contact_person: formData.contact_person || null,
+        contact_phone: formData.contact_phone || null,
+        contact_email: formData.contact_email || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        postal_code: formData.postal_code || null,
+        country: formData.country || null,
+        fiscal_id: formData.fiscal_id || null,
+        notes: formData.notes || null,
+      };
 
       if (editingCompany) {
-        const { error } = await supabase
-          .from('company_portfolio')
-          .update(formData)
-          .eq('id', editingCompany.id);
-
-        if (error) throw error;
+        await updateCompanyPortfolioItem(toNumericId(editingCompany.id), payload);
         const updateToast = toast({
           title: t('common.success'),
           description: t('companyPortfolio.companyUpdated')
         });
         setTimeout(() => updateToast.dismiss(), 1000);
       } else {
-        const { error } = await supabase
-          .from('company_portfolio')
-          .insert({
-            ...formData,
-            organization_id: profile?.organization_id,
-            created_by: user?.id
-          });
-
-        if (error) throw error;
+        await createCompanyPortfolioItem(payload);
         const createToast = toast({
           title: t('common.success'),
           description: t('companyPortfolio.companyAdded')
@@ -344,12 +316,7 @@ export const CompanyPortfolio: React.FC = () => {
     if (!confirm(t('companyPortfolio.deleteConfirm'))) return;
 
     try {
-      const { error } = await supabase
-        .from('company_portfolio')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteCompanyPortfolioItem(toNumericId(id));
 
       const deleteToast = toast({
         title: t('common.success'),
@@ -378,7 +345,7 @@ export const CompanyPortfolio: React.FC = () => {
       address: company.address || '',
       city: company.city || '',
       postal_code: company.postal_code || '',
-      country: company.country || 'España',
+      country: company.country || 'EspaÃ±a',
       fiscal_id: company.fiscal_id || '',
       notes: company.notes || ''
     });
@@ -395,7 +362,7 @@ export const CompanyPortfolio: React.FC = () => {
       address: '',
       city: '',
       postal_code: '',
-      country: 'España',
+      country: 'EspaÃ±a',
       fiscal_id: '',
       notes: ''
     });
@@ -478,12 +445,6 @@ export const CompanyPortfolio: React.FC = () => {
     
     setImportingVCF(true);
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user?.id)
-        .single();
-      
       let importedCount = 0;
       
       for (const index of selectedVCFContacts) {
@@ -491,26 +452,23 @@ export const CompanyPortfolio: React.FC = () => {
         
         const companyData = {
           company_name: contact.organization || contact.fullName || 'Contacto importado',
-          company_type: [] as string[],
-          contact_person: contact.fullName || '',
-          contact_phone: contact.phone || '',
-          contact_email: contact.email || '',
-          address: contact.address || '',
-          city: contact.city || '',
-          postal_code: contact.postalCode || '',
-          country: contact.country || 'España',
-          fiscal_id: '',
-          notes: contact.notes || '',
-          organization_id: profile?.organization_id,
-          created_by: user?.id
+          company_type: [],
+          contact_person: contact.fullName || null,
+          contact_phone: contact.phone || null,
+          contact_email: contact.email || null,
+          address: contact.address || null,
+          city: contact.city || null,
+          postal_code: contact.postalCode || null,
+          country: contact.country || 'EspaÃ±a',
+          fiscal_id: null,
+          notes: contact.notes || null,
         };
-        
-        const { error } = await supabase
-          .from('company_portfolio')
-          .insert(companyData);
-        
-        if (!error) {
+
+        try {
+          await createCompanyPortfolioItem(companyData);
           importedCount++;
+        } catch (error) {
+          console.error('Error importing VCF contact:', error);
         }
       }
       
@@ -1141,4 +1099,5 @@ export const CompanyPortfolio: React.FC = () => {
     </div>
   );
 };
+
 

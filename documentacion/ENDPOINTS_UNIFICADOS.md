@@ -209,6 +209,14 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | PATCH | `/api/v1/erp/projects/{project_id}/budgets/{budget_id}` | `backend-fastapi/app/api/v1/erp.py` |
 | GET | `/api/v1/erp/projects/{project_id}/documents` | `backend-fastapi/app/api/v1/erp.py` |
 | POST | `/api/v1/erp/projects/{project_id}/documents` | `backend-fastapi/app/api/v1/erp.py` |
+| GET | `/api/v1/erp/company-types` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| POST | `/api/v1/erp/company-types` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| PATCH | `/api/v1/erp/company-types/{type_name}` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| DELETE | `/api/v1/erp/company-types/{type_name}` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| GET | `/api/v1/erp/company-portfolio` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| POST | `/api/v1/erp/company-portfolio` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| PATCH | `/api/v1/erp/company-portfolio/{company_id}` | `backend-fastapi/app/api/v1/company_portfolio.py` |
+| DELETE | `/api/v1/erp/company-portfolio/{company_id}` | `backend-fastapi/app/api/v1/company_portfolio.py` |
 | GET | `/api/v1/erp/rental-machinery` | `backend-fastapi/app/api/v1/erp.py` |
 | POST | `/api/v1/erp/rental-machinery` | `backend-fastapi/app/api/v1/erp.py` |
 | DELETE | `/api/v1/erp/rental-machinery/{machinery_id}` | `backend-fastapi/app/api/v1/erp.py` |

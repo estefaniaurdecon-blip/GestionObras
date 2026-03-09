@@ -63,6 +63,7 @@ from app.models.work_report_comment import WorkReportComment  # noqa: F401
 from app.models.phase import Phase  # noqa: F401
 from app.models.user_app_role import UserAppRole  # noqa: F401
 from app.models.user_work_assignment import UserWorkAssignment  # noqa: F401
+from app.models.company_portfolio import CompanyPortfolio, CompanyType  # noqa: F401
 from app.invoices.models import Invoice, InvoiceEvent, NotificationLog  # noqa: F401
 from app.contracts.models import (  # noqa: F401
     Contract,
