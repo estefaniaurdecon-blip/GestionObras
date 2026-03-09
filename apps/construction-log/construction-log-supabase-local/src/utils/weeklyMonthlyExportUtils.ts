@@ -2,10 +2,38 @@ import { WorkReport } from '@/types/workReport';
 import { isNative, saveBase64File } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listRentalMachinery, type ApiRentalMachinery } from '@/integrations/api/client';
 
 type XlsxModule = typeof import('xlsx-js-style');
 type XlsxWorkSheet = import('xlsx-js-style').WorkSheet;
+type LegacyRentalMachine = {
+  work_id: string;
+  provider: string | null;
+  type: string;
+  machine_number: string;
+  delivery_date: string;
+  removal_date: string | null;
+  daily_rate: number;
+};
+
+const parseRentalPrice = (value: number | string | null | undefined): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const mapApiRentalToLegacy = (item: ApiRentalMachinery): LegacyRentalMachine => ({
+  work_id: String(item.project_id),
+  provider: item.provider || null,
+  type: item.name || item.description || '',
+  machine_number: String(item.id),
+  delivery_date: item.start_date,
+  removal_date: item.end_date || null,
+  daily_rate: parseRentalPrice(item.price),
+});
 
 // Helper function to apply center alignment to all cells in a worksheet
 const applyCenterAlignment = (worksheet: XlsxWorkSheet, XLSX: XlsxModule) => {
@@ -73,17 +101,14 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
 
   // Obtener toda la maquinaria de alquiler de las obras de los reportes
   const allWorkIds = [...new Set(reports.map(r => r.workId).filter(Boolean))];
-  let allRentalMachinery: any[] = [];
+  let allRentalMachinery: LegacyRentalMachine[] = [];
   
   if (allWorkIds.length > 0) {
-    const { data } = await supabase
-      .from('work_rental_machinery')
-      .select('*')
-      .in('work_id', allWorkIds);
-    
-    if (data) {
-      allRentalMachinery = data;
-    }
+    const allRentalFromApi = await listRentalMachinery({ limit: 1000 });
+    const workIdSet = new Set(allWorkIds.map((id) => String(id)));
+    allRentalMachinery = allRentalFromApi
+      .map(mapApiRentalToLegacy)
+      .filter((machine) => workIdSet.has(machine.work_id));
   }
 
   // Crear hoja de resumen semanal
@@ -426,17 +451,14 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
 
   // Obtener toda la maquinaria de alquiler de las obras de los reportes
   const allWorkIds = [...new Set(reports.map(r => r.workId).filter(Boolean))];
-  let allRentalMachinery: any[] = [];
+  let allRentalMachinery: LegacyRentalMachine[] = [];
   
   if (allWorkIds.length > 0) {
-    const { data } = await supabase
-      .from('work_rental_machinery')
-      .select('*')
-      .in('work_id', allWorkIds);
-    
-    if (data) {
-      allRentalMachinery = data;
-    }
+    const allRentalFromApi = await listRentalMachinery({ limit: 1000 });
+    const workIdSet = new Set(allWorkIds.map((id) => String(id)));
+    allRentalMachinery = allRentalFromApi
+      .map(mapApiRentalToLegacy)
+      .filter((machine) => workIdSet.has(machine.work_id));
   }
 
   // Crear hoja de resumen mensual

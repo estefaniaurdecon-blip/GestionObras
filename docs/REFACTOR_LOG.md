@@ -715,3 +715,31 @@ Plantilla para registrar cada iteracion de refactor.
 - Decision/es tomadas:
   - Priorizar corte funcional de Supabase en componentes de uso diario aunque el primer paso use polling.
   - Extender API de mensajes para preservar capacidades existentes del frontend sin fallback legacy.
+
+## Iteracion 2026-03-09 - Corte Supabase (maquinaria de alquiler en exportaciones)
+- Objetivo: seguir reduciendo dependencias legacy reemplazando consultas `work_rental_machinery` de exportaciones por API ERP.
+- Alcance:
+  - `construction-log`: `weeklyMonthlyExportUtils`, `archivedExportUtils`, `WorkReportList` (exportacion Excel bulk).
+- Cambios realizados:
+  - `weeklyMonthlyExportUtils.ts`:
+    - elimina `supabase` y usa `listRentalMachinery(...)`.
+    - agrega mapeo local de `ApiRentalMachinery` a shape legacy usado por hojas Excel.
+  - `archivedExportUtils.ts`:
+    - elimina `supabase` y usa `listRentalMachinery({ projectId })`.
+    - mantiene calculo de dias/coste de maquinaria activa con campos normalizados.
+  - `WorkReportList.tsx`:
+    - en descarga Excel bulk deja de usar import dinamico de `legacySupabaseRemoved`.
+    - usa `listRentalMachinery({ projectId })` para montar hoja de maquinaria de alquiler.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP (reuso de endpoint existente `GET /api/v1/erp/rental-machinery`).
+- Riesgos/mitigaciones:
+  - El backend API no expone `machine_number` legacy; se usa `id` como fallback para mantener columna en export.
+  - Se conserva orden por fecha de entrega y calculos previos para minimizar diferencias funcionales.
+- Tests ejecutados:
+  - `npx tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` -> `OK`.
+- Pendientes:
+  - `WorkReportList` mantiene consultas legacy `supabase` para `work_assignments/works/profiles` (pendiente de endpoint/capa API equivalente).
+  - Continuar sustitucion de usos `supabase.*` restantes en utilidades PDF y hooks de dominio.
+- Decision/es tomadas:
+  - Priorizar migraciones donde ya existe endpoint API para reducir riesgo y mantener avance continuo.

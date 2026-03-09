@@ -3,10 +3,36 @@ import { WorkReport } from '@/types/workReport';
 import { generateWorkReportPDF } from './pdfGenerator';
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listRentalMachinery, type ApiRentalMachinery } from '@/integrations/api/client';
 
 type XlsxModule = typeof import('xlsx-js-style');
 type XlsxWorkSheet = import('xlsx-js-style').WorkSheet;
+type LegacyRentalMachine = {
+  provider: string | null;
+  type: string;
+  machine_number: string;
+  delivery_date: string;
+  removal_date: string | null;
+  daily_rate: number;
+};
+
+const parseRentalPrice = (value: number | string | null | undefined): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const mapApiRentalToLegacy = (item: ApiRentalMachinery): LegacyRentalMachine => ({
+  provider: item.provider || null,
+  type: item.name || item.description || '',
+  machine_number: String(item.id),
+  delivery_date: item.start_date,
+  removal_date: item.end_date || null,
+  daily_rate: parseRentalPrice(item.price),
+});
 
 // Helper function to apply center alignment to all cells in a worksheet
 const applyCenterAlignment = (worksheet: XlsxWorkSheet, XLSX: XlsxModule) => {
@@ -103,11 +129,12 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
 
   // 4. MAQUINARIA DE ALQUILER
   if (report.workId) {
-    const { data: rentalMachinery } = await supabase
-      .from('work_rental_machinery')
-      .select('*')
-      .eq('work_id', report.workId)
-      .order('delivery_date', { ascending: true });
+    const projectId = Number(report.workId);
+    const rentalMachinery = Number.isFinite(projectId)
+      ? (await listRentalMachinery({ projectId, limit: 500 }))
+          .map(mapApiRentalToLegacy)
+          .sort((a, b) => new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime())
+      : [];
 
     if (rentalMachinery && rentalMachinery.length > 0) {
       const reportDate = new Date(report.date);

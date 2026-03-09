@@ -58,6 +58,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
+import { listRentalMachinery } from '@/integrations/api/client';
 import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import JSZip from 'jszip';
 
@@ -592,18 +593,30 @@ export const WorkReportList = ({
 
       for (const report of reportsToDownload) {
         try {
-          // We need to generate the Excel as a blob/buffer
-          // Import the export function and modify to return workbook
-          const { supabase } = await import('@/integrations/api/legacySupabaseRemoved');
-          
           // Fetch rental machinery data for this report
           let rentalMachineryData: any[] = [];
           if (report.workId) {
-            const { data } = await supabase
-              .from('work_rental_machinery')
-              .select('*')
-              .eq('work_id', report.workId);
-            if (data) rentalMachineryData = data;
+            const projectId = Number(report.workId);
+            if (Number.isFinite(projectId)) {
+              const rentalRows = await listRentalMachinery({ projectId, limit: 500 });
+              rentalMachineryData = rentalRows
+                .map((row) => ({
+                  provider: row.provider || '',
+                  type: row.name || row.description || '',
+                  machine_number: String(row.id),
+                  delivery_date: row.start_date,
+                  daily_rate:
+                    typeof row.price === 'number'
+                      ? row.price
+                      : Number.isFinite(Number(row.price))
+                        ? Number(row.price)
+                        : 0,
+                }))
+                .sort(
+                  (a, b) =>
+                    new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime()
+                );
+            }
           }
 
           // Create workbook for this report
