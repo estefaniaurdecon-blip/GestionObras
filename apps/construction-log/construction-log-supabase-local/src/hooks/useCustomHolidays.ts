@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { useOrganization } from '@/hooks/useOrganization';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  createCustomHoliday,
+  deleteCustomHoliday,
+  listCustomHolidays,
+  updateCustomHoliday,
+  type ApiCustomHoliday,
+} from '@/integrations/api/client';
 
 export interface CustomHoliday {
   id: string;
@@ -14,24 +20,29 @@ export interface CustomHoliday {
   updated_at: string;
 }
 
+const mapCustomHoliday = (holiday: ApiCustomHoliday): CustomHoliday => ({
+  id: String(holiday.id),
+  organization_id: String(holiday.tenant_id),
+  date: holiday.date,
+  name: holiday.name,
+  region: holiday.region ?? null,
+  created_by: holiday.created_by_id != null ? String(holiday.created_by_id) : null,
+  created_at: holiday.created_at,
+  updated_at: holiday.updated_at,
+});
+
 export const useCustomHolidays = () => {
-  const { organization } = useOrganization();
+  const { user } = useAuth();
   const [holidays, setHolidays] = useState<CustomHoliday[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchHolidays = async () => {
-    if (!organization?.id) return;
+    if (!user?.id) return;
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('custom_holidays')
-        .select('*')
-        .eq('organization_id', organization.id)
-        .order('date', { ascending: true });
-
-      if (error) throw error;
-      setHolidays(data || []);
+      const data = await listCustomHolidays();
+      setHolidays((data || []).map(mapCustomHoliday));
     } catch (error: any) {
       console.error('Error fetching custom holidays:', error);
       toast.error('Error al cargar los festivos');
@@ -41,51 +52,52 @@ export const useCustomHolidays = () => {
   };
 
   const addHoliday = async (holidayData: { date: string; name: string; region?: string }) => {
-    if (!organization?.id) {
+    if (!user?.id) {
       toast.error('Debe estar autenticado');
       return;
     }
 
     try {
-      const { data, error } = await supabase
-        .from('custom_holidays')
-        .insert({
-          ...holidayData,
-          organization_id: organization.id,
-        })
-        .select()
-        .single();
+      const apiHoliday = await createCustomHoliday({
+        date: holidayData.date,
+        name: holidayData.name,
+        region: holidayData.region ?? null,
+      });
+      const holiday = mapCustomHoliday(apiHoliday);
 
-      if (error) throw error;
-
-      setHolidays(prev => [...prev, data].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      ));
-      toast.success('Festivo añadido correctamente');
-      return data;
+      setHolidays((prev) =>
+        [...prev, holiday].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
+      toast.success('Festivo anadido correctamente');
+      return holiday;
     } catch (error: any) {
       console.error('Error adding holiday:', error);
-      toast.error('Error al añadir el festivo');
+      toast.error('Error al anadir el festivo');
       throw error;
     }
   };
 
   const updateHoliday = async (id: string, updates: Partial<CustomHoliday>) => {
     try {
-      const { data, error } = await supabase
-        .from('custom_holidays')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const numericHolidayId = Number(id);
+      if (!Number.isFinite(numericHolidayId)) {
+        throw new Error('ID de festivo invalido');
+      }
 
-      if (error) throw error;
+      const apiHoliday = await updateCustomHoliday(numericHolidayId, {
+        date: updates.date,
+        name: updates.name,
+        region: updates.region,
+      });
+      const holiday = mapCustomHoliday(apiHoliday);
 
-      setHolidays(prev => prev.map(h => h.id === id ? data : h).sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      ));
+      setHolidays((prev) =>
+        prev
+          .map((h) => (h.id === id ? holiday : h))
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
       toast.success('Festivo actualizado correctamente');
-      return data;
+      return holiday;
     } catch (error: any) {
       console.error('Error updating holiday:', error);
       toast.error('Error al actualizar el festivo');
@@ -95,14 +107,14 @@ export const useCustomHolidays = () => {
 
   const deleteHoliday = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('custom_holidays')
-        .delete()
-        .eq('id', id);
+      const numericHolidayId = Number(id);
+      if (!Number.isFinite(numericHolidayId)) {
+        throw new Error('ID de festivo invalido');
+      }
 
-      if (error) throw error;
+      await deleteCustomHoliday(numericHolidayId);
 
-      setHolidays(prev => prev.filter(h => h.id !== id));
+      setHolidays((prev) => prev.filter((h) => h.id !== id));
       toast.success('Festivo eliminado correctamente');
     } catch (error: any) {
       console.error('Error deleting holiday:', error);
@@ -113,7 +125,7 @@ export const useCustomHolidays = () => {
 
   useEffect(() => {
     fetchHolidays();
-  }, [organization?.id]);
+  }, [user?.id]);
 
   return {
     holidays,

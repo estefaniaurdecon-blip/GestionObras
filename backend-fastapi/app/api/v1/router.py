@@ -8,6 +8,7 @@ from . import (
     auth,
     dashboard,
     delivery_notes,
+    custom_holidays,
     erp,
     external_collaborations,
     branding,
@@ -68,6 +69,11 @@ api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(erp.router, prefix="/erp", tags=["erp"])
+api_router.include_router(
+    custom_holidays.router,
+    prefix="/erp/custom-holidays",
+    tags=["erp"],
+)
 api_router.include_router(
     external_collaborations.router,
     prefix="/erp",

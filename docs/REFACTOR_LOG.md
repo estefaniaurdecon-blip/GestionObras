@@ -767,3 +767,50 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar eliminacion de imports Supabase directos en componentes/hooks restantes.
 - Decision/es tomadas:
   - Mantener estrategia por capas: primero sacar `supabase` de UI, luego cortar proveedor legacy en servicio.
+
+## Iteracion 2026-03-09 - API-first: `custom_holidays` (backend + hook frontend)
+- Objetivo: validar la estrategia acordada de eliminacion de Supabase por dominio, implementando endpoint real faltante y migrando consumo frontend.
+- Alcance:
+  - Backend FastAPI: `app/models`, `app/schemas`, `app/services`, `app/api/v1`, registro en router/base y test dedicado.
+  - Frontend `construction-log`: cliente API (`modules/customHolidays.ts` + fachada `client.ts`) y hook `useCustomHolidays.ts`.
+  - Documentacion de contratos: `documentacion/ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Nuevo dominio backend `custom_holidays`:
+    - Modelo SQLModel `CustomHoliday` (`tenant_id`, `date`, `name`, `region`, `created_by_id`, timestamps).
+    - Schemas `CustomHolidayCreate/Update/Read`.
+    - Servicio CRUD `custom_holiday_service`.
+    - Router CRUD montado en `GET/POST/PATCH/DELETE /api/v1/erp/custom-holidays`.
+  - Registro de infraestructura backend:
+    - `custom_holidays.router` incluido en `app/api/v1/router.py`.
+    - `CustomHoliday` agregado en `app/db/base.py` para metadata/create_all.
+  - Frontend API-first:
+    - Nuevo modulo `src/integrations/api/modules/customHolidays.ts`.
+    - `client.ts` mantiene fachada compatible y reexporta:
+      - `listCustomHolidays`, `createCustomHoliday`, `updateCustomHoliday`, `deleteCustomHoliday`.
+    - `useCustomHolidays.ts` migra de `supabase.from('custom_holidays')` a cliente API.
+    - Mapeo de contrato API (`tenant_id`, `created_by_id`) a shape legacy del hook (`organization_id`, `created_by`) para no romper consumidores.
+  - Documentacion unificada de endpoints actualizada:
+    - Alta de rutas `/api/v1/erp/custom-holidays*`.
+    - Correccion de tabla `messages` con `DELETE /api/v1/messages/{message_id}`.
+- Contratos impactados:
+  - Nuevos endpoints:
+    - `GET /api/v1/erp/custom-holidays`
+    - `POST /api/v1/erp/custom-holidays`
+    - `PATCH /api/v1/erp/custom-holidays/{holiday_id}`
+    - `DELETE /api/v1/erp/custom-holidays/{holiday_id}`
+  - Sin breaking changes en exports publicos existentes de `client.ts`.
+- Riesgos/mitigaciones:
+  - Persisten referencias legacy `supabase.*` en otros dominios; este slice cierra solo `custom_holidays`.
+  - Persiste deuda estructural de migraciones DB (sin Alembic); actualmente el alta de tabla depende de metadata/create_all en entorno de desarrollo.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_custom_holidays_api.py` -> `1 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` (`construction-log`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 17 matches / 9 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 243 matches / 24 archivos.
+- Pendientes:
+  - Migrar `useWorkRentalMachinery` a API ERP (ya existe endpoint `rental-machinery`).
+  - Continuar corte de referencias `supabase.*` en `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers`, `WorkReportComments` y gateway legacy.
+- Decision/es tomadas:
+  - Se confirma estrategia `API-first`: no reintroducir Supabase en `src`; para cada dominio faltante, crear endpoint backend y migrar consumo frontend directo.

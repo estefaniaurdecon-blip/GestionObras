@@ -11,6 +11,7 @@ import { createUsersApi, normalizeApiUser } from './modules/users';
 import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
+import { createCustomHolidaysApi } from './modules/customHolidays';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -1013,6 +1014,27 @@ export const removeMyOrganizationLogo = organizationApi.removeMyOrganizationLogo
 export const getBrandingByTenant = organizationApi.getBrandingByTenant;
 export const getMyUserPreferences = organizationApi.getMyUserPreferences;
 export const updateMyUserPreferences = organizationApi.updateMyUserPreferences;
+
+// ============================================================
+// CUSTOM HOLIDAYS API
+// ============================================================
+
+export type {
+  ApiCustomHoliday,
+  CreateCustomHolidayPayload,
+  ListCustomHolidaysParams,
+  UpdateCustomHolidayPayload,
+} from './modules/customHolidays';
+
+const customHolidaysApi = createCustomHolidaysApi({
+  apiFetchJson,
+  buildQueryParams,
+});
+
+export const listCustomHolidays = customHolidaysApi.listCustomHolidays;
+export const createCustomHoliday = customHolidaysApi.createCustomHoliday;
+export const updateCustomHoliday = customHolidaysApi.updateCustomHoliday;
+export const deleteCustomHoliday = customHolidaysApi.deleteCustomHoliday;
 
 // ============================================================
 // TOOLS API

@@ -198,6 +198,10 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | POST | `/api/v1/erp/rental-machinery` | `backend-fastapi/app/api/v1/erp.py` |
 | DELETE | `/api/v1/erp/rental-machinery/{machinery_id}` | `backend-fastapi/app/api/v1/erp.py` |
 | PATCH | `/api/v1/erp/rental-machinery/{machinery_id}` | `backend-fastapi/app/api/v1/erp.py` |
+| GET | `/api/v1/erp/custom-holidays` | `backend-fastapi/app/api/v1/custom_holidays.py` |
+| POST | `/api/v1/erp/custom-holidays` | `backend-fastapi/app/api/v1/custom_holidays.py` |
+| PATCH | `/api/v1/erp/custom-holidays/{holiday_id}` | `backend-fastapi/app/api/v1/custom_holidays.py` |
+| DELETE | `/api/v1/erp/custom-holidays/{holiday_id}` | `backend-fastapi/app/api/v1/custom_holidays.py` |
 | GET | `/api/v1/erp/reports/time` | `backend-fastapi/app/api/v1/erp.py` |
 | GET | `/api/v1/erp/subactivities` | `backend-fastapi/app/api/v1/erp.py` |
 | POST | `/api/v1/erp/subactivities` | `backend-fastapi/app/api/v1/erp.py` |
@@ -307,6 +311,7 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | POST | `/api/v1/messages/{message_id}/read` | `backend-fastapi/app/api/v1/messages.py` |
 | DELETE | `/api/v1/messages/conversation/{other_user_id}` | `backend-fastapi/app/api/v1/messages.py` |
 | DELETE | `/api/v1/messages/clear-all` | `backend-fastapi/app/api/v1/messages.py` |
+| DELETE | `/api/v1/messages/{message_id}` | `backend-fastapi/app/api/v1/messages.py` |
 
 ### Modulo `invoices`
 
