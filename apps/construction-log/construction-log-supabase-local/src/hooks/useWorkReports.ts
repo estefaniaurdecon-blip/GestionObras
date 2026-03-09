@@ -967,13 +967,13 @@ export const useWorkReports = () => {
         await deleteWorkReportRow(reportId);
 
         // Eliminar de operaciones pendientes
-        const pending = await storage.getItem(PENDING_SYNC_KEY);
+        const pending = await storage.getItem(PENDING_SYNC_KEY_USER);
         if (pending) {
           const operations: PendingOperation[] = JSON.parse(pending);
           const filtered = operations.filter(op => 
             !(op.reportId === reportId && op.type === 'delete')
           );
-          await storage.setItem(PENDING_SYNC_KEY, JSON.stringify(filtered));
+          await storage.setItem(PENDING_SYNC_KEY_USER, JSON.stringify(filtered));
         }
       }
     } catch (error: any) {

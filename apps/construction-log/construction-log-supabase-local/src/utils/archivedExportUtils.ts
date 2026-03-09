@@ -1,12 +1,13 @@
 import JSZip from 'jszip';
-import * as XLSX from 'xlsx-js-style';
 import { WorkReport } from '@/types/workReport';
 import { generateWorkReportPDF } from './pdfGenerator';
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+type XlsxModule = typeof import('xlsx-js-style');
+
 // Helper function to apply center alignment to all cells in a worksheet
-const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {
+const applyCenterAlignment = (worksheet: XlsxModule['WorkSheet'], XLSX: XlsxModule) => {
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
   for (let row = range.s.r; row <= range.e.r; row++) {
     for (let col = range.s.c; col <= range.e.c; col++) {
@@ -25,6 +26,7 @@ const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {
  * Genera un archivo Excel para un reporte individual
  */
 export const generateSingleReportExcel = async (report: WorkReport): Promise<Blob> => {
+  const XLSX = await import('xlsx-js-style');
   const wb = XLSX.utils.book_new();
 
   // 1. INFORMACIÓN GENERAL DEL PARTE
@@ -42,7 +44,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
     { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 20 }, 
     { wch: 15 }, { wch: 20 }, { wch: 50 }
   ];
-  applyCenterAlignment(generalWs);
+  applyCenterAlignment(generalWs, XLSX);
   XLSX.utils.book_append_sheet(wb, generalWs, 'Información General');
 
   // 2. MANO DE OBRA
@@ -66,7 +68,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
         { wch: 25 }, { wch: 25 }, { wch: 30 }, 
         { wch: 10 }, { wch: 15 }, { wch: 15 }
       ];
-      applyCenterAlignment(workWs);
+      applyCenterAlignment(workWs, XLSX);
       XLSX.utils.book_append_sheet(wb, workWs, 'Mano de Obra');
     }
   }
@@ -92,7 +94,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
         { wch: 25 }, { wch: 25 }, { wch: 30 }, 
         { wch: 10 }, { wch: 15 }, { wch: 15 }
       ];
-      applyCenterAlignment(machineryWs);
+      applyCenterAlignment(machineryWs, XLSX);
       XLSX.utils.book_append_sheet(wb, machineryWs, 'Maq. Subcontratas');
     }
   }
@@ -140,7 +142,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
           { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 12 }, 
           { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
         ];
-        applyCenterAlignment(rentalMachineryWs);
+        applyCenterAlignment(rentalMachineryWs, XLSX);
         XLSX.utils.book_append_sheet(wb, rentalMachineryWs, 'Maquinaria Alquiler');
       }
     }
@@ -168,7 +170,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
         { wch: 25 }, { wch: 15 }, { wch: 30 }, 
         { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 }
       ];
-      applyCenterAlignment(materialsWs);
+      applyCenterAlignment(materialsWs, XLSX);
       XLSX.utils.book_append_sheet(wb, materialsWs, 'Materiales');
     }
   }
@@ -198,7 +200,7 @@ export const generateSingleReportExcel = async (report: WorkReport): Promise<Blo
         { wch: 25 }, { wch: 25 }, { wch: 30 }, { wch: 12 }, { wch: 10 },
         { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }
       ];
-      applyCenterAlignment(subcontractWs);
+      applyCenterAlignment(subcontractWs, XLSX);
       XLSX.utils.book_append_sheet(wb, subcontractWs, 'Subcontrata');
     }
   }

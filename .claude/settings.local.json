@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth status)",
+      "Bash(wc -l \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src/components\"/*.tsx)"
+    ]
+  }
+}

@@ -15,7 +15,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { TabsContent } from '@/components/ui/tabs';
 import { DashboardToolsTabs, type DashboardToolsTab } from '@/components/DashboardToolsTabs';
-import { PartsTabContent, ToolsPanelContent, type OpenExistingReportOptions } from '@/components/DashboardToolsTabContents';
+import {
+  PartsTabContent,
+  type OpenExistingReportOptions,
+  type SummaryReportViewMode,
+} from '@/components/DashboardToolsTabContents';
 import type { GenerateWorkReportDraft } from '@/components/GenerateWorkReportPanel';
 import type { HistoryReportsPanelProps } from '@/components/HistoryReportsPanel';
 import { TenantPicker } from '@/components/TenantPicker';
@@ -24,8 +28,8 @@ import { apiFetch } from '@/integrations/api/client';
 import type { ApiTenant } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
 import {
-  ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
   Clock3,
   ShieldCheck,
   Wifi,
@@ -41,6 +45,12 @@ const GenerateWorkReportPanel = lazy(() =>
 const HistoryReportsPanel = lazy(() =>
   import('@/components/HistoryReportsPanel').then((module) => ({
     default: module.HistoryReportsPanel,
+  })),
+);
+
+const LazyToolsPanelContent = lazy(() =>
+  import('@/components/DashboardToolsPanelContent').then((module) => ({
+    default: module.ToolsPanelContent,
   })),
 );
 
@@ -210,6 +220,7 @@ export const WorkReportsTab = ({
   } = actions;
   const [activeToolsTab, setActiveToolsTab] = useState<DashboardToolsTab>('parts');
   const [summaryReportAnalysisOpen, setSummaryReportAnalysisOpen] = useState(false);
+  const [summaryReportViewMode, setSummaryReportViewMode] = useState<SummaryReportViewMode>('generate');
   const [reportNavigationIds, setReportNavigationIds] = useState<string[]>([]);
   const [openedReportId, setOpenedReportId] = useState<string | null>(null);
   const [isSyncOnline, setIsSyncOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -223,6 +234,7 @@ export const WorkReportsTab = ({
   useEffect(() => {
     if (activeToolsTab !== 'summary-report') {
       setSummaryReportAnalysisOpen(false);
+      setSummaryReportViewMode('generate');
     }
   }, [activeToolsTab]);
 
@@ -233,6 +245,10 @@ export const WorkReportsTab = ({
   }, [generatePanelOpen]);
 
   const reportsById = useMemo(() => new Map(allWorkReports.map((report) => [report.id, report])), [allWorkReports]);
+  const reportsForSummary = useMemo(
+    () => (allWorkReports.length > 0 ? allWorkReports : workReports),
+    [allWorkReports, workReports],
+  );
 
   const effectiveNavigationIds = useMemo(() => {
     if (!openedReportId) return [];
@@ -529,21 +545,22 @@ export const WorkReportsTab = ({
               {activeToolsTab === 'history' ? (
                 <Card className="bg-white">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-start">
+                    <div className="grid grid-cols-[88px_1fr_88px] items-start">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => setActiveToolsTab('parts')}
-                        className="h-8 px-2 text-slate-600 hover:text-slate-900"
+                        className="mt-0.5 h-8 w-[88px] justify-start px-2 text-slate-600 hover:text-slate-900"
                       >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
+                        <ChevronLeft className="mr-1 h-5 w-5" strokeWidth={3} />
                         Volver
                       </Button>
-                    </div>
-                    <div className="space-y-1 text-center">
-                      <CardTitle>Historial de partes</CardTitle>
-                      <CardDescription>Busqueda y filtros de partes guardados.</CardDescription>
+                      <div className="space-y-1 text-center">
+                        <CardTitle>Historial de partes</CardTitle>
+                        <CardDescription>Busqueda y filtros de partes guardados.</CardDescription>
+                      </div>
+                      <div aria-hidden className="h-8 w-[88px]" />
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -559,18 +576,28 @@ export const WorkReportsTab = ({
                   </CardContent>
                 </Card>
               ) : activeToolsTab !== 'parts' ? (
-                <ToolsPanelContent
-                  activeToolsTab={activeToolsTab}
-                  workReports={allWorkReports}
-                  tenantUnavailable={tenantUnavailable}
-                  summaryReportAnalysisOpen={summaryReportAnalysisOpen}
-                  onSummaryReportAnalysisOpenChange={setSummaryReportAnalysisOpen}
-                  onOpenMetrics={() => setMetricsOpen(true)}
-                  onOpenExistingReport={openExistingReportWithContext}
-                  onPending={handlePending}
-                  onDataChanged={reloadWorkReports}
-                  onBackToParts={() => setActiveToolsTab('parts')}
-                />
+                <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando herramientas...</div>}>
+                  <LazyToolsPanelContent
+                    activeToolsTab={activeToolsTab}
+                    workReports={reportsForSummary}
+                    tenantUnavailable={tenantUnavailable}
+                    summaryReportAnalysisOpen={summaryReportAnalysisOpen}
+                    summaryReportViewMode={summaryReportViewMode}
+                    onSummaryReportViewModeChange={setSummaryReportViewMode}
+                    onSummaryReportAnalysisOpenChange={setSummaryReportAnalysisOpen}
+                    onOpenMetrics={() => setMetricsOpen(true)}
+                    onOpenExistingReport={openExistingReportWithContext}
+                    onPending={handlePending}
+                    onDataChanged={reloadWorkReports}
+                    onBackToParts={() => {
+                      if (activeToolsTab === 'summary-report' && summaryReportAnalysisOpen) {
+                        setSummaryReportAnalysisOpen(false);
+                        return;
+                      }
+                      setActiveToolsTab('parts');
+                    }}
+                  />
+                </Suspense>
               ) : (
                 <PartsTabContent
                   tenantResolving={tenantResolving}
@@ -579,6 +606,7 @@ export const WorkReportsTab = ({
                   tenantErrorMessage={tenantErrorMessage}
                   workReportsLoading={workReportsLoading}
                   workReports={workReports}
+                  allWorkReports={allWorkReports}
                   workReportVisibleDays={workReportVisibleDays}
                   syncing={syncing}
                   canCreateWorkReport={canCreateWorkReport}

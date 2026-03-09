@@ -1,9 +1,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx-js-style';
 import { WorkRepaso, RepasoSubcontractGroup } from '@/hooks/useWorkRepasos';
 import { sanitizePdfFilename } from '@/utils/securePdfFilename';
 import { calculateOptimalSpacing, getAdaptiveSpacing, ContentMetrics } from './pdfSpacingOptimizer';
+
+type XlsxModule = typeof import('xlsx-js-style');
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendiente',
@@ -79,6 +80,7 @@ export const exportRepasosToExcel = async (
   repasos: WorkRepaso[],
   options: ExportOptions
 ): Promise<void> => {
+  const XLSX: XlsxModule = await import('xlsx-js-style');
   const { workName, workNumber } = options;
 
   // Crear workbook

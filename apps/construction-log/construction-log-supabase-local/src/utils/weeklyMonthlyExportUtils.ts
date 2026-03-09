@@ -1,11 +1,12 @@
-import * as XLSX from 'xlsx-js-style';
 import { WorkReport } from '@/types/workReport';
 import { isNative, saveBase64File } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+type XlsxModule = typeof import('xlsx-js-style');
+
 // Helper function to apply center alignment to all cells in a worksheet
-const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {
+const applyCenterAlignment = (worksheet: XlsxModule['WorkSheet'], XLSX: XlsxModule) => {
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
   for (let row = range.s.r; row <= range.e.r; row++) {
     for (let col = range.s.c; col <= range.e.c; col++) {
@@ -47,6 +48,8 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
   if (reports.length === 0) {
     throw new Error('No hay partes para exportar');
   }
+
+  const XLSX = await import('xlsx-js-style');
 
   // Agrupar partes por semana
   const weeklyGroups = new Map<string, WorkReport[]>();
@@ -159,7 +162,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
     { wch: 18 }, // Coste Subcontratas
     { wch: 40 }  // Obras
   ];
-  applyCenterAlignment(summaryWs);
+  applyCenterAlignment(summaryWs, XLSX);
   
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Resumen Semanal');
 
@@ -300,7 +303,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(workWs);
+    applyCenterAlignment(workWs, XLSX);
     XLSX.utils.book_append_sheet(wb, workWs, 'Mano de Obra');
   }
 
@@ -319,7 +322,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(machineryWs);
+    applyCenterAlignment(machineryWs, XLSX);
     XLSX.utils.book_append_sheet(wb, machineryWs, 'Maq. Subcontratas');
   }
 
@@ -338,7 +341,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
       { wch: 14 }, // Tarifa Diaria
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(rentalWs);
+    applyCenterAlignment(rentalWs, XLSX);
     XLSX.utils.book_append_sheet(wb, rentalWs, 'Maquinaria Alquiler');
   }
 
@@ -358,7 +361,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
       { wch: 14 }, // Precio Unit.
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(materialWs);
+    applyCenterAlignment(materialWs, XLSX);
     XLSX.utils.book_append_sheet(wb, materialWs, 'Materiales');
   }
 
@@ -378,7 +381,7 @@ export const exportWeeklyReports = async (reports: WorkReport[], workName?: stri
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(subcontractWs);
+    applyCenterAlignment(subcontractWs, XLSX);
     XLSX.utils.book_append_sheet(wb, subcontractWs, 'Subcontrata');
   }
 
@@ -400,6 +403,8 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
   if (reports.length === 0) {
     throw new Error('No hay partes para exportar');
   }
+
+  const XLSX = await import('xlsx-js-style');
 
   // Agrupar partes por mes
   const monthlyGroups = new Map<string, WorkReport[]>();
@@ -513,7 +518,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
     { wch: 10 }, // Nº Obras
     { wch: 50 }  // Obras
   ];
-  applyCenterAlignment(summaryWs);
+  applyCenterAlignment(summaryWs, XLSX);
   
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Resumen Mensual');
 
@@ -656,7 +661,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(workWs);
+    applyCenterAlignment(workWs, XLSX);
     XLSX.utils.book_append_sheet(wb, workWs, 'Mano de Obra');
   }
 
@@ -675,7 +680,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(machineryWs);
+    applyCenterAlignment(machineryWs, XLSX);
     XLSX.utils.book_append_sheet(wb, machineryWs, 'Maq. Subcontratas');
   }
 
@@ -694,7 +699,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
       { wch: 14 }, // Tarifa Diaria
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(rentalWs);
+    applyCenterAlignment(rentalWs, XLSX);
     XLSX.utils.book_append_sheet(wb, rentalWs, 'Maquinaria Alquiler');
   }
 
@@ -714,7 +719,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
       { wch: 14 }, // Precio Unit.
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(materialWs);
+    applyCenterAlignment(materialWs, XLSX);
     XLSX.utils.book_append_sheet(wb, materialWs, 'Materiales');
   }
 
@@ -734,7 +739,7 @@ export const exportMonthlyReports = async (reports: WorkReport[], workName?: str
       { wch: 14 }, // Precio/Hora
       { wch: 12 }  // Total
     ];
-    applyCenterAlignment(subcontractWs);
+    applyCenterAlignment(subcontractWs, XLSX);
     XLSX.utils.book_append_sheet(wb, subcontractWs, 'Subcontrata');
   }
 

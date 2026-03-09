@@ -1,18 +1,19 @@
-import { createRoot } from "react-dom/client";
+﻿import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
-import { SplashScreen } from "@capacitor/splash-screen";
 import App from "./App.tsx";
 import "./index.css";
 import "./i18n/config";
+import { hideNativeSplashOnce, scheduleNativeSplashHideRetries } from "./utils/nativeSplash";
 import { registerServiceWorker, unregisterServiceWorker } from "./utils/serviceWorkerRegistration";
 import { startupPerfEnd, startupPerfPoint, startupPerfStart } from "./utils/startupPerf";
+
 declare global {
   interface Window {
     __hideAppLoading?: () => void;
   }
 }
 
-// Log para diagnóstico en APK (visible también en el loader HTML)
+// Log para diagnostico en APK (visible tambien en el loader HTML)
 const appendBootLog = (line: string) => {
   try {
     const pre = document.getElementById("boot-log");
@@ -107,26 +108,21 @@ const hideLoading = () => {
   }
 };
 
-// Exponer helper para que la app decida cuándo ocultar el loader
+// Exponer helper para que la app decida cuando ocultar el loader
 window.__hideAppLoading = hideLoading;
 
-// Ocultar splash nativo de forma segura
-const hideNativeSplashSafely = () => {
-  if (!Capacitor.isNativePlatform()) return;
-  logDebug("Intentando ocultar splash nativo...");
-  SplashScreen.hide()
-    .then(() => logDebug("Splash nativo ocultado OK"))
-    .catch((e) => logDebug(`Splash hide error (ignorado): ${e}`));
+const requestNativeSplashHide = () => {
+  void hideNativeSplashOnce({ log: logDebug });
 };
 
-// Función para mostrar error en pantalla
+// Funcion para mostrar error en pantalla
 const showBootError = (title: string, detail: string) => {
-  hideNativeSplashSafely();
+  requestNativeSplashHide();
   const loading = document.getElementById("app-loading");
   if (loading) {
     loading.innerHTML = `
       <div style="text-align:center;padding:20px;max-width:320px;">
-        <div style="font-size:48px;margin-bottom:16px;">❌</div>
+        <div style="font-size:48px;margin-bottom:16px;">X</div>
         <div style="font-size:18px;font-weight:600;">${title}</div>
         <div style="margin-top:12px;font-size:13px;opacity:0.85;word-break:break-word;">${detail}</div>
         <button onclick="location.reload()" style="margin-top:20px;padding:12px 24px;background:#F97316;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">Reintentar</button>
@@ -135,7 +131,7 @@ const showBootError = (title: string, detail: string) => {
   }
 };
 
-// Inicialización principal
+// Inicializacion principal
 const initApp = async () => {
   startupPerfStart("main:initApp");
   try {
@@ -143,18 +139,15 @@ const initApp = async () => {
     startupPerfPoint("initApp start");
 
     // Forzar ocultado temprano del splash nativo
-    hideNativeSplashSafely();
+    requestNativeSplashHide();
 
     if (await ensureFreshNativeAssets()) {
       return;
     }
-    
-    // Múltiples intentos de ocultar splash en caso de timing issues
+
+    // Reintentos por si el plugin aun no estaba listo en el primer intento
     if (Capacitor.isNativePlatform()) {
-      setTimeout(hideNativeSplashSafely, 100);
-      setTimeout(hideNativeSplashSafely, 500);
-      setTimeout(hideNativeSplashSafely, 1000);
-      setTimeout(hideNativeSplashSafely, 2000);
+      scheduleNativeSplashHideRetries([100, 500, 1000, 2000], { log: logDebug });
     }
 
     // Clean any corrupted Electron storage before initializing
@@ -168,7 +161,7 @@ const initApp = async () => {
       });
 
     // La DB offline se inicializa de forma lazy con scope de tenant al cargar el usuario.
-    logDebug("DB offline: inicialización diferida por tenant");
+    logDebug("DB offline: inicializacion diferida por tenant");
 
     // En desarrollo web, eliminamos SW previo para evitar servir bundles/caches obsoletos.
     if (import.meta.env.DEV && !Capacitor.isNativePlatform()) {
@@ -176,7 +169,7 @@ const initApp = async () => {
       await unregisterServiceWorker();
     }
 
-    // Registrar Service Worker para funcionalidad offline (solo Web/PWA en producción)
+    // Registrar Service Worker para funcionalidad offline (solo Web/PWA en produccion)
     if (import.meta.env.PROD && !Capacitor.isNativePlatform()) {
       logDebug("Registrando Service Worker...");
       registerServiceWorker().then((registration) => {
@@ -190,25 +183,24 @@ const initApp = async () => {
     startupPerfStart("main:react-mount");
     startupPerfStart("main:root-render-to-app-mounted");
     const rootElement = document.getElementById("root");
-    
+
     if (!rootElement) {
-      throw new Error("No se encontró el elemento #root");
+      throw new Error("No se encontro el elemento #root");
     }
 
     const root = createRoot(rootElement);
     root.render(<App />);
     startupPerfEnd("main:react-mount");
-    
+
     logDebug("React montado correctamente");
     startupPerfEnd("main:initApp");
-    
   } catch (error) {
-    console.error("[App] Error crítico durante inicialización:", error);
+    console.error("[App] Error critico durante inicializacion:", error);
     startupPerfEnd("main:initApp");
-    showBootError("Error crítico", String(error));
+    showBootError("Error critico", String(error));
   }
 };
 
-// Ejecutar inicialización
+// Ejecutar inicializacion
 initApp();
 

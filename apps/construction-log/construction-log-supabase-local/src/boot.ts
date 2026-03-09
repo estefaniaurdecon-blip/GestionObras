@@ -1,11 +1,10 @@
-import { Capacitor } from "@capacitor/core";
-import { SplashScreen } from "@capacitor/splash-screen";
+﻿import { Capacitor } from "@capacitor/core";
+import { hideNativeSplashOnce, scheduleNativeSplashHideRetries } from "./utils/nativeSplash";
 
 const now = () => new Date().toISOString().replace("T", " ").replace("Z", "");
 
 const appendBootLog = (line: string) => {
   try {
-    // eslint-disable-next-line no-console
     console.log(`[Boot] ${line}`);
     const pre = document.getElementById("boot-log");
     if (pre) {
@@ -22,31 +21,21 @@ const setBootStatus = (text: string) => {
   if (el) el.textContent = text;
 };
 
-const hideNativeSplashSafely = () => {
-  if (!Capacitor.isNativePlatform()) return;
-  SplashScreen.hide().catch(() => {
-    // ignore
-  });
-};
-
 appendBootLog(`boot.ts cargado | platform=${Capacitor.getPlatform()} | isNative=${Capacitor.isNativePlatform()}`);
-setBootStatus("Ocultando splash nativo…");
+setBootStatus("Ocultando splash nativo...");
 
-hideNativeSplashSafely();
+void hideNativeSplashOnce();
 if (Capacitor.isNativePlatform()) {
-  window.setTimeout(hideNativeSplashSafely, 60);
-  window.setTimeout(hideNativeSplashSafely, 200);
-  window.setTimeout(hideNativeSplashSafely, 600);
-  window.setTimeout(hideNativeSplashSafely, 1200);
+  scheduleNativeSplashHideRetries([60, 200, 600, 1200]);
 }
 
-setBootStatus("Cargando aplicación…");
-appendBootLog("Importando main.tsx…");
+setBootStatus("Cargando aplicacion...");
+appendBootLog("Importando main.tsx...");
 
 import("./main")
   .then(() => {
     appendBootLog("main.tsx importado");
-    setBootStatus("Iniciando UI…");
+    setBootStatus("Iniciando UI...");
   })
   .catch((err) => {
     const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);

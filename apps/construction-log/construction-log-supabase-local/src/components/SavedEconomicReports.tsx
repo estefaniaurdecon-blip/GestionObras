@@ -18,7 +18,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
@@ -119,7 +118,8 @@ export const SavedEconomicReports = () => {
     return periodReports.reduce((sum, report) => sum + Number(report.total_amount), 0);
   };
 
-  const exportIndividualToExcel = (report: SavedEconomicReport) => {
+  const exportIndividualToExcel = async (report: SavedEconomicReport) => {
+    const XLSX = await import('xlsx-js-style');
     const wb = XLSX.utils.book_new();
     const fmtMoney = (n: any) => {
       if (n == null || n === '' || isNaN(Number(n))) return '0.00';

@@ -1,8 +1,9 @@
-import * as XLSX from 'xlsx-js-style';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { WorkPostventa } from '@/hooks/useWorkPostventas';
 import { sanitizePdfFilename } from '@/utils/securePdfFilename';
+
+type XlsxModule = typeof import('xlsx-js-style');
 
 interface ExportContext {
   workName: string;
@@ -41,6 +42,7 @@ export const exportPostventasToExcel = async (
   postventas: WorkPostventa[],
   context: ExportContext
 ): Promise<void> => {
+  const XLSX: XlsxModule = await import('xlsx-js-style');
   const workbook = XLSX.utils.book_new();
   
   // Main sheet - Summary

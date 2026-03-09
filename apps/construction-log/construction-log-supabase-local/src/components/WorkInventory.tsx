@@ -14,8 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import * as XLSX from 'xlsx-js-style';
-import { isNative, saveBase64File } from '@/utils/nativeFile';
+import { saveBase64File } from '@/utils/nativeFile';
 import { InventoryAIAnalysis } from './InventoryAIAnalysis';
 import { DeliveryNoteReview } from './DeliveryNoteReview';
 import { InventoryDashboard } from './InventoryDashboard';
@@ -363,7 +362,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       toast.error("No se pudo eliminar el elemento");
     }
   };
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     setExportingNotes(true);
   
     const allItems = [...materials, ...tools];
@@ -374,6 +373,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       return;
     }
   
+    const XLSX = await import('xlsx-js-style');
     const wb = XLSX.utils.book_new();
   
     // Function to generate worksheet from items
@@ -398,7 +398,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     generateWorksheet(tools, 'Herramientas');
   
     // Function to convert workbook to base64
-    const workbookToBase64 = (workbook: XLSX.WorkBook): string => {
+    const workbookToBase64 = (workbook: Awaited<typeof import('xlsx-js-style')>['WorkBook']): string => {
       return XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
     };
   
@@ -406,7 +406,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const wbBase64 = workbookToBase64(wb);
   
     // Save the file
-    saveBase64File(wbBase64, `inventario-${workName}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await saveBase64File(`inventario-${workName}.xlsx`, wbBase64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   
     setExportingNotes(false);
   };
@@ -431,6 +431,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       return;
     }
   
+    const XLSX = await import('xlsx-js-style');
     const wb = XLSX.utils.book_new();
   
     // Function to generate worksheet from items
@@ -454,7 +455,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     generateWorksheet(itemsWithDeliveryNotes, 'Albaranes');
   
     // Function to convert workbook to base64
-    const workbookToBase64 = (workbook: XLSX.WorkBook): string => {
+    const workbookToBase64 = (workbook: Awaited<typeof import('xlsx-js-style')>['WorkBook']): string => {
       return XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
     };
   
@@ -462,7 +463,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const wbBase64 = workbookToBase64(wb);
   
     // Save the file
-    saveBase64File(wbBase64, `albaranes-inventario-${workName}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await saveBase64File(`albaranes-inventario-${workName}.xlsx`, wbBase64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   
     setExportingNotes(false);
   };

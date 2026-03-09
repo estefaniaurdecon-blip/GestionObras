@@ -273,9 +273,15 @@ export async function apiFetchJson<T>(
     
     // Try to parse error details
     try {
-      error.data = await response.json();
-      if (error.data?.detail) {
-        error.message = error.data.detail;
+      const parsedErrorData: unknown = await response.json();
+      error.data = parsedErrorData;
+      if (typeof parsedErrorData === 'object' && parsedErrorData !== null && 'detail' in parsedErrorData) {
+        const detail = (parsedErrorData as { detail?: unknown }).detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          error.message = detail;
+        } else if (detail !== undefined && detail !== null) {
+          error.message = String(detail);
+        }
       }
     } catch {
       // Ignore parsing errors

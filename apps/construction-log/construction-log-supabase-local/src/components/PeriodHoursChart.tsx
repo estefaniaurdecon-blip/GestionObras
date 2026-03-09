@@ -143,6 +143,7 @@ export const PeriodHoursChart = ({ title, rawRows, seriesType }: PeriodHoursChar
               tickCount={yTicks.length}
             />
             <Tooltip
+              cursor={false}
               formatter={(value) => [`${Number(value).toFixed(1)} h`, 'Horas']}
               labelFormatter={(label) => `Periodo: ${String(label)}`}
             />

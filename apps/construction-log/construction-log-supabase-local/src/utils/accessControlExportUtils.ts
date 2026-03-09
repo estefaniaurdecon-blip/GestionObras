@@ -1,9 +1,10 @@
-import * as XLSX from 'xlsx-js-style';
 import { AccessReport } from '@/types/accessControl';
 import { format } from 'date-fns';
 
+type XlsxModule = typeof import('xlsx-js-style');
+
 // Helper function to apply center alignment to all cells in a worksheet
-const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {
+const applyCenterAlignment = (worksheet: XlsxModule['WorkSheet'], XLSX: XlsxModule) => {
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
   for (let row = range.s.r; row <= range.e.r; row++) {
     for (let col = range.s.c; col <= range.e.c; col++) {
@@ -18,7 +19,8 @@ const applyCenterAlignment = (worksheet: XLSX.WorkSheet) => {
   }
 };
 
-export const exportAccessControlToExcel = (reports: AccessReport[]) => {
+export const exportAccessControlToExcel = async (reports: AccessReport[]) => {
+  const XLSX = await import('xlsx-js-style');
   const workbook = XLSX.utils.book_new();
 
   // Resumen general (con entradas válidas)
@@ -66,7 +68,7 @@ export const exportAccessControlToExcel = (reports: AccessReport[]) => {
   });
 
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  applyCenterAlignment(summarySheet);
+  applyCenterAlignment(summarySheet, XLSX);
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumen');
 
   // Personal sheet (con entradas válidas)
@@ -102,7 +104,7 @@ export const exportAccessControlToExcel = (reports: AccessReport[]) => {
   });
 
   const personalSheet = XLSX.utils.aoa_to_sheet(personalData);
-  applyCenterAlignment(personalSheet);
+  applyCenterAlignment(personalSheet, XLSX);
   XLSX.utils.book_append_sheet(workbook, personalSheet, 'Personal');
 
   // Machinery sheet (con entradas válidas)
@@ -133,7 +135,7 @@ export const exportAccessControlToExcel = (reports: AccessReport[]) => {
   });
 
   const machinerySheet = XLSX.utils.aoa_to_sheet(machineryData);
-  applyCenterAlignment(machinerySheet);
+  applyCenterAlignment(machinerySheet, XLSX);
   XLSX.utils.book_append_sheet(workbook, machinerySheet, 'Maquinaria');
 
   // Companies summary sheet (con entradas válidas)
@@ -197,7 +199,7 @@ export const exportAccessControlToExcel = (reports: AccessReport[]) => {
   });
 
   const companiesSheet = XLSX.utils.aoa_to_sheet(companiesData);
-  applyCenterAlignment(companiesSheet);
+  applyCenterAlignment(companiesSheet, XLSX);
   XLSX.utils.book_append_sheet(workbook, companiesSheet, 'Por Empresa');
 
   // Style the workbook

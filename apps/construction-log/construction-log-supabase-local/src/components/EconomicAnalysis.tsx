@@ -631,7 +631,7 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
                       />
                       <YAxis yAxisId="left" />
                       <YAxis yAxisId="right" orientation="right" />
-                      <Tooltip />
+                      <Tooltip cursor={false} />
                       <Legend />
                       <Line 
                         yAxisId="left"
@@ -677,7 +677,7 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip cursor={false} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -737,7 +737,7 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
                             height={100}
                           />
                           <YAxis />
-                          <Tooltip />
+                          <Tooltip cursor={false} />
                           <Legend />
                           <Bar dataKey="workCost" fill="#3b82f6" name="Mano de Obra (€)" />
                           <Bar dataKey="machineryCost" fill="#10b981" name="Maquinaria (€)" />

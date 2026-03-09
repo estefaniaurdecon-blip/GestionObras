@@ -65,7 +65,7 @@ type UseAccessControlManagerResult = {
   handleSaveAccessControl: () => Promise<void>;
   handleExportAccessControlData: () => Promise<void>;
   handleAccessDataFileSelected: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleGenerateAccessControlReport: () => void;
+  handleGenerateAccessControlReport: () => Promise<void>;
 };
 
 export const useAccessControlManager = ({
@@ -326,7 +326,7 @@ export const useAccessControlManager = ({
     [reloadAccessControlReports, saveAccessControlReport, user?.email, user?.full_name],
   );
 
-  const handleGenerateAccessControlReport = useCallback(() => {
+  const handleGenerateAccessControlReport = useCallback(async () => {
     const filteredByWork =
       accessReportWorkFilter === 'all'
         ? accessControlReports
@@ -362,7 +362,7 @@ export const useAccessControlManager = ({
       return;
     }
 
-    exportAccessControlToExcel(filtered);
+    await exportAccessControlToExcel(filtered);
     toast({
       title: 'Informe generado',
       description: `Se generó el informe con ${filtered.length} controles.`,

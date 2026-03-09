@@ -731,7 +731,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="period" fontSize={10} />
                           <YAxis />
-                          <Tooltip />
+                          <Tooltip cursor={false} />
                           <Bar dataKey="hours" fill="hsl(var(--primary))" name="Horas" />
                         </BarChart>
                       </ResponsiveContainer>
@@ -744,7 +744,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="period" fontSize={10} />
                           <YAxis />
-                          <Tooltip />
+                          <Tooltip cursor={false} />
                           <Bar dataKey="hours" fill="hsl(var(--chart-2))" name="Horas" />
                         </BarChart>
                       </ResponsiveContainer>
@@ -757,7 +757,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="period" fontSize={10} />
                           <YAxis />
-                          <Tooltip />
+                          <Tooltip cursor={false} />
                           <Bar dataKey="hours" fill="hsl(var(--chart-3))" name="Horas" />
                         </BarChart>
                       </ResponsiveContainer>
@@ -1015,6 +1015,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                                   ))}
                                 </Pie>
                                 <Tooltip
+                                  cursor={false}
                                   formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                                 />
                               </PieChart>
@@ -1054,6 +1055,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                             <XAxis dataKey="month" fontSize={11} />
                             <YAxis fontSize={11} />
                             <Tooltip
+                              cursor={false}
                               formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                             />
                             <Legend />
@@ -1080,6 +1082,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                             <XAxis type="number" fontSize={11} />
                             <YAxis dataKey="work" type="category" width={200} fontSize={10} />
                             <Tooltip
+                              cursor={false}
                               formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                             />
                             <Bar dataKey="cost" fill="hsl(var(--primary))" name="Costo Total" />

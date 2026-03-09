@@ -541,3 +541,45 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar retiro de `apps/construction-log/construction-log-supabase-local` segun plan de migracion.
 - Decision/es tomadas:
   - No reforzar Supabase legacy; mantener unicamente el scheduler backend (`auto_duplicate_rental_machinery_daily` en Celery Beat).
+
+## Iteracion 2026-03-09 - Checkpoint critico (rama `perf/startup-lazy-tabs`)
+- Objetivo: consolidar estado real del WIP actual, priorizar bloqueos criticos y registrar checkpoint antes de continuar slices.
+- Alcance:
+  - `construction-log` (startup/lazy tabs + split de dashboard tools + utilidades de exportacion/almacenamiento).
+  - Documentacion de estado tecnico (`docs/REFACTOR_LOG.md`).
+- Cambios realizados:
+  - Split de `DashboardToolsTabContents.tsx`:
+    - `DashboardToolsTabContents.tsx` queda con `PartsTabContent` y tipos compartidos.
+    - Nuevo `DashboardToolsPanelContent.tsx` concentra el panel de herramientas.
+  - Lazy loading activo para tools/historial en `WorkReportsTab.tsx` mediante `React.lazy` + `Suspense`.
+  - Ajustes de startup en `boot.ts`, `main.tsx` y nuevo `utils/nativeSplash.ts` para diferir trabajo no critico y estabilizar ocultado de splash.
+  - Continuacion de refactor en utilidades de exportacion (`exportUtils`, `weeklyMonthlyExportUtils`, `archivedExportUtils`, etc.) y `storage`.
+- Estado medido del hotspot:
+  - `DashboardToolsTabContents.tsx`: ~1043 lineas.
+  - `DashboardToolsPanelContent.tsx`: ~2539 lineas.
+  - Total funcional del bloque dashboard tools: ~3582 lineas (desacoplado por archivo, aun no reducido de forma neta).
+  - `integrations/api/client.ts`: ~1463 lineas (fachada compatible + modulos 1-5 ya extraidos).
+- Contratos impactados:
+  - Sin cambios de contratos HTTP en este checkpoint.
+- Riesgos/mitigaciones:
+  - `CRITICO`: baseline de calidad no verde en `construction-log`:
+    - `npm run lint:changed` falla (124 errores, 11 warnings; alta deuda `no-explicit-any`).
+    - `tsc -p tsconfig.app.json` falla con errores en modulos fuera del slice (incluyendo varios `Cannot find name 'supabase'`).
+  - Migracion Supabase/API sigue incompleta y el conteo depende del metodo:
+    - `rg "supabase\\."`: 21 matches / 11 archivos (subestima casos multilinea).
+    - `rg -U "supabase\\s*\\."`: cobertura amplia de accesos legacy en multiples modulos.
+  - `MEDIO`: `albaran.py` sigue sin montarse en `api/v1/router.py`.
+  - `MEDIO`: CI de deploy mantiene `git reset --hard` sin gates de test/lint.
+- Tests ejecutados:
+  - `npm run build` (construction-log): OK.
+    - Evidencia de code splitting: chunk `DashboardToolsPanelContent-*.js` (~68.37 kB).
+  - `npm run lint:changed`: FAIL (errores preexistentes y nuevos en archivos tocados).
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json`: FAIL (errores TS en varios modulos no estabilizados).
+- Pendientes (prioridad inmediata):
+  1. `CRITICO`: recuperar baseline verde de `construction-log` (minimo `tsc` limpio en el alcance activo y estrategia para errores lint bloqueantes).
+  2. Continuar `API Client Slice 6` (extraer bloque grande `erp` o `ai_runtime` de `client.ts`).
+  3. Retomar corte Supabase por mayor impacto (`useMessageableUsers` y modulos legacy con acceso directo).
+  4. Montar `albaran.py` en `api/v1/router.py` y validar contrato.
+- Decision/es tomadas:
+  - Registrar checkpoint tecnico real antes de seguir con nuevos slices para evitar deriva documental.
+  - Priorizar estabilidad de baseline (build/tsc/lint) sobre ampliar superficie de refactor.
