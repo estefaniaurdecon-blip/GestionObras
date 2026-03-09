@@ -91,6 +91,7 @@ interface FeatureCard {
 export const HelpCenter = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const currentUserId = user ? String(user.id) : null;
   const { isMaster, isAdmin, isSiteManager, isForeman, isOfi, isReader } = useUserPermissions();
   const [adminId, setAdminId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,14 +107,14 @@ export const HelpCenter = () => {
   }, []);
 
   useEffect(() => {
-    if (adminId) {
+    if (adminId && currentUserId) {
       loadMessages();
       const channel = subscribeToMessages();
       return () => {
         channel.unsubscribe();
       };
     }
-  }, [adminId]);
+  }, [adminId, currentUserId]);
 
   const loadAdmin = async () => {
     try {
@@ -131,14 +132,14 @@ export const HelpCenter = () => {
   };
 
   const loadMessages = async () => {
-    if (!user || !adminId) return;
+    if (!currentUserId || !adminId) return;
     
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('messages')
         .select(`*, profiles!messages_from_user_id_fkey(full_name)`)
-        .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${user.id})`)
+        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${currentUserId})`)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -163,18 +164,18 @@ export const HelpCenter = () => {
         event: '*',
         schema: 'public',
         table: 'messages',
-        filter: `to_user_id=eq.${user?.id}`,
+        filter: `to_user_id=eq.${currentUserId}`,
       }, () => loadMessages())
       .subscribe();
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user || !adminId) return;
+    if (!newMessage.trim() || !currentUserId || !adminId) return;
 
     setSendingMessage(true);
     try {
       const { error } = await supabase.from('messages').insert({
-        from_user_id: user.id,
+        from_user_id: currentUserId,
         to_user_id: adminId,
         message: newMessage.trim(),
       });
@@ -206,14 +207,14 @@ export const HelpCenter = () => {
   };
 
   const handleClearConversation = async () => {
-    if (!user || !adminId) return;
+    if (!currentUserId || !adminId) return;
     if (!confirm(t('help.clearConfirm'))) return;
 
     try {
       const { error } = await supabase
         .from('messages')
         .delete()
-        .or(`and(from_user_id.eq.${user.id},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${user.id})`);
+        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${currentUserId})`);
 
       if (error) throw error;
       toast({ title: t('help.conversationCleared'), description: t('help.conversationClearedDesc') });
@@ -1572,7 +1573,7 @@ export const HelpCenter = () => {
                     ) : (
                       <div className="space-y-4">
                         {messages.map((message) => {
-                          const isMe = message.from_user_id === user?.id;
+                          const isMe = message.from_user_id === currentUserId;
                           return (
                             <div
                               key={message.id}

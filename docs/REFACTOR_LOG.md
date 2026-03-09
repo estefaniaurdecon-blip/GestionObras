@@ -642,3 +642,37 @@ Plantilla para registrar cada iteracion de refactor.
 - Decision/es tomadas:
   - Priorizar cierres funcionales de migracion Supabase en hooks de alto uso (mensajeria/contactos) antes de atacar deuda tipada horizontal.
   - Mantener `client.ts` como fachada estable mientras continua la extraccion modular.
+
+## Iteracion 2026-03-09 - Recuperacion de baseline TS en `construction-log` (bloque critico)
+- Objetivo: desbloquear el avance del refactor recuperando compilacion TypeScript limpia en el estado actual de `perf/startup-lazy-tabs`.
+- Alcance:
+  - `construction-log` (`src/components/*`, `src/hooks/*`, `src/utils/*`, `src/offline-db/repositories/*`).
+  - Ajustes de tipado sin cambios de contratos HTTP.
+- Cambios realizados:
+  - IDs de usuario normalizados a `string` para comparaciones y payloads en:
+    - `ChatCenter`, `FileTransfer`, `HelpCenter`, `WorkReportList`, `useWasteEntries`.
+  - `WorkReportList` robustecido para `lastEditedBy/createdBy` mixto (`string | number`) al cargar/leer `editorNames`.
+  - Correccion de tipado `xlsx-js-style`:
+    - `WorkSheet` tipado via `import('xlsx-js-style').WorkSheet` en utilidades de exportacion.
+    - `WorkBook` tipado via `import('xlsx-js-style').WorkBook` en `WorkInventory`.
+  - Ajustes de contratos locales de componentes:
+    - `AccessPersonalDialog`: uso correcto de `SignaturePad` (`label` en lugar de prop inexistente `height`).
+    - `GenerateWorkReportPanel`: eliminado `initialDraft?.id` de dependencias (campo no existe en el tipo de draft).
+  - Endurecimiento de repositorio offline:
+    - `workReportsRepo.insertOutboxEvent` evita spread sobre `unknown` y serializa payload de forma segura.
+  - `AdvancedReports` alinea tipado al generar PDF resumen IA para compatibilizar respuesta API y generador PDF.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP ni de rutas backend.
+- Riesgos/mitigaciones:
+  - El ajuste de `AdvancedReports` usa casting tipado de salida IA para mantener compatibilidad inmediata; pendiente reemplazar por validacion estructural completa en runtime.
+  - Persisten errores de lint en archivos del alcance (principalmente `no-explicit-any` preexistente).
+- Tests ejecutados:
+  - `npx tsc -p tsconfig.app.json --pretty false` -> `OK` (sin errores).
+  - `npm run build` -> `OK` (chunk lazy `DashboardToolsPanelContent-*.js` se mantiene, ~68.37 kB).
+  - `npm run lint:changed` -> `FAIL` (79 errores, 4 warnings; deuda de lint preexistente + alcance tocado).
+- Pendientes:
+  - Reducir deuda ESLint de `no-explicit-any` en componentes/utilidades de exportacion y reportes avanzados.
+  - Continuar corte funcional de `supabase.*` residual por modulo (migracion API-first).
+- Decision/es tomadas:
+  - Priorizar baseline `tsc` verde para desbloquear continuidad de slices criticos.
+  - Mantener una segunda fase de saneamiento lint para no mezclar cambios de tipado funcional con limpieza masiva de estilo/tipos.

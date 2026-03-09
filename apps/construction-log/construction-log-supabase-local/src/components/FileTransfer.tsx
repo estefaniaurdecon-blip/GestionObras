@@ -24,6 +24,7 @@ import { isNative } from "@/utils/nativeFile";
 
 export const FileTransfer = () => {
   const { user } = useAuth();
+  const currentUserId = user ? String(user.id) : null;
   const { sentFiles, receivedFiles, loading, shareFile, downloadFile, deleteFile } = useSharedFiles();
   const { users } = useUsers();
   const { isUserOnline } = useUserPresence();
@@ -129,7 +130,7 @@ export const FileTransfer = () => {
                     <SelectValue placeholder="Selecciona un usuario" />
                   </SelectTrigger>
                   <SelectContent>
-                    {users.filter((u) => u.id !== user?.id).map((u) => (
+                    {users.filter((u) => u.id !== currentUserId).map((u) => (
                       <SelectItem key={u.id} value={u.id}>
                         <div className="flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full ${isUserOnline(u.id) ? "bg-green-500" : "bg-muted-foreground"}`} />

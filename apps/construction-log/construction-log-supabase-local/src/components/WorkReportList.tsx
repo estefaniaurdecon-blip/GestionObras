@@ -104,6 +104,7 @@ export const WorkReportList = ({
 }: WorkReportListProps) => {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const currentUserId = user ? String(user.id) : null;
   const { isSiteManager, isAdmin, isOfi, isMaster } = useUserPermissions();
   const { toast } = useToast();
   const { organization } = useOrganization();
@@ -163,14 +164,14 @@ export const WorkReportList = ({
   // Cargar obras disponibles desde los partes
   useEffect(() => {
     const loadWorks = async () => {
-      if (!user) return;
+      if (!currentUserId) return;
 
       try {
         // Obtener obras asignadas al usuario
         const { data: assignments, error: assignError } = await supabase
           .from('work_assignments')
           .select('work_id')
-          .eq('user_id', user.id);
+          .eq('user_id', currentUserId);
 
         if (assignError) throw assignError;
 
@@ -195,7 +196,7 @@ export const WorkReportList = ({
     };
 
     loadWorks();
-  }, [user]);
+  }, [currentUserId]);
 
   // Cargar nombres de editores para reportes que han sido editados
   useEffect(() => {
@@ -203,7 +204,7 @@ export const WorkReportList = ({
       const editorIds = new Set<string>();
       reports.forEach(report => {
         if (report.lastEditedBy) {
-          editorIds.add(report.lastEditedBy);
+          editorIds.add(String(report.lastEditedBy));
         }
       });
 
@@ -902,8 +903,9 @@ export const WorkReportList = ({
 
   // Helper function to check if user can edit/delete a report
   const canModifyReport = (report: WorkReport) => {
+    if (!currentUserId) return false;
     // El creador siempre puede modificar
-    if (report.createdBy === user?.id) return true;
+    if (report.createdBy !== undefined && report.createdBy !== null && String(report.createdBy) === currentUserId) return true;
     
     // Master y Admin pueden modificar si están asignados a la obra del reporte
     if ((isMaster || isAdmin) && report.workId) {
@@ -1828,9 +1830,9 @@ export const WorkReportList = ({
                                    </div>
 
                                    {/* Marca de agua si fue editado */}
-                                   {report.lastEditedBy && report.lastEditedAt && editorNames.get(report.lastEditedBy) && (
+                                   {report.lastEditedBy && report.lastEditedAt && editorNames.get(String(report.lastEditedBy)) && (
                                      <div className="text-xs text-muted-foreground/60 italic border-l-2 border-muted pl-2">
-                                       Editado por {editorNames.get(report.lastEditedBy)} el{' '}
+                                       Editado por {editorNames.get(String(report.lastEditedBy))} el{' '}
                                        {format(new Date(report.lastEditedAt), "dd/MM/yyyy 'a las' HH:mm", { locale: es })}
                                      </div>
                                    )}

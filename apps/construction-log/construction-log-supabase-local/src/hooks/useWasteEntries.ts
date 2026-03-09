@@ -24,6 +24,7 @@ export const useWasteEntries = (workReportId: string | null, workId?: string) =>
   const [managers, setManagers] = useState<WasteManagerDB[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const currentUserId = user ? String(user.id) : null;
   const { organization } = useOrganization();
 
   // Cargar tipos de residuos y gestores
@@ -107,7 +108,7 @@ export const useWasteEntries = (workReportId: string | null, workId?: string) =>
 
   // Crear nueva entrada
   const createEntry = async (entry: Omit<WasteEntryInsert, 'work_report_id' | 'organization_id' | 'created_by'>) => {
-    if (!workReportId || !organization?.id || !user?.id) {
+    if (!workReportId || !organization?.id || !currentUserId) {
       toast({
         title: 'Error',
         description: 'Faltan datos necesarios para crear la entrada',
@@ -122,7 +123,7 @@ export const useWasteEntries = (workReportId: string | null, workId?: string) =>
         work_report_id: workReportId,
         organization_id: organization.id,
         work_id: workId || null,
-        created_by: user.id
+        created_by: currentUserId
       };
 
       const { data, error } = await supabase

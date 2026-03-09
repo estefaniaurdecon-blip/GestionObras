@@ -51,7 +51,9 @@ export const useCompanyStandardization = () => {
           toast.info(`Se encontraron ${data.duplicateGroups} grupos de empresas similares`);
         }
       } else {
-        throw new Error(data.error || 'Error desconocido');
+        const apiError =
+          'error' in data && typeof data.error === 'string' ? data.error : 'Error desconocido';
+        throw new Error(apiError);
       }
     } catch (error: unknown) {
       console.error('Error analyzing companies:', error);
@@ -117,7 +119,9 @@ export const useCompanyStandardization = () => {
         // Clear results after successful application
         setAnalysisResult(null);
       } else {
-        throw new Error(data.error || 'Error desconocido');
+        const apiError =
+          'error' in data && typeof data.error === 'string' ? data.error : 'Error desconocido';
+        throw new Error(apiError);
       }
     } catch (error: unknown) {
       console.error('Error applying standardization:', error);

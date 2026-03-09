@@ -601,7 +601,7 @@ export const GenerateWorkReportPanel = ({
       window.clearTimeout(timeoutShort);
       window.clearTimeout(timeoutLong);
     };
-  }, [reportIdentifier, initialDate, initialDraft?.date, initialDraft?.id]);
+  }, [reportIdentifier, initialDate, initialDraft?.date]);
 
   const handleGalleryUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);

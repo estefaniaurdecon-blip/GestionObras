@@ -2,9 +2,10 @@ import { AccessReport } from '@/types/accessControl';
 import { format } from 'date-fns';
 
 type XlsxModule = typeof import('xlsx-js-style');
+type XlsxWorkSheet = import('xlsx-js-style').WorkSheet;
 
 // Helper function to apply center alignment to all cells in a worksheet
-const applyCenterAlignment = (worksheet: XlsxModule['WorkSheet'], XLSX: XlsxModule) => {
+const applyCenterAlignment = (worksheet: XlsxWorkSheet, XLSX: XlsxModule) => {
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
   for (let row = range.s.r; row <= range.e.r; row++) {
     for (let col = range.s.c; col <= range.e.c; col++) {

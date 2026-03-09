@@ -150,7 +150,7 @@ export const AccessPersonalDialog = ({
               onChange={(signature) =>
                 setForm((current) => ({ ...current, signature }))
               }
-              height={160}
+              label="Firma"
             />
           </div>
 

@@ -1163,14 +1163,35 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                   if (!data.success) {
                     throw new Error(data.error || 'Error al generar el informe');
                   }
+
+                  const pdfAnomalies = data.anomalies as Array<{
+                    type: 'error' | 'info' | 'warning';
+                    title: string;
+                    description: string;
+                    affectedItems?: string[];
+                  }>;
+                  const pdfChartData = data.chartData as {
+                    monthlyTrends: Array<{
+                      month: string;
+                      workHours: number;
+                      machineryHours: number;
+                      materialCost: number;
+                      subcontractCost: number;
+                      reports: number;
+                    }>;
+                    costDistribution: Array<{ name: string; value: number; color: string }>;
+                    topCompanies: Array<{ company: string; workHours: number; machineryHours: number; total: number }>;
+                    topWorks: Array<{ work: string; reports: number; workHours: number; materialCost: number }>;
+                    dayDistribution: Array<{ day: string; count: number }>;
+                  };
                   
                   // Generar el PDF con los datos
                   await generateSummaryReportPDF(
                     {
                       statistics: data.statistics,
-                      anomalies: data.anomalies,
+                      anomalies: pdfAnomalies,
                       aiAnalysis: data.aiAnalysis,
-                      chartData: data.chartData,
+                      chartData: pdfChartData,
                       periodDescription: data.periodDescription,
                     },
                     {

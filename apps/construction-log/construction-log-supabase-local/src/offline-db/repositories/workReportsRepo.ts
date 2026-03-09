@@ -78,6 +78,9 @@ async function insertOutboxEvent(tx: OfflineDbTx, params: {
   createdAt: number;
 }) {
   const outboxId = crypto.randomUUID();
+  const payloadObject = isPlainObject(params.payload)
+    ? params.payload
+    : { value: params.payload };
   await tx.run(
     `INSERT INTO outbox (
       id, entity, entity_id, op, payload_json, created_at, attempts, last_error, status
@@ -89,7 +92,7 @@ async function insertOutboxEvent(tx: OfflineDbTx, params: {
       params.op,
       JSON.stringify({
         tenantId: params.tenantId,
-        ...params.payload,
+        ...payloadObject,
       }),
       params.createdAt,
     ]

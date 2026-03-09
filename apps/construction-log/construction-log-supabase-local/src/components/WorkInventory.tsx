@@ -398,7 +398,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     generateWorksheet(tools, 'Herramientas');
   
     // Function to convert workbook to base64
-    const workbookToBase64 = (workbook: Awaited<typeof import('xlsx-js-style')>['WorkBook']): string => {
+    const workbookToBase64 = (workbook: import('xlsx-js-style').WorkBook): string => {
       return XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
     };
   
@@ -455,7 +455,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     generateWorksheet(itemsWithDeliveryNotes, 'Albaranes');
   
     // Function to convert workbook to base64
-    const workbookToBase64 = (workbook: Awaited<typeof import('xlsx-js-style')>['WorkBook']): string => {
+    const workbookToBase64 = (workbook: import('xlsx-js-style').WorkBook): string => {
       return XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
     };
   

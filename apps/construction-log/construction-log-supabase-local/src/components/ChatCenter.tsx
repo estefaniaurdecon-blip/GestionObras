@@ -40,6 +40,7 @@ interface ConversationItem {
 
 export const ChatCenter = () => {
   const { user } = useAuth();
+  const currentUserId = user ? String(user.id) : null;
   const { messages, unreadCount, sendMessage, markAsRead, deleteConversation, clearAllMessages, reloadMessages } = useMessages();
   const { users: contacts, loading: loadingContacts } = useMessageableUsers();
   const { isUserOnline } = useUserPresence();
@@ -62,11 +63,11 @@ export const ChatCenter = () => {
 
   // Build conversations grouped by the counterpart
   const conversations = useMemo<ConversationItem[]>(() => {
-    if (!user) return [];
+    if (!currentUserId) return [];
     const map = new Map<string, ConversationItem & { lastTs: number }>();
 
     for (const m of messages) {
-      const isFromMe = m.from_user_id === user.id;
+      const isFromMe = m.from_user_id === currentUserId;
       const otherId = isFromMe ? m.to_user_id : m.from_user_id;
       const otherName = (isFromMe ? (m.to_user as any)?.full_name : (m.from_user as any)?.full_name) || "Usuario";
       const ts = new Date(m.created_at).getTime();
@@ -96,7 +97,7 @@ export const ChatCenter = () => {
     return items.filter((c) =>
       c.userName.toLowerCase().includes(search.toLowerCase())
     );
-  }, [messages, user, search]);
+  }, [messages, currentUserId, search]);
 
   const selectedUser = useMemo(() => contacts.find((c) => c.id === selectedUserId), [contacts, selectedUserId]);
 
@@ -108,12 +109,12 @@ export const ChatCenter = () => {
   }, [open, reloadMessages, reloadFiles]);
 
   useEffect(() => {
-    if (!open || !user || !selectedUserId) return;
+    if (!open || !currentUserId || !selectedUserId) return;
     // Mark messages from selected user as read
     messages
-      .filter((m) => m.from_user_id === selectedUserId && m.to_user_id === user.id && !m.read)
+      .filter((m) => m.from_user_id === selectedUserId && m.to_user_id === currentUserId && !m.read)
       .forEach((m) => markAsRead(m.id));
-  }, [open, user, selectedUserId, messages, markAsRead]);
+  }, [open, currentUserId, selectedUserId, messages, markAsRead]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -297,7 +298,7 @@ export const ChatCenter = () => {
 
                 <div className="pt-2 pb-1 px-2 text-[11px] text-muted-foreground font-medium">Contactos</div>
                 {contacts
-                  .filter((u) => u.id !== user?.id && u.full_name.toLowerCase().includes(search.toLowerCase()))
+                  .filter((u) => u.id !== currentUserId && u.full_name.toLowerCase().includes(search.toLowerCase()))
                   .map((u) => (
                     <button key={`contact-${u.id}`} onClick={() => setSelectedUserId(u.id)} className={`w-full text-left rounded-md px-3 py-2 hover:bg-accent ${selectedUserId === u.id ? "bg-accent" : ""}`}>
                       <div className="flex items-center gap-2">
@@ -347,14 +348,14 @@ export const ChatCenter = () => {
                   // Combine messages and files
                   const userMessages = messages.filter(
                     (m) =>
-                      (m.from_user_id === user?.id && m.to_user_id === selectedUser.id) ||
-                      (m.to_user_id === user?.id && m.from_user_id === selectedUser.id)
+                      (m.from_user_id === currentUserId && m.to_user_id === selectedUser.id) ||
+                      (m.to_user_id === currentUserId && m.from_user_id === selectedUser.id)
                   ).map(m => ({ type: 'message' as const, data: m, timestamp: new Date(m.created_at).getTime() }));
 
                   const userFiles = [...sentFiles, ...receivedFiles].filter(
                     (f) =>
-                      (f.from_user_id === user?.id && f.to_user_id === selectedUser.id) ||
-                      (f.to_user_id === user?.id && f.from_user_id === selectedUser.id)
+                      (f.from_user_id === currentUserId && f.to_user_id === selectedUser.id) ||
+                      (f.to_user_id === currentUserId && f.from_user_id === selectedUser.id)
                   ).map(f => ({ type: 'file' as const, data: f, timestamp: new Date(f.created_at).getTime() }));
 
                   const combined = [...userMessages, ...userFiles].sort((a, b) => a.timestamp - b.timestamp);
@@ -362,7 +363,7 @@ export const ChatCenter = () => {
                   return combined.map((item, idx) => {
                     if (item.type === 'message') {
                       const m = item.data;
-                      const isMine = m.from_user_id === user?.id;
+                      const isMine = m.from_user_id === currentUserId;
                       return (
                         <div key={`msg-${m.id}`} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isMine ? "ml-auto bg-primary/10" : "bg-muted"}`}>
                           <div className="whitespace-pre-wrap break-words">{m.message}</div>
@@ -380,7 +381,7 @@ export const ChatCenter = () => {
                       );
                     } else {
                       const f = item.data;
-                      const isMine = f.from_user_id === user?.id;
+                      const isMine = f.from_user_id === currentUserId;
                       return (
                         <div key={`file-${f.id}`} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isMine ? "ml-auto bg-primary/10" : "bg-muted"}`}>
                           <div className="flex items-center gap-2">
