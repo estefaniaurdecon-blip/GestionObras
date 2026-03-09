@@ -13,6 +13,7 @@ import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
 import { createCustomHolidaysApi } from './modules/customHolidays';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
+import { createWorkReportCommentsApi } from './modules/workReportComments';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -1061,6 +1062,23 @@ export const updateRentalMachineryAssignment =
   rentalMachineryAssignmentsApi.updateRentalMachineryAssignment;
 export const deleteRentalMachineryAssignment =
   rentalMachineryAssignmentsApi.deleteRentalMachineryAssignment;
+
+// ============================================================
+// WORK REPORT COMMENTS API
+// ============================================================
+
+export type {
+  ApiWorkReportComment,
+  ApiWorkReportCommentUser,
+  CreateWorkReportCommentPayload,
+} from './modules/workReportComments';
+
+const workReportCommentsApi = createWorkReportCommentsApi({
+  apiFetchJson,
+});
+
+export const listWorkReportComments = workReportCommentsApi.listWorkReportComments;
+export const createWorkReportComment = workReportCommentsApi.createWorkReportComment;
 
 // ============================================================
 // TOOLS API

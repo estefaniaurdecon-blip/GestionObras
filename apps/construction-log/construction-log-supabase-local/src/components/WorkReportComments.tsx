@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import {
+  createWorkReportComment,
+  listWorkReportComments,
+  type ApiWorkReportComment,
+} from '@/integrations/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
@@ -25,6 +29,17 @@ interface WorkReportCommentsProps {
   workReportId: string;
 }
 
+const mapComment = (comment: ApiWorkReportComment): WorkReportComment => ({
+  id: String(comment.id),
+  work_report_id: comment.work_report_id,
+  user_id: String(comment.user_id),
+  comment: comment.comment,
+  created_at: comment.created_at,
+  user: {
+    full_name: comment.user?.full_name || 'Usuario',
+  },
+});
+
 export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) => {
   const [comments, setComments] = useState<WorkReportComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -34,20 +49,9 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
 
   const loadComments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('work_report_comments')
-        .select(`
-          *,
-          user:profiles(full_name)
-        `)
-        .eq('work_report_id', workReportId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setComments(data as any);
-      }
-    } catch (error: any) {
+      const data = await listWorkReportComments(workReportId);
+      setComments((data || []).map(mapComment));
+    } catch (error: unknown) {
       console.error('Error loading comments:', error);
     } finally {
       setLoading(false);
@@ -55,39 +59,22 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
   };
 
   useEffect(() => {
-    loadComments();
+    let mounted = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    // Subscribe to realtime comments
-    const channel = supabase
-      .channel(`comments-${workReportId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'work_report_comments',
-          filter: `work_report_id=eq.${workReportId}`
-        },
-        async (payload) => {
-          // Fetch user details for new comment
-          const { data: userData } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', payload.new.user_id)
-            .single();
+    const run = async () => {
+      if (!mounted) return;
+      await loadComments();
+    };
 
-          const newCommentData = {
-            ...payload.new,
-            user: userData
-          } as any;
-
-          setComments(prev => [...prev, newCommentData]);
-        }
-      )
-      .subscribe();
+    void run();
+    intervalId = setInterval(() => {
+      void run();
+    }, 10000);
 
     return () => {
-      supabase.removeChannel(channel);
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
     };
   }, [workReportId]);
 
@@ -96,27 +83,23 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
 
     setSending(true);
     try {
-      const { error } = await supabase
-        .from('work_report_comments')
-        .insert({
-          work_report_id: workReportId,
-          user_id: user.id,
-          comment: newComment.trim()
-        });
-
-      if (error) throw error;
+      await createWorkReportComment(workReportId, {
+        comment: newComment.trim(),
+      });
 
       setNewComment('');
+      await loadComments();
       toast({
-        title: "Comentario agregado",
-        description: "Tu comentario ha sido publicado.",
+        title: 'Comentario agregado',
+        description: 'Tu comentario ha sido publicado.',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending comment:', error);
+      const message = error instanceof Error ? error.message : 'No se pudo publicar el comentario';
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
       });
     } finally {
       setSending(false);
@@ -131,7 +114,7 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
           Comentarios
         </CardTitle>
         <CardDescription>
-          Comparte información o preguntas sobre este parte
+          Comparte informacion o preguntas sobre este parte
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -144,8 +127,8 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
           ) : comments.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-center">
               <MessageCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No hay comentarios aún</p>
-              <p className="text-sm text-muted-foreground">Sé el primero en comentar</p>
+              <p className="text-muted-foreground">No hay comentarios aun</p>
+              <p className="text-sm text-muted-foreground">Se el primero en comentar</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -156,7 +139,7 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(comment.created_at), {
                         addSuffix: true,
-                        locale: es
+                        locale: es,
                       })}
                     </span>
                   </div>
@@ -188,4 +171,3 @@ export const WorkReportComments = ({ workReportId }: WorkReportCommentsProps) =>
     </Card>
   );
 };
-

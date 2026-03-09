@@ -206,6 +206,8 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | POST | `/api/v1/erp/rental-machinery-assignments` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |
 | PATCH | `/api/v1/erp/rental-machinery-assignments/{assignment_id}` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |
 | DELETE | `/api/v1/erp/rental-machinery-assignments/{assignment_id}` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |
+| GET | `/api/v1/work-reports/{work_report_id}/comments` | `backend-fastapi/app/api/v1/work_report_comments.py` |
+| POST | `/api/v1/work-reports/{work_report_id}/comments` | `backend-fastapi/app/api/v1/work_report_comments.py` |
 | GET | `/api/v1/erp/reports/time` | `backend-fastapi/app/api/v1/erp.py` |
 | GET | `/api/v1/erp/subactivities` | `backend-fastapi/app/api/v1/erp.py` |
 | POST | `/api/v1/erp/subactivities` | `backend-fastapi/app/api/v1/erp.py` |

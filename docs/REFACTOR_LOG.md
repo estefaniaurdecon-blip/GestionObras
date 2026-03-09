@@ -857,3 +857,40 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar corte en `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers`, `WorkReportComments` y gateway legacy.
 - Decision/es tomadas:
   - Se mantiene estrategia incremental por dominio: endpoint backend + modulo API + migracion de hook/UI en un mismo slice.
+
+## Iteracion 2026-03-09 - API-first: `work_report_comments` + migracion de `WorkReportComments`
+- Objetivo: eliminar dependencia `supabase.*` en el modulo de comentarios de partes sin romper UX base de lectura/publicacion.
+- Alcance:
+  - Backend FastAPI: nuevo modelo, schemas, servicio, router y test de API para comentarios.
+  - Frontend `construction-log`: nuevo modulo API y migracion de `components/WorkReportComments.tsx`.
+  - Documentacion: actualizacion de `ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Backend:
+    - Modelo `WorkReportComment` (`erp_work_report_comment`) con `tenant_id`, `work_report_id`, `user_id`, `comment`, `created_at`.
+    - Schemas `WorkReportCommentCreate/Read` (+ `user.full_name` en respuesta).
+    - Servicio `work_report_comment_service` para listado ordenado y creacion de comentarios.
+    - Router montado en:
+      - `GET /api/v1/work-reports/{work_report_id}/comments`
+      - `POST /api/v1/work-reports/{work_report_id}/comments`
+    - Registro en `app/api/v1/router.py` y `app/db/base.py`.
+  - Frontend:
+    - Nuevo modulo `src/integrations/api/modules/workReportComments.ts`.
+    - `client.ts` expone `listWorkReportComments` y `createWorkReportComment`.
+    - `WorkReportComments.tsx` deja Supabase y usa API.
+    - Sustitucion de realtime legacy por polling ligero cada 10s (sin canal Supabase).
+- Contratos impactados:
+  - Nuevos endpoints de comentarios de partes (sin breaking changes en contratos previos).
+- Riesgos/mitigaciones:
+  - El cambio de realtime a polling puede introducir latencia de refresco (hasta 10s) para comentarios nuevos.
+  - Se mantiene shape de UI (`user.full_name`) para evitar cambios en renderizado.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_work_report_comments_api.py backend-fastapi/tests/test_custom_holidays_api.py backend-fastapi/tests/test_rental_machinery_assignments_api.py` -> `3 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` (`construction-log`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 15 matches / 7 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 225 matches / 22 archivos.
+- Pendientes:
+  - Migrar `useWorkRentalMachinery`, `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers` y `workReportsSupabaseGateway`.
+- Decision/es tomadas:
+  - Confirmado criterio de corte: eliminar gateways/supabase transicionales en cuanto exista endpoint API equivalente y consumidor migrado.
