@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
 import { calculateWorkingDays } from '@/utils/workingDaysCalculator';
 import { useCustomHolidays } from '@/hooks/useCustomHolidays';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 export interface WorkRentalMachinery {
   id: string;

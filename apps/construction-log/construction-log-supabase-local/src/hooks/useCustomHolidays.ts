@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useOrganization } from '@/hooks/useOrganization';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 export interface CustomHoliday {
   id: string;

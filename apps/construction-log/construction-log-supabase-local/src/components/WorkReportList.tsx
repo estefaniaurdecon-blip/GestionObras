@@ -58,6 +58,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import JSZip from 'jszip';
 
 export type ViewMode = 'byForeman' | 'weekly' | 'monthly';
@@ -592,7 +593,7 @@ export const WorkReportList = ({
         try {
           // We need to generate the Excel as a blob/buffer
           // Import the export function and modify to return workbook
-          const { supabase } = await import('@/integrations/supabase/client');
+          const { supabase } = await import('@/integrations/api/legacySupabaseRemoved');
           
           // Fetch rental machinery data for this report
           let rentalMachineryData: any[] = [];
@@ -2592,3 +2593,4 @@ export const WorkReportList = ({
     </div>
   );
 };
+

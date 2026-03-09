@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 export type WorkReportsRealtimePayload = {
   eventType: string;
@@ -186,3 +186,4 @@ export const insertNotificationsRows = async (
   const { error } = await supabase.from('notifications').insert(notifications);
   if (error) throw error;
 };
+

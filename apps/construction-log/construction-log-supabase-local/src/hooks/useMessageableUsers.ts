@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { AppRole } from '@/types/user';
 import { toast } from './use-toast';
 
@@ -43,3 +43,4 @@ export const useMessageableUsers = () => {
     reloadUsers: loadUsers,
   };
 };
+

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 // Types for subcontract groups with workers and machinery
 export interface RepasoWorker {

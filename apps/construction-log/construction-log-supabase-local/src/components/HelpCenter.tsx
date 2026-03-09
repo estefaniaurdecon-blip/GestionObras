@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { toast } from '@/hooks/use-toast';
 import { 
   Send, 
@@ -1654,3 +1654,4 @@ export const HelpCenter = () => {
     </div>
   );
 };
+

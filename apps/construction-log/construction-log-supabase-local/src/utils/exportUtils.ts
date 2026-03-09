@@ -2,6 +2,7 @@ import { WorkReport } from '@/types/workReport';
 import { isNative, blobToBase64, saveBase64File, textToBase64 } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 type XlsxModule = typeof import('xlsx-js-style');
 

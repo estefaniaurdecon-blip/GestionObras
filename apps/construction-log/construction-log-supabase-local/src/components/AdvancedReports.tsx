@@ -17,7 +17,7 @@ import { Download, FileText, Clock, Truck, Edit2, Save, X, Trash2, Euro, Trendin
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, getWeek, getMonth, getYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
 import { generateSummaryReport } from '@/integrations/api/client';
@@ -1257,3 +1257,4 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
     </div>
   );
 };
+

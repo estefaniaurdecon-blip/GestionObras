@@ -23,6 +23,7 @@ import autoTable from 'jspdf-autotable';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { generateEconomicReportPDF } from '@/utils/economicReportPdfGenerator';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 interface SavedEconomicReport {
   id: string;

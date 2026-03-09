@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { OrganizationSettings } from '@/components/OrganizationSettings';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 const getRoleLabel = (role: AppRole, t: any): string => {
   const labels: Record<AppRole, string> = {

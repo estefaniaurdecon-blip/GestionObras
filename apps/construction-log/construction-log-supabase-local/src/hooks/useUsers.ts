@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { UserProfile, AppRole, WorkAssignment } from '@/types/user';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from './use-toast';
@@ -232,3 +232,4 @@ export const useUsers = () => {
     getAssignableForemenForSiteManager,
   };
 };
+

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { differenceInDays, parseISO, addDays, format } from 'date-fns';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 export interface DeadlineItem {
   id: string;

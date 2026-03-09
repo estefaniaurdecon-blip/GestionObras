@@ -3,6 +3,7 @@ import { WorkReport } from '@/types/workReport';
 import { generateWorkReportPDF } from './pdfGenerator';
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 type XlsxModule = typeof import('xlsx-js-style');
 

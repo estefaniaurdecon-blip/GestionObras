@@ -7,7 +7,6 @@ import { HardHat, X, Send, Minimize2, Maximize2, Trash2, Image as ImageIcon, Max
 import { useToast } from "@/hooks/use-toast";
 import { WorkReport } from "@/types/workReport";
 import { AccessReport } from "@/types/accessControl";
-import type { Database } from '@/integrations/supabase/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -22,7 +21,37 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-type InventoryItem = Database['public']['Tables']['work_inventory']['Row'];
+type InventoryItem = {
+  id?: string;
+  work_id?: string | null;
+  name?: string | null;
+  item_type?: string | null;
+  category?: string | null;
+  quantity?: number | string | null;
+  unit?: string | null;
+  last_entry_date?: string | null;
+  last_supplier?: string | null;
+  delivery_note_number?: string | null;
+  product_code?: string | null;
+  unit_price?: number | string | null;
+  total_price?: number | string | null;
+  batch_number?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  condition?: string | null;
+  location?: string | null;
+  exit_date?: string | null;
+  observations?: string | null;
+  notes?: string | null;
+  contractedPart?: string | null;
+  company?: string | null;
+  activity?: string | null;
+  workers?: number | string | null;
+  hours?: number | string | null;
+  hourlyRate?: number | string | null;
+  total?: number | string | null;
+  unitType?: string | null;
+};
 // Configurar worker de PDF.js (compatible con Vite)
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc as unknown as string;
 

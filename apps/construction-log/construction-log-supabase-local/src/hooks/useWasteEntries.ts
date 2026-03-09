@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from '@/hooks/use-toast';
-import type { 
+import type {
   WasteEntryDB, 
   WasteEntryInsert, 
   WasteTypeDB, 
@@ -11,6 +11,7 @@ import type {
   WasteActionType,
   ContainerSizeDB
 } from '@/types/wasteDatabase';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 export interface WasteEntryWithRelations extends WasteEntryDB {
   waste_type?: WasteTypeDB | null;

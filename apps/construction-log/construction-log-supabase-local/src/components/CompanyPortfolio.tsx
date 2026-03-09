@@ -3,7 +3,7 @@ import { Pencil, Trash2, Plus, Search, Building2, Phone, Mail, MapPin, FileText,
 import { readVCFFile, VCFContact } from '@/utils/vcfParser';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1141,3 +1141,4 @@ export const CompanyPortfolio: React.FC = () => {
     </div>
   );
 };
+

@@ -18,11 +18,25 @@ import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, startOf
 import { es } from 'date-fns/locale';
 import { Plus, Check, X, Edit2, Trash2, Clock, ChevronLeft, ChevronRight, CheckCircle2, Circle, PlayCircle, Bell, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/integrations/supabase/types';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
-type CalendarTask = Database['public']['Tables']['calendar_tasks']['Row'];
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+type CalendarTask = {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  title: string;
+  description: string | null;
+  task_date: string;
+  due_time: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assigned_to: string | null;
+  work_id: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
 
 interface CalendarTasksProps {
   open: boolean;

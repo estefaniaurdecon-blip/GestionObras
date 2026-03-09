@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Edit2, Trash2, Save } from 'lucide-react';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 interface EconomicManagementProps {
   reports: WorkReport[];

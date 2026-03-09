@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, AlertCircle, Clock, Wrench } from 'lucide-react';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 interface ActiveRepaso {
   id: string;

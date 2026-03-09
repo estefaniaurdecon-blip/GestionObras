@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { useOrganization } from './useOrganization';
 import { useToast } from './use-toast';
 
@@ -184,3 +184,4 @@ export const useRentalMachineryAssignments = ({
     refetch: fetchAssignments
   };
 };
+

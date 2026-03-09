@@ -12,7 +12,7 @@ import {
 import { isNative, saveBase64File } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { sanitizePdfFilename } from './securePdfFilename';
 import { 
   calculateOptimalSpacing, 
@@ -1012,3 +1012,4 @@ export const generateWorkReportPDF = async (
     throw new Error(`Error al generar el PDF: ${error instanceof Error ? error.message : 'Error desconocido'}`);
   }
 };
+

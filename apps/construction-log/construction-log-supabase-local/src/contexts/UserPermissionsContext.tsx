@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/user';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 interface UserPermissionsContextType {
   roles: AppRole[];

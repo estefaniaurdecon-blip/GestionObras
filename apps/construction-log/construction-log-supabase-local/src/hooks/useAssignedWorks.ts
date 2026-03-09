@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { WorkBasic } from '@/types/work';
+import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 // Use WorkBasic for assigned works (only essential fields needed)
 export type Work = WorkBasic;

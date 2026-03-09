@@ -12,18 +12,18 @@
 - `PENDIENTE`: estandar de formato Python unificado (`ruff format` o `black`) y reglas de lint estables en CI.
 - `PENDIENTE`: estandar TS/React unificado entre `frontend-react` y `construction-log` (ESLint estricto + formateo consistente).
 - `PENDIENTE`: politica de migraciones DB via Alembic (sin DDL ad-hoc en startup).
-- `PENDIENTE`: regla de frontera en `construction-log`: solo `integrations/api/*` habla con backend; eliminar llamadas directas Supabase.
+- `EN CURSO`: regla de frontera en `construction-log`: solo `integrations/api/*` habla con backend; imports directos desde `integrations/supabase/*` eliminados en `src`, pendiente sustituir accesos legacy `supabase.*` por API.
 - `PENDIENTE`: cobertura minima por modulo refactorizado (tests unit/integration antes de merge).
 - `PENDIENTE`: checklist de cambios de interfaz (actualizar `INTERFACES.md` y `ENDPOINTS_UNIFICADOS.md`).
 
 ## Lista inicial de problemas
 1. `ALTO` Monolitos de logica en backend: `backend-fastapi/app/services/erp_service.py` (~93.5 KB), `backend-fastapi/app/api/v1/ai_runtime.py` (~76.4 KB), alta complejidad y riesgo de regresion.
-2. `ALTO` Monolitos en `construction-log`: `src/components/DashboardToolsTabContents.tsx` (~113 KB, 2698 lineas), `WorkReportList.tsx` (~122.6 KB, 2496 lineas), `GenerateWorkReportPanel.tsx` (~98.8 KB, 2389 lineas), `useWorkReports.ts` (~53.6 KB, 1301 lineas).
+2. `ALTO` Monolitos en `construction-log`: bloque de tools dividido en `DashboardToolsTabContents.tsx` (~1043 lineas) + `DashboardToolsPanelContent.tsx` (~2539 lineas) pero aun grande en conjunto; ademas `WorkReportList.tsx` (~122.6 KB, 2496 lineas), `GenerateWorkReportPanel.tsx` (~98.8 KB, 2389 lineas), `useWorkReports.ts` (~53.6 KB, 1301 lineas).
 3. `ALTO` Ruptura de frontera UI->hooks->gateways en `construction-log`: `DashboardToolsTabContents.tsx` sigue mezclando UI + reglas de dominio; a 2026-03-05 ya se extrajeron importacion, infraestructura/dominio de exportacion a `services/*`, estado/reglas de calendario-periodos e imagenes de exportacion a hooks (`useWorkReportExportCalendar`, `useWorkReportExportPeriodSelection`, `useWorkReportExportImageSelection`) y el ensamblado de `ExportWorkReport` en `workReportExportDomain`.
-4. `ALTO` Migracion parcial Supabase/API en `construction-log`: se detectan 23 referencias `supabase.*` en 13 archivos de `src` (hooks/componentes/utils) pese al cliente marcado como deprecated; en `useWorkReports.ts` ya no hay llamadas directas y se encapsularon en `services/workReportsSupabaseGateway.ts`.
+4. `ALTO` Migracion parcial Supabase/API en `construction-log`: ya no hay imports directos `integrations/supabase/*` en `src` (corte aplicado), pero persisten accesos legacy `supabase.*` en hooks/componentes/utils; en `useWorkReports.ts` las operaciones legacy siguen encapsuladas en `services/workReportsSupabaseGateway.ts`.
 5. `ALTO` Cliente API monolitico en `construction-log`: `src/integrations/api/client.ts` (~53 KB, 1690 lineas) concentra demasiados contratos y mapeos en un solo modulo.
 6. `ALTO` Evolucion de esquema en runtime en `backend-fastapi/app/db/session.py` (muchos `ALTER TABLE` y backfills al arranque).
-7. `ALTO` Variables sensibles en archivos `.env` versionados en repo (debe tratarse como riesgo de seguridad/operacion).
+7. `MEDIO` Riesgo de secretos por uso de `.env` locales en entornos de trabajo; actualmente no aparecen `.env` versionados en `git ls-files` (mantener vigilancia y rotacion).
 8. `MEDIO` Monolitos en `frontend-react`: `TimeControlPage.tsx` (1800 lineas), `ContractsModule.tsx` (1831 lineas), `ErpTasksPage.tsx` (1504 lineas), `HrPage.tsx` (1501 lineas).
 9. `MEDIO` CI actual (`.github/workflows/deploy.yml`) despliega sin gates de test/lint; usa `git reset --hard`.
 10. `MEDIO` Endpoint definido pero no montado: `backend-fastapi/app/api/v1/albaran.py` no aparece en `app/api/v1/router.py`.
@@ -564,7 +564,7 @@ Plantilla para registrar cada iteracion de refactor.
 - Riesgos/mitigaciones:
   - `CRITICO`: baseline de calidad no verde en `construction-log`:
     - `npm run lint:changed` falla (124 errores, 11 warnings; alta deuda `no-explicit-any`).
-    - `tsc -p tsconfig.app.json` falla con errores en modulos fuera del slice (incluyendo varios `Cannot find name 'supabase'`).
+    - `tsc -p tsconfig.app.json` falla con errores en modulos fuera del slice.
   - Migracion Supabase/API sigue incompleta y el conteo depende del metodo:
     - `rg "supabase\\."`: 21 matches / 11 archivos (subestima casos multilinea).
     - `rg -U "supabase\\s*\\."`: cobertura amplia de accesos legacy en multiples modulos.
@@ -578,8 +578,33 @@ Plantilla para registrar cada iteracion de refactor.
 - Pendientes (prioridad inmediata):
   1. `CRITICO`: recuperar baseline verde de `construction-log` (minimo `tsc` limpio en el alcance activo y estrategia para errores lint bloqueantes).
   2. Continuar `API Client Slice 6` (extraer bloque grande `erp` o `ai_runtime` de `client.ts`).
-  3. Retomar corte Supabase por mayor impacto (`useMessageableUsers` y modulos legacy con acceso directo).
+  3. Completar sustitucion de accesos legacy `supabase.*` por endpoints API (`useMessageableUsers` y modulos legacy restantes).
   4. Montar `albaran.py` en `api/v1/router.py` y validar contrato.
 - Decision/es tomadas:
   - Registrar checkpoint tecnico real antes de seguir con nuevos slices para evitar deriva documental.
   - Priorizar estabilidad de baseline (build/tsc/lint) sobre ampliar superficie de refactor.
+
+## Iteracion 2026-03-09 - Corte de imports Supabase en `construction-log/src`
+- Objetivo: eliminar uso directo de `integrations/supabase/*` en codigo fuente para reforzar frontera API-first sin reintroducir cliente Supabase.
+- Alcance:
+  - `construction-log` (`src/components/*`, `src/hooks/*`, `src/utils/*`, `src/services/*`).
+  - Nuevo shim de compatibilidad temporal en `src/integrations/api/legacySupabaseRemoved.ts`.
+- Cambios realizados:
+  - Reemplazo de imports y dynamic imports desde `@/integrations/supabase/client` por `@/integrations/api/legacySupabaseRemoved`.
+  - Eliminacion de imports de tipos desde `@/integrations/supabase/types` en `src` (no quedan referencias a `integrations/supabase/*` en codigo app).
+  - Alta de `legacySupabaseRemoved.ts` como adaptador temporal que falla explicito al acceder a rutas legacy (`supabase.*`) para evitar uso silencioso de proveedor retirado.
+  - Ajustes de tipado local en componentes que dependian de tipos de Supabase (`AIAssistantChat`, `CalendarTasks`) para mantener compilacion del modulo.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP.
+- Riesgos/mitigaciones:
+  - El shim mantiene compatibilidad de compilacion, pero cualquier flujo runtime que aun toque `supabase.*` fallara de forma explicita hasta migrarse a API.
+  - Se prioriza visibilidad de deuda tecnica sobre mantener fallback silencioso al proveedor legacy.
+- Tests ejecutados:
+  - `rg -n "integrations/supabase/" apps/construction-log/construction-log-supabase-local/src` -> 0 coincidencias.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json` -> sigue FALLANDO por tipados no relacionados con Supabase (`ChatCenter`, `xlsx-js-style`, `GenerateWorkReportDraft`, etc.).
+- Pendientes:
+  - Sustituir accesos legacy `supabase.*` por llamadas API reales en hooks/componentes afectados.
+  - Continuar estabilizacion de baseline TS/lint del proyecto.
+- Decision/es tomadas:
+  - No reintroducir cliente Supabase ni sus tipos en `src`.
+  - Mantener shim temporal acotado mientras se completa la migracion funcional a API.
