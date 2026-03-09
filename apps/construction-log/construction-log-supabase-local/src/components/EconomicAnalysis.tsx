@@ -11,7 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listRentalMachinery } from '@/integrations/api/client';
 
 interface EconomicAnalysisProps {
   reports: WorkReport[];
@@ -24,16 +24,19 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
   const [selectedWork, setSelectedWork] = useState<string>('all');
   const [rentalMachinery, setRentalMachinery] = useState<any[]>([]);
 
-  // Cargar maquinaria de alquiler
+  // Cargar maquinaria de alquiler via API (map API fields to legacy names)
   useEffect(() => {
     const loadRentalMachinery = async () => {
       try {
-        const { data, error } = await supabase
-          .from('work_rental_machinery')
-          .select('*')
-          .order('delivery_date', { ascending: false });
-
-        if (error) throw error;
+        const items = await listRentalMachinery();
+        const data = items.map((m: any) => ({
+          ...m,
+          work_id: m.project_id,
+          delivery_date: m.start_date,
+          removal_date: m.end_date,
+          daily_rate: m.price != null ? Number(m.price) : 0,
+          type: m.name,
+        }));
         setRentalMachinery(data || []);
       } catch (error) {
         console.error('Error loading rental machinery:', error);

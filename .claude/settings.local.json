@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(gh auth status)",
-      "Bash(wc -l \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src/components\"/*.tsx)"
+      "Bash(wc -l \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src/components\"/*.tsx)",
+      "Bash(find \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec wc -l {} +)",
+      "Bash(find \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/frontend-react/src\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec wc -l {} +)",
+      "Bash(grep -r \"from ''@/integrations/api\" \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src\" --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -r \"from ''@/services\\\\|from ''@/offline-db\" \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src\" --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -r \"from ''@/integrations/api/client''\" \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src\" --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -r \"import.*from ''@/services/\\\\|import.*from ''@/offline-db\" \"c:\\\\Users\\\\pinnovacion\\\\Desktop\\\\rutas\\\\Saas-Multi-Tenant-main\\\\Saas-Multi-Tenant-main/apps/construction-log/construction-log-supabase-local/src\" --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(rg -n \"supabase\\\\.\" apps/construction-log/construction-log-supabase-local/src/ --glob \"*.{ts,tsx}\")",
+      "Bash(rg -n \"legacySupabaseRemoved\" apps/construction-log/construction-log-supabase-local/src/ --glob \"*.{ts,tsx}\")",
+      "Bash(rg -n \"\\\\.channel\\\\\\(\" apps/construction-log/construction-log-supabase-local/src/ --glob \"*.{ts,tsx}\")",
+      "Bash(node ./node_modules/typescript/bin/tsc -p tsconfig.app.json --pretty false)",
+      "Bash(npm run build)"
     ]
   }
 }

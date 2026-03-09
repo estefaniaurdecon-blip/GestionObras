@@ -25,6 +25,7 @@ from . import (
     organization,
     phases,
     rental_machinery_assignments,
+    saved_economic_reports,
     tenants,
     tickets,
     tools,
@@ -141,5 +142,10 @@ api_router.include_router(
 api_router.include_router(
     simulations.router,
     prefix="/erp",
+    tags=["erp"],
+)
+api_router.include_router(
+    saved_economic_reports.router,
+    prefix="/erp/saved-economic-reports",
     tags=["erp"],
 )

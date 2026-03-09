@@ -12,7 +12,10 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Edit2, Trash2, Save } from 'lucide-react';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import {
+  listManagedUserAssignments,
+  upsertSavedEconomicReport,
+} from '@/integrations/api/client';
 
 interface EconomicManagementProps {
   reports: WorkReport[];
@@ -42,13 +45,8 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('work_assignments')
-        .select('work_id')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      setAssignedWorkIds(data?.map(a => a.work_id) || []);
+      const workIds = await listManagedUserAssignments(Number(user.id));
+      setAssignedWorkIds(workIds.map(String));
     } catch (error) {
       console.error('Error loading assigned works:', error);
     } finally {
@@ -263,32 +261,12 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
     if (!editedReport || !user) return;
 
     try {
-      // First update the work report with prices
-      const { error: updateError } = await supabase
-        .from('work_reports')
-        .update({
-          work_groups: editedReport.workGroups as any,
-          machinery_groups: editedReport.machineryGroups as any,
-          material_groups: editedReport.materialGroups as any,
-          subcontract_groups: editedReport.subcontractGroups as any,
-        })
-        .eq('id', editedReport.id);
-
-      if (updateError) throw updateError;
-
       // Calculate total amount
       const totalAmount = calculateTotal();
-      
-      // Check if a saved economic report already exists for this work_report_id
-      const { data: existingReport, error: checkError } = await supabase
-        .from('saved_economic_reports')
-        .select('id')
-        .eq('work_report_id', editedReport.id)
-        .maybeSingle();
 
-      if (checkError) throw checkError;
-
-      const reportData = {
+      // Upsert saved economic report via API (handles check + insert/update)
+      await upsertSavedEconomicReport({
+        work_report_id: editedReport.id,
         work_name: editedReport.workName,
         work_number: editedReport.workNumber,
         date: editedReport.date,
@@ -299,28 +277,7 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
         material_groups: editedReport.materialGroups as any,
         subcontract_groups: editedReport.subcontractGroups as any,
         total_amount: totalAmount,
-      };
-
-      if (existingReport) {
-        // Update existing record
-        const { error: saveError } = await supabase
-          .from('saved_economic_reports')
-          .update(reportData)
-          .eq('id', existingReport.id);
-
-        if (saveError) throw saveError;
-      } else {
-        // Insert new record
-        const { error: saveError } = await supabase
-          .from('saved_economic_reports')
-          .insert({
-            ...reportData,
-            work_report_id: editedReport.id,
-            saved_by: user.id,
-          });
-
-        if (saveError) throw saveError;
-      }
+      });
 
       toast({
         title: "Precios guardados",
@@ -329,7 +286,7 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
 
       onReportUpdate();
       setSelectedReport(editedReport);
-      
+
       // Navigate to saved economic reports tab
       if (onSaveSuccess) {
         setTimeout(() => {

@@ -11,7 +11,7 @@ import {
 } from './pdfSpacingOptimizer';
 
 interface SavedEconomicReport {
-  id: string;
+  id: string | number;
   work_report_id: string;
   work_name: string;
   work_number: string;

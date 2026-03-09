@@ -16,7 +16,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 import { OrganizationSettings } from '@/components/OrganizationSettings';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import {
+  listProjects,
+  addManagedUserRole,
+  removeManagedUserRole,
+  assignManagedUserToWork,
+  removeManagedUserFromWork,
+} from '@/integrations/api/client';
 
 const getRoleLabel = (role: AppRole, t: any): string => {
   const labels: Record<AppRole, string> = {
@@ -52,16 +58,14 @@ export const UserManagement = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<AppRole>('foreman');
 
-  // Load works available for assignment (only works the current user has access to)
+  // Load works available for assignment via API
   useEffect(() => {
     const loadWorks = async () => {
-      const { data, error } = await supabase
-        .from('works')
-        .select('*')
-        .order('name');
-
-      if (!error && data) {
-        setAssignableWorks(data); // Admins and site managers see their assigned works via RLS
+      try {
+        const projects = await listProjects();
+        setAssignableWorks(projects);
+      } catch (error) {
+        console.error('Error loading works:', error);
       }
     };
     loadWorks();
@@ -103,15 +107,7 @@ export const UserManagement = () => {
     console.log('handleAddRole - organization_id:', selectedUser.organization_id);
 
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .insert({ 
-          user_id: selectedUser.id, 
-          role,
-          organization_id: selectedUser.organization_id
-        });
-
-      if (error) throw error;
+      await addManagedUserRole(Number(selectedUser.id), role);
 
       toast({
         title: t('userManagement.roleAdded'),
@@ -141,13 +137,7 @@ export const UserManagement = () => {
     if (!selectedUser) return;
 
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', selectedUser.id)
-        .eq('role', role);
-
-      if (error) throw error;
+      await removeManagedUserRole(Number(selectedUser.id), role);
 
       toast({
         title: t('userManagement.roleRemoved'),
@@ -558,50 +548,19 @@ export const UserManagement = () => {
                           if (!selectedUser) return;
                           try {
                             if (isAssigned) {
-                              const { error } = await supabase
-                                .from('work_assignments')
-                                .delete()
-                                .eq('user_id', selectedUser.id)
-                                .eq('work_id', work.id);
-                              
-                              if (error) throw error;
-                              
+                              await removeManagedUserFromWork(Number(selectedUser.id), Number(work.id));
+
                               toast({
                                 title: t('userManagement.workRemoved'),
                                 description: t('userManagement.workRemovedDesc'),
                               });
                             } else {
-                              // Check if assignment already exists to avoid duplicate key error
-                              const { data: existing } = await supabase
-                                .from('work_assignments')
-                                .select('id')
-                                .eq('user_id', selectedUser.id)
-                                .eq('work_id', work.id)
-                                .maybeSingle();
-                              
-                              if (existing) {
-                                // Assignment already exists, just update the UI state
-                                toast({
-                                  title: t('userManagement.workAssigned'),
-                                  description: t('userManagement.workAlreadyAssigned', 'La obra ya estaba asignada a este usuario.'),
-                                });
-                              } else {
-                                const { error } = await supabase
-                                  .from('work_assignments')
-                                  .insert({ 
-                                    user_id: selectedUser.id, 
-                                    work_id: work.id,
-                                    created_by: selectedUser.id,
-                                    organization_id: selectedUser.organization_id
-                                  });
-                                
-                                if (error) throw error;
-                                
-                                toast({
-                                  title: t('userManagement.workAssigned'),
-                                  description: t('userManagement.workAssignedDesc'),
-                                });
-                              }
+                              await assignManagedUserToWork(Number(selectedUser.id), Number(work.id));
+
+                              toast({
+                                title: t('userManagement.workAssigned'),
+                                description: t('userManagement.workAssignedDesc'),
+                              });
                             }
                             
                             await loadUsers();

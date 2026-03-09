@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { WorkBasic } from '@/types/work';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listManagedUserAssignments, listProjects } from '@/integrations/api/client';
 
 // Use WorkBasic for assigned works (only essential fields needed)
 export type Work = WorkBasic;
@@ -20,33 +20,22 @@ export const useAssignedWorks = () => {
 
     try {
       setLoading(true);
-      
-      // Get works assigned to the user through work_assignments
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('work_assignments')
-        .select('work_id')
-        .eq('user_id', user.id);
 
-      if (assignmentsError) throw assignmentsError;
+      // Get work IDs assigned to the user via API
+      const workIds = await listManagedUserAssignments(Number(user.id));
 
-      if (assignments && assignments.length > 0) {
-        const workIds = assignments.map(a => a.work_id);
-        
-        const { data: worksData, error: worksError } = await supabase
-          .from('works')
-          .select('*')
-          .in('id', workIds)
-          .order('name', { ascending: true });
+      if (workIds.length > 0) {
+        // Get all projects and filter by assigned IDs
+        const allProjects = await listProjects();
+        const assignedProjects = allProjects
+          .filter(p => workIds.includes(p.id))
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-        if (worksError) throw worksError;
-
-        if (worksData) {
-          setWorks(worksData);
-        }
+        setWorks(assignedProjects as unknown as Work[]);
       } else {
         setWorks([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading assigned works:', error);
       setWorks([]);
     } finally {

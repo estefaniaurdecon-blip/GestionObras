@@ -18,6 +18,7 @@ import { createPhasesApi } from './modules/phases';
 import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
+import { createSavedEconomicReportsApi } from './modules/savedEconomicReports';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -1656,6 +1657,23 @@ export const createSharedFile = attachmentsApi.createSharedFile;
 export const downloadSharedFile = attachmentsApi.downloadSharedFile;
 export const markSharedFileDownloaded = attachmentsApi.markSharedFileDownloaded;
 export const deleteSharedFile = attachmentsApi.deleteSharedFile;
+
+// ============================================================
+// SAVED ECONOMIC REPORTS API
+// ============================================================
+
+export type {
+  ApiSavedEconomicReport,
+  SavedEconomicReportCreatePayload,
+} from './modules/savedEconomicReports';
+
+const savedEconomicReportsApi = createSavedEconomicReportsApi({
+  apiFetchJson,
+});
+
+export const listSavedEconomicReports = savedEconomicReportsApi.listSavedEconomicReports;
+export const upsertSavedEconomicReport = savedEconomicReportsApi.upsertSavedEconomicReport;
+export const deleteSavedEconomicReport = savedEconomicReportsApi.deleteSavedEconomicReport;
 
 // ============================================================
 // PLACEHOLDER - For unimplemented features

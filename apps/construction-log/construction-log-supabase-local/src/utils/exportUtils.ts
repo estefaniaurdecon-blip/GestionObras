@@ -2,7 +2,21 @@ import { WorkReport } from '@/types/workReport';
 import { isNative, blobToBase64, saveBase64File, textToBase64 } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { listRentalMachinery as listRentalMachineryApi } from '@/integrations/api/client';
 import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+
+// Adapter: map API fields to legacy field names used throughout this file
+async function listRentalMachineryLegacy(): Promise<any[]> {
+  const items = await listRentalMachineryApi();
+  return items.map((m: any) => ({
+    ...m,
+    work_id: m.project_id,
+    delivery_date: m.start_date,
+    removal_date: m.end_date,
+    daily_rate: m.price != null ? Number(m.price) : 0,
+    type: m.name,
+  }));
+}
 
 type XlsxModule = typeof import('xlsx-js-style');
 type XlsxWorkSheet = import('xlsx-js-style').WorkSheet;
@@ -120,11 +134,7 @@ export const exportToExcel = async (reports: WorkReport[]) => {
   const workIds = [...new Set(reports.map(r => r.workId).filter(Boolean))];
   
   if (workIds.length > 0) {
-    const { data: rentalMachinery } = await supabase
-      .from('work_rental_machinery')
-      .select('*')
-      .in('work_id', workIds)
-      .order('delivery_date', { ascending: true });
+    const rentalMachinery = await listRentalMachineryLegacy();
 
     if (rentalMachinery) {
       reports.forEach(report => {
@@ -381,11 +391,8 @@ export const exportSingleReportToExcel = async (report: WorkReport) => {
 
   // 4. MAQUINARIA DE ALQUILER
   if (report.workId) {
-    const { data: rentalMachinery } = await supabase
-      .from('work_rental_machinery')
-      .select('*')
-      .eq('work_id', report.workId)
-      .order('delivery_date', { ascending: true });
+    const allRentalMachinery = await listRentalMachineryLegacy();
+    const rentalMachinery = allRentalMachinery.filter((m: any) => String(m.work_id) === String(report.workId));
 
     if (rentalMachinery && rentalMachinery.length > 0) {
       const reportDate = new Date(report.date);

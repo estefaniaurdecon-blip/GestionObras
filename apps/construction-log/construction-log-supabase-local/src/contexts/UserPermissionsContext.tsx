@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/user';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { getCurrentUser, listManagedUserRoles } from '@/integrations/api/client';
 
 interface UserPermissionsContextType {
   roles: AppRole[];
@@ -34,33 +34,23 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
-      
-      // Load roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
 
-      if (rolesError) throw rolesError;
-      if (rolesData) {
-        setRoles(rolesData.map(r => r.role as AppRole));
-      }
+      // Load roles via API
+      const userRoles = await listManagedUserRoles(Number(user.id));
+      setRoles(userRoles as AppRole[]);
 
-      // Load profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('full_name, organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError && profileError.code !== 'PGRST116') {
+      // Load profile via API
+      try {
+        const currentUser = await getCurrentUser();
+        setUserProfile({
+          full_name: currentUser.full_name ?? null,
+          organization_id: currentUser.tenant_id != null ? String(currentUser.tenant_id) : null,
+        });
+      } catch (profileError) {
         console.error('Error loading profile:', profileError);
-      }
-      if (profileData) {
-        setUserProfile(profileData);
       }
     } catch (error) {
       console.error('Error loading user roles:', error);

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { differenceInDays, parseISO, addDays, format } from 'date-fns';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listManagedUserAssignments, listPhases, listProjects } from '@/integrations/api/client';
 
 export interface DeadlineItem {
   id: string;
@@ -20,9 +20,9 @@ const calculateDeadlineStatus = (endDate: string): { daysRemaining: number; stat
   const end = parseISO(endDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   const daysRemaining = differenceInDays(end, today);
-  
+
   if (daysRemaining <= 0) {
     return { daysRemaining, status: 'critical' };
   } else if (daysRemaining <= 3) {
@@ -39,64 +39,53 @@ export const useUpcomingDeadlines = (limit: number = 5) => {
     queryFn: async (): Promise<DeadlineItem[]> => {
       if (!user?.id) return [];
 
+      // Get works assigned to the current user via API
+      let assignedWorkIds: number[] = [];
+      try {
+        assignedWorkIds = await listManagedUserAssignments(Number(user.id));
+      } catch {
+        console.error('Error fetching work assignments');
+      }
+
+      // Get all phases and projects via API
+      const [allPhases, allProjects] = await Promise.all([
+        listPhases(),
+        listProjects(),
+      ]);
+
+      // Build project name map
+      const projectNameMap = new Map<number, string>();
+      for (const p of allProjects) {
+        projectNameMap.set(p.id, p.name || '');
+      }
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayStr = format(today, 'yyyy-MM-dd');
-      const nextWeekStr = format(addDays(today, 7), 'yyyy-MM-dd');
+      const todayTs = today.getTime();
+      const nextWeekTs = addDays(today, 7).getTime();
 
-      // First, get works assigned to the current user
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('work_assignments')
-        .select('work_id')
-        .eq('user_id', user.id);
+      // Filter phases: pending/in_progress, deadline or started, optionally by assigned works
+      const filtered = allPhases.filter((phase: any) => {
+        if (!['pending', 'in_progress'].includes(phase.status)) return false;
 
-      if (assignmentsError) {
-        console.error('Error fetching work assignments:', assignmentsError);
-        throw assignmentsError;
-      }
+        const endTs = phase.end_date ? parseISO(phase.end_date).getTime() : Infinity;
+        const startTs = phase.start_date ? parseISO(phase.start_date).getTime() : Infinity;
+        if (endTs > nextWeekTs && startTs > todayTs) return false;
 
-      const assignedWorkIds = assignments?.map(a => a.work_id) || [];
+        if (assignedWorkIds.length > 0 && !assignedWorkIds.includes(phase.project_id)) return false;
 
-      // Fetch phases with smart filters
-      let query = supabase
-        .from('phases')
-        .select(`
-          id,
-          name,
-          start_date,
-          end_date,
-          progress,
-          status,
-          work_id,
-          works:work_id (name)
-        `)
-        .in('status', ['pending', 'in_progress'])
-        .or(`end_date.lte.${nextWeekStr},start_date.lte.${todayStr}`)
-        .order('end_date', { ascending: true })
-        .limit(limit * 2); // Fetch extra to filter later
-
-      // If user has assigned works, filter by those works
-      // If no assignments (admin/master), they see all org phases
-      if (assignedWorkIds.length > 0) {
-        query = query.in('work_id', assignedWorkIds);
-      }
-
-      const { data: phases, error: phasesError } = await query;
-
-      if (phasesError) {
-        console.error('Error fetching phases:', phasesError);
-        throw phasesError;
-      }
+        return true;
+      });
 
       // Transform and calculate deadline info
-      const deadlineItems: DeadlineItem[] = (phases || [])
+      const deadlineItems: DeadlineItem[] = filtered
         .map((phase: any) => {
           const { daysRemaining, status } = calculateDeadlineStatus(phase.end_date);
           return {
-            id: phase.id,
+            id: String(phase.id),
             name: phase.name,
-            workName: phase.works?.name || null,
-            workId: phase.work_id,
+            workName: projectNameMap.get(phase.project_id) || null,
+            workId: phase.project_id != null ? String(phase.project_id) : null,
             endDate: phase.end_date,
             startDate: phase.start_date,
             progress: phase.progress || 0,
@@ -105,7 +94,6 @@ export const useUpcomingDeadlines = (limit: number = 5) => {
             phaseStatus: phase.status,
           };
         })
-        // Sort by urgency (most critical first)
         .sort((a, b) => a.daysRemaining - b.daysRemaining)
         .slice(0, limit);
 

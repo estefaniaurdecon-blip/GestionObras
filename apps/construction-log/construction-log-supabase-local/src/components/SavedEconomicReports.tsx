@@ -23,24 +23,13 @@ import autoTable from 'jspdf-autotable';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { generateEconomicReportPDF } from '@/utils/economicReportPdfGenerator';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import {
+  listSavedEconomicReports,
+  deleteSavedEconomicReport,
+  type ApiSavedEconomicReport,
+} from '@/integrations/api/client';
 
-interface SavedEconomicReport {
-  id: string;
-  work_report_id: string;
-  work_name: string;
-  work_number: string;
-  date: string;
-  foreman: string;
-  site_manager: string;
-  work_groups: any[];
-  machinery_groups: any[];
-  material_groups: any[];
-  subcontract_groups: any[];
-  rental_machinery_groups: any[];
-  total_amount: number;
-  created_at: string;
-}
+type SavedEconomicReport = ApiSavedEconomicReport;
 
 type GroupingType = 'day' | 'week' | 'month';
 
@@ -64,13 +53,8 @@ export const SavedEconomicReports = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('saved_economic_reports')
-        .select('*')
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      setReports((data || []) as SavedEconomicReport[]);
+      const data = await listSavedEconomicReports();
+      setReports(data);
     } catch (error) {
       console.error('Error loading saved reports:', error);
       // Evitar mostrar error si ya hay datos visibles
@@ -363,14 +347,9 @@ export const SavedEconomicReports = () => {
     });
   };
 
-  const handleDelete = async (reportId: string) => {
+  const handleDelete = async (reportId: number) => {
     try {
-      const { error } = await supabase
-        .from('saved_economic_reports')
-        .delete()
-        .eq('id', reportId);
-
-      if (error) throw error;
+      await deleteSavedEconomicReport(reportId);
 
       toast({
         title: "Parte eliminado",
