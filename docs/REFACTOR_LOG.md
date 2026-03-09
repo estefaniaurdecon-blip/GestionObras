@@ -608,3 +608,37 @@ Plantilla para registrar cada iteracion de refactor.
 - Decision/es tomadas:
   - No reintroducir cliente Supabase ni sus tipos en `src`.
   - Mantener shim temporal acotado mientras se completa la migracion funcional a API.
+
+## Iteracion 2026-03-09 - Slice 6 (parcial) + cierre `useMessageableUsers` en API
+- Objetivo: continuar el roadmap critico tras el checkpoint, cerrando un hook bloqueante de mensajeria y avanzando la modularizacion del cliente API.
+- Alcance:
+  - Frontend `construction-log`: `src/hooks/useMessageableUsers.ts`.
+  - Cliente API: `src/integrations/api/client.ts`, nuevo `src/integrations/api/modules/aiRuntime.ts`.
+- Cambios realizados:
+  - `useMessageableUsers` migra de RPC Supabase (`get_messageable_users`) a API propia:
+    - usa `listUsersByTenant(...)` del cliente API.
+    - mapea usuarios API a `MessageableUser` (`id`, `full_name`, `roles`, `approved`).
+    - mantiene fallback seguro cuando no hay `tenant_id` resuelto.
+  - API Client Slice 6 (parcial):
+    - nuevo modulo `modules/aiRuntime.ts` con implementacion de endpoints `/api/v1/ai/*` e inventario AI:
+      - `generateSummaryReport`, `analyzeWorkImage`, `analyzeLogoColors`,
+      - `standardizeCompanies`, `analyzeInventory`,
+      - `populateInventoryFromReports`, `cleanInventory`,
+      - `listInventoryItems`, `updateInventoryItem`, `deleteInventoryItem`,
+      - `mergeInventorySuppliers`, `validateFixInventory`, `applyInventoryAnalysis`.
+    - `client.ts` conserva fachada compatible y delega esas funciones al nuevo modulo.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP.
+  - Sin breaking changes en exports publicos de `client.ts`.
+- Riesgos/mitigaciones:
+  - El corte funcional de Supabase avanza en mensajeria, pero siguen modulos legacy con `supabase.*` pendiente de sustitucion por API.
+  - Se opta por slice parcial de modularizacion (implementacion movida a modulo) para minimizar riesgo de regresion tipada en consumidores actuales.
+- Tests ejecutados:
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json` (sigue FAIL por deuda TS preexistente fuera de este slice: `ChatCenter`, `xlsx-js-style`, tipos mixtos `string|number`, etc.).
+  - No reaparecen errores `Cannot find name 'supabase'` en el estado actual.
+- Pendientes:
+  - Completar sustitucion de accesos `supabase.*` restantes en hooks/componentes legacy.
+  - Seguir reduciendo deuda TS para recuperar baseline verde de `tsc`.
+- Decision/es tomadas:
+  - Priorizar cierres funcionales de migracion Supabase en hooks de alto uso (mensajeria/contactos) antes de atacar deuda tipada horizontal.
+  - Mantener `client.ts` como fachada estable mientras continua la extraccion modular.

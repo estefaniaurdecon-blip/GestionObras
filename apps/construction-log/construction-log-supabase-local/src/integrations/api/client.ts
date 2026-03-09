@@ -10,6 +10,7 @@ import { createAttachmentsApi } from './modules/attachments';
 import { createUsersApi, normalizeApiUser } from './modules/users';
 import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
+import { createAiRuntimeApi } from './modules/aiRuntime';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -1394,128 +1395,24 @@ export interface CleanInventoryResponse {
   remaining: number;
 }
 
-export async function generateSummaryReport(
-  payload: GenerateSummaryReportRequest
-): Promise<GenerateSummaryReportResponse> {
-  return apiFetchJson<GenerateSummaryReportResponse>('/api/v1/ai/generate-summary-report', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
+const aiRuntimeApi = createAiRuntimeApi({
+  apiFetchJson,
+  buildQueryParams,
+});
 
-export async function analyzeWorkImage(
-  payload: AnalyzeWorkImageRequest
-): Promise<AnalyzeWorkImageResponse> {
-  return apiFetchJson<AnalyzeWorkImageResponse>('/api/v1/ai/analyze-work-image', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function analyzeLogoColors(
-  payload: AnalyzeLogoColorsRequest
-): Promise<AnalyzeLogoColorsResponse> {
-  return apiFetchJson<AnalyzeLogoColorsResponse>('/api/v1/ai/analyze-logo-colors', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function standardizeCompanies(
-  payload: StandardizeCompaniesAnalyzeRequest
-): Promise<StandardizeCompaniesAnalyzeResponse>;
-export async function standardizeCompanies(
-  payload: StandardizeCompaniesApplyRequest
-): Promise<StandardizeCompaniesApplyResponse>;
-export async function standardizeCompanies(
-  payload: StandardizeCompaniesRequest
-): Promise<StandardizeCompaniesAnalyzeResponse | StandardizeCompaniesApplyResponse> {
-  return apiFetchJson<StandardizeCompaniesAnalyzeResponse | StandardizeCompaniesApplyResponse>(
-    '/api/v1/ai/standardize-companies',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }
-  );
-}
-
-export async function analyzeInventory(
-  payload: AnalyzeInventoryRequest
-): Promise<AnalyzeInventoryResponse> {
-  return apiFetchJson<AnalyzeInventoryResponse>('/api/v1/ai/analyze-inventory', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function populateInventoryFromReports(
-  payload: PopulateInventoryRequest
-): Promise<PopulateInventoryResponse> {
-  return apiFetchJson<PopulateInventoryResponse>('/api/v1/ai/populate-inventory-from-reports', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function cleanInventory(
-  payload: CleanInventoryRequest
-): Promise<CleanInventoryResponse> {
-  return apiFetchJson<CleanInventoryResponse>('/api/v1/ai/clean-inventory', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function listInventoryItems(workId: string): Promise<InventoryItemApi[]> {
-  const query = buildQueryParams({ work_id: workId });
-  return apiFetchJson<InventoryItemApi[]>(`/api/v1/ai/inventory-items${query}`);
-}
-
-export async function updateInventoryItem(
-  workId: string,
-  itemId: string,
-  payload: InventoryUpdatePayload
-): Promise<InventoryItemApi> {
-  const query = buildQueryParams({ work_id: workId });
-  return apiFetchJson<InventoryItemApi>(`/api/v1/ai/inventory-items/${itemId}${query}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteInventoryItem(workId: string, itemId: string): Promise<void> {
-  const query = buildQueryParams({ work_id: workId });
-  return apiFetchJson<void>(`/api/v1/ai/inventory-items/${itemId}${query}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function mergeInventorySuppliers(
-  payload: MergeInventorySuppliersRequest
-): Promise<MergeInventorySuppliersResponse> {
-  return apiFetchJson<MergeInventorySuppliersResponse>('/api/v1/ai/inventory/merge-suppliers', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function validateFixInventory(
-  workId: string
-): Promise<ValidateFixInventoryResponse> {
-  return apiFetchJson<ValidateFixInventoryResponse>('/api/v1/ai/inventory/validate-fix', {
-    method: 'POST',
-    body: JSON.stringify({ work_id: workId }),
-  });
-}
-
-export async function applyInventoryAnalysis(
-  payload: ApplyInventoryAnalysisRequest
-): Promise<ApplyInventoryAnalysisResponse> {
-  return apiFetchJson<ApplyInventoryAnalysisResponse>('/api/v1/ai/inventory/apply-analysis', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
+export const generateSummaryReport = aiRuntimeApi.generateSummaryReport;
+export const analyzeWorkImage = aiRuntimeApi.analyzeWorkImage;
+export const analyzeLogoColors = aiRuntimeApi.analyzeLogoColors;
+export const standardizeCompanies = aiRuntimeApi.standardizeCompanies;
+export const analyzeInventory = aiRuntimeApi.analyzeInventory;
+export const populateInventoryFromReports = aiRuntimeApi.populateInventoryFromReports;
+export const cleanInventory = aiRuntimeApi.cleanInventory;
+export const listInventoryItems = aiRuntimeApi.listInventoryItems;
+export const updateInventoryItem = aiRuntimeApi.updateInventoryItem;
+export const deleteInventoryItem = aiRuntimeApi.deleteInventoryItem;
+export const mergeInventorySuppliers = aiRuntimeApi.mergeInventorySuppliers;
+export const validateFixInventory = aiRuntimeApi.validateFixInventory;
+export const applyInventoryAnalysis = aiRuntimeApi.applyInventoryAnalysis;
 
 export async function listInventoryMovements(
   workId?: string,
