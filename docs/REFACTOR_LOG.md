@@ -934,3 +934,50 @@ Plantilla para registrar cada iteracion de refactor.
   - Reducir/eliminar `workReportsSupabaseGateway` cuando se migren sus consumidores restantes.
 - Decision/es tomadas:
   - Priorizar paridad funcional del hook extendiendo contrato backend en lugar de degradar campos legacy de maquinaria.
+
+## Iteracion 2026-03-09 - API-first: `phases` + migracion de `usePhases`
+- Objetivo: eliminar `supabase.*` en `usePhases` manteniendo contrato del hook y regla de borrado protegido por partes asociados.
+- Alcance:
+  - Backend FastAPI: nuevo dominio `erp_phase` (model + schema + service + router + test API).
+  - Frontend `construction-log`: nuevo modulo API `phases`, fachada estable en `client.ts` y migracion de `usePhases.ts`.
+  - Documentacion: actualizacion de `ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Backend:
+    - Modelo `Phase` (`erp_phase`) con `tenant_id`, `project_id`, rango de fechas, `status`, `progress`, autor y timestamps.
+    - Schemas `PhaseCreate/PhaseUpdate/PhaseRead` (incluye `work_name` para mantener join de UI).
+    - Servicio `phase_service` con:
+      - listado por tenant,
+      - create/update con validacion de rango de fechas y scope de obra,
+      - borrado protegido (`PHASE_HAS_CHILDREN`) cuando hay `erp_work_report` en el rango/obra.
+    - Router montado en:
+      - `GET /api/v1/erp/phases`
+      - `POST /api/v1/erp/phases`
+      - `PATCH /api/v1/erp/phases/{phase_id}`
+      - `DELETE /api/v1/erp/phases/{phase_id}`
+      - `GET /api/v1/erp/phases/{phase_id}/has-children`
+    - Registro en `app/api/v1/router.py` y `app/db/base.py`.
+    - Test nuevo `test_phases_api.py` (CRUD + guard de hijos).
+  - Frontend:
+    - Nuevo modulo `src/integrations/api/modules/phases.ts`.
+    - `client.ts` expone `listPhases`, `createPhase`, `updatePhase`, `deletePhase`, `checkPhaseHasChildren`.
+    - `usePhases.ts` migra de Supabase a API y mantiene shape legacy (`id/work_id/organization_id` como `string`).
+    - Se conserva el error funcional `PHASE_HAS_CHILDREN` para toasts y UX existente.
+- Contratos impactados:
+  - Nuevas rutas API bajo `/api/v1/erp/phases`.
+  - Sin breaking changes en firma publica del hook `usePhases`.
+- Riesgos/mitigaciones:
+  - `project_id` es numerico en backend ERP: el hook convierte `work_id` string->number de forma defensiva.
+  - Borrado protegido se valida en backend y tambien en frontend (`has-children`) para feedback temprano.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_phases_api.py` -> `1 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+  - `npm run build` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 14 matches / 6 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 200 matches / 20 archivos.
+- Pendientes:
+  - Migrar `useUsers` (incluye gap de endpoints para roles/asignaciones legacy).
+  - Migrar `CompanyPortfolio`.
+  - Validar residual real en `WorkReportComments` y continuar con `AdvancedReports`/`pdfGenerator`.
+- Decision/es tomadas:
+  - Para no romper Timeline, se mantiene contrato legacy del hook y se resuelve paridad via mapeo API<->UI en el frontend.

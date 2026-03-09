@@ -12,6 +12,7 @@ import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
 import { createCustomHolidaysApi } from './modules/customHolidays';
+import { createPhasesApi } from './modules/phases';
 import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
@@ -992,6 +993,27 @@ export const listCustomHolidays = customHolidaysApi.listCustomHolidays;
 export const createCustomHoliday = customHolidaysApi.createCustomHoliday;
 export const updateCustomHoliday = customHolidaysApi.updateCustomHoliday;
 export const deleteCustomHoliday = customHolidaysApi.deleteCustomHoliday;
+
+// ============================================================
+// PHASES API
+// ============================================================
+
+export type {
+  ApiPhase,
+  ApiPhaseStatus,
+  CreatePhasePayload,
+  UpdatePhasePayload,
+} from './modules/phases';
+
+const phasesApi = createPhasesApi({
+  apiFetchJson,
+});
+
+export const listPhases = phasesApi.listPhases;
+export const createPhase = phasesApi.createPhase;
+export const updatePhase = phasesApi.updatePhase;
+export const deletePhase = phasesApi.deletePhase;
+export const checkPhaseHasChildren = phasesApi.checkPhaseHasChildren;
 
 // ============================================================
 // RENTAL MACHINERY API

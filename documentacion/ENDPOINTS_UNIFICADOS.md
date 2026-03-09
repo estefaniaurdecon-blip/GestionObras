@@ -205,6 +205,11 @@ Nota de contrato: `rental-machinery` soporta campos `machine_number`, `notes` e 
 | POST | `/api/v1/erp/custom-holidays` | `backend-fastapi/app/api/v1/custom_holidays.py` |
 | PATCH | `/api/v1/erp/custom-holidays/{holiday_id}` | `backend-fastapi/app/api/v1/custom_holidays.py` |
 | DELETE | `/api/v1/erp/custom-holidays/{holiday_id}` | `backend-fastapi/app/api/v1/custom_holidays.py` |
+| GET | `/api/v1/erp/phases` | `backend-fastapi/app/api/v1/phases.py` |
+| POST | `/api/v1/erp/phases` | `backend-fastapi/app/api/v1/phases.py` |
+| PATCH | `/api/v1/erp/phases/{phase_id}` | `backend-fastapi/app/api/v1/phases.py` |
+| DELETE | `/api/v1/erp/phases/{phase_id}` | `backend-fastapi/app/api/v1/phases.py` |
+| GET | `/api/v1/erp/phases/{phase_id}/has-children` | `backend-fastapi/app/api/v1/phases.py` |
 | GET | `/api/v1/erp/rental-machinery-assignments` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |
 | POST | `/api/v1/erp/rental-machinery-assignments` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |
 | PATCH | `/api/v1/erp/rental-machinery-assignments/{assignment_id}` | `backend-fastapi/app/api/v1/rental_machinery_assignments.py` |

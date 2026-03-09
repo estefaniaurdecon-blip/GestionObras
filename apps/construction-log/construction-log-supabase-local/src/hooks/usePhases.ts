@@ -1,5 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  checkPhaseHasChildren,
+  createPhase as apiCreatePhase,
+  deletePhase as apiDeletePhase,
+  listPhases,
+  updatePhase as apiUpdatePhase,
+  type ApiPhase,
+} from '@/integrations/api/client';
 import { toast } from 'sonner';
 
 export interface Phase {
@@ -45,6 +52,37 @@ interface CreatePhaseParams {
   responsible?: string;
 }
 
+const parseNumericId = (value: string): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('ID invalido');
+  }
+  return parsed;
+};
+
+const toProjectId = (workId?: string): number | null => {
+  if (!workId) return null;
+  const parsed = Number(workId);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const mapApiPhase = (phase: ApiPhase): Phase => ({
+  id: String(phase.id),
+  organization_id: String(phase.tenant_id),
+  work_id: phase.project_id != null ? String(phase.project_id) : null,
+  name: phase.name,
+  description: phase.description ?? null,
+  responsible: phase.responsible ?? null,
+  start_date: phase.start_date,
+  end_date: phase.end_date,
+  status: phase.status,
+  progress: phase.progress ?? 0,
+  created_by: phase.created_by_id != null ? String(phase.created_by_id) : null,
+  created_at: phase.created_at,
+  updated_at: phase.updated_at,
+  work_name: phase.work_name ?? null,
+});
+
 export const usePhases = () => {
   const queryClient = useQueryClient();
 
@@ -52,42 +90,16 @@ export const usePhases = () => {
   const { data: phases = [], isLoading, error, refetch } = useQuery({
     queryKey: ['phases'],
     queryFn: async (): Promise<Phase[]> => {
-      const { data, error } = await supabase
-        .from('phases')
-        .select(`
-          *,
-          works:work_id (name)
-        `)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching phases:', error);
-        throw error;
-      }
-
-      // Map work name from joined table
-      return (data || []).map((phase: any) => ({
-        ...phase,
-        work_name: phase.works?.name || null,
-      }));
+      const data = await listPhases();
+      return (data || []).map(mapApiPhase);
     },
   });
 
   // Update phase name only
   const updatePhaseNameMutation = useMutation({
     mutationFn: async ({ id, newName }: UpdatePhaseNameParams) => {
-      const { data, error } = await supabase
-        .from('phases')
-        .update({ name: newName })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data;
+      const updated = await apiUpdatePhase(parseNumericId(id), { name: newName });
+      return mapApiPhase(updated);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phases'] });
@@ -102,18 +114,26 @@ export const usePhases = () => {
   // Update phase (full update)
   const updatePhaseMutation = useMutation({
     mutationFn: async ({ id, ...updates }: UpdatePhaseParams) => {
-      const { data, error } = await supabase
-        .from('phases')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const payload: {
+        name?: string;
+        start_date?: string;
+        end_date?: string;
+        status?: 'pending' | 'in_progress' | 'completed';
+        progress?: number;
+        description?: string | null;
+        responsible?: string | null;
+      } = {};
 
-      if (error) {
-        throw error;
-      }
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.start_date !== undefined) payload.start_date = updates.start_date;
+      if (updates.end_date !== undefined) payload.end_date = updates.end_date;
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.progress !== undefined) payload.progress = updates.progress;
+      if (updates.description !== undefined) payload.description = updates.description ?? null;
+      if (updates.responsible !== undefined) payload.responsible = updates.responsible ?? null;
 
-      return data;
+      const updated = await apiUpdatePhase(parseNumericId(id), payload);
+      return mapApiPhase(updated);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phases'] });
@@ -125,60 +145,26 @@ export const usePhases = () => {
     },
   });
 
-  // Check if phase has children (work reports within its date range and work)
-  const checkPhaseHasChildren = async (phaseId: string): Promise<boolean> => {
-    // First get the phase details
-    const { data: phase, error: phaseError } = await supabase
-      .from('phases')
-      .select('work_id, start_date, end_date')
-      .eq('id', phaseId)
-      .single();
-
-    if (phaseError || !phase) {
+  const checkPhaseHasChildrenSafe = async (phaseId: string): Promise<boolean> => {
+    try {
+      return await checkPhaseHasChildren(parseNumericId(phaseId));
+    } catch (phaseError) {
       console.error('Error fetching phase for child check:', phaseError);
       return false;
     }
-
-    // If no work_id, the phase has no associated work reports
-    if (!phase.work_id) {
-      return false;
-    }
-
-    // Check for work reports within the phase's date range and work
-    const { count, error: reportsError } = await supabase
-      .from('work_reports')
-      .select('id', { count: 'exact', head: true })
-      .eq('work_id', phase.work_id)
-      .gte('date', phase.start_date)
-      .lte('date', phase.end_date);
-
-    if (reportsError) {
-      console.error('Error checking work reports:', reportsError);
-      return false;
-    }
-
-    return (count ?? 0) > 0;
   };
 
   // Delete phase
   const deletePhaseMutation = useMutation({
     mutationFn: async (id: string) => {
       // First check if phase has children
-      const hasChildren = await checkPhaseHasChildren(id);
-      
+      const hasChildren = await checkPhaseHasChildrenSafe(id);
+
       if (hasChildren) {
         throw new Error('PHASE_HAS_CHILDREN');
       }
 
-      const { error } = await supabase
-        .from('phases')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        throw error;
-      }
-
+      await apiDeletePhase(parseNumericId(id));
       return id;
     },
     onSuccess: () => {
@@ -188,7 +174,7 @@ export const usePhases = () => {
     onError: (error: Error) => {
       console.error('Error deleting phase:', error);
       if (error.message === 'PHASE_HAS_CHILDREN') {
-        toast.error('No puedes borrar una fase que ya tiene datos. Archívala o borra los datos primero.');
+        toast.error('No puedes borrar una fase que ya tiene datos. Archivala o borra los datos primero.');
       } else {
         toast.error('No se pudo eliminar la fase');
       }
@@ -198,35 +184,17 @@ export const usePhases = () => {
   // Create phase
   const createPhaseMutation = useMutation({
     mutationFn: async (params: CreatePhaseParams) => {
-      // Get organization_id from the current user's session
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No authenticated user');
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.organization_id) throw new Error('No organization found');
-
-      const { data, error } = await supabase
-        .from('phases')
-        .insert({
-          ...params,
-          organization_id: profile.organization_id,
-          created_by: user.id,
-          status: 'pending',
-          progress: 0,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data;
+      const apiPhase = await apiCreatePhase({
+        name: params.name,
+        project_id: toProjectId(params.work_id),
+        description: params.description ?? null,
+        responsible: params.responsible ?? null,
+        start_date: params.start_date,
+        end_date: params.end_date,
+        status: 'pending',
+        progress: 0,
+      });
+      return mapApiPhase(apiPhase);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phases'] });
