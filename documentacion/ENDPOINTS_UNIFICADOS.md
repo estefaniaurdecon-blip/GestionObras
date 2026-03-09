@@ -140,6 +140,21 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | PATCH | `/api/v1/users/{user_id}` | `backend-fastapi/app/api/v1/users.py` |
 | PATCH | `/api/v1/users/{user_id}/status` | `backend-fastapi/app/api/v1/users.py` |
 
+### Modulo `user_management`
+
+| Metodo | Ruta | Fuente |
+|---|---|---|
+| GET | `/api/v1/erp/user-management/users` | `backend-fastapi/app/api/v1/user_management.py` |
+| DELETE | `/api/v1/erp/user-management/users/{user_id}` | `backend-fastapi/app/api/v1/user_management.py` |
+| POST | `/api/v1/erp/user-management/users/{user_id}/approve` | `backend-fastapi/app/api/v1/user_management.py` |
+| GET | `/api/v1/erp/user-management/users/{user_id}/roles` | `backend-fastapi/app/api/v1/user_management.py` |
+| POST | `/api/v1/erp/user-management/users/{user_id}/roles` | `backend-fastapi/app/api/v1/user_management.py` |
+| DELETE | `/api/v1/erp/user-management/users/{user_id}/roles/{role}` | `backend-fastapi/app/api/v1/user_management.py` |
+| GET | `/api/v1/erp/user-management/users/{user_id}/assignments` | `backend-fastapi/app/api/v1/user_management.py` |
+| POST | `/api/v1/erp/user-management/assignments` | `backend-fastapi/app/api/v1/user_management.py` |
+| DELETE | `/api/v1/erp/user-management/assignments` | `backend-fastapi/app/api/v1/user_management.py` |
+| GET | `/api/v1/erp/user-management/assignable-foremen` | `backend-fastapi/app/api/v1/user_management.py` |
+
 ### Modulo `tools`
 
 | Metodo | Ruta | Fuente |

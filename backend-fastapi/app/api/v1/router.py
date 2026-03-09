@@ -29,6 +29,7 @@ from . import (
     tools,
     updates,
     users,
+    user_management,
     work_report_comments,
     summary,
     simulations,
@@ -68,6 +69,11 @@ api_router.include_router(
 # Rutas protegidas
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(
+    user_management.router,
+    prefix="/erp/user-management",
+    tags=["users"],
+)
 api_router.include_router(work_report_comments.router, prefix="", tags=["erp"])
 api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])

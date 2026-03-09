@@ -981,3 +981,63 @@ Plantilla para registrar cada iteracion de refactor.
   - Validar residual real en `WorkReportComments` y continuar con `AdvancedReports`/`pdfGenerator`.
 - Decision/es tomadas:
   - Para no romper Timeline, se mantiene contrato legacy del hook y se resuelve paridad via mapeo API<->UI en el frontend.
+
+## Iteracion 2026-03-09 - API-first: `user-management` + migracion de `useUsers`
+- Objetivo: eliminar `supabase.*` en `useUsers` manteniendo operaciones de aprobacion, roles y asignaciones de obra consumidas por UI.
+- Alcance:
+  - Backend FastAPI: nuevo dominio `erp/user-management` (models + schema + service + router + test API).
+  - Frontend `construction-log`: nuevo modulo API `userManagement`, fachada estable en `client.ts` y migracion de `useUsers.ts`.
+  - Documentacion: actualizacion de `ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Backend:
+    - Nuevos modelos:
+      - `UserAppRole` (`erp_user_app_role`) para roles funcionales de app (`master/admin/site_manager/foreman/reader/ofi`).
+      - `UserWorkAssignment` (`erp_user_work_assignment`) para relacion usuario-obra.
+    - Nuevos schemas en `schemas/user_management.py` para perfiles, roles, aprobacion y asignaciones.
+    - Nuevo servicio `user_management_service.py` con:
+      - listado de usuarios por tenant (`approved` mapeado desde `is_active`),
+      - CRUD de roles app por usuario,
+      - aprobacion de usuario + asignacion de rol,
+      - CRUD de asignaciones usuario-obra,
+      - listado de capataces asignables (con fallback desde RBAC core `role=user`).
+      - limpieza de datos relacionados para borrado de usuario.
+    - Nuevo router `api/v1/user_management.py` montado en `/api/v1/erp/user-management/*`.
+    - Registro en `app/api/v1/router.py` y `app/db/base.py`.
+    - Test nuevo `test_user_management_api.py` (roles + aprobacion + asignaciones + borrado).
+  - Frontend:
+    - Nuevo modulo `src/integrations/api/modules/userManagement.ts`.
+    - `client.ts` expone:
+      - `listManagedUsers`, `listManagedUserRoles`, `addManagedUserRole`, `removeManagedUserRole`,
+      - `approveManagedUser`, `listManagedUserAssignments`,
+      - `assignManagedUserToWork`, `removeManagedUserFromWork`,
+      - `listAssignableForemen`, `deleteUserAndData`.
+    - `useUsers.ts` migra completamente a API y mantiene firma publica del hook.
+- Contratos impactados:
+  - Nuevas rutas:
+    - `GET /api/v1/erp/user-management/users`
+    - `DELETE /api/v1/erp/user-management/users/{user_id}`
+    - `POST /api/v1/erp/user-management/users/{user_id}/approve`
+    - `GET /api/v1/erp/user-management/users/{user_id}/roles`
+    - `POST /api/v1/erp/user-management/users/{user_id}/roles`
+    - `DELETE /api/v1/erp/user-management/users/{user_id}/roles/{role}`
+    - `GET /api/v1/erp/user-management/users/{user_id}/assignments`
+    - `POST /api/v1/erp/user-management/assignments`
+    - `DELETE /api/v1/erp/user-management/assignments`
+    - `GET /api/v1/erp/user-management/assignable-foremen`
+  - Sin breaking changes en firma del hook `useUsers`.
+- Riesgos/mitigaciones:
+  - Se introduce una capa de roles app separada de RBAC core para mantener compatibilidad funcional legacy.
+  - Fallback de capataces (`role=user` del RBAC core) evita listas vacias durante transicion.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_user_management_api.py backend-fastapi/tests/test_phases_api.py` -> `2 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+  - `npm run build` (en `apps/construction-log/construction-log-supabase-local`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 13 matches / 5 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 179 matches / 19 archivos.
+- Pendientes:
+  - Migrar `CompanyPortfolio`.
+  - Validar residual de `WorkReportComments` y consumidores activos.
+  - Atacar bloque critico `pdfGenerator` / `exportUtils` / `AdvancedReports` (confirmando uso real antes de cortes agresivos).
+- Decision/es tomadas:
+  - Mantener `useUsers` estable para consumidores actuales y encapsular la compatibilidad en endpoints de `user-management`.

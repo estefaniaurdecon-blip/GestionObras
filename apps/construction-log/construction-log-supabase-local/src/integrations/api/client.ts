@@ -8,6 +8,7 @@ import { createNotificationsApi } from './modules/notifications';
 import { createMessagesApi } from './modules/messages';
 import { createAttachmentsApi } from './modules/attachments';
 import { createUsersApi, normalizeApiUser } from './modules/users';
+import { createUserManagementApi } from './modules/userManagement';
 import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
@@ -952,6 +953,33 @@ export const updateUserStatus = usersApi.updateUserStatus;
 export const deleteUser = usersApi.deleteUser;
 export const updateCurrentUserProfile = usersApi.updateCurrentUserProfile;
 export const changePassword = usersApi.changePassword;
+
+// ============================================================
+// USER MANAGEMENT API (construction-log compatibility)
+// ============================================================
+
+export type {
+  ApiAppRole,
+  ApiManagedUser,
+  ApiUserAssignments,
+  ApiUserRoles,
+} from './modules/userManagement';
+
+const userManagementApi = createUserManagementApi({
+  apiFetchJson,
+  buildQueryParams,
+});
+
+export const listManagedUsers = userManagementApi.listManagedUsers;
+export const listManagedUserRoles = userManagementApi.listUserRoles;
+export const addManagedUserRole = userManagementApi.addUserRole;
+export const removeManagedUserRole = userManagementApi.removeUserRole;
+export const approveManagedUser = userManagementApi.approveManagedUser;
+export const listManagedUserAssignments = userManagementApi.listUserAssignments;
+export const assignManagedUserToWork = userManagementApi.assignUserToWork;
+export const removeManagedUserFromWork = userManagementApi.removeUserFromWork;
+export const listAssignableForemen = userManagementApi.listAssignableForemen;
+export const deleteUserAndData = userManagementApi.deleteUserAndData;
 
 export type {
   ApiOrganization,
