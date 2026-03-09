@@ -143,6 +143,58 @@ export const listAssignedWorkUserIds = async (workId: string, candidateUserIds: 
   return (data || []).map((row) => String(row.user_id));
 };
 
+export type AssignedWorkRow = {
+  id: string;
+  number: string;
+  name: string;
+};
+
+export const listAssignedWorksByUser = async (
+  userId: string | number,
+): Promise<AssignedWorkRow[]> => {
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from('work_assignments')
+    .select('work_id')
+    .eq('user_id', userId);
+
+  if (assignmentsError) throw assignmentsError;
+  if (!assignments || assignments.length === 0) return [];
+
+  const workIds = assignments
+    .map((assignment) => assignment.work_id)
+    .filter((workId): workId is string => Boolean(workId));
+  if (workIds.length === 0) return [];
+
+  const { data: works, error: worksError } = await supabase
+    .from('works')
+    .select('id, number, name')
+    .in('id', workIds);
+  if (worksError) throw worksError;
+
+  return (works || []).map((work) => ({
+    id: String(work.id),
+    number: String(work.number || ''),
+    name: String(work.name || ''),
+  }));
+};
+
+export const listProfileNamesByIds = async (
+  userIds: string[],
+): Promise<Array<{ id: string; full_name: string | null }>> => {
+  if (userIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', userIds);
+  if (error) throw error;
+
+  return (data || []).map((profile) => ({
+    id: String(profile.id),
+    full_name: profile.full_name ?? null,
+  }));
+};
+
 export const listWorkReportDownloads = async (reportId: string, excludeUserId: string | number) => {
   const legacyClient = supabase as unknown as {
     from: (table: string) => {

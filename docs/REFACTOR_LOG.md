@@ -743,3 +743,27 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar sustitucion de usos `supabase.*` restantes en utilidades PDF y hooks de dominio.
 - Decision/es tomadas:
   - Priorizar migraciones donde ya existe endpoint API para reducir riesgo y mantener avance continuo.
+
+## Iteracion 2026-03-09 - Corte de import Supabase en `WorkReportList` (frontera componente -> gateway)
+- Objetivo: eliminar `supabase` directo en `WorkReportList` sin alterar comportamiento funcional.
+- Alcance:
+  - `WorkReportList.tsx`.
+  - `workReportsSupabaseGateway.ts` (nuevos helpers de lectura).
+- Cambios realizados:
+  - `WorkReportList` deja de importar `legacySupabaseRemoved`.
+  - Se reemplazan lecturas directas por gateway:
+    - `listAssignedWorksByUser(...)` para carga de obras asignadas.
+    - `listProfileNamesByIds(...)` para resolver nombres de editores.
+  - Se mantiene consulta de maquinaria de alquiler por API (`listRentalMachinery`) en export bulk.
+- Contratos impactados:
+  - Sin cambios de contratos HTTP.
+- Riesgos/mitigaciones:
+  - Persisten consultas legacy en gateway (transicional), pero se refuerza frontera de arquitectura y se reduce acoplamiento en UI.
+- Tests ejecutados:
+  - `npx tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` -> `OK`.
+- Pendientes:
+  - Sustituir progresivamente helpers legacy del gateway por endpoints API nativos.
+  - Continuar eliminacion de imports Supabase directos en componentes/hooks restantes.
+- Decision/es tomadas:
+  - Mantener estrategia por capas: primero sacar `supabase` de UI, luego cortar proveedor legacy en servicio.

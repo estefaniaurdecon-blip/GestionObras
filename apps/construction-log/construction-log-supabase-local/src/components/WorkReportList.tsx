@@ -59,7 +59,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
 import { listRentalMachinery } from '@/integrations/api/client';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { listAssignedWorksByUser, listProfileNamesByIds } from '@/services/workReportsSupabaseGateway';
 import JSZip from 'jszip';
 
 export type ViewMode = 'byForeman' | 'weekly' | 'monthly';
@@ -168,29 +168,8 @@ export const WorkReportList = ({
       if (!currentUserId) return;
 
       try {
-        // Obtener obras asignadas al usuario
-        const { data: assignments, error: assignError } = await supabase
-          .from('work_assignments')
-          .select('work_id')
-          .eq('user_id', currentUserId);
-
-        if (assignError) throw assignError;
-
-        if (assignments && assignments.length > 0) {
-          const workIds = assignments.map(a => a.work_id);
-          
-          // Obtener los detalles de las obras
-          const { data: works, error: worksError } = await supabase
-            .from('works')
-            .select('id, number, name')
-            .in('id', workIds);
-
-          if (worksError) throw worksError;
-          
-          if (works) {
-            setAvailableWorks(works);
-          }
-        }
+        const assignedWorks = await listAssignedWorksByUser(currentUserId);
+        setAvailableWorks(assignedWorks);
       } catch (error) {
         console.error('Error loading works:', error);
       }
@@ -212,12 +191,7 @@ export const WorkReportList = ({
       if (editorIds.size === 0) return;
 
       try {
-        const { data: profiles, error } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', Array.from(editorIds));
-
-        if (error) throw error;
+        const profiles = await listProfileNamesByIds(Array.from(editorIds));
 
         if (profiles) {
           const newEditorNames = new Map<string, string>();
