@@ -22,6 +22,7 @@ from . import (
     messages,
     notifications,
     organization,
+    rental_machinery_assignments,
     tenants,
     tickets,
     tools,
@@ -72,6 +73,11 @@ api_router.include_router(erp.router, prefix="/erp", tags=["erp"])
 api_router.include_router(
     custom_holidays.router,
     prefix="/erp/custom-holidays",
+    tags=["erp"],
+)
+api_router.include_router(
+    rental_machinery_assignments.router,
+    prefix="/erp/rental-machinery-assignments",
     tags=["erp"],
 )
 api_router.include_router(

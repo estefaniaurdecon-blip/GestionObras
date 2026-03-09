@@ -814,3 +814,46 @@ Plantilla para registrar cada iteracion de refactor.
   - Continuar corte de referencias `supabase.*` en `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers`, `WorkReportComments` y gateway legacy.
 - Decision/es tomadas:
   - Se confirma estrategia `API-first`: no reintroducir Supabase en `src`; para cada dominio faltante, crear endpoint backend y migrar consumo frontend directo.
+
+## Iteracion 2026-03-09 - API-first: `rental_machinery_assignments` + migracion de hook
+- Objetivo: continuar el corte de Supabase con un dominio de uso diario (asignaciones de operadores de maquinaria) con paridad CRUD via backend/API.
+- Alcance:
+  - Backend FastAPI: nuevo modelo, schemas, servicio, router y test de API.
+  - Frontend `construction-log`: nuevo modulo API y migracion de `useRentalMachineryAssignments`.
+  - Documentacion: actualizacion de `ENDPOINTS_UNIFICADOS.md`.
+- Cambios realizados:
+  - Backend:
+    - Modelo `RentalMachineryAssignment` (`erp_rental_machinery_assignment`) con:
+      - `tenant_id`, `rental_machinery_id`, `work_id`, `assignment_date`, `end_date`, `operator_name`, `company_name`, `activity`, `created_by_id`, timestamps.
+      - indice por tenant/obra/fecha y constraint unica por `tenant_id + rental_machinery_id + assignment_date`.
+    - Schemas `RentalMachineryAssignmentCreate/Update/Read`.
+    - Servicio CRUD `rental_machinery_assignment_service` con validacion de duplicados.
+    - Router CRUD montado en:
+      - `GET /api/v1/erp/rental-machinery-assignments`
+      - `POST /api/v1/erp/rental-machinery-assignments`
+      - `PATCH /api/v1/erp/rental-machinery-assignments/{assignment_id}`
+      - `DELETE /api/v1/erp/rental-machinery-assignments/{assignment_id}`
+    - Registro en `app/api/v1/router.py` y `app/db/base.py`.
+  - Frontend:
+    - Nuevo modulo `src/integrations/api/modules/rentalMachineryAssignments.ts`.
+    - `client.ts` mantiene fachada compatible y expone:
+      - `listRentalMachineryAssignments`, `createRentalMachineryAssignment`, `updateRentalMachineryAssignment`, `deleteRentalMachineryAssignment`.
+    - `useRentalMachineryAssignments.ts` deja de usar `supabase.*` y pasa a cliente API.
+    - Se conserva shape legacy del hook para no romper componentes (`id`, `organization_id`, `created_by` como `string`).
+- Contratos impactados:
+  - Nuevos endpoints API de asignaciones de maquinaria (sin breaking changes en contratos existentes).
+- Riesgos/mitigaciones:
+  - `useWorkRentalMachinery` sigue en Supabase; este slice migra asignaciones, no el maestro de maquinaria.
+  - La validacion de duplicados se mueve a API con `409 Conflict`, manteniendo feedback en UI.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_custom_holidays_api.py backend-fastapi/tests/test_rental_machinery_assignments_api.py` -> `2 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` (`construction-log`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 16 matches / 8 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 234 matches / 23 archivos.
+- Pendientes:
+  - Migrar `useWorkRentalMachinery` (maestro) a API ERP con contrato compatible de campos.
+  - Continuar corte en `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers`, `WorkReportComments` y gateway legacy.
+- Decision/es tomadas:
+  - Se mantiene estrategia incremental por dominio: endpoint backend + modulo API + migracion de hook/UI en un mismo slice.

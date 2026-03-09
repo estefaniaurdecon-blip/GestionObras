@@ -12,6 +12,7 @@ import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
 import { createCustomHolidaysApi } from './modules/customHolidays';
+import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -1035,6 +1036,31 @@ export const listCustomHolidays = customHolidaysApi.listCustomHolidays;
 export const createCustomHoliday = customHolidaysApi.createCustomHoliday;
 export const updateCustomHoliday = customHolidaysApi.updateCustomHoliday;
 export const deleteCustomHoliday = customHolidaysApi.deleteCustomHoliday;
+
+// ============================================================
+// RENTAL MACHINERY ASSIGNMENTS API
+// ============================================================
+
+export type {
+  ApiRentalMachineryAssignment,
+  CreateRentalMachineryAssignmentPayload,
+  ListRentalMachineryAssignmentsParams,
+  UpdateRentalMachineryAssignmentPayload,
+} from './modules/rentalMachineryAssignments';
+
+const rentalMachineryAssignmentsApi = createRentalMachineryAssignmentsApi({
+  apiFetchJson,
+  buildQueryParams,
+});
+
+export const listRentalMachineryAssignments =
+  rentalMachineryAssignmentsApi.listRentalMachineryAssignments;
+export const createRentalMachineryAssignment =
+  rentalMachineryAssignmentsApi.createRentalMachineryAssignment;
+export const updateRentalMachineryAssignment =
+  rentalMachineryAssignmentsApi.updateRentalMachineryAssignment;
+export const deleteRentalMachineryAssignment =
+  rentalMachineryAssignmentsApi.deleteRentalMachineryAssignment;
 
 // ============================================================
 // TOOLS API

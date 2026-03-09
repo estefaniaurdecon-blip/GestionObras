@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
-import { useOrganization } from './useOrganization';
+import {
+  createRentalMachineryAssignment,
+  deleteRentalMachineryAssignment,
+  listRentalMachineryAssignments,
+  updateRentalMachineryAssignment,
+  type ApiRentalMachineryAssignment,
+} from '@/integrations/api/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from './use-toast';
 
 export interface RentalMachineryAssignment {
@@ -24,93 +30,111 @@ interface UseRentalMachineryAssignmentsProps {
   workId?: string;
 }
 
-export const useRentalMachineryAssignments = ({ 
-  rentalMachineryId, 
+function mapAssignment(apiAssignment: ApiRentalMachineryAssignment): RentalMachineryAssignment {
+  return {
+    id: String(apiAssignment.id),
+    rental_machinery_id: apiAssignment.rental_machinery_id,
+    organization_id: String(apiAssignment.tenant_id),
+    work_id: apiAssignment.work_id,
+    assignment_date: apiAssignment.assignment_date,
+    end_date: apiAssignment.end_date ?? null,
+    operator_name: apiAssignment.operator_name,
+    company_name: apiAssignment.company_name,
+    activity: apiAssignment.activity ?? null,
+    created_by:
+      apiAssignment.created_by_id !== undefined && apiAssignment.created_by_id !== null
+        ? String(apiAssignment.created_by_id)
+        : null,
+    created_at: apiAssignment.created_at,
+    updated_at: apiAssignment.updated_at,
+  };
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const maybeStatus = (error as { status?: unknown }).status;
+  return typeof maybeStatus === 'number' ? maybeStatus : null;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (!error || typeof error !== 'object') return '';
+  const maybeMessage = (error as { message?: unknown }).message;
+  return typeof maybeMessage === 'string' ? maybeMessage : '';
+}
+
+export const useRentalMachineryAssignments = ({
+  rentalMachineryId,
   date,
-  workId 
+  workId,
 }: UseRentalMachineryAssignmentsProps) => {
   const [assignments, setAssignments] = useState<RentalMachineryAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const { organization } = useOrganization();
+  const { user } = useAuth();
   const { toast } = useToast();
 
   const fetchAssignments = async () => {
-    if (!organization?.id) return;
+    if (!user?.id) return;
 
     try {
       setLoading(true);
-      let query = supabase
-        .from('work_rental_machinery_assignments')
-        .select('*')
-        .eq('organization_id', organization.id);
-
-      if (rentalMachineryId) {
-        query = query.eq('rental_machinery_id', rentalMachineryId);
-      }
-
-      if (date) {
-        query = query.eq('assignment_date', date);
-      }
-
-      if (workId) {
-        query = query.eq('work_id', workId);
-      }
-
-      const { data, error } = await query.order('assignment_date', { ascending: false });
-
-      if (error) throw error;
-      setAssignments(data || []);
+      const data = await listRentalMachineryAssignments({
+        rentalMachineryId,
+        date,
+        workId,
+      });
+      setAssignments((data || []).map(mapAssignment));
     } catch (error) {
       console.error('Error fetching rental machinery assignments:', error);
       toast({
-        title: "Error",
-        description: "No se pudieron cargar las asignaciones de operadores",
-        variant: "destructive"
+        title: 'Error',
+        description: 'No se pudieron cargar las asignaciones de operadores',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const addAssignment = async (assignmentData: Omit<RentalMachineryAssignment, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => {
-    if (!organization?.id) return;
+  const addAssignment = async (
+    assignmentData: Omit<RentalMachineryAssignment, 'id' | 'created_at' | 'updated_at' | 'created_by'>
+  ) => {
+    if (!user?.id) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from('work_rental_machinery_assignments')
-        .insert([{
-          ...assignmentData,
-          organization_id: organization.id,
-          created_by: user?.id
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const created = await createRentalMachineryAssignment({
+        rental_machinery_id: assignmentData.rental_machinery_id,
+        work_id: assignmentData.work_id,
+        assignment_date: assignmentData.assignment_date,
+        end_date: assignmentData.end_date,
+        operator_name: assignmentData.operator_name,
+        company_name: assignmentData.company_name,
+        activity: assignmentData.activity,
+      });
 
       toast({
-        title: "Éxito",
-        description: "Asignación de operador creada correctamente"
+        title: 'Exito',
+        description: 'Asignacion de operador creada correctamente',
       });
 
       await fetchAssignments();
-      return data;
-    } catch (error: any) {
+      return mapAssignment(created);
+    } catch (error) {
       console.error('Error adding rental machinery assignment:', error);
-      
-      if (error.code === '23505') {
+
+      const status = getErrorStatus(error);
+      const message = getErrorMessage(error).toLowerCase();
+      if (status === 409 || message.includes('ya existe')) {
         toast({
-          title: "Error",
-          description: "Ya existe una asignación para esta maquinaria en esta fecha",
-          variant: "destructive"
+          title: 'Error',
+          description: 'Ya existe una asignacion para esta maquinaria en esta fecha',
+          variant: 'destructive',
         });
       } else {
         toast({
-          title: "Error",
-          description: "No se pudo crear la asignación de operador",
-          variant: "destructive"
+          title: 'Error',
+          description: 'No se pudo crear la asignacion de operador',
+          variant: 'destructive',
         });
       }
       throw error;
@@ -119,25 +143,31 @@ export const useRentalMachineryAssignments = ({
 
   const updateAssignment = async (id: string, updates: Partial<RentalMachineryAssignment>) => {
     try {
-      const { error } = await supabase
-        .from('work_rental_machinery_assignments')
-        .update(updates)
-        .eq('id', id);
+      const assignmentId = Number(id);
+      if (!Number.isFinite(assignmentId)) {
+        throw new Error('ID de asignacion invalido');
+      }
 
-      if (error) throw error;
+      await updateRentalMachineryAssignment(assignmentId, {
+        assignment_date: updates.assignment_date,
+        end_date: updates.end_date,
+        operator_name: updates.operator_name,
+        company_name: updates.company_name,
+        activity: updates.activity,
+      });
 
       toast({
-        title: "Éxito",
-        description: "Asignación de operador actualizada correctamente"
+        title: 'Exito',
+        description: 'Asignacion de operador actualizada correctamente',
       });
 
       await fetchAssignments();
     } catch (error) {
       console.error('Error updating rental machinery assignment:', error);
       toast({
-        title: "Error",
-        description: "No se pudo actualizar la asignación de operador",
-        variant: "destructive"
+        title: 'Error',
+        description: 'No se pudo actualizar la asignacion de operador',
+        variant: 'destructive',
       });
       throw error;
     }
@@ -145,35 +175,35 @@ export const useRentalMachineryAssignments = ({
 
   const deleteAssignment = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('work_rental_machinery_assignments')
-        .delete()
-        .eq('id', id);
+      const assignmentId = Number(id);
+      if (!Number.isFinite(assignmentId)) {
+        throw new Error('ID de asignacion invalido');
+      }
 
-      if (error) throw error;
+      await deleteRentalMachineryAssignment(assignmentId);
 
       toast({
-        title: "Éxito",
-        description: "Asignación de operador eliminada correctamente"
+        title: 'Exito',
+        description: 'Asignacion de operador eliminada correctamente',
       });
 
       await fetchAssignments();
     } catch (error) {
       console.error('Error deleting rental machinery assignment:', error);
       toast({
-        title: "Error",
-        description: "No se pudo eliminar la asignación de operador",
-        variant: "destructive"
+        title: 'Error',
+        description: 'No se pudo eliminar la asignacion de operador',
+        variant: 'destructive',
       });
       throw error;
     }
   };
 
   useEffect(() => {
-    if (organization?.id) {
+    if (user?.id) {
       fetchAssignments();
     }
-  }, [rentalMachineryId, date, workId, organization?.id]);
+  }, [rentalMachineryId, date, workId, user?.id]);
 
   return {
     assignments,
@@ -181,7 +211,6 @@ export const useRentalMachineryAssignments = ({
     addAssignment,
     updateAssignment,
     deleteAssignment,
-    refetch: fetchAssignments
+    refetch: fetchAssignments,
   };
 };
-
