@@ -2459,7 +2459,10 @@ def create_rental_machinery(
         project_id=payload.project_id,
         is_rental=bool(payload.is_rental),
         name=cleaned_name,
+        machine_number=(payload.machine_number or "").strip() or None,
         description=(payload.description or "").strip() or None,
+        notes=(payload.notes or "").strip() or None,
+        image_url=(payload.image_url or "").strip() or None,
         provider=(payload.provider or "").strip() or None,
         start_date=payload.start_date,
         end_date=payload.end_date,
@@ -2498,8 +2501,14 @@ def update_rental_machinery(
         if not cleaned_name:
             raise ValueError("El nombre de la maquinaria es obligatorio.")
         machinery.name = cleaned_name
+    if payload.machine_number is not None:
+        machinery.machine_number = payload.machine_number.strip() or None
     if payload.description is not None:
         machinery.description = payload.description.strip() or None
+    if payload.notes is not None:
+        machinery.notes = payload.notes.strip() or None
+    if payload.image_url is not None:
+        machinery.image_url = payload.image_url.strip() or None
     if payload.provider is not None:
         machinery.provider = payload.provider.strip() or None
 

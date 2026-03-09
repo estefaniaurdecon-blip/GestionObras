@@ -894,3 +894,43 @@ Plantilla para registrar cada iteracion de refactor.
   - Migrar `useWorkRentalMachinery`, `AdvancedReports`, `pdfGenerator`, `CompanyPortfolio`, `usePhases`, `useUsers` y `workReportsSupabaseGateway`.
 - Decision/es tomadas:
   - Confirmado criterio de corte: eliminar gateways/supabase transicionales en cuanto exista endpoint API equivalente y consumidor migrado.
+
+## Iteracion 2026-03-09 - API-first: `work_rental_machinery` (maestro) + migracion de `useWorkRentalMachinery`
+- Objetivo: cerrar el pendiente prioritario del maestro de maquinaria de alquiler eliminando `supabase.*` del hook y manteniendo contrato legacy de UI.
+- Alcance:
+  - Backend FastAPI: ampliacion de contrato en `rental-machinery` (model/schemas/service + compatibilidad de schema en startup + test API).
+  - Frontend `construction-log`: nuevo modulo API `rentalMachinery`, fachada estable en `client.ts` y migracion de `useWorkRentalMachinery.ts`.
+  - Documentacion: `ENDPOINTS_UNIFICADOS` + este log.
+- Cambios realizados:
+  - Backend `rental-machinery`:
+    - Se amplian campos del dominio con soporte legacy: `machine_number`, `notes`, `image_url`.
+    - Se actualizan `RentalMachineryRead/Create/Update` para incluir estos campos.
+    - El servicio CRUD persiste/actualiza dichos campos manteniendo validaciones de fechas/estado existentes.
+    - `init_db` agrega `ALTER TABLE` de compatibilidad para columnas faltantes en `erp_rental_machinery`.
+    - Nuevo test `test_rental_machinery_supports_legacy_machine_fields` para validar create + update + list con esos campos.
+  - Frontend API-first:
+    - Nuevo modulo `src/integrations/api/modules/rentalMachinery.ts` con:
+      - `listRentalMachinery`, `createRentalMachinery`, `updateRentalMachinery`, `deleteRentalMachinery`.
+    - `client.ts` mantiene fachada estable y reexporta esos metodos/tipos desde el modulo nuevo.
+    - `useWorkRentalMachinery.ts` migra de `supabase.from('work_rental_machinery')` a cliente API.
+    - Se conserva shape legacy del hook (`type`, `machine_number`, `delivery_date`, `daily_rate`, `notes`, `image`) mediante mapeo API<->UI.
+- Contratos impactados:
+  - Sin rutas nuevas.
+  - Contrato ampliado en endpoints existentes:
+    - `GET/POST/PATCH /api/v1/erp/rental-machinery` ahora soporta `machine_number`, `notes`, `image_url`.
+  - Sin breaking changes en exports publicos previos de `client.ts`.
+- Riesgos/mitigaciones:
+  - El dominio ERP usa `project_id` numerico; el hook valida `workId` y evita llamadas invalidas cuando no es convertible.
+  - `status` legacy se resuelve automaticamente (`active|inactive`) en base a `removal_date` para mantener comportamiento esperado.
+- Tests ejecutados:
+  - `python -m pytest backend-fastapi/tests/test_erp_work_reports_and_rental.py -k rental_machinery` -> `2 passed`.
+  - `node .\\node_modules\\typescript\\bin\\tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - `npm run build` (`construction-log`) -> `OK`.
+- Estado medido (Supabase residual en `construction-log/src`):
+  - `rg -n "supabase\\."` -> 15 matches / 7 archivos.
+  - `rg -n -U "supabase\\s*\\."` -> 217 matches / 21 archivos.
+- Pendientes:
+  - Continuar corte en `usePhases`, `useUsers`, `CompanyPortfolio`, `AdvancedReports`, `pdfGenerator`.
+  - Reducir/eliminar `workReportsSupabaseGateway` cuando se migren sus consumidores restantes.
+- Decision/es tomadas:
+  - Priorizar paridad funcional del hook extendiendo contrato backend en lugar de degradar campos legacy de maquinaria.

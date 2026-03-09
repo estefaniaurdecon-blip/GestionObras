@@ -12,6 +12,7 @@ import { createOrganizationApi } from './modules/organization';
 import { createToolsApi } from './modules/tools';
 import { createAiRuntimeApi } from './modules/aiRuntime';
 import { createCustomHolidaysApi } from './modules/customHolidays';
+import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
 import type { ApiUser } from './modules/users';
@@ -775,36 +776,6 @@ export interface AccessControlReportUpdatePayload {
   expected_updated_at?: string;
 }
 
-export interface ApiRentalMachinery {
-  id: number;
-  tenant_id: number;
-  project_id: number;
-  is_rental: boolean;
-  name: string;
-  description?: string | null;
-  provider?: string | null;
-  start_date: string;
-  end_date?: string | null;
-  price?: number | string | null;
-  price_unit: string;
-  status: string;
-  created_by_id?: number | null;
-  updated_by_id?: number | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
-}
-
-export interface ListRentalMachineryParams {
-  tenantId?: string | number | null;
-  projectId?: number;
-  date?: string;
-  status?: string;
-  includeDeleted?: boolean;
-  limit?: number;
-  offset?: number;
-}
-
 export interface ListAccessControlReportsParams {
   tenantId?: string | number | null;
   projectId?: number;
@@ -863,22 +834,6 @@ export async function deleteAccessControlReport(
   return apiFetchJson<void>(`/api/v1/erp/access-control-reports/${reportId}`, {
     method: 'DELETE',
     headers: tenantHeader(tenantId),
-  });
-}
-
-export async function listRentalMachinery(
-  params: ListRentalMachineryParams = {}
-): Promise<ApiRentalMachinery[]> {
-  const query = buildQueryParams({
-    project_id: params.projectId,
-    date: params.date,
-    status: params.status,
-    include_deleted: params.includeDeleted,
-    limit: params.limit,
-    offset: params.offset,
-  });
-  return apiFetchJson<ApiRentalMachinery[]>(`/api/v1/erp/rental-machinery${query}`, {
-    headers: tenantHeader(params.tenantId),
   });
 }
 
@@ -1037,6 +992,28 @@ export const listCustomHolidays = customHolidaysApi.listCustomHolidays;
 export const createCustomHoliday = customHolidaysApi.createCustomHoliday;
 export const updateCustomHoliday = customHolidaysApi.updateCustomHoliday;
 export const deleteCustomHoliday = customHolidaysApi.deleteCustomHoliday;
+
+// ============================================================
+// RENTAL MACHINERY API
+// ============================================================
+
+export type {
+  ApiRentalMachinery,
+  CreateRentalMachineryPayload,
+  ListRentalMachineryParams,
+  UpdateRentalMachineryPayload,
+} from './modules/rentalMachinery';
+
+const rentalMachineryApi = createRentalMachineryApi({
+  apiFetchJson,
+  buildQueryParams,
+  tenantHeader,
+});
+
+export const listRentalMachinery = rentalMachineryApi.listRentalMachinery;
+export const createRentalMachinery = rentalMachineryApi.createRentalMachinery;
+export const updateRentalMachinery = rentalMachineryApi.updateRentalMachinery;
+export const deleteRentalMachinery = rentalMachineryApi.deleteRentalMachinery;
 
 // ============================================================
 // RENTAL MACHINERY ASSIGNMENTS API

@@ -229,6 +229,22 @@ def init_db() -> None:
                     )
                 )
 
+    if "erp_rental_machinery" in table_names:
+        rental_columns = {col["name"] for col in inspector.get_columns("erp_rental_machinery")}
+        with engine.begin() as conn:
+            if "machine_number" not in rental_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_rental_machinery ADD COLUMN machine_number VARCHAR(128) NULL")
+                )
+            if "notes" not in rental_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_rental_machinery ADD COLUMN notes TEXT NULL")
+                )
+            if "image_url" not in rental_columns:
+                conn.execute(
+                    text("ALTER TABLE erp_rental_machinery ADD COLUMN image_url TEXT NULL")
+                )
+
     # Columns auxiliares para asignaciones y tracking en actividades/subactividades.
     if "erp_activity" in table_names:
         activity_columns = {col["name"] for col in inspector.get_columns("erp_activity")}

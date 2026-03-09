@@ -527,7 +527,10 @@ class RentalMachineryRead(BaseModel):
     project_id: int
     is_rental: bool
     name: str
+    machine_number: Optional[str] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
+    image_url: Optional[str] = None
     provider: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
@@ -545,7 +548,10 @@ class RentalMachineryCreate(BaseModel):
     project_id: int
     is_rental: bool = True
     name: str
+    machine_number: Optional[str] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
+    image_url: Optional[str] = None
     provider: Optional[str] = None
     start_date: date
     end_date: Optional[date] = None
@@ -558,7 +564,10 @@ class RentalMachineryUpdate(BaseModel):
     project_id: Optional[int] = None
     is_rental: Optional[bool] = None
     name: Optional[str] = None
+    machine_number: Optional[str] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
+    image_url: Optional[str] = None
     provider: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None

@@ -490,3 +490,60 @@ def test_rental_machinery_active_on_filters_by_interval_and_status(client: TestC
     machines = response.json()
     assert len(machines) == 1
     assert machines[0]["id"] == active_id
+
+
+def test_rental_machinery_supports_legacy_machine_fields(client: TestClient) -> None:
+    token = _login_superadmin(client)
+    tenant_id = _create_tenant(client, token, prefix="erp-rental-legacy")
+    project_id = _create_project(client, token, tenant_id, name="Proyecto Legacy Rental")
+
+    created = client.post(
+        "/api/v1/erp/rental-machinery",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        json={
+            "project_id": project_id,
+            "name": "Excavadora",
+            "machine_number": "EXC-001",
+            "provider": "Proveedor Uno",
+            "start_date": "2026-03-01",
+            "end_date": None,
+            "price": "250.50",
+            "price_unit": "day",
+            "notes": "Maquina principal de movimiento de tierras",
+            "image_url": "data:image/jpeg;base64,ZmFrZS1pbWFnZS1kYXRh",
+            "status": "active",
+        },
+    )
+    assert created.status_code == status.HTTP_201_CREATED, created.text
+    payload = created.json()
+    machinery_id = payload["id"]
+    assert payload["machine_number"] == "EXC-001"
+    assert payload["notes"] == "Maquina principal de movimiento de tierras"
+    assert payload["image_url"].startswith("data:image/jpeg;base64,")
+
+    updated = client.patch(
+        f"/api/v1/erp/rental-machinery/{machinery_id}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        json={
+            "machine_number": "EXC-002",
+            "notes": "Actualizada para jornada extendida",
+            "image_url": "https://cdn.example.com/machinery/exc-002.jpg",
+            "end_date": "2026-03-15",
+            "status": "inactive",
+        },
+    )
+    assert updated.status_code == status.HTTP_200_OK, updated.text
+    updated_payload = updated.json()
+    assert updated_payload["machine_number"] == "EXC-002"
+    assert updated_payload["notes"] == "Actualizada para jornada extendida"
+    assert updated_payload["image_url"] == "https://cdn.example.com/machinery/exc-002.jpg"
+    assert updated_payload["status"] == "inactive"
+
+    listed = client.get(
+        "/api/v1/erp/rental-machinery",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-Id": str(tenant_id)},
+        params={"project_id": project_id, "limit": 50},
+    )
+    assert listed.status_code == status.HTTP_200_OK, listed.text
+    listed_items = listed.json()
+    assert any(item["id"] == machinery_id and item["machine_number"] == "EXC-002" for item in listed_items)

@@ -198,6 +198,9 @@ Regla de orden: cualquier otro documento debe enlazar aqui y no duplicar listado
 | POST | `/api/v1/erp/rental-machinery` | `backend-fastapi/app/api/v1/erp.py` |
 | DELETE | `/api/v1/erp/rental-machinery/{machinery_id}` | `backend-fastapi/app/api/v1/erp.py` |
 | PATCH | `/api/v1/erp/rental-machinery/{machinery_id}` | `backend-fastapi/app/api/v1/erp.py` |
+
+Nota de contrato: `rental-machinery` soporta campos `machine_number`, `notes` e `image_url` en `GET/POST/PATCH`.
+
 | GET | `/api/v1/erp/custom-holidays` | `backend-fastapi/app/api/v1/custom_holidays.py` |
 | POST | `/api/v1/erp/custom-holidays` | `backend-fastapi/app/api/v1/custom_holidays.py` |
 | PATCH | `/api/v1/erp/custom-holidays/{holiday_id}` | `backend-fastapi/app/api/v1/custom_holidays.py` |

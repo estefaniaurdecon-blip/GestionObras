@@ -4,7 +4,7 @@ from datetime import date as DateType, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Column, Index, JSON, Numeric
+from sqlalchemy import Column, Index, JSON, Numeric, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -354,7 +354,10 @@ class RentalMachinery(SQLModel, table=True):
 
     is_rental: bool = Field(default=True, index=True)
     name: str = Field(max_length=255)
+    machine_number: Optional[str] = Field(default=None, max_length=128)
     description: Optional[str] = Field(default=None, max_length=512)
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    image_url: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     provider: Optional[str] = Field(default=None, max_length=255)
     start_date: DateType = Field(index=True)
     end_date: Optional[DateType] = Field(default=None, index=True)
