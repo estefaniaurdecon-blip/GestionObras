@@ -130,6 +130,24 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
         json={"to_user_id": str(receiver.id), "message": "Segundo mensaje"},
     )
     assert second_send.status_code == status.HTTP_201_CREATED
+    second_message_id = int(second_send.json()["id"])
+
+    delete_single_response = client.delete(
+        f"/api/v1/messages/{second_message_id}",
+        headers=receiver_headers,
+    )
+    assert delete_single_response.status_code == status.HTTP_204_NO_CONTENT
+
+    post_single_delete_list = client.get("/api/v1/messages?limit=100", headers=receiver_headers)
+    assert post_single_delete_list.status_code == status.HTTP_200_OK
+    assert all(int(item["id"]) != second_message_id for item in post_single_delete_list.json()["items"])
+
+    third_send = client.post(
+        "/api/v1/messages",
+        headers=superadmin_headers,
+        json={"to_user_id": str(receiver.id), "message": "Tercer mensaje"},
+    )
+    assert third_send.status_code == status.HTTP_201_CREATED
 
     clear_response = client.delete("/api/v1/messages/clear-all", headers=receiver_headers)
     assert clear_response.status_code == status.HTTP_204_NO_CONTENT

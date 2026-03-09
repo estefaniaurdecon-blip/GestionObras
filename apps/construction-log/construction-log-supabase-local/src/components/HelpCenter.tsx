@@ -10,7 +10,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import {
+  createMessage,
+  deleteConversationMessages,
+  deleteMessage,
+  listMessages,
+  listUsersByTenant,
+  type ApiUser,
+} from '@/integrations/api/client';
 import { toast } from '@/hooks/use-toast';
 import { 
   Send, 
@@ -88,6 +95,23 @@ interface FeatureCard {
   roles: string[];
 }
 
+const ADMIN_ROLE_NAMES = new Set([
+  'admin',
+  'master',
+  'super_admin',
+  'tenant_admin',
+]);
+
+const hasAdminRole = (candidate: ApiUser): boolean => {
+  if (candidate.is_super_admin) return true;
+  const roleNames = Array.isArray(candidate.roles)
+    ? candidate.roles
+    : candidate.role_name
+      ? [String(candidate.role_name)]
+      : [];
+  return roleNames.some((role) => ADMIN_ROLE_NAMES.has(String(role).trim().toLowerCase()));
+};
+
 export const HelpCenter = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -103,8 +127,12 @@ export const HelpCenter = () => {
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAdmin();
-  }, []);
+    if (user?.tenant_id && currentUserId) {
+      loadAdmin();
+    } else {
+      setAdminId(null);
+    }
+  }, [user?.tenant_id, currentUserId]);
 
   useEffect(() => {
     if (adminId && currentUserId) {
@@ -117,17 +145,19 @@ export const HelpCenter = () => {
   }, [adminId, currentUserId]);
 
   const loadAdmin = async () => {
+    if (!user?.tenant_id || !currentUserId) return;
     try {
-      const { data, error } = await supabase.rpc('get_organization_admin');
-      if (error) {
-        console.error('Error loading admin:', error);
-        return;
-      }
-      if (data && data.length > 0) {
-        setAdminId(data[0].user_id);
-      }
+      const users = await listUsersByTenant(user.tenant_id, false);
+      const adminUser = users.find(
+        (candidate) =>
+          candidate.is_active &&
+          String(candidate.id) !== currentUserId &&
+          hasAdminRole(candidate)
+      );
+      setAdminId(adminUser ? String(adminUser.id) : null);
     } catch (error) {
       console.error('Error loading admin:', error);
+      setAdminId(null);
     }
   };
 
@@ -136,18 +166,25 @@ export const HelpCenter = () => {
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`*, profiles!messages_from_user_id_fkey(full_name)`)
-        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${currentUserId})`)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      
-      const messagesWithNames = data?.map(msg => ({
-        ...msg,
-        from_user_name: (msg as any).profiles?.full_name || 'Usuario'
-      })) || [];
+      const response = await listMessages({ limit: 500, offset: 0 });
+      const messagesWithNames = response.items
+        .filter(
+          (msg) =>
+            (msg.from_user_id === currentUserId && msg.to_user_id === adminId) ||
+            (msg.from_user_id === adminId && msg.to_user_id === currentUserId)
+        )
+        .sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+        .map((msg) => ({
+          id: String(msg.id),
+          from_user_id: msg.from_user_id,
+          to_user_id: msg.to_user_id,
+          message: msg.message,
+          created_at: msg.created_at,
+          from_user_name: msg.from_user?.full_name || 'Usuario',
+        }));
       
       setMessages(messagesWithNames);
     } catch (error) {
@@ -158,15 +195,12 @@ export const HelpCenter = () => {
   };
 
   const subscribeToMessages = () => {
-    return supabase
-      .channel('help-messages')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `to_user_id=eq.${currentUserId}`,
-      }, () => loadMessages())
-      .subscribe();
+    const pollId = window.setInterval(() => {
+      void loadMessages();
+    }, 10000);
+    return {
+      unsubscribe: () => window.clearInterval(pollId),
+    };
   };
 
   const handleSendMessage = async () => {
@@ -174,13 +208,10 @@ export const HelpCenter = () => {
 
     setSendingMessage(true);
     try {
-      const { error } = await supabase.from('messages').insert({
-        from_user_id: currentUserId,
+      await createMessage({
         to_user_id: adminId,
         message: newMessage.trim(),
       });
-
-      if (error) throw error;
 
       setNewMessage('');
       toast({ title: t('help.messageSent'), description: t('help.messageSentDesc') });
@@ -194,10 +225,10 @@ export const HelpCenter = () => {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!user) return;
+    const numericId = Number(messageId);
+    if (!Number.isFinite(numericId)) return;
     try {
-      const { error } = await supabase.from('messages').delete().eq('id', messageId);
-      if (error) throw error;
+      await deleteMessage(numericId);
       toast({ title: t('help.messageDeleted'), description: t('help.messageDeletedDesc') });
       loadMessages();
     } catch (error: any) {
@@ -211,12 +242,7 @@ export const HelpCenter = () => {
     if (!confirm(t('help.clearConfirm'))) return;
 
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .or(`and(from_user_id.eq.${currentUserId},to_user_id.eq.${adminId}),and(from_user_id.eq.${adminId},to_user_id.eq.${currentUserId})`);
-
-      if (error) throw error;
+      await deleteConversationMessages(adminId);
       toast({ title: t('help.conversationCleared'), description: t('help.conversationClearedDesc') });
       loadMessages();
     } catch (error: any) {

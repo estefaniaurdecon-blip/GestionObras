@@ -676,3 +676,42 @@ Plantilla para registrar cada iteracion de refactor.
 - Decision/es tomadas:
   - Priorizar baseline `tsc` verde para desbloquear continuidad de slices criticos.
   - Mantener una segunda fase de saneamiento lint para no mezclar cambios de tipado funcional con limpieza masiva de estilo/tipos.
+
+## Iteracion 2026-03-09 - Corte Supabase en `HelpCenter` + endpoint API de borrado individual
+- Objetivo: eliminar dependencia legacy `supabase.*` en el chat de ayuda y mantener paridad funcional (incluyendo borrado de mensaje).
+- Alcance:
+  - Frontend `construction-log`: `HelpCenter` y cliente API de mensajes.
+  - Backend FastAPI: router/servicio de mensajes y test de API.
+- Cambios realizados:
+  - `HelpCenter.tsx` migra de consultas/realtime Supabase a cliente API:
+    - resolucion de administrador via `listUsersByTenant(...)` (roles admin/master/super_admin/tenant_admin),
+    - carga de conversacion via `listMessages(...)` + filtrado por `adminId/currentUserId`,
+    - envio via `createMessage(...)`,
+    - borrado de conversacion via `deleteConversationMessages(...)`,
+    - polling ligero (10s) para refresco en lugar de canal realtime legacy.
+  - Se elimina import de `legacySupabaseRemoved` en `HelpCenter` (sin referencias `supabase` en el componente).
+  - Cliente API:
+    - nuevo metodo `deleteMessage(messageId)` en `modules/messages.ts`,
+    - re-export en `integrations/api/client.ts`.
+  - Backend:
+    - nuevo caso de uso `delete_message(...)` en `message_service.py`.
+    - nuevo endpoint `DELETE /api/v1/messages/{message_id}` en `api/v1/messages.py`.
+    - ajuste de orden de rutas para no interferir con `DELETE /api/v1/messages/clear-all`.
+  - Tests backend:
+    - `test_messages_api.py` ampliado para cubrir borrado individual y verificar que el mensaje desaparece del listado.
+- Contratos impactados:
+  - Nuevo endpoint backend: `DELETE /api/v1/messages/{message_id}`.
+  - Sin breaking changes en endpoints existentes de mensajes.
+- Riesgos/mitigaciones:
+  - El reemplazo de realtime por polling en `HelpCenter` reduce complejidad de migracion y elimina dependencia Supabase; el refresco deja de ser push inmediato.
+  - Seleccion de administrador depende de roles retornados por `listUsersByTenant`; si no existe usuario con rol admin/master se muestra estado sin admin disponible.
+- Tests ejecutados:
+  - Frontend: `npx tsc -p tsconfig.app.json --pretty false` -> `OK`.
+  - Frontend: `npm run build` -> `OK`.
+  - Backend: `python -m pytest backend-fastapi/tests/test_messages_api.py` -> `1 passed`.
+- Pendientes:
+  - Continuar migracion de modulos con `supabase.*` residual (hooks/utils legacy restantes).
+  - Evaluar si `HelpCenter` requiere websocket/realtime API propio para paridad UX total.
+- Decision/es tomadas:
+  - Priorizar corte funcional de Supabase en componentes de uso diario aunque el primer paso use polling.
+  - Extender API de mensajes para preservar capacidades existentes del frontend sin fallback legacy.

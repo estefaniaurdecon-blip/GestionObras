@@ -67,6 +67,12 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     });
   };
 
+  const deleteMessage = async (messageId: number): Promise<void> => {
+    return deps.apiFetchJson<void>(`/api/v1/messages/${messageId}`, {
+      method: 'DELETE',
+    });
+  };
+
   const deleteConversationMessages = async (otherUserId: string): Promise<void> => {
     return deps.apiFetchJson<void>(`/api/v1/messages/conversation/${encodeURIComponent(otherUserId)}`, {
       method: 'DELETE',
@@ -83,6 +89,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     listMessages,
     createMessage,
     markMessageAsRead,
+    deleteMessage,
     deleteConversationMessages,
     clearAllMessages,
   };

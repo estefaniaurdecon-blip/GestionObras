@@ -10,6 +10,7 @@ from app.services.message_service import (
     MessageValidationError,
     clear_all_messages,
     create_message,
+    delete_message,
     delete_conversation,
     list_messages_for_user,
     mark_message_as_read,
@@ -146,4 +147,29 @@ def api_clear_all_messages(
         user=current_user,
         tenant_id=tenant_id,
     )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{message_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Eliminar un mensaje",
+)
+def api_delete_message(
+    message_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> Response:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    try:
+        delete_message(
+            session=session,
+            user=current_user,
+            tenant_id=tenant_id,
+            message_id=message_id,
+        )
+    except MessageNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -963,6 +963,7 @@ const messagesApi = createMessagesApi({
 export const listMessages = messagesApi.listMessages;
 export const createMessage = messagesApi.createMessage;
 export const markMessageAsRead = messagesApi.markMessageAsRead;
+export const deleteMessage = messagesApi.deleteMessage;
 export const deleteConversationMessages = messagesApi.deleteConversationMessages;
 export const clearAllMessages = messagesApi.clearAllMessages;
 

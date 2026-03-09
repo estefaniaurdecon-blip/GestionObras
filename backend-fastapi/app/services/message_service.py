@@ -145,6 +145,27 @@ def mark_message_as_read(
     return _serialize_message(session, row)
 
 
+def delete_message(
+    session: Session,
+    *,
+    user: User,
+    tenant_id: int,
+    message_id: int,
+) -> None:
+    row = session.exec(
+        select(Message).where(
+            Message.id == message_id,
+            Message.tenant_id == tenant_id,
+        )
+    ).first()
+    current_user_id = _current_user_id(user)
+    if not row or (row.from_user_id != current_user_id and row.to_user_id != current_user_id):
+        raise MessageNotFoundError("Mensaje no encontrado.")
+
+    session.delete(row)
+    session.commit()
+
+
 def delete_conversation(
     session: Session,
     *,
