@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useWorkReports } from '@/hooks/useWorkReports';
 import { formatDistanceToNow, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { generateWorkReportPDF } from '@/utils/pdfGenerator';
@@ -30,15 +29,24 @@ import { Card } from '@/components/ui/card';
 import {
   getErpWorkReport,
   listErpWorkReports,
-  type ApiErpWorkReport,
 } from '@/integrations/api/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
+import {
+  type ApiErpWorkReport,
+  extractWorkReportDetail,
+  mapApiWorkReportToLegacyWorkReport,
+  type WorkReportDetail,
+} from '@/services/workReportContract';
 import type { Notification as AppNotification } from '@/types/notifications';
 import type { WorkReport } from '@/types/workReport';
 
-type NotificationWorkDetail = { workName: string; workNumber: string; date: string };
+type NotificationWorkDetail = WorkReportDetail;
+type NotificationsCenterProps = {
+  companyLogo?: string;
+  reports?: WorkReport[];
+};
 
 const toApiReportId = (raw: string | undefined): number | null => {
   if (!raw) return null;
@@ -53,113 +61,13 @@ const toApiReportId = (raw: string | undefined): number | null => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-const toRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const toArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
-
-const toText = (...values: unknown[]): string => {
-  for (const value of values) {
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed.length > 0) return trimmed;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-  return '';
-};
-
-const toNumber = (value: unknown, fallback = 0): number => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const toBoolean = (value: unknown, fallback = false): boolean => {
-  if (typeof value === 'boolean') return value;
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === 'number') return value !== 0;
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'true' || normalized === '1') return true;
-    if (normalized === 'false' || normalized === '0') return false;
-  }
-  return fallback;
-};
-
-const extractWorkDetail = (report: ApiErpWorkReport): NotificationWorkDetail => {
-  const payload = toRecord(report.payload);
-  return {
-    workName: toText(
-      payload.workName,
-      payload.work_name,
-      payload.projectName,
-      payload.project_name,
-      report.title,
-      `Obra ${report.project_id}`,
-    ),
-    workNumber: toText(
-      payload.workNumber,
-      payload.work_number,
-      payload.reportIdentifier,
-      payload.report_identifier,
-      report.report_identifier,
-      report.id,
-    ),
-    date: toText(payload.date, report.date),
-  };
-};
-
-const mapApiReportToWorkReport = (report: ApiErpWorkReport): WorkReport => {
-  const payload = toRecord(report.payload);
-  const detail = extractWorkDetail(report);
-
-  return {
-    id: String(report.id),
-    workId: toText(payload.workId, payload.work_id, report.project_id) || undefined,
-    workNumber: detail.workNumber,
-    date: detail.date,
-    workName: detail.workName,
-    foreman: toText(payload.foreman),
-    foremanHours: toNumber(payload.foremanHours ?? payload.foreman_hours, 0),
-    foremanEntries: toArray(payload.foremanEntries ?? payload.foreman_entries),
-    foremanSignature: toText(payload.foremanSignature, payload.foreman_signature) || undefined,
-    siteManager: toText(payload.siteManager, payload.site_manager),
-    siteManagerSignature: toText(payload.siteManagerSignature, payload.site_manager_signature) || undefined,
-    observations: toText(payload.observations),
-    workGroups: toArray(payload.workGroups ?? payload.work_groups),
-    machineryGroups: toArray(payload.machineryGroups ?? payload.machinery_groups),
-    materialGroups: toArray(payload.materialGroups ?? payload.material_groups),
-    subcontractGroups: toArray(payload.subcontractGroups ?? payload.subcontract_groups),
-    createdAt: toText(report.created_at, report.updated_at, new Date().toISOString()),
-    updatedAt: toText(report.updated_at, report.created_at, new Date().toISOString()),
-    createdBy:
-      toText(payload.createdBy, payload.created_by, report.created_by_id) || undefined,
-    approved: toBoolean(payload.approved, report.status === 'approved'),
-    approvedBy: toText(payload.approvedBy, payload.approved_by) || undefined,
-    approvedAt: toText(payload.approvedAt, payload.approved_at) || undefined,
-    lastEditedBy: toText(payload.lastEditedBy, payload.last_edited_by, report.updated_by_id) || undefined,
-    lastEditedAt: toText(payload.lastEditedAt, payload.last_edited_at) || undefined,
-    status:
-      (toText(payload.status, report.status) as WorkReport['status']) || 'missing_data',
-    missingDeliveryNotes: toBoolean(payload.missingDeliveryNotes, false),
-    autoCloneNextDay: toBoolean(payload.autoCloneNextDay, false),
-    completedSections: toArray(payload.completedSections ?? payload.completed_sections),
-    isArchived: report.status === 'archived',
-    archivedAt: report.deleted_at || undefined,
-    archivedBy: toText(payload.archivedBy, payload.archived_by) || undefined,
-  };
-};
-
-export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) => {
+export const NotificationsCenter = ({
+  companyLogo,
+  reports = [],
+}: NotificationsCenterProps) => {
   const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
   const { isOfi, isSiteManager, isAdmin, isMaster } = useUserPermissions();
   const { trackDownload } = useWorkReportDownloads();
-  const { reports } = useWorkReports();
   const [open, setOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
@@ -195,7 +103,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
           pendingNotifications.map(async ({ relatedId, reportId }) => {
             try {
               const report = await getErpWorkReport(reportId);
-              return { relatedId, detail: extractWorkDetail(report) };
+              return { relatedId, detail: extractWorkReportDetail(report) };
             } catch {
               return null;
             }
@@ -323,7 +231,9 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
       }
 
       // Try to find in local reports first
-      let relatedReport = reports.find(r => r.id === String(apiReportId));
+      let relatedReport = reports.find(
+        (report) => report.id === selectedNotification.related_id || toApiReportId(report.id) === apiReportId,
+      );
       let relatedApiReport: ApiErpWorkReport | null = null;
       
       // If not found locally, fetch from database
@@ -340,7 +250,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
           return;
         }
 
-        relatedReport = mapApiReportToWorkReport(relatedApiReport);
+        relatedReport = mapApiWorkReportToLegacyWorkReport(relatedApiReport);
       }
 
       const reportDate = new Date(relatedReport.date);
@@ -363,7 +273,7 @@ export const NotificationsCenter = ({ companyLogo }: { companyLogo?: string }) =
           limit: 500,
           offset: 0,
         });
-        const allReports = apiReports.map(mapApiReportToWorkReport);
+        const allReports: WorkReport[] = apiReports.map(mapApiWorkReportToLegacyWorkReport);
 
         if (allReports.length > 0) {
           if (period === 'week') {

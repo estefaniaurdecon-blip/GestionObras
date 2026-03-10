@@ -3,7 +3,6 @@ import { isNative, blobToBase64, saveBase64File, textToBase64 } from './nativeFi
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { listRentalMachinery as listRentalMachineryApi } from '@/integrations/api/client';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 
 // Adapter: map API fields to legacy field names used throughout this file
 async function listRentalMachineryLegacy(): Promise<any[]> {
@@ -256,54 +255,7 @@ export const exportToExcel = async (reports: WorkReport[]) => {
     XLSX.utils.book_append_sheet(wb, subcontractWs, 'Subcontrata');
   }
 
-  // 7. REPASOS ACTIVOS
-  const repasosData: any[] = [];
-  const statusLabels: Record<string, string> = {
-    pending: 'Pendiente',
-    in_progress: 'En Proceso',
-    completed: 'Completado',
-  };
-
-  // Fetch repasos for all works
-  if (workIds.length > 0) {
-    const { data: allRepasos } = await supabase
-      .from('work_repasos')
-      .select('*')
-      .in('work_id', workIds)
-      .in('status', ['pending', 'in_progress'])
-      .order('created_at', { ascending: true });
-
-    if (allRepasos) {
-      reports.forEach(report => {
-        if (!report.workId) return;
-        
-        const reportRepasos = allRepasos.filter(r => r.work_id === report.workId);
-        reportRepasos.forEach(repaso => {
-          repasosData.push({
-            'Fecha': new Date(report.date).toLocaleDateString('es-ES'),
-            'Nº Obra': report.workNumber || '',
-            'Nombre Obra': report.workName || '',
-            'Código': repaso.code || '',
-            'Estado': statusLabels[repaso.status] || repaso.status,
-            'Descripción': repaso.description || '',
-            'Empresa Asignada': repaso.assigned_company || '-',
-            'Horas Estimadas': repaso.estimated_hours || 0,
-            'Horas Reales': repaso.actual_hours || 0,
-          });
-        });
-      });
-    }
-  }
-
-  if (repasosData.length > 0) {
-    const repasosWs = XLSX.utils.json_to_sheet(repasosData);
-    repasosWs['!cols'] = [
-      { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 15 },
-      { wch: 40 }, { wch: 25 }, { wch: 15 }, { wch: 15 }
-    ];
-    applyCenterAlignment(repasosWs, XLSX);
-    XLSX.utils.book_append_sheet(wb, repasosWs, 'Repasos Activos');
-  }
+  // La exportacion de repasos legacy se ha retirado hasta cerrar la migracion.
 
   // Generar nombre de archivo
   const dateFormatted = format(new Date(), 'dd-MM-yyyy');
@@ -492,41 +444,7 @@ export const exportSingleReportToExcel = async (report: WorkReport) => {
     XLSX.utils.book_append_sheet(wb, subcontractWs, 'Subcontrata');
   }
 
-  // 7. REPASOS ACTIVOS
-  if (report.workId) {
-    const { data: activeRepasos } = await supabase
-      .from('work_repasos')
-      .select('*')
-      .eq('work_id', report.workId)
-      .in('status', ['pending', 'in_progress'])
-      .order('created_at', { ascending: true });
-
-    if (activeRepasos && activeRepasos.length > 0) {
-      const statusLabels: Record<string, string> = {
-        pending: 'Pendiente',
-        in_progress: 'En Proceso',
-        completed: 'Completado',
-      };
-
-      const repasosData: any[] = activeRepasos.map(repaso => ({
-        'Código': repaso.code || '',
-        'Estado': statusLabels[repaso.status] || repaso.status,
-        'Descripción': repaso.description || '',
-        'Empresa Asignada': repaso.assigned_company || '-',
-        'Horas Estimadas': repaso.estimated_hours || 0,
-        'Horas Reales': repaso.actual_hours || 0,
-        'Fecha Creación': new Date(repaso.created_at).toLocaleDateString('es-ES'),
-      }));
-
-      const repasosWs = XLSX.utils.json_to_sheet(repasosData);
-      repasosWs['!cols'] = [
-        { wch: 12 }, { wch: 15 }, { wch: 40 }, { wch: 25 }, 
-        { wch: 15 }, { wch: 15 }, { wch: 15 }
-      ];
-      applyCenterAlignment(repasosWs, XLSX);
-      XLSX.utils.book_append_sheet(wb, repasosWs, 'Repasos Activos');
-    }
-  }
+  // La exportacion de repasos legacy se ha retirado hasta cerrar la migracion.
 
   const dateFormatted = format(new Date(report.date), 'dd-MM-yyyy');
   const foremanName = (report.foreman || 'sin_encargado').replace(/\s+/g, '_');
@@ -540,5 +458,6 @@ export const exportSingleReportToExcel = async (report: WorkReport) => {
     return Promise.resolve();
   }
 };
+
 
 

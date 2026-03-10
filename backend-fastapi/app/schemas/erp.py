@@ -387,6 +387,7 @@ WorkReportStatus = Literal[
     "closed",
     "archived",
 ]
+WorkReportSyncOperationType = Literal["create", "update", "delete"]
 
 
 class WorkReportRead(BaseModel):
@@ -400,7 +401,7 @@ class WorkReportRead(BaseModel):
     idempotency_key: Optional[str] = None
     title: Optional[str] = None
     date: date
-    status: str
+    status: WorkReportStatus
     is_closed: bool
     payload: dict[str, Any] = Field(default_factory=dict)
     created_by_id: Optional[int] = None
@@ -435,7 +436,7 @@ class WorkReportUpdate(BaseModel):
 
 class WorkReportSyncOperation(BaseModel):
     client_op_id: str
-    op: Literal["create", "update", "delete"]
+    op: WorkReportSyncOperationType
     report_id: Optional[int] = None
     external_id: Optional[str] = None
     client_temp_id: Optional[str] = None
@@ -451,7 +452,7 @@ class WorkReportSyncRequest(BaseModel):
 
 class WorkReportSyncAck(BaseModel):
     client_op_id: str
-    op: str
+    op: WorkReportSyncOperationType
     ok: bool
     report_id: Optional[int] = None
     external_id: Optional[str] = None

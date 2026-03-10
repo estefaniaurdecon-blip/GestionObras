@@ -19,6 +19,12 @@ import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
 import { createSavedEconomicReportsApi } from './modules/savedEconomicReports';
+import type {
+  ApiErpWorkReport,
+  CreateErpWorkReportPayload,
+  ListErpWorkReportsParams,
+  UpdateErpWorkReportPayload,
+} from '@/services/workReportContract';
 import type { ApiUser } from './modules/users';
 
 // Re-export storage functions for convenience
@@ -638,59 +644,12 @@ export async function deleteErpWorkReport(
   });
 }
 
-export interface ApiErpWorkReport {
-  id: number;
-  tenant_id: number;
-  project_id: number;
-  external_id?: string | null;
-  report_identifier?: string | null;
-  idempotency_key?: string | null;
-  title?: string | null;
-  date: string;
-  status: string;
-  is_closed: boolean;
-  payload: Record<string, unknown>;
-  created_by_id?: number | null;
-  updated_by_id?: number | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
-}
-
-export interface ListErpWorkReportsParams {
-  tenantId?: string | number | null;
-  projectId?: number;
-  externalId?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  status?: string;
-  updatedSince?: string;
-  includeDeleted?: boolean;
-  limit?: number;
-  offset?: number;
-}
-
-export interface CreateErpWorkReportPayload {
-  project_id: number;
-  date: string;
-  title?: string | null;
-  status?: string;
-  is_closed?: boolean;
-  report_identifier?: string | null;
-  external_id?: string | null;
-  payload?: Record<string, unknown>;
-}
-
-export interface UpdateErpWorkReportPayload {
-  project_id?: number;
-  date?: string;
-  title?: string | null;
-  status?: string;
-  is_closed?: boolean;
-  report_identifier?: string | null;
-  external_id?: string | null;
-  payload?: Record<string, unknown>;
-}
+export type {
+  ApiErpWorkReport,
+  CreateErpWorkReportPayload,
+  ListErpWorkReportsParams,
+  UpdateErpWorkReportPayload,
+} from '@/services/workReportContract';
 
 export async function listErpWorkReports(
   params: ListErpWorkReportsParams = {}

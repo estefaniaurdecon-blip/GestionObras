@@ -27,6 +27,7 @@ import {
   listRentalMachinery,
   listSavedEconomicReports,
 } from '@/integrations/api/client';
+import { mapApiWorkReportToLegacyWorkReport } from '@/services/workReportContract';
 
 interface AdvancedReportsProps {
   reports: WorkReport[];
@@ -64,29 +65,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
         const statusFilter = new Set(['completed', 'missing_data', 'missing_delivery_notes']);
         const normalized: WorkReport[] = data
           .filter(r => statusFilter.has(r.status))
-          .map(r => ({
-            id: r.external_id || String(r.id),
-            workId: r.payload.work_id != null ? String(r.payload.work_id) : String(r.project_id),
-            workName: String(r.payload.work_name ?? ''),
-            workNumber: String(r.payload.work_number ?? ''),
-            date: r.date,
-            foreman: String(r.payload.foreman ?? ''),
-            foremanHours: Number(r.payload.foreman_hours ?? 0),
-            siteManager: String(r.payload.site_manager ?? ''),
-            workGroups: (r.payload.work_groups as any) || [],
-            machineryGroups: (r.payload.machinery_groups as any) || [],
-            materialGroups: (r.payload.material_groups as any) || [],
-            subcontractGroups: (r.payload.subcontract_groups as any) || [],
-            observations: String(r.payload.observations ?? ''),
-            createdBy: r.created_by_id != null ? String(r.created_by_id) : undefined,
-            createdAt: r.created_at,
-            updatedAt: r.updated_at,
-            approved: Boolean(r.payload.approved),
-            approvedBy: r.payload.approved_by != null ? String(r.payload.approved_by) : undefined,
-            approvedAt: r.payload.approved_at != null ? String(r.payload.approved_at) : undefined,
-            status: (r.status as 'completed' | 'missing_data' | 'missing_delivery_notes'),
-            missingDeliveryNotes: Boolean(r.payload.missing_delivery_notes),
-          }));
+          .map(mapApiWorkReportToLegacyWorkReport);
         setRealtimeReports(normalized);
       } catch (error) {
         console.error('Error loading reports:', error);

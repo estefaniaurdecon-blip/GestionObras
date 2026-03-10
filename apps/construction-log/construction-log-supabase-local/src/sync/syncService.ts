@@ -3,6 +3,14 @@ import { offlineDb } from '@/offline-db/db';
 import type { OutboxRow } from '@/offline-db/types';
 import { getToken, isTokenExpired } from '@/integrations/api/storage';
 import {
+  API_WORK_REPORT_STATUSES,
+  type ApiErpWorkReport,
+  type WorkReportSyncAck,
+  type WorkReportSyncOperation,
+  type WorkReportSyncRequest,
+  type WorkReportSyncResponse,
+} from '@/services/workReportContract';
+import {
   buildDeterministicClientOpId,
   decideConsolidatedAction,
   getCompatRetryPayload,
@@ -11,63 +19,8 @@ import {
 
 const LAST_SYNC_KEY_PREFIX = 'work_reports_last_sync::';
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const ALLOWED_SYNC_STATUSES = new Set([
-  'draft',
-  'pending',
-  'approved',
-  'completed',
-  'missing_data',
-  'missing_delivery_notes',
-  'closed',
-  'archived',
-]);
-
-type WorkReportSyncOperation = {
-  client_op_id: string;
-  op: 'create' | 'update' | 'delete';
-  report_id?: number;
-  external_id?: string;
-  client_temp_id?: string;
-  data: Record<string, unknown>;
-};
-
-type WorkReportSyncRequest = {
-  since?: string | null;
-  operations: WorkReportSyncOperation[];
-  include_deleted?: boolean;
-  limit?: number;
-};
-
-type WorkReportSyncAck = {
-  client_op_id: string;
-  op?: 'create' | 'update' | 'delete';
-  ok: boolean;
-  error?: string | null;
-  report_id?: number | null;
-  external_id?: string | null;
-  client_temp_id?: string | null;
-  mapped_server_id?: number | null;
-};
-
-type WorkReportServerChange = {
-  id: number;
-  tenant_id: number;
-  project_id: number;
-  external_id?: string | null;
-  title?: string | null;
-  date: string;
-  status: string;
-  payload?: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
-};
-
-type WorkReportSyncResponse = {
-  ack?: WorkReportSyncAck[];
-  id_map?: Record<string, number>;
-  server_changes?: WorkReportServerChange[];
-};
+const ALLOWED_SYNC_STATUSES = new Set(API_WORK_REPORT_STATUSES);
+type WorkReportServerChange = ApiErpWorkReport;
 
 type ApiProjectLookup = {
   id: number;
@@ -207,15 +160,6 @@ function isAuthApiError(error: unknown): boolean {
   return message.includes('sesion') || message.includes('session') || message.includes('unauthorized');
 }
 
-function shouldRetryLegacyDateValidation(errorMessage: string | null | undefined): boolean {
-  const message = (errorMessage ?? '').toLowerCase();
-  return (
-    message.includes('workreportupdate') &&
-    message.includes('date') &&
-    message.includes('none_required')
-  );
-}
-
 function shouldRetryServerChangesSerialization(error: unknown): boolean {
   const message = toSyncErrorMessage(error).toLowerCase();
   return (
@@ -291,34 +235,6 @@ function sanitizeSyncRequestForTransport(requestPayload: WorkReportSyncRequest):
       };
     }),
   };
-}
-
-function buildStrictUpdateDataForRetry(data: Record<string, unknown>): Record<string, unknown> {
-  const source = isRecord(data.patch) ? data.patch : data;
-  const next: Record<string, unknown> = {};
-  const allowedKeys = [
-    'project_id',
-    'projectId',
-    'title',
-    'status',
-    'is_closed',
-    'isClosed',
-    'report_identifier',
-    'reportIdentifier',
-    'external_id',
-    'externalId',
-    'payload',
-    'expected_updated_at',
-    'expectedUpdatedAt',
-  ] as const;
-
-  for (const key of allowedKeys) {
-    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
-      next[key] = source[key];
-    }
-  }
-
-  return sanitizeUpdateOperationDataForTransport(next);
 }
 
 function getLastSyncMetaKey(tenantId: string): string {
@@ -851,29 +767,6 @@ async function sendSyncBatch(
   }
 }
 
-async function retryLegacyDateValidationUpdate(
-  tenantId: string,
-  operation: WorkReportSyncOperation
-): Promise<WorkReportSyncAck | null> {
-  if (operation.op !== 'update' || !isRecord(operation.data)) return null;
-
-  const retryOperation: WorkReportSyncOperation = {
-    ...operation,
-    client_op_id: `${operation.client_op_id}-datefix-${Date.now().toString(36)}`,
-    data: buildStrictUpdateDataForRetry(operation.data),
-  };
-
-  const retryPayload: WorkReportSyncRequest = {
-    since: null,
-    operations: [retryOperation],
-    include_deleted: true,
-    limit: 1,
-  };
-
-  const retryResponse = await sendSyncBatch(tenantId, retryPayload);
-  return retryResponse.ack?.[0] ?? null;
-}
-
 async function pullServerReports(
   tenantId: string,
   since: string | null | undefined,
@@ -1080,37 +973,6 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           let errorMessage =
             asString(ack?.error) ??
             (ack ? 'Error de sincronización en servidor.' : 'El servidor no devolvió confirmación para la operación.');
-
-          if (plan.operation.op === 'update' && shouldRetryLegacyDateValidation(errorMessage)) {
-            try {
-              const retryAck = await retryLegacyDateValidationUpdate(tenantId, plan.operation);
-              if (shouldClearOutboxForAck(retryAck)) {
-                const mappedServerId = resolveMappedServerId(plan, retryAck ?? undefined, response);
-                synced += plan.outboxIds.length;
-                failed -= plan.outboxIds.length;
-                await markEntriesAsSynced(plan, mappedServerId);
-                console.warn('[Sync][date-fallback] Reintento aplicado correctamente.', {
-                  tenantId,
-                  originalClientOpId: plan.operation.client_op_id,
-                  localReportId: plan.localReportId,
-                  mappedServerId,
-                  outboxIds: plan.outboxIds,
-                });
-                continue;
-              }
-              if (retryAck?.error) {
-                errorMessage = asString(retryAck.error) ?? errorMessage;
-              }
-            } catch (retryError) {
-              console.warn('[Sync][date-fallback] Reintento fallido.', {
-                tenantId,
-                originalClientOpId: plan.operation.client_op_id,
-                localReportId: plan.localReportId,
-                outboxIds: plan.outboxIds,
-                retryError: toSyncErrorMessage(retryError),
-              });
-            }
-          }
 
           if (!firstFailureReason) firstFailureReason = errorMessage;
           await markPlanError(plan, errorMessage);
