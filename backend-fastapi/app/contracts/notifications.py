@@ -7,8 +7,10 @@ from sqlmodel import Session, select
 from app.contracts.models import Contract, ContractNotificationEvent, ContractNotificationLog
 from app.core.config import settings
 from app.core.email import _send_email
-from app.models.role import Role
+from app.models.hr import Department, EmployeeDepartment, EmployeeProfile
 from app.models.user import User
+
+_DEPT_NAMES = ["gerencia", "administracion", "compras", "juridico"]
 
 
 def _merge_recipients(*groups: Iterable[str]) -> list[str]:
@@ -26,42 +28,42 @@ def _merge_recipients(*groups: Iterable[str]) -> list[str]:
     return merged
 
 
-def _get_role_emails(session: Session, tenant_id: int, role_name: str) -> list[str]:
-    role = session.exec(select(Role).where(Role.name == role_name)).one_or_none()
-    if not role:
-        return []
-    users = session.exec(
-        select(User).where(
-            User.tenant_id == tenant_id,
-            User.role_id == role.id,
+def _get_dept_emails(session: Session, tenant_id: int, dept_name: str) -> list[str]:
+    rows = session.exec(
+        select(User.email)
+        .join(EmployeeProfile, EmployeeProfile.user_id == User.id)
+        .join(EmployeeDepartment, EmployeeDepartment.employee_id == EmployeeProfile.id)
+        .join(Department, Department.id == EmployeeDepartment.department_id)
+        .where(
+            EmployeeProfile.tenant_id == tenant_id,
+            Department.name.ilike(dept_name),
             User.is_active.is_(True),
         )
     ).all()
-    return [user.email for user in users if user.email]
+    return [email for email in rows if email]
 
 
-def _get_role_user_ids(session: Session, tenant_id: int, role_name: str) -> list[int]:
-    role = session.exec(select(Role).where(Role.name == role_name)).one_or_none()
-    if not role:
-        return []
-    users = session.exec(
-        select(User).where(
-            User.tenant_id == tenant_id,
-            User.role_id == role.id,
+def _get_dept_user_ids(session: Session, tenant_id: int, dept_name: str) -> list[int]:
+    rows = session.exec(
+        select(User.id)
+        .join(EmployeeProfile, EmployeeProfile.user_id == User.id)
+        .join(EmployeeDepartment, EmployeeDepartment.employee_id == EmployeeProfile.id)
+        .join(Department, Department.id == EmployeeDepartment.department_id)
+        .where(
+            EmployeeProfile.tenant_id == tenant_id,
+            Department.name.ilike(dept_name),
             User.is_active.is_(True),
         )
     ).all()
-    return [user.id for user in users]
+    return [uid for uid in rows if uid]
 
 
 def get_department_recipients(session: Session, tenant_id: int) -> dict[str, list[str]]:
-    # Los roles legacy (gerencia, administracion, etc.) ya no existen.
-    # Las notificaciones por departamento se gestionan vía EmployeeDepartment.
-    return {}
+    return {name: _get_dept_emails(session, tenant_id, name) for name in _DEPT_NAMES}
 
 
 def get_department_user_ids(session: Session, tenant_id: int) -> dict[str, list[int]]:
-    return {}
+    return {name: _get_dept_user_ids(session, tenant_id, name) for name in _DEPT_NAMES}
 
 
 def build_signature_url(token: str) -> str:
