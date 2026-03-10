@@ -2,8 +2,7 @@
 Migracion de roles legacy al modelo oficial:
 - super_admin
 - tenant_admin
-- gerencia
-- user
+- usuario
 
 Este script reasigna usuarios e invitaciones con roles legacy.
 Uso:
@@ -26,15 +25,17 @@ from app.models.user_invitation import UserInvitation
 
 
 LEGACY_TO_OFFICIAL_ROLE = {
-    "manager": "gerencia",
-    "hr_manager": "gerencia",
-    "jefe_obra": "user",
-    "administracion": "user",
-    "compras": "user",
-    "juridico": "user",
+    "manager": "usuario",
+    "hr_manager": "usuario",
+    "jefe_obra": "usuario",
+    "administracion": "usuario",
+    "compras": "usuario",
+    "juridico": "usuario",
+    "gerencia": "usuario",
+    "user": "usuario",
 }
 
-OFFICIAL_ROLES = {"super_admin", "tenant_admin", "gerencia", "user"}
+OFFICIAL_ROLES = {"super_admin", "tenant_admin", "usuario"}
 
 
 def migrate_roles(session: Session, apply_changes: bool) -> dict[str, int]:

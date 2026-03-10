@@ -75,21 +75,11 @@ def _sync_gerencia_role(
     if role_name == "tenant_admin":
         return
 
-    gerencia_role = session.exec(select(Role).where(Role.name == "gerencia")).one_or_none()
-    user_role = session.exec(select(Role).where(Role.name == "user")).one_or_none()
-    if not gerencia_role or not user_role:
+    # El rol "gerencia" ya no existe — solo super_admin, tenant_admin, usuario.
+    # Esta función es un no-op: la asignación de rol por departamento ya no aplica.
+    usuario_role = session.exec(select(Role).where(Role.name == "usuario")).one_or_none()
+    if not usuario_role:
         return
-
-    if is_gerencia and role_name != "gerencia":
-        user.role_id = gerencia_role.id
-        session.add(user)
-        session.commit()
-        return
-
-    if not is_gerencia and role_name == "gerencia":
-        user.role_id = user_role.id
-        session.add(user)
-        session.commit()
 
 
 def create_department(

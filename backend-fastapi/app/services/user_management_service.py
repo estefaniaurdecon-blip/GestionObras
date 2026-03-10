@@ -21,8 +21,7 @@ from app.schemas.user_management import (
 CORE_ROLE_TO_APP_ROLE: dict[str, AppRole] = {
     "super_admin": "master",
     "tenant_admin": "admin",
-    "gerencia": "site_manager",
-    "user": "foreman",
+    # "usuario" no tiene AppRole de fallback — requiere UserAppRole explícito
 }
 
 
@@ -298,7 +297,7 @@ def list_assignable_foremen(
     ).all()
 
     # Fallback for users that still use only the core RBAC role.
-    core_role = session.exec(select(Role).where(Role.name == "user")).first()
+    core_role = session.exec(select(Role).where(Role.name == "usuario")).first()
     fallback_users: list[User] = []
     if core_role:
         fallback_users = session.exec(

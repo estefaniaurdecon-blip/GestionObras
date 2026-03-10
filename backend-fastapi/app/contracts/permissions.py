@@ -12,18 +12,9 @@ from app.models.hr import Department, EmployeeDepartment, EmployeeProfile
 from app.contracts.models import ContractDepartment
 
 
-ROLE_JEFE_OBRA = "jefe_obra"
-ROLE_GERENCIA = "gerencia"
-ROLE_ADMIN = "administracion"
-ROLE_COMPRAS = "compras"
-ROLE_JURIDICO = "juridico"
-
-ROLE_BY_DEPARTMENT = {
-    ContractDepartment.GERENCIA: ROLE_GERENCIA,
-    ContractDepartment.ADMIN: ROLE_ADMIN,
-    ContractDepartment.COMPRAS: ROLE_COMPRAS,
-    ContractDepartment.JURIDICO: ROLE_JURIDICO,
-}
+# Los departamentos de contrato se resuelven por membresía en EmployeeDepartment,
+# no por nombre de rol (los roles legacy "gerencia", "jefe_obra", etc. ya no existen).
+ROLE_BY_DEPARTMENT: dict = {}
 
 DEPARTMENT_NAME_MAP = {
     "gerencia": ContractDepartment.GERENCIA,

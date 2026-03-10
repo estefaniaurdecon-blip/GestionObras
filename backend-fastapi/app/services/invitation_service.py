@@ -20,7 +20,7 @@ from app.schemas.user import UserCreate
 from app.services.external_account_service import sync_moodle_user
 from app.services.user_service import create_user
 
-INVITABLE_ROLES = {"tenant_admin", "user"}
+INVITABLE_ROLES = {"tenant_admin", "usuario"}
 
 
 def _generate_token() -> str:

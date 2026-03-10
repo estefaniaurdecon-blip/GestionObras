@@ -24,7 +24,7 @@ from app.schemas.user import (
     UserStatusUpdate,
 )
 
-OFFICIAL_NON_SUPERADMIN_ROLES = {"tenant_admin", "gerencia", "user"}
+OFFICIAL_NON_SUPERADMIN_ROLES = {"tenant_admin", "usuario"}
 
 
 def _resolve_avatar_url(avatar_url: str | None) -> str | None:
@@ -239,8 +239,6 @@ def update_user_admin(
     if data.role_name is not None:
         if data.role_name == "super_admin" and not current_user.is_super_admin:
             raise PermissionError("No tienes permisos para asignar rol Super Admin")
-        if data.role_name == "gerencia":
-            raise ValueError("El rol Gerencia se asigna automaticamente por departamento.")
         role = session.exec(
             select(Role).where(Role.name == data.role_name),
         ).one_or_none()
@@ -294,8 +292,6 @@ def create_user(
         if user_in.role_name == "super_admin":
             if not current_user.is_super_admin or not user_in.is_super_admin:
                 raise ValueError("Rol no permitido para este usuario")
-        elif user_in.role_name == "gerencia":
-            raise ValueError("El rol Gerencia se asigna automaticamente por departamento.")
         elif user_in.role_name not in OFFICIAL_NON_SUPERADMIN_ROLES:
             raise ValueError("Rol no permitido para este usuario")
 

@@ -55,23 +55,13 @@ def _get_role_user_ids(session: Session, tenant_id: int, role_name: str) -> list
 
 
 def get_department_recipients(session: Session, tenant_id: int) -> dict[str, list[str]]:
-    return {
-        "gerencia": _get_role_emails(session, tenant_id, "gerencia"),
-        "administracion": _get_role_emails(session, tenant_id, "administracion"),
-        "compras": _get_role_emails(session, tenant_id, "compras"),
-        "juridico": _get_role_emails(session, tenant_id, "juridico"),
-        "jefe_obra": _get_role_emails(session, tenant_id, "jefe_obra"),
-    }
+    # Los roles legacy (gerencia, administracion, etc.) ya no existen.
+    # Las notificaciones por departamento se gestionan vía EmployeeDepartment.
+    return {}
 
 
 def get_department_user_ids(session: Session, tenant_id: int) -> dict[str, list[int]]:
-    return {
-        "gerencia": _get_role_user_ids(session, tenant_id, "gerencia"),
-        "administracion": _get_role_user_ids(session, tenant_id, "administracion"),
-        "compras": _get_role_user_ids(session, tenant_id, "compras"),
-        "juridico": _get_role_user_ids(session, tenant_id, "juridico"),
-        "jefe_obra": _get_role_user_ids(session, tenant_id, "jefe_obra"),
-    }
+    return {}
 
 
 def build_signature_url(token: str) -> str:

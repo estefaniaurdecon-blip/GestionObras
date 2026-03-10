@@ -64,12 +64,8 @@ ROLE_PERMISSIONS: Dict[str, Iterable[str]] = {
         "tools:configure",
         "audit:read",
     },
-    # Gerencia: acceso operativo del tenant (sin soporte, logs, herramientas ni ajustes de tenant).
-    "gerencia": {
-        "users:read",
-    },
     # Usuario estándar: puede ver y lanzar herramientas asignadas.
-    "user": {
+    "usuario": {
         "tools:read",
         "tools:launch",
     },
@@ -406,7 +402,7 @@ def _ensure_ticket_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": ticket_permissions.keys(),
         "tenant_admin": ticket_permissions.keys(),
-        "user": ("tickets:create", "tickets:read_own"),
+        "usuario": ("tickets:create", "tickets:read_own"),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -463,7 +459,6 @@ def _ensure_hr_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": hr_permissions.keys(),
         "tenant_admin": hr_permissions.keys(),
-        "gerencia": ("hr:read", "hr:reports"),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -521,8 +516,7 @@ def _ensure_erp_permissions(session: Session) -> None:
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": erp_permissions.keys(),
         "tenant_admin": erp_permissions.keys(),
-        "gerencia": ("erp:read", "erp:reports:read"),
-        "user": ("erp:read", "erp:track"),
+        "usuario": ("erp:read", "erp:track"),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -576,22 +570,10 @@ def _ensure_contracts_permissions(session: Session) -> None:
 
     roles = {r.name: r for r in session.exec(select(Role)).all()}
 
-    required_roles = {
-        "gerencia": "Gerencia",
-    }
-    for role_name, desc in required_roles.items():
-        if role_name not in roles:
-            role = Role(name=role_name, description=f"Rol contratos: {desc}")
-            session.add(role)
-            session.commit()
-            session.refresh(role)
-            roles[role_name] = role
-
     role_permission_map: Dict[str, Iterable[str]] = {
         "super_admin": contract_permissions.keys(),
         "tenant_admin": contract_permissions.keys(),
-        "gerencia": ("contracts:read", "contracts:approve", "contracts:reject"),
-        "user": ("contracts:read",),
+        "usuario": ("contracts:read",),
     }
 
     for role_name, codes in role_permission_map.items():
@@ -616,39 +598,6 @@ def _ensure_contracts_permissions(session: Session) -> None:
     session.commit()
 
 
-def _prune_gerencia_permissions(session: Session) -> None:
-    """
-    El rol Gerencia no debe tener permisos de soporte, logs, herramientas ni ajustes de tenant.
-    """
-
-    role = session.exec(select(Role).where(Role.name == "gerencia")).one_or_none()
-    if not role:
-        return
-
-    perms = session.exec(
-        select(Permission).where(
-            (Permission.code.like("tickets:%"))
-            | (Permission.code.like("tools:%"))
-            | (Permission.code.like("tenants:%"))
-            | (Permission.code == "audit:read")
-            | (Permission.code == "branding:manage")
-            | (Permission.code == "users:create")
-            | (Permission.code == "users:update")
-            | (Permission.code == "users:delete")
-        )
-    ).all()
-    disallowed_ids = {perm.id for perm in perms}
-    if not disallowed_ids:
-        return
-
-    session.exec(
-        delete(RolePermission).where(
-            RolePermission.role_id == role.id,
-            RolePermission.permission_id.in_(disallowed_ids),
-        )
-    )
-    session.commit()
-
 def run_seed() -> None:
     """
     Punto de entrada principal del proceso de seed RBAC.
@@ -665,7 +614,6 @@ def run_seed() -> None:
         _ensure_hr_permissions(session)
         _ensure_erp_permissions(session)
         _ensure_contracts_permissions(session)
-        _prune_gerencia_permissions(session)
         migrate_roles(session, apply_changes=True)
 
 
