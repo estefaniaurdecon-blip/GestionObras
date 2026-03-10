@@ -14,6 +14,14 @@ export interface NotificationsApiDeps {
 
 export type ApiNotificationType = 'ticket_assigned' | 'ticket_comment' | 'ticket_status' | 'generic';
 
+export interface ApiNotificationCreate {
+  user_id: number;
+  type?: ApiNotificationType;
+  title: string;
+  body?: string | null;
+  reference?: string | null;
+}
+
 export interface ApiNotificationRead {
   id: number;
   tenant_id: number;
@@ -68,10 +76,18 @@ export function createNotificationsApi(deps: NotificationsApiDeps) {
     });
   };
 
+  const createNotification = async (payload: ApiNotificationCreate): Promise<ApiNotificationRead> => {
+    return deps.apiFetchJson<ApiNotificationRead>('/api/v1/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  };
+
   return {
     listNotifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     deleteNotification,
+    createNotification,
   };
 }

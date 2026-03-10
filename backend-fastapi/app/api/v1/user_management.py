@@ -59,12 +59,13 @@ def _tenant_scope(current_user: User, x_tenant_id: Optional[int]) -> int:
 
 @router.get("/users", response_model=list[UserProfileRead], summary="Listar usuarios del tenant")
 def api_list_user_profiles(
+    app_role: Optional[str] = Query(default=None, description="Filtrar por rol de app (ej: site_manager, foreman)"),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["users:read"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[UserProfileRead]:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    return list_user_profiles(session, tenant_id=tenant_id)
+    return list_user_profiles(session, tenant_id=tenant_id, app_role=app_role)
 
 
 @router.get("/users/{user_id}/roles", response_model=UserRolesRead, summary="Listar roles de app de un usuario")

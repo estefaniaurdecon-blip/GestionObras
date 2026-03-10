@@ -1,17 +1,28 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from app.api.deps import get_current_active_user
 from app.db.session import get_session
+from app.models.notification import NotificationType
 from app.schemas.notification import NotificationListResponse, NotificationRead
 from app.services.notification_service import (
+    create_notification,
     delete_notification,
     list_notifications_for_user,
     mark_all_as_read,
     mark_notification_as_read,
 )
+
+
+class NotificationCreate(BaseModel):
+    user_id: int
+    type: NotificationType = NotificationType.GENERIC
+    title: str
+    body: Optional[str] = None
+    reference: Optional[str] = None
 
 
 router = APIRouter()
@@ -97,4 +108,40 @@ def api_delete_notification(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "",
+    response_model=NotificationRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear notificación para un usuario del tenant",
+)
+def api_create_notification(
+    payload: NotificationCreate,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_active_user),
+) -> NotificationRead:
+    if current_user.tenant_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant requerido.")
+    notification = create_notification(
+        session,
+        tenant_id=int(current_user.tenant_id),
+        user_id=payload.user_id,
+        type=payload.type,
+        title=payload.title,
+        body=payload.body,
+        reference=payload.reference,
+    )
+    return NotificationRead(
+        id=notification.id,
+        tenant_id=notification.tenant_id,
+        user_id=notification.user_id,
+        type=notification.type,
+        title=notification.title,
+        body=notification.body,
+        reference=notification.reference,
+        is_read=notification.is_read,
+        created_at=notification.created_at,
+        read_at=notification.read_at,
+    )
 

@@ -17,10 +17,16 @@ import { Download, FileText, Clock, Truck, Edit2, Save, X, Trash2, Euro, Trendin
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, getWeek, getMonth, getYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
-import { generateSummaryReport } from '@/integrations/api/client';
+import {
+  generateSummaryReport,
+  listErpWorkReports,
+  listManagedUserAssignments,
+  listProjects,
+  listRentalMachinery,
+  listSavedEconomicReports,
+} from '@/integrations/api/client';
 
 interface AdvancedReportsProps {
   reports: WorkReport[];
@@ -48,63 +54,46 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
   const [rentalMachinery, setRentalMachinery] = useState<any[]>([]);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  // Cargar partes de trabajo en tiempo real
+  // Cargar partes de trabajo
   useEffect(() => {
     if (!user || !isOpen) return;
 
     const loadReports = async () => {
       try {
-        const { data, error } = await supabase
-          .from('work_reports')
-          .select('*')
-          .in('status', ['completed', 'missing_data', 'missing_delivery_notes'])
-          .order('date', { ascending: false });
-
-        if (error) throw error;
-        
-        if (data) {
-          const normalized: WorkReport[] = data.map(r => ({
-            id: r.id,
-            workId: r.work_id || undefined,
-            workName: r.work_name,
-            workNumber: r.work_number,
+        const data = await listErpWorkReports({ limit: 500 });
+        const statusFilter = new Set(['completed', 'missing_data', 'missing_delivery_notes']);
+        const normalized: WorkReport[] = data
+          .filter(r => statusFilter.has(r.status))
+          .map(r => ({
+            id: r.external_id || String(r.id),
+            workId: r.payload.work_id != null ? String(r.payload.work_id) : String(r.project_id),
+            workName: String(r.payload.work_name ?? ''),
+            workNumber: String(r.payload.work_number ?? ''),
             date: r.date,
-            foreman: r.foreman || '',
-            foremanHours: r.foreman_hours || 0,
-            siteManager: r.site_manager || '',
-            workGroups: (r.work_groups as any) || [],
-            machineryGroups: (r.machinery_groups as any) || [],
-            materialGroups: (r.material_groups as any) || [],
-            subcontractGroups: (r.subcontract_groups as any) || [],
-            observations: r.observations || '',
-            createdBy: r.created_by || undefined,
-            createdAt: r.created_at || undefined,
-            updatedAt: r.updated_at || undefined,
-            approved: r.approved || false,
-            approvedBy: r.approved_by || undefined,
-            approvedAt: r.approved_at || undefined,
-            status: (r.status as 'completed' | 'missing_data' | 'missing_delivery_notes') || 'completed',
-            missingDeliveryNotes: r.missing_delivery_notes || false,
+            foreman: String(r.payload.foreman ?? ''),
+            foremanHours: Number(r.payload.foreman_hours ?? 0),
+            siteManager: String(r.payload.site_manager ?? ''),
+            workGroups: (r.payload.work_groups as any) || [],
+            machineryGroups: (r.payload.machinery_groups as any) || [],
+            materialGroups: (r.payload.material_groups as any) || [],
+            subcontractGroups: (r.payload.subcontract_groups as any) || [],
+            observations: String(r.payload.observations ?? ''),
+            createdBy: r.created_by_id != null ? String(r.created_by_id) : undefined,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+            approved: Boolean(r.payload.approved),
+            approvedBy: r.payload.approved_by != null ? String(r.payload.approved_by) : undefined,
+            approvedAt: r.payload.approved_at != null ? String(r.payload.approved_at) : undefined,
+            status: (r.status as 'completed' | 'missing_data' | 'missing_delivery_notes'),
+            missingDeliveryNotes: Boolean(r.payload.missing_delivery_notes),
           }));
-          setRealtimeReports(normalized);
-        }
+        setRealtimeReports(normalized);
       } catch (error) {
         console.error('Error loading reports:', error);
       }
     };
 
     loadReports();
-
-    const channel = supabase
-      .channel('work-reports-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_reports' }, () => {
-        loadReports();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user, isOpen]);
 
   // Cargar obras disponibles
@@ -113,27 +102,15 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!user) return;
 
       try {
-        const { data: assignments, error: assignError } = await supabase
-          .from('work_assignments')
-          .select('work_id')
-          .eq('user_id', user.id);
-
-        if (assignError) throw assignError;
-
-        if (assignments && assignments.length > 0) {
-          const workIds = assignments.map(a => a.work_id);
-          
-          const { data: works, error: worksError } = await supabase
-            .from('works')
-            .select('id, number, name')
-            .in('id', workIds);
-
-          if (worksError) throw worksError;
-          
-          if (works) {
-            setAvailableWorks(works);
-          }
-        }
+        const [workIds, allProjects] = await Promise.all([
+          listManagedUserAssignments(Number(user.id)),
+          listProjects(),
+        ]);
+        const workIdSet = new Set(workIds);
+        const works = allProjects
+          .filter(p => workIdSet.has(p.id))
+          .map(p => ({ id: String(p.id), number: String(p.code ?? p.id), name: p.name }));
+        setAvailableWorks(works);
       } catch (error) {
         console.error('Error loading works:', error);
       }
@@ -148,12 +125,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!user || !isOpen) return;
 
       try {
-        const { data, error } = await supabase
-          .from('saved_economic_reports')
-          .select('*')
-          .order('date', { ascending: false });
-
-        if (error) throw error;
+        const data = await listSavedEconomicReports();
         setEconomicReports(data || []);
       } catch (error) {
         console.error('Error loading economic reports:', error);
@@ -161,18 +133,6 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
     };
 
     loadEconomicReports();
-
-    // Suscribirse a cambios en tiempo real
-    const channel = supabase
-      .channel('economic-reports-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'saved_economic_reports' }, () => {
-        loadEconomicReports();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user, isOpen]);
 
   // Cargar maquinaria de alquiler
@@ -181,31 +141,21 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!user || !isOpen) return;
 
       try {
-        const { data, error } = await supabase
-          .from('work_rental_machinery')
-          .select('*')
-          .order('delivery_date', { ascending: false });
-
-        if (error) throw error;
-        setRentalMachinery(data || []);
+        const data = await listRentalMachinery();
+        setRentalMachinery(data.map(m => ({
+          ...m,
+          work_id: m.project_id,
+          delivery_date: m.start_date,
+          removal_date: m.end_date,
+          daily_rate: m.price != null ? Number(m.price) : 0,
+          type: m.name,
+        })));
       } catch (error) {
         console.error('Error loading rental machinery:', error);
       }
     };
 
     loadRentalMachinery();
-
-    // Suscribirse a cambios en tiempo real
-    const channel = supabase
-      .channel('rental-machinery-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_rental_machinery' }, () => {
-        loadRentalMachinery();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user, isOpen]);
 
   const getDateRange = (range: string) => {

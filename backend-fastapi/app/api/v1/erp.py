@@ -928,6 +928,7 @@ def _map_access_control_error(detail: str) -> int:
 @router.get("/work-reports", response_model=list[WorkReportRead])
 def api_list_work_reports(
     project_id: Optional[int] = Query(default=None),
+    external_id: Optional[str] = Query(default=None),
     date_from: Optional[date] = Query(default=None),
     date_to: Optional[date] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
@@ -945,6 +946,7 @@ def api_list_work_reports(
             session,
             tenant_id,
             project_id=project_id,
+            external_id=external_id,
             date_from=date_from,
             date_to=date_to,
             status=status_filter,

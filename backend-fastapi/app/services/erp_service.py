@@ -1652,6 +1652,7 @@ def list_work_reports(
     tenant_id: Optional[int],
     *,
     project_id: Optional[int] = None,
+    external_id: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     status: Optional[str] = None,
@@ -1669,6 +1670,8 @@ def list_work_reports(
         stmt = stmt.where(WorkReport.deleted_at.is_(None))
     if project_id is not None:
         stmt = stmt.where(WorkReport.project_id == project_id)
+    if external_id is not None:
+        stmt = stmt.where(WorkReport.external_id == external_id)
     if date_from is not None:
         stmt = stmt.where(WorkReport.date >= date_from)
     if date_to is not None:

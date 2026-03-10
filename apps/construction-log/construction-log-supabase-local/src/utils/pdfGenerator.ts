@@ -12,7 +12,8 @@ import {
 import { isNative, saveBase64File } from './nativeFile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/integrations/api/legacySupabaseRemoved';
+import { getUserProfileFullName } from '@/services/workReportsSupabaseGateway';
+import { listRentalMachinery as listRentalMachineryApi } from '@/integrations/api/client';
 import { sanitizePdfFilename } from './securePdfFilename';
 import { 
   calculateOptimalSpacing, 
@@ -166,11 +167,18 @@ export const generateWorkReportPDF = async (
   // Rental Machinery section
   if (report.workId) {
     try {
-      const { data: rentalMachinery } = await supabase
-        .from('work_rental_machinery')
-        .select('*')
-        .eq('work_id', report.workId)
-        .order('delivery_date', { ascending: true });
+      const allMachinery = await listRentalMachineryApi();
+      const rentalMachinery = allMachinery
+        .filter((m) => String(m.project_id) === String(report.workId))
+        .map((m) => ({
+          ...m,
+          work_id: m.project_id,
+          delivery_date: m.start_date,
+          removal_date: m.end_date,
+          daily_rate: m.price != null ? Number(m.price) : 0,
+          type: m.name,
+        }))
+        .sort((a, b) => (a.delivery_date > b.delivery_date ? 1 : -1));
 
       if (rentalMachinery && rentalMachinery.length > 0) {
         // Filter machinery active on the report date
@@ -401,15 +409,8 @@ export const generateWorkReportPDF = async (
   // Waste Management / RCDs Section - Fetch from relational table
   if (report.id) {
     try {
-      const { data: wasteEntries } = await supabase
-        .from('work_report_waste_entries')
-        .select(`
-          *,
-          waste_type:waste_type_id(id, name, ler_code, is_hazardous),
-          manager:manager_id(id, company_name)
-        `)
-        .eq('work_report_id', report.id)
-        .order('created_at', { ascending: true });
+      // work_report_waste_entries not yet migrated to API — deferred
+      const wasteEntries: any[] = [];
 
       if (wasteEntries && wasteEntries.length > 0) {
         if (yPosition > pageHeight - 70) {
@@ -489,12 +490,8 @@ export const generateWorkReportPDF = async (
   // Active Repasos section
   if (report.workId) {
     try {
-      const { data: activeRepasos } = await supabase
-        .from('work_repasos')
-        .select('*')
-        .eq('work_id', report.workId)
-        .in('status', ['pending', 'in_progress'])
-        .order('created_at', { ascending: true });
+      // work_repasos not yet migrated to API — deferred
+      const activeRepasos: any[] = [];
 
       if (activeRepasos && activeRepasos.length > 0) {
         if (yPosition > pageHeight - 70) {
@@ -671,18 +668,14 @@ export const generateWorkReportPDF = async (
       yPosition += 50;
       
       // Obtener nombre del editor
-      const { data: editorProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', report.lastEditedBy)
-        .single();
-      
-      if (editorProfile?.full_name) {
+      const editorFullName = await getUserProfileFullName(report.lastEditedBy);
+
+      if (editorFullName) {
         // Marca de agua tenue
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150); // Gris tenue
         const editedDate = format(new Date(report.lastEditedAt), "dd/MM/yyyy 'a las' HH:mm", { locale: es });
-        const watermarkText = `Editado por ${editorProfile.full_name} el ${editedDate}`;
+        const watermarkText = `Editado por ${editorFullName} el ${editedDate}`;
         doc.text(watermarkText, pageWidth / 2, yPosition, { align: 'center' });
         doc.setTextColor(0, 0, 0); // Restaurar color negro
       }
@@ -780,20 +773,12 @@ export const generateWorkReportPDF = async (
     // Si es una URL firmada de Supabase Storage (antigua), convertir a URL pública
     if (originalUrl.includes('/storage/v1/object/sign/')) {
       try {
-        // Extraer el path del archivo de la URL firmada
         const urlObj = new URL(originalUrl);
         const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/sign\/([^?]+)/);
         if (pathMatch) {
-          const bucketAndPath = pathMatch[1];
-          const [bucket, ...pathParts] = bucketAndPath.split('/');
-          const filePath = pathParts.join('/');
-          
-          // Usar URL pública (el bucket work-report-images es público ahora)
-          const { data } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(filePath);
-          
-          return data.publicUrl;
+          // Reemplazar /sign/ por /public/ para obtener la URL pública
+          const publicPath = `/storage/v1/object/public/${pathMatch[1]}`;
+          return `${urlObj.origin}${publicPath}`;
         }
       } catch (error) {
         console.error('Error generando URL pública:', error);

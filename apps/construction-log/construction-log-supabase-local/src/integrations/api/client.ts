@@ -660,6 +660,7 @@ export interface ApiErpWorkReport {
 export interface ListErpWorkReportsParams {
   tenantId?: string | number | null;
   projectId?: number;
+  externalId?: string;
   dateFrom?: string;
   dateTo?: string;
   status?: string;
@@ -669,11 +670,34 @@ export interface ListErpWorkReportsParams {
   offset?: number;
 }
 
+export interface CreateErpWorkReportPayload {
+  project_id: number;
+  date: string;
+  title?: string | null;
+  status?: string;
+  is_closed?: boolean;
+  report_identifier?: string | null;
+  external_id?: string | null;
+  payload?: Record<string, unknown>;
+}
+
+export interface UpdateErpWorkReportPayload {
+  project_id?: number;
+  date?: string;
+  title?: string | null;
+  status?: string;
+  is_closed?: boolean;
+  report_identifier?: string | null;
+  external_id?: string | null;
+  payload?: Record<string, unknown>;
+}
+
 export async function listErpWorkReports(
   params: ListErpWorkReportsParams = {}
 ): Promise<ApiErpWorkReport[]> {
   const query = buildQueryParams({
     project_id: params.projectId,
+    external_id: params.externalId,
     date_from: params.dateFrom,
     date_to: params.dateTo,
     status: params.status,
@@ -685,6 +709,29 @@ export async function listErpWorkReports(
 
   return apiFetchJson<ApiErpWorkReport[]>(`/api/v1/erp/work-reports${query}`, {
     headers: tenantHeader(params.tenantId),
+  });
+}
+
+export async function createErpWorkReport(
+  data: CreateErpWorkReportPayload,
+  tenantId?: string | number | null
+): Promise<ApiErpWorkReport> {
+  return apiFetchJson<ApiErpWorkReport>('/api/v1/erp/work-reports', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function updateErpWorkReport(
+  reportId: number,
+  data: UpdateErpWorkReportPayload,
+  tenantId?: string | number | null
+): Promise<ApiErpWorkReport> {
+  return apiFetchJson<ApiErpWorkReport>(`/api/v1/erp/work-reports/${reportId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+    headers: tenantHeader(tenantId),
   });
 }
 
@@ -904,6 +951,7 @@ export const listNotifications = notificationsApi.listNotifications;
 export const markNotificationAsRead = notificationsApi.markNotificationAsRead;
 export const markAllNotificationsAsRead = notificationsApi.markAllNotificationsAsRead;
 export const deleteNotification = notificationsApi.deleteNotification;
+export const createNotification = notificationsApi.createNotification;
 
 // ============================================================
 // MESSAGES API
@@ -973,6 +1021,7 @@ const userManagementApi = createUserManagementApi({
 });
 
 export const listManagedUsers = userManagementApi.listManagedUsers;
+export const listManagedUsersByRole = userManagementApi.listUsersByRole;
 export const listManagedUserRoles = userManagementApi.listUserRoles;
 export const addManagedUserRole = userManagementApi.addUserRole;
 export const removeManagedUserRole = userManagementApi.removeUserRole;

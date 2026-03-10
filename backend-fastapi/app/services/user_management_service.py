@@ -68,15 +68,27 @@ def list_user_profiles(
     session: Session,
     *,
     tenant_id: int,
+    app_role: Optional[str] = None,
 ) -> list[UserProfileRead]:
-    users = session.exec(
-        select(User)
-        .where(
-            User.tenant_id == tenant_id,
-            User.is_super_admin.is_(False),
+    if app_role is not None:
+        user_ids = session.exec(
+            select(UserAppRole.user_id).where(
+                UserAppRole.tenant_id == tenant_id,
+                UserAppRole.role == app_role,
+            )
+        ).all()
+        stmt = (
+            select(User)
+            .where(User.tenant_id == tenant_id, User.id.in_(user_ids), User.is_super_admin.is_(False))
+            .order_by(User.full_name.asc())
         )
-        .order_by(User.full_name.asc())
-    ).all()
+    else:
+        stmt = (
+            select(User)
+            .where(User.tenant_id == tenant_id, User.is_super_admin.is_(False))
+            .order_by(User.full_name.asc())
+        )
+    users = session.exec(stmt).all()
 
     return [
         UserProfileRead(

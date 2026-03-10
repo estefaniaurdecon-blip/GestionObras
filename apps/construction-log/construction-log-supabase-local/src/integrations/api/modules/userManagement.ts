@@ -39,6 +39,11 @@ export function createUserManagementApi(deps: UserManagementApiDeps) {
     return deps.apiFetchJson<ApiManagedUser[]>('/api/v1/erp/user-management/users');
   };
 
+  const listUsersByRole = async (appRole: ApiAppRole): Promise<ApiManagedUser[]> => {
+    const query = deps.buildQueryParams({ app_role: appRole });
+    return deps.apiFetchJson<ApiManagedUser[]>(`/api/v1/erp/user-management/users${query}`);
+  };
+
   const listUserRoles = async (userId: number): Promise<ApiAppRole[]> => {
     const response = await deps.apiFetchJson<ApiUserRoles>(
       `/api/v1/erp/user-management/users/${userId}/roles`
@@ -124,6 +129,7 @@ export function createUserManagementApi(deps: UserManagementApiDeps) {
 
   return {
     listManagedUsers,
+    listUsersByRole,
     listUserRoles,
     addUserRole,
     removeUserRole,
