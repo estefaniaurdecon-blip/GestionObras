@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export type ExternalCollaborationType =
   | "Universidades"
@@ -27,19 +27,10 @@ export interface ExternalCollaborationCreate {
 
 export type ExternalCollaborationUpdate = Partial<ExternalCollaborationCreate>;
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchExternalCollaborations(tenantId?: number) {
   const response = await apiClient.get<ExternalCollaboration[]>(
     "/api/v1/erp/external-collaborations",
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -51,7 +42,7 @@ export async function createExternalCollaboration(
   const response = await apiClient.post<ExternalCollaboration>(
     "/api/v1/erp/external-collaborations",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -64,7 +55,7 @@ export async function updateExternalCollaboration(
   const response = await apiClient.patch<ExternalCollaboration>(
     `/api/v1/erp/external-collaborations/${collaborationId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -75,6 +66,6 @@ export async function deleteExternalCollaboration(
 ) {
   await apiClient.delete(
     `/api/v1/erp/external-collaborations/${collaborationId}`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
 }

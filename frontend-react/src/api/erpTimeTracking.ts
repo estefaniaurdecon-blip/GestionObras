@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export interface TimeSession {
   id: number;
@@ -26,19 +26,10 @@ export interface ErpTask {
   created_at: string;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchErpTasks(tenantId?: number): Promise<ErpTask[]> {
   const response = await apiClient.get<ErpTask[]>(
     "/api/v1/erp/tasks",
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -49,7 +40,7 @@ export async function getActiveTimeSession(
   try {
     const response = await apiClient.get<TimeSession>(
       "/api/v1/erp/time-tracking/active",
-      buildTenantHeaders(tenantId),
+      withTenantHeaders(tenantId),
     );
     return response.data;
   } catch (error: any) {
@@ -81,7 +72,7 @@ export async function startTimeSession(
   const response = await apiClient.post<TimeSession>(
     "/api/v1/erp/time-tracking/start",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -90,7 +81,7 @@ export async function stopTimeSession(tenantId?: number): Promise<TimeSession> {
   const response = await apiClient.put<TimeSession>(
     "/api/v1/erp/time-tracking/stop",
     undefined,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }

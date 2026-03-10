@@ -1,46 +1,39 @@
 import React from "react";
-import { screen, waitFor } from "@testing-library/react";
-import { vi } from "vitest";
+import { fireEvent, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { fetchTenantTools } from "../api/tools";
-import { DashboardPage } from "./DashboardPage";
+import { ToolGrid } from "../components/tools/ToolGrid";
 import { renderWithProviders } from "./testUtils";
 
-// Mock del módulo de API de herramientas
-vi.mock("../api/tools", () => ({
-  fetchTenantTools: vi.fn(),
-}));
+describe("ToolGrid", () => {
+  it("renderiza las herramientas y dispara launch", () => {
+    const onLaunch = vi.fn();
 
-const mockedFetchTenantTools = vi.mocked(fetchTenantTools);
+    renderWithProviders(
+      <ToolGrid
+        tools={[
+          {
+            id: 1,
+            name: "Moodle Demo",
+            slug: "moodle-demo",
+            base_url: "https://moodle.mavico.shop",
+            description: "Instancia Moodle de pruebas",
+          },
+        ]}
+        onLaunch={onLaunch}
+      />,
+    );
 
-describe("DashboardPage", () => {
-  beforeEach(() => {
-    mockedFetchTenantTools.mockReset();
-  });
+    expect(screen.getByText("Moodle Demo")).toBeInTheDocument();
+    expect(screen.getByText("Instancia Moodle de pruebas")).toBeInTheDocument();
 
-  it("muestra el listado de herramientas del tenant", async () => {
-    mockedFetchTenantTools.mockResolvedValueOnce([
-      {
+    fireEvent.click(screen.getByRole("button", { name: /moodle demo/i }));
+
+    expect(onLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
         id: 1,
-        name: "Moodle Demo",
         slug: "moodle-demo",
-        base_url: "https://moodle.mavico.shop",
-        description: "Instancia Moodle de pruebas",
-      },
-    ]);
-
-    renderWithProviders(<DashboardPage />);
-
-    // Comprueba textos básicos y que la herramienta mock aparece
-    expect(
-      screen.getByText(/herramientas disponibles para tu tenant/i),
-    ).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByText("Moodle Demo")).toBeInTheDocument();
-      expect(
-        screen.getByText("Instancia Moodle de pruebas"),
-      ).toBeInTheDocument();
-    });
+      }),
+    );
   });
 });

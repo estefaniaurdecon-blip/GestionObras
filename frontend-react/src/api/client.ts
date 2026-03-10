@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 
 /**
  * Cliente HTTP centralizado usando Axios.
@@ -48,6 +48,34 @@ const resolveApiBaseUrl = () => {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+export const buildTenantHeaders = (
+  tenantId?: number | string | null,
+): Record<string, string> => {
+  if (tenantId === null || tenantId === undefined) {
+    return {};
+  }
+  const normalized = String(tenantId).trim();
+  return normalized ? { "X-Tenant-Id": normalized } : {};
+};
+
+export const withTenantHeaders = (
+  tenantId?: number | string | null,
+  config: AxiosRequestConfig = {},
+): AxiosRequestConfig => {
+  const tenantHeaders = buildTenantHeaders(tenantId);
+  if (Object.keys(tenantHeaders).length === 0) {
+    return config;
+  }
+
+  return {
+    ...config,
+    headers: {
+      ...(config.headers ?? {}),
+      ...tenantHeaders,
+    },
+  };
+};
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -59,12 +87,8 @@ apiClient.interceptors.request.use((config) => {
     const protocol = window.location.protocol === "https:" ? "https" : "http";
     config.baseURL = `${protocol}://${window.location.hostname}:8000`;
   }
-  const existingTenantHeader =
-    config.headers &&
-    (config.headers["X-Tenant-Id"] ? (config.headers as any)["x-tenant-id"]);
   config.headers = {
-    ...config.headers,
-    ...(existingTenantHeader ? {} : {}),
+    ...(config.headers ?? {}),
     "X-Source": "web",
   };
   return config;

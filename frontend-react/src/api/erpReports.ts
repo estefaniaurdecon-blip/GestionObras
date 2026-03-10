@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export interface ErpProject {
   id: number;
@@ -43,19 +43,10 @@ export interface ProjectBudgetMilestone {
   created_at?: string;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchErpProjects(tenantId?: number): Promise<ErpProject[]> {
   const response = await apiClient.get<ErpProject[]>(
     "/api/v1/erp/projects",
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -66,7 +57,7 @@ export async function fetchErpProject(
 ): Promise<ErpProject> {
   const response = await apiClient.get<ErpProject>(
     `/api/v1/erp/projects/${projectId}`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -77,7 +68,7 @@ export async function fetchProjectBudgetMilestones(
 ): Promise<ProjectBudgetMilestone[]> {
   const response = await apiClient.get<ProjectBudgetMilestone[]>(
     `/api/v1/erp/projects/${projectId}/budget-milestones`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -105,7 +96,7 @@ export async function fetchTimeReport(
     "/api/v1/erp/reports/time",
     {
       params,
-      ...(buildTenantHeaders(tenantId) ?? {}),
+      ...withTenantHeaders(tenantId),
     },
   );
   return response.data;

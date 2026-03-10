@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export interface ErpProjectCreate {
   name: string;
@@ -65,15 +65,6 @@ export interface ErpTaskUpdate {
   is_completed?: boolean;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function createErpProject(
   payload: ErpProjectCreate,
   tenantId?: number,
@@ -81,7 +72,7 @@ export async function createErpProject(
   const response = await apiClient.post<ErpProjectResponse>(
     "/api/v1/erp/projects",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -94,7 +85,7 @@ export async function updateErpProject(
   const response = await apiClient.patch<ErpProjectResponse>(
     `/api/v1/erp/projects/${projectId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -106,7 +97,7 @@ export async function createErpTask(
   await apiClient.post(
     "/api/v1/erp/tasks",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
 }
 
@@ -118,7 +109,7 @@ export async function updateErpTask(
   await apiClient.patch(
     `/api/v1/erp/tasks/${taskId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
 }
 

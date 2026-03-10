@@ -3,15 +3,13 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
 import { login } from "../api/auth";
-import { LoginPage } from "./LoginPage";
+import { LoginPage } from "../pages/LoginPage";
 import { renderWithProviders } from "./testUtils";
 
-// Mock del módulo de API de autenticación
 vi.mock("../api/auth", () => ({
   login: vi.fn(),
 }));
 
-// Mock simple del router de TanStack para poder asertar sobre history.push
 const pushMock = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({
@@ -28,6 +26,7 @@ describe("LoginPage", () => {
     pushMock.mockReset();
     mockedLogin.mockReset();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("redirige a /mfa cuando el backend requiere MFA", async () => {
@@ -39,22 +38,24 @@ describe("LoginPage", () => {
 
     renderWithProviders(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/auth\.login\.email/i), {
       target: { value: "user@example.com" },
     });
-    fireEvent.change(screen.getByLabelText(/contraseña/i), {
+    fireEvent.change(screen.getByLabelText(/auth\.login\.password/i), {
       target: { value: "password" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /auth\.login\.submit/i }),
+    );
 
     await waitFor(() => {
-      expect(mockedLogin).toHaveBeenCalled();
+      expect(mockedLogin).toHaveBeenCalledWith("user@example.com", "password");
       expect(pushMock).toHaveBeenCalledWith("/mfa");
     });
   });
 
-  it("guarda el token y redirige al dashboard cuando el login es directo", async () => {
+  it("redirige al dashboard cuando el login devuelve token", async () => {
     mockedLogin.mockResolvedValueOnce({
       mfa_required: false,
       access_token: "test-token",
@@ -63,17 +64,19 @@ describe("LoginPage", () => {
 
     renderWithProviders(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
+    fireEvent.change(screen.getByLabelText(/auth\.login\.email/i), {
       target: { value: "user@example.com" },
     });
-    fireEvent.change(screen.getByLabelText(/contraseña/i), {
+    fireEvent.change(screen.getByLabelText(/auth\.login\.password/i), {
       target: { value: "password" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /auth\.login\.submit/i }),
+    );
 
     await waitFor(() => {
-      expect(mockedLogin).toHaveBeenCalled();
+      expect(mockedLogin).toHaveBeenCalledWith("user@example.com", "password");
       expect(pushMock).toHaveBeenCalledWith("/dashboard");
     });
   });

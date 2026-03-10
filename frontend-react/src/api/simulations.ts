@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export type SimulationExpense = {
   id: number;
@@ -48,15 +48,6 @@ export type SimulationExpenseCreate = {
 
 export type SimulationExpenseUpdate = Partial<SimulationExpenseCreate>;
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 const mapExpense = (expense: ApiSimulationExpense): SimulationExpense => ({
   id: expense.id,
   concept: expense.concept,
@@ -82,7 +73,7 @@ const serializeProjectPatch = (payload: SimulationProjectUpdate) => ({
 export async function fetchSimulations(tenantId?: number) {
   const response = await apiClient.get<ApiSimulationProject[]>(
     "/api/v1/erp/simulations",
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data.map(mapProject);
 }
@@ -99,7 +90,7 @@ export async function createSimulationProject(
       subsidy_percent: payload.subsidyPercent ?? 0,
       threshold_percent: payload.thresholdPercent ?? 50,
     },
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return mapProject(response.data);
 }
@@ -112,7 +103,7 @@ export async function updateSimulationProject(
   const response = await apiClient.patch<ApiSimulationProject>(
     `/api/v1/erp/simulations/${projectId}`,
     serializeProjectPatch(payload),
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return mapProject(response.data);
 }
@@ -123,7 +114,7 @@ export async function deleteSimulationProject(
 ) {
   await apiClient.delete(
     `/api/v1/erp/simulations/${projectId}`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
 }
 
@@ -138,7 +129,7 @@ export async function createSimulationExpense(
       concept: payload.concept,
       amount: payload.amount ?? 0,
     },
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return mapExpense(response.data);
 }
@@ -152,7 +143,7 @@ export async function updateSimulationExpense(
   const response = await apiClient.patch<ApiSimulationExpense>(
     `/api/v1/erp/simulations/${projectId}/expenses/${expenseId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return mapExpense(response.data);
 }
@@ -164,6 +155,6 @@ export async function deleteSimulationExpense(
 ) {
   await apiClient.delete(
     `/api/v1/erp/simulations/${projectId}/expenses/${expenseId}`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
 }

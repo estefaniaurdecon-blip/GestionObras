@@ -6,7 +6,15 @@ import {
   FormControl,
   FormLabel,
   Heading,
+  HStack,
   Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Select,
   Switch,
   Table,
@@ -17,88 +25,68 @@ import {
   Thead,
   Tr,
   VStack,
-  HStack,
-  useToast,
   useColorModeValue,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
+  useToast,
 } from "@chakra-ui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { keyframes } from "@emotion/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { deleteUser, createUserInvitation, fetchAllTenants, fetchUsersByTenant, type TenantOption, type TenantUserSummary, updateUser, updateUserStatus } from "../api/users";
 import { AppShell } from "../components/layout/AppShell";
 import { PageHero } from "../components/layout/PageHero";
-import { apiClient } from "../api/client";
-import { createUserInvitation } from "../api/users";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 
-interface TenantOption {
-  id: number;
-  name: string;
-  subdomain: string;
-}
+type EditableRole = "tenant_admin" | "user";
 
-interface User {
-  id: number;
-  email: string;
-  full_name?: string | null;
-  is_active: boolean;
-  is_super_admin: boolean;
-  tenant_id?: number | null;
-  role_id?: number | null;
-  role_name?: string | null;
-}
-
-async function fetchTenants(): Promise<TenantOption[]> {
-  const response = await apiClient.get<TenantOption[]>("/api/v1/tenants/");
-  return response.data;
-}
-
-async function fetchUsers(tenantId: number): Promise<User[]> {
-  const response = await apiClient.get<User[]>(
-    `/api/v1/users/by-tenant/${tenantId}`,
-    {
-      headers: {
-        "X-Tenant-Id": tenantId.toString(),
-      },
-    },
-  );
-  return response.data;
-}
-
-interface NewUserFormState {
+interface UserFormState {
   email: string;
   full_name: string;
-  role: "tenant_admin" | "user";
+  role: EditableRole;
 }
 
-interface EditUserFormState {
-  email: string;
-  full_name: string;
-  role: "tenant_admin" | "user";
-}
+const defaultInviteForm = (): UserFormState => ({
+  email: "",
+  full_name: "",
+  role: "tenant_admin",
+});
 
-/**
- * Gestión de usuarios por tenant.
- *
- * Super Admin:
- *   - Puede seleccionar cualquier tenant.
- *
- * Admin de tenant:
- *   - Gestiona solo los usuarios de su propio tenant (sin selector).
- */
-// Pantalla de gestión de usuarios: listado, filtros y acciones.
+const defaultEditForm = (): UserFormState => ({
+  email: "",
+  full_name: "",
+  role: "user",
+});
+
+const getErrorDetail = (error: unknown, fallback: string): string => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "detail" in error.response.data &&
+    typeof error.response.data.detail === "string"
+  ) {
+    return error.response.data.detail;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
+
+const resolveRole = (user: TenantUserSummary): EditableRole => {
+  return user.role_name === "tenant_admin" ? "tenant_admin" : "user";
+};
+
 export const UsersPage: React.FC = () => {
-  // Utilidades y estilos base.
   const toast = useToast();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
   const cardBg = useColorModeValue("white", "gray.700");
   const tableHeadBg = useColorModeValue("gray.50", "gray.800");
   const panelBg = useColorModeValue("gray.50", "gray.800");
@@ -110,32 +98,15 @@ export const UsersPage: React.FC = () => {
 
   const { data: currentUser } = useCurrentUser();
   const isSuperAdmin = currentUser?.is_super_admin === true;
-  const currentTenantId = currentUser?.tenant_id ? null;
+  const currentTenantId = currentUser?.tenant_id ?? null;
 
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (isSuperAdmin) return;
-    if (!currentTenantId) return;
-    if (selectedTenantId !== null) return;
-    setSelectedTenantId(currentTenantId);
-  }, [currentTenantId, isSuperAdmin, selectedTenantId]);
-
-  const [form, setForm] = useState<NewUserFormState>({
-    email: "",
-    full_name: "",
-    role: "tenant_admin",
-  });
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<TenantUserSummary | null>(null);
   const [isGerenciaEditing, setIsGerenciaEditing] = useState(false);
-  const [editForm, setEditForm] = useState<EditUserFormState>({
-    email: "",
-    full_name: "",
-    role: "user",
-  });
-
+  const [form, setForm] = useState<UserFormState>(defaultInviteForm);
+  const [editForm, setEditForm] = useState<UserFormState>(defaultEditForm);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
     "all" | "super_admin" | "tenant_admin" | "gerencia" | "user"
@@ -144,107 +115,86 @@ export const UsersPage: React.FC = () => {
     "all",
   );
 
-  const {
-    data: tenants,
-    isLoading: isLoadingTenants,
-    isError: isErrorTenants,
-  } = useQuery<TenantOption[]>({
+  const tenantsQuery = useQuery<TenantOption[]>({
     queryKey: ["tenants-for-users"],
-    queryFn: fetchTenants,
+    queryFn: fetchAllTenants,
     enabled: isSuperAdmin,
-    onSuccess: (data) => {
-      if (isSuperAdmin && !selectedTenantId && data.length > 0) {
-        setSelectedTenantId(data[0].id);
-      }
-    },
   });
 
-  const {
-    data: users,
-    isLoading: isLoadingUsers,
-    isError: isErrorUsers,
-  } = useQuery<User[]>({
+  useEffect(() => {
+    if (isSuperAdmin) {
+      if (selectedTenantId !== null) return;
+      if (tenantsQuery.data?.length) {
+        setSelectedTenantId(tenantsQuery.data[0].id);
+      }
+      return;
+    }
+    if (currentTenantId === null) return;
+    if (selectedTenantId === currentTenantId) return;
+    setSelectedTenantId(currentTenantId);
+  }, [currentTenantId, isSuperAdmin, selectedTenantId, tenantsQuery.data]);
+
+  const usersQuery = useQuery<TenantUserSummary[]>({
     queryKey: ["users", selectedTenantId],
-    queryFn: () => fetchUsers(selectedTenantId as number),
+    queryFn: () => fetchUsersByTenant(selectedTenantId as number),
     enabled: selectedTenantId !== null,
   });
 
+  const invalidateUsers = async () => {
+    if (selectedTenantId === null) return;
+    await queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
+  };
+
   const createInvitationMutation = useMutation({
-    mutationFn: async (payload: NewUserFormState) => {
-      const { role, ...rest } = payload;
+    mutationFn: async (payload: UserFormState) => {
+      if (selectedTenantId === null) {
+        throw new Error(t("users.tenant.placeholder"));
+      }
       await createUserInvitation({
-        ...rest,
+        email: payload.email,
+        full_name: payload.full_name || null,
         tenant_id: selectedTenantId,
-        role_name: role,
+        role_name: payload.role,
       });
     },
-    onSuccess: () => {
-      if (selectedTenantId) {
-        queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
-      }
+    onSuccess: async () => {
+      await invalidateUsers();
       toast({
         title: t("users.messages.inviteSuccessTitle"),
         description: t("users.messages.inviteSuccessDesc"),
         status: "success",
       });
-      setForm({
-        email: "",
-        full_name: "",
-        role: "tenant_admin",
-      });
+      setForm(defaultInviteForm());
       setInviteOpen(false);
     },
-    onError: (error: any) => {
-      const detail =
-        error?.response?.data?.detail ?
-        error?.message ?
-        t("users.messages.inviteErrorFallback");
+    onError: (error) => {
       toast({
         title: t("users.messages.inviteErrorTitle"),
-        description: detail,
+        description: getErrorDetail(error, t("users.messages.inviteErrorFallback")),
         status: "error",
       });
     },
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = Number(e.target.value);
-    setSelectedTenantId(Number.isNaN(id) ? null : id);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createInvitationMutation.mutate(form);
-  };
-
   const updateUserMutation = useMutation({
-    mutationFn: async (payload: { id: number; email: string; full_name: string; role?: "tenant_admin" | "user" }) => {
-      const { id, ...data } = payload;
-      return apiClient.patch<User>(
-        `/api/v1/users/${id}`,
+    mutationFn: async (payload: {
+      id: number;
+      email: string;
+      full_name: string;
+      role?: EditableRole;
+    }) => {
+      return updateUser(
+        payload.id,
         {
-          email: data.email,
-          full_name: data.full_name,
-          role_name: data.role,
+          email: payload.email,
+          full_name: payload.full_name,
+          role_name: payload.role,
         },
-        {
-          headers: {
-            "X-Tenant-Id": (selectedTenantId ? "").toString(),
-          },
-        },
+        selectedTenantId,
       );
     },
-    onSuccess: () => {
-      if (selectedTenantId) {
-        queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
-      }
+    onSuccess: async () => {
+      await invalidateUsers();
       toast({
         title: t("users.messages.updateSuccessTitle"),
         description: t("users.messages.updateSuccessDesc"),
@@ -253,122 +203,119 @@ export const UsersPage: React.FC = () => {
       setEditOpen(false);
       setEditingUser(null);
     },
-    onError: (error: any) => {
-      const detail =
-        error?.response?.data?.detail ?
-        t("users.messages.updateErrorFallback");
+    onError: (error) => {
       toast({
         title: t("users.messages.updateErrorTitle"),
-        description: detail,
+        description: getErrorDetail(error, t("users.messages.updateErrorFallback")),
         status: "error",
       });
     },
   });
 
-  const openEditUser = (user: User) => {
-    const role =
-      user.role_name === "tenant_admin"
-        ? "tenant_admin"
-        : "user";
-    setEditingUser(user);
-    setEditForm({
-      email: user.email,
-      full_name: user.full_name ? "",
-      role,
-    });
-    setIsGerenciaEditing(user.role_name === "gerencia");
-    setEditOpen(true);
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: number) => deleteUser(userId, selectedTenantId),
+    onSuccess: async () => {
+      await invalidateUsers();
+      toast({
+        title: t("users.messages.deleteSuccessTitle"),
+        description: t("users.messages.deleteSuccessDesc"),
+        status: "success",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: t("users.messages.deleteErrorTitle"),
+        description: getErrorDetail(error, t("users.messages.deleteErrorFallback")),
+        status: "error",
+      });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async (payload: { userId: number; isActive: boolean }) =>
+      updateUserStatus(payload.userId, payload.isActive, selectedTenantId),
+    onSuccess: async () => {
+      await invalidateUsers();
+    },
+    onError: (error) => {
+      toast({
+        title: t("users.messages.statusErrorTitle"),
+        description: getErrorDetail(error, t("users.messages.statusErrorFallback")),
+        status: "error",
+      });
+    },
+  });
+
+  const handleFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleEditChange = (
+  const handleEditFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setEditForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const openEditUser = (user: TenantUserSummary) => {
+    setEditingUser(user);
+    setEditForm({
+      email: user.email,
+      full_name: user.full_name ?? "",
+      role: resolveRole(user),
+    });
+    setIsGerenciaEditing(user.role_name === "gerencia");
+    setEditOpen(true);
+  };
+
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createInvitationMutation.mutate(form);
+  };
+
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    if (isGerenciaEditing) {
-      updateUserMutation.mutate({
-        id: editingUser.id,
-        email: editForm.email,
-        full_name: editForm.full_name,
-        role: undefined,
-      });
-      return;
-    }
-    updateUserMutation.mutate({ id: editingUser.id, ...editForm });
+    updateUserMutation.mutate({
+      id: editingUser.id,
+      email: editForm.email,
+      full_name: editForm.full_name,
+      role: isGerenciaEditing ? undefined : editForm.role,
+    });
   };
 
-  const getRoleLabel = (user: User): string => {
+  const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = Number.parseInt(e.target.value, 10);
+    setSelectedTenantId(Number.isNaN(value) ? null : value);
+  };
+
+  const handleDeleteUser = (user: TenantUserSummary) => {
+    const confirmed = window.confirm(
+      `${t("users.table.delete")}: ${user.full_name || user.email}`,
+    );
+    if (!confirmed) return;
+    deleteUserMutation.mutate(user.id);
+  };
+
+  const getRoleLabel = (user: TenantUserSummary): string => {
     if (user.is_super_admin) return t("users.roles.superAdmin");
     if (user.role_name === "tenant_admin") return t("users.roles.tenantAdmin");
     if (user.role_name === "gerencia") return "Gerencia";
     return t("users.roles.standard");
   };
 
-  const handleDeleteUser = (userId: number) => {
-    apiClient
-      .delete(`/api/v1/users/${userId}`)
-      .then(() => {
-        if (selectedTenantId) {
-          queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
-        }
-        toast({
-          title: t("users.messages.deleteSuccessTitle"),
-          description: t("users.messages.deleteSuccessDesc"),
-          status: "success",
-        });
-      })
-      .catch((error: any) => {
-        const detail =
-          error?.response?.data?.detail ?
-          t("users.messages.deleteErrorFallback");
-        toast({
-          title: t("users.messages.deleteErrorTitle"),
-          description: detail,
-          status: "error",
-        });
-      });
-  };
-
-  const handleToggleActive = (user: User) => {
-    apiClient
-      .patch<User>(
-        `/api/v1/users/${user.id}/status`,
-        { is_active: !user.is_active },
-        {
-          headers: {
-            "X-Tenant-Id": (selectedTenantId ? "").toString(),
-          },
-        },
-      )
-      .then(() => {
-        if (selectedTenantId) {
-          queryClient.invalidateQueries({ queryKey: ["users", selectedTenantId] });
-        }
-      })
-      .catch((error: any) => {
-        const detail =
-          error?.response?.data?.detail ?
-          t("users.messages.statusErrorFallback");
-        toast({
-          title: t("users.messages.statusErrorTitle"),
-          description: detail,
-          status: "error",
-        });
-      });
-  };
-
   const filteredUsers = useMemo(() => {
-    if (!users) return [];
+    const users = usersQuery.data ?? [];
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
     return users.filter((user) => {
       const matchesSearch =
-        !searchTerm ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.full_name ? "").toLowerCase().includes(searchTerm.toLowerCase());
+        normalizedSearch.length === 0 ||
+        user.email.toLowerCase().includes(normalizedSearch) ||
+        (user.full_name ?? "").toLowerCase().includes(normalizedSearch);
 
       const matchesRole =
         roleFilter === "all" ||
@@ -391,9 +338,8 @@ export const UsersPage: React.FC = () => {
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [users, searchTerm, roleFilter, statusFilter]);
+  }, [roleFilter, searchTerm, statusFilter, usersQuery.data]);
 
-  // Render principal de la pagina.
   return (
     <AppShell>
       <Box animation={`${fadeUp} 0.6s ease-out`} mb={8}>
@@ -410,15 +356,15 @@ export const UsersPage: React.FC = () => {
             <FormLabel>{t("users.tenant.label")}</FormLabel>
             <Select
               placeholder={
-                isLoadingTenants
+                tenantsQuery.isLoading
                   ? t("users.tenant.loading")
                   : t("users.tenant.placeholder")
               }
-              value={selectedTenantId ? ""}
+              value={selectedTenantId !== null ? String(selectedTenantId) : ""}
               onChange={handleTenantChange}
-              isDisabled={isLoadingTenants || isErrorTenants}
+              isDisabled={tenantsQuery.isLoading || tenantsQuery.isError}
             >
-              {(tenants ? []).map((tenant) => (
+              {(tenantsQuery.data ?? []).map((tenant) => (
                 <option key={tenant.id} value={tenant.id}>
                   {tenant.name} ({tenant.subdomain})
                 </option>
@@ -436,20 +382,26 @@ export const UsersPage: React.FC = () => {
           colorScheme="green"
           size="sm"
           onClick={() => setInviteOpen(true)}
-          isDisabled={!selectedTenantId}
+          isDisabled={selectedTenantId === null}
         >
           {t("users.invite.submit")}
         </Button>
       </HStack>
 
-      {isLoadingUsers && <Text>{t("users.list.loading")}</Text>}
-      {isErrorUsers && (
+      {usersQuery.isLoading && <Text>{t("users.list.loading")}</Text>}
+      {usersQuery.isError && (
         <Text color="red.500" mb={4}>
           {t("users.list.loadError")}
         </Text>
       )}
 
-      {!isLoadingUsers && users && (
+      {!usersQuery.isLoading && selectedTenantId === null && (
+        <Text color={subtleText} mb={4}>
+          {t("users.tenant.placeholder")}
+        </Text>
+      )}
+
+      {!usersQuery.isLoading && usersQuery.data && (
         <>
           <Box borderWidth="1px" borderRadius="xl" p={4} bg={panelBg} mb={6}>
             <HStack spacing={4} align="flex-end" flexWrap="wrap">
@@ -495,69 +447,78 @@ export const UsersPage: React.FC = () => {
           <Box borderWidth="1px" borderRadius="xl" overflow="hidden" bg={cardBg}>
             <Box overflowX="auto">
               <Table size="sm" minW="760px">
-              <Thead bg={tableHeadBg}>
-                <Tr>
-                  <Th>{t("users.table.name")}</Th>
-                  <Th>{t("users.table.email")}</Th>
-                  <Th>{t("users.table.role")}</Th>
-                  <Th>{t("users.table.status")}</Th>
-                  <Th></Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {filteredUsers.length === 0 ? (
+                <Thead bg={tableHeadBg}>
                   <Tr>
-                    <Td colSpan={5}>
-                      <Text fontSize="sm" color={subtleText}>
-                        {t("users.table.empty")}
-                      </Text>
-                    </Td>
+                    <Th>{t("users.table.name")}</Th>
+                    <Th>{t("users.table.email")}</Th>
+                    <Th>{t("users.table.role")}</Th>
+                    <Th>{t("users.table.status")}</Th>
+                    <Th />
                   </Tr>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <Tr key={user.id}>
-                      <Td>{user.full_name ? "-"}</Td>
-                      <Td>{user.email}</Td>
-                      <Td>{getRoleLabel(user)}</Td>
-                      <Td>
-                        <HStack spacing={3}>
-                          <Badge colorScheme={user.is_active ? "green" : "red"}>
-                            {user.is_active ? t("users.table.active") : t("users.table.inactive")}
-                          </Badge>
-                          <Switch
-                            size="sm"
-                            isChecked={user.is_active}
-                            onChange={() => handleToggleActive(user)}
-                          />
-                        </HStack>
-                      </Td>
-                      <Td>
-                        <HStack spacing={2}>
-                          {!user.is_super_admin && (
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={() => openEditUser(user)}
-                            >
-                              {t("users.table.edit")}
-                            </Button>
-                          )}
-                          {!user.is_super_admin && (
-                            <Button
-                              size="xs"
-                              colorScheme="red"
-                              variant="outline"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              {t("users.table.delete")}
-                            </Button>
-                          )}
-                        </HStack>
+                </Thead>
+                <Tbody>
+                  {filteredUsers.length === 0 ? (
+                    <Tr>
+                      <Td colSpan={5}>
+                        <Text fontSize="sm" color={subtleText}>
+                          {t("users.table.empty")}
+                        </Text>
                       </Td>
                     </Tr>
-                  ))
-                )}
-              </Tbody>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <Tr key={user.id}>
+                        <Td>{user.full_name || "-"}</Td>
+                        <Td>{user.email}</Td>
+                        <Td>{getRoleLabel(user)}</Td>
+                        <Td>
+                          <HStack spacing={3}>
+                            <Badge colorScheme={user.is_active ? "green" : "red"}>
+                              {user.is_active
+                                ? t("users.table.active")
+                                : t("users.table.inactive")}
+                            </Badge>
+                            <Switch
+                              size="sm"
+                              isChecked={user.is_active}
+                              onChange={() =>
+                                updateStatusMutation.mutate({
+                                  userId: user.id,
+                                  isActive: !user.is_active,
+                                })
+                              }
+                              isDisabled={updateStatusMutation.isPending}
+                            />
+                          </HStack>
+                        </Td>
+                        <Td>
+                          <HStack spacing={2}>
+                            {!user.is_super_admin && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => openEditUser(user)}
+                              >
+                                {t("users.table.edit")}
+                              </Button>
+                            )}
+                            {!user.is_super_admin && (
+                              <Button
+                                size="xs"
+                                colorScheme="red"
+                                variant="outline"
+                                onClick={() => handleDeleteUser(user)}
+                                isDisabled={deleteUserMutation.isPending}
+                              >
+                                {t("users.table.delete")}
+                              </Button>
+                            )}
+                          </HStack>
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </Tbody>
               </Table>
             </Box>
           </Box>
@@ -566,7 +527,7 @@ export const UsersPage: React.FC = () => {
 
       <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} size="lg">
         <ModalOverlay />
-        <ModalContent as="form" onSubmit={handleSubmit}>
+        <ModalContent as="form" onSubmit={handleInviteSubmit}>
           <ModalHeader>{t("users.invite.title")}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
@@ -576,7 +537,7 @@ export const UsersPage: React.FC = () => {
                 <Input
                   name="full_name"
                   value={form.full_name}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
                   placeholder={t("users.invite.fullNamePlaceholder")}
                 />
               </FormControl>
@@ -586,13 +547,13 @@ export const UsersPage: React.FC = () => {
                   name="email"
                   type="email"
                   value={form.email}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
                   placeholder={t("users.invite.emailPlaceholder")}
                 />
               </FormControl>
               <FormControl>
                 <FormLabel>{t("users.invite.role")}</FormLabel>
-                <Select name="role" value={form.role} onChange={handleChange}>
+                <Select name="role" value={form.role} onChange={handleFormChange}>
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
                   <option value="user">{t("users.roles.standard")}</option>
                 </Select>
@@ -607,7 +568,7 @@ export const UsersPage: React.FC = () => {
               type="submit"
               colorScheme="green"
               isLoading={createInvitationMutation.isPending}
-              isDisabled={!selectedTenantId}
+              isDisabled={selectedTenantId === null}
             >
               {t("users.invite.submit")}
             </Button>
@@ -627,7 +588,7 @@ export const UsersPage: React.FC = () => {
                 <Input
                   name="full_name"
                   value={editForm.full_name}
-                  onChange={handleEditChange}
+                  onChange={handleEditFormChange}
                 />
               </FormControl>
               <FormControl isRequired>
@@ -636,7 +597,7 @@ export const UsersPage: React.FC = () => {
                   name="email"
                   type="email"
                   value={editForm.email}
-                  onChange={handleEditChange}
+                  onChange={handleEditFormChange}
                 />
               </FormControl>
               <FormControl>
@@ -644,7 +605,7 @@ export const UsersPage: React.FC = () => {
                 <Select
                   name="role"
                   value={editForm.role}
-                  onChange={handleEditChange}
+                  onChange={handleEditFormChange}
                   isDisabled={isGerenciaEditing}
                 >
                   <option value="tenant_admin">{t("users.roles.tenantAdmin")}</option>
@@ -652,7 +613,7 @@ export const UsersPage: React.FC = () => {
                 </Select>
                 {isGerenciaEditing && (
                   <Text fontSize="xs" color={subtleText}>
-                    El rol de Gerencia se asigna automáticamente por departamento.
+                    El rol de Gerencia se asigna automaticamente por departamento.
                   </Text>
                 )}
               </FormControl>
@@ -666,16 +627,13 @@ export const UsersPage: React.FC = () => {
               type="submit"
               colorScheme="green"
               isLoading={updateUserMutation.isPending}
-              isDisabled={!selectedTenantId}
+              isDisabled={selectedTenantId === null}
             >
               {t("users.edit.save")}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-
     </AppShell>
   );
 };
-
-

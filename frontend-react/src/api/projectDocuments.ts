@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export interface ProjectDocument {
   id: number;
@@ -12,22 +12,13 @@ export interface ProjectDocument {
   url: string;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchProjectDocuments(
   projectId: number,
   tenantId?: number,
 ): Promise<ProjectDocument[]> {
   const response = await apiClient.get<ProjectDocument[]>(
     `/api/v1/erp/projects/${projectId}/documents`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -44,7 +35,7 @@ export async function uploadProjectDocument(
   const response = await apiClient.post<ProjectDocument>(
     `/api/v1/erp/projects/${projectId}/documents`,
     formData,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }

@@ -1,13 +1,4 @@
-import { apiClient } from "./client";
-
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
+import { apiClient, withTenantHeaders } from "./client";
 
 // Tipos y llamadas para estructura del proyecto (actividades, hitos, entregables).
 
@@ -154,7 +145,7 @@ export async function fetchActivities(
 ): Promise<ErpActivity[]> {
   const response = await apiClient.get<ErpActivity[]>("/api/v1/erp/activities", {
     params: projectId ? { project_id: projectId } : undefined,
-    ...(buildTenantHeaders(tenantId) ?? {}),
+    ...withTenantHeaders(tenantId),
   });
   return response.data;
 }
@@ -166,7 +157,7 @@ export async function createActivity(
   const response = await apiClient.post<ErpActivity>(
     "/api/v1/erp/activities",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -191,7 +182,7 @@ export async function fetchSubActivities(
   if (params.activityId) query.activity_id = params.activityId;
   const response = await apiClient.get<ErpSubActivity[]>(
     "/api/v1/erp/subactivities",
-    { params: query, ...(buildTenantHeaders(tenantId) ?? {}) },
+    { params: query, ...withTenantHeaders(tenantId) },
   );
   return response.data;
 }
@@ -203,7 +194,7 @@ export async function createSubActivity(
   const response = await apiClient.post<ErpSubActivity>(
     "/api/v1/erp/subactivities",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -228,7 +219,7 @@ export async function fetchMilestones(
   if (params.activityId) query.activity_id = params.activityId;
   const response = await apiClient.get<ErpMilestone[]>(
     "/api/v1/erp/milestones",
-    { params: query, ...(buildTenantHeaders(tenantId) ?? {}) },
+    { params: query, ...withTenantHeaders(tenantId) },
   );
   return response.data;
 }
@@ -240,7 +231,7 @@ export async function createMilestone(
   const response = await apiClient.post<ErpMilestone>(
     "/api/v1/erp/milestones",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }

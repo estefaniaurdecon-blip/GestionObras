@@ -1,5 +1,7 @@
 ﻿import { apiClient } from "./client";
 
+import { withTenantHeaders } from "./client";
+
 export type ContractStatus =
   | "DRAFT"
   | "PENDING_SUPPLIER"
@@ -154,15 +156,6 @@ export interface SupplierOnboardingValidateResponse {
   tenant_id: number;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchContracts(
   tenantId?: number,
   filters: ContractFilters = {},
@@ -173,7 +166,7 @@ export async function fetchContracts(
 
   const response = await apiClient.get<Contract[]>("/api/v1/contracts", {
     params,
-    ...(buildTenantHeaders(tenantId) ?? {}),
+    ...withTenantHeaders(tenantId),
   });
   return response.data;
 }
@@ -185,7 +178,7 @@ export async function createContract(
   const response = await apiClient.post<Contract>(
     "/api/v1/contracts",
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -198,7 +191,7 @@ export async function updateContract(
   const response = await apiClient.patch<Contract>(
     `/api/v1/contracts/${contractId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -222,12 +215,11 @@ export async function addContractOffer(
   const response = await apiClient.post<ContractOffer>(
     `/api/v1/contracts/${contractId}/offers`,
     formData,
-    {
+    withTenantHeaders(tenantId, {
       headers: {
         "Content-Type": "multipart/form-data",
-        ...(buildTenantHeaders(tenantId)?.headers ?? {}),
       },
-    },
+    }),
   );
   return response.data;
 }
@@ -240,7 +232,7 @@ export async function selectContractOffer(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/select-offer`,
     { offer_id: offerId },
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -252,7 +244,7 @@ export async function generateContractDocs(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/generate-docs`,
     {},
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -265,7 +257,7 @@ export async function lookupSupplierByTaxId(
     "/api/v1/contracts/suppliers/lookup",
     {
       params: { tax_id: taxId },
-      ...(buildTenantHeaders(tenantId) ?? {}),
+      ...withTenantHeaders(tenantId),
     },
   );
   return response.data.found ? response.data.supplier ?? null : null;
@@ -298,7 +290,7 @@ export async function submitContractGerencia(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/submit-gerencia`,
     {},
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -310,7 +302,7 @@ export async function submitComparative(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/submit-comparative`,
     {},
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -323,7 +315,7 @@ export async function approveComparative(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/approve-comparative`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -336,7 +328,7 @@ export async function rejectComparative(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/reject-comparative`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -349,7 +341,7 @@ export async function approveContract(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/approve`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -362,7 +354,7 @@ export async function rejectContract(
   const response = await apiClient.post<Contract>(
     `/api/v1/contracts/${contractId}/reject`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }

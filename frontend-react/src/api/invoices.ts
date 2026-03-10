@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, withTenantHeaders } from "./client";
 
 export type InvoiceStatus =
   | "uploaded"
@@ -69,15 +69,6 @@ export interface InvoiceFilters {
   dateTo?: string | null;
 }
 
-const buildTenantHeaders = (tenantId?: number) =>
-  tenantId
-    ? {
-        headers: {
-          "X-Tenant-Id": tenantId.toString(),
-        },
-      }
-    : undefined;
-
 export async function fetchInvoices(
   tenantId?: number,
   filters: InvoiceFilters = {},
@@ -93,7 +84,7 @@ export async function fetchInvoices(
     "/api/v1/invoices",
     {
       params,
-      ...(buildTenantHeaders(tenantId) ?? {}),
+      ...withTenantHeaders(tenantId),
     },
   );
   return response.data;
@@ -105,7 +96,7 @@ export async function fetchInvoice(
 ): Promise<Invoice> {
   const response = await apiClient.get<Invoice>(
     `/api/v1/invoices/${invoiceId}`,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -139,12 +130,11 @@ export async function uploadInvoice(
   const response = await apiClient.post<Invoice>(
     "/api/v1/invoices",
     formData,
-    {
+    withTenantHeaders(tenantId, {
       headers: {
         "Content-Type": "multipart/form-data",
-        ...(buildTenantHeaders(tenantId)?.headers ?? {}),
       },
-    },
+    }),
   );
   return response.data;
 }
@@ -157,7 +147,7 @@ export async function updateInvoice(
   const response = await apiClient.patch<Invoice>(
     `/api/v1/invoices/${invoiceId}`,
     payload,
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -169,7 +159,7 @@ export async function markInvoicePaid(
   const response = await apiClient.post<Invoice>(
     `/api/v1/invoices/${invoiceId}/mark-paid`,
     {},
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -178,7 +168,7 @@ export async function deleteInvoice(
   invoiceId: number,
   tenantId?: number,
 ): Promise<void> {
-  await apiClient.delete(`/api/v1/invoices/${invoiceId}`, buildTenantHeaders(tenantId));
+  await apiClient.delete(`/api/v1/invoices/${invoiceId}`, withTenantHeaders(tenantId));
 }
 
 export async function reprocessInvoice(
@@ -188,7 +178,7 @@ export async function reprocessInvoice(
   const response = await apiClient.post<Invoice>(
     `/api/v1/invoices/${invoiceId}/reprocess`,
     {},
-    buildTenantHeaders(tenantId),
+    withTenantHeaders(tenantId),
   );
   return response.data;
 }
@@ -201,7 +191,7 @@ export async function downloadInvoiceFile(
     `/api/v1/invoices/${invoiceId}/download`,
     {
       responseType: "blob",
-      ...(buildTenantHeaders(tenantId) ?? {}),
+      ...withTenantHeaders(tenantId),
     },
   );
   return response.data as Blob;

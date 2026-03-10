@@ -1,5 +1,6 @@
 // Cliente HTTP configurado (axios) con baseURL, cookies, etc.
 import { apiClient } from "./client";
+import { withTenantHeaders } from "./client";
 
 /**
  * Información del usuario autenticado actual
@@ -36,6 +37,10 @@ export interface TenantUserSummary {
   email: string; // Email
   full_name: string | null; // Nombre completo
   is_active: boolean; // Estado del usuario
+  is_super_admin?: boolean; // Super admin global
+  tenant_id?: number | null; // Tenant asociado
+  role_id?: number | null; // Rol asignado
+  role_name?: string | null; // Nombre del rol
 }
 
 /**
@@ -56,9 +61,7 @@ export async function fetchUsersByTenant(
         exclude_assigned: options?.excludeAssigned ?? false,
       },
       // Header para control multi-tenant
-      headers: {
-        "X-Tenant-Id": tenantId.toString(),
-      },
+      ...withTenantHeaders(tenantId),
     },
   );
   return response.data;
@@ -99,6 +102,45 @@ export async function createUserInvitation(
   payload: UserInvitationCreate,
 ): Promise<void> {
   await apiClient.post("/api/v1/invitations", payload);
+}
+
+export interface UserUpdateAdminPayload {
+  email?: string | null;
+  full_name?: string | null;
+  role_name?: string | null;
+}
+
+export async function updateUser(
+  userId: number,
+  payload: UserUpdateAdminPayload,
+  tenantId?: number | null,
+): Promise<TenantUserSummary> {
+  const response = await apiClient.patch<TenantUserSummary>(
+    `/api/v1/users/${userId}`,
+    payload,
+    withTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function updateUserStatus(
+  userId: number,
+  isActive: boolean,
+  tenantId?: number | null,
+): Promise<TenantUserSummary> {
+  const response = await apiClient.patch<TenantUserSummary>(
+    `/api/v1/users/${userId}/status`,
+    { is_active: isActive },
+    withTenantHeaders(tenantId),
+  );
+  return response.data;
+}
+
+export async function deleteUser(
+  userId: number,
+  tenantId?: number | null,
+): Promise<void> {
+  await apiClient.delete(`/api/v1/users/${userId}`, withTenantHeaders(tenantId));
 }
 
 /**
