@@ -211,7 +211,7 @@ async function readLegacySnapshotFromStorageKey(storageKey: string): Promise<Leg
 
 function isSuperAdminOrMultiTenant(user: ApiUser | null | undefined): boolean {
   if (!user) return false;
-  if (Boolean(user.is_super_admin)) return true;
+  if (user.is_super_admin) return true;
   const roles = normalizeRoles(user.roles);
   return roles.some((role) =>
     ['super_admin', 'superadmin', 'master', 'platform_admin', 'multi_tenant', 'multi-tenant'].includes(role)

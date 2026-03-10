@@ -58,8 +58,8 @@ interface GeneratorOptions {
 // Estimate content metrics
 const estimateContentMetrics = (data: SummaryReportData): ContentMetrics => {
   let contentHeight = 80; // Header
-  let sectionCount = 10;
-  let tableCount = 5;
+  const sectionCount = 10;
+  const tableCount = 5;
   let lineCount = 50;
   
   // AI Analysis text
@@ -206,7 +206,7 @@ const drawPieChart = (
   const centerX = x + radius + 10;
   const centerY = y + radius;
   
-  let startAngle = -Math.PI / 2;
+  const startAngle = -Math.PI / 2;
   const colors = [
     [110, 143, 86],
     [74, 124, 89],

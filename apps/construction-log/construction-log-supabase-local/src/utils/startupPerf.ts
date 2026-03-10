@@ -45,7 +45,7 @@ function toInfo(meta?: string): string {
 
 function log(message: string): void {
   if (!STARTUP_PERF_ENABLED) return;
-  // eslint-disable-next-line no-console
+   
   console.log(`[StartupPerf] ${message}`);
 }
 

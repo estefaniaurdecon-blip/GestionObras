@@ -25,9 +25,9 @@ interface ComprehensiveReportOptions {
 // Estimate content metrics for comprehensive report
 const estimateComprehensiveReportMetrics = (reports: WorkReport[], options: ComprehensiveReportOptions): ContentMetrics => {
   let contentHeight = 60; // Header
-  let sectionCount = 3; // Summary, daily, company
-  let tableCount = 3;
-  let lineCount = 10;
+  const sectionCount = 3; // Summary, daily, company
+  const tableCount = 3;
+  const lineCount = 10;
   
   contentHeight += 100; // Summary table
   contentHeight += reports.length * 12 + 50; // Daily table

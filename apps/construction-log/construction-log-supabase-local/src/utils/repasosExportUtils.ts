@@ -22,7 +22,7 @@ const estimateRepasosMetrics = (repasos: WorkRepaso[]): ContentMetrics => {
   let contentHeight = 60; // Header
   let sectionCount = 1;
   let tableCount = 1;
-  let lineCount = 5;
+  const lineCount = 5;
   
   contentHeight += repasos.length * 15; // Main table
   

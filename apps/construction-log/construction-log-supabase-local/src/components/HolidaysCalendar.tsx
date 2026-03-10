@@ -240,7 +240,7 @@ export const HolidaysCalendar = () => {
               const monthHolidays: Array<{ date: Date; name: string; type: string }> = [];
 
               // Recopilar festivos del mes
-              let currentDate = new Date(monthStart);
+              const currentDate = new Date(monthStart);
               while (currentDate <= monthEnd) {
                 const holidayType = getHolidayType(currentDate);
                 const holidayName = getHolidayName(currentDate);
