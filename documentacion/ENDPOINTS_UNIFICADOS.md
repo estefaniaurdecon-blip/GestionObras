@@ -338,9 +338,12 @@ Nota de contrato: `rental-machinery` soporta campos `machine_number`, `notes` e 
 | Metodo | Ruta | Fuente |
 |---|---|---|
 | GET | `/api/v1/notifications` | `backend-fastapi/app/api/v1/notifications.py` |
+| POST | `/api/v1/notifications` | `backend-fastapi/app/api/v1/notifications.py` |
 | POST | `/api/v1/notifications/read-all` | `backend-fastapi/app/api/v1/notifications.py` |
 | POST | `/api/v1/notifications/{notification_id}/read` | `backend-fastapi/app/api/v1/notifications.py` |
 | DELETE | `/api/v1/notifications/{notification_id}` | `backend-fastapi/app/api/v1/notifications.py` |
+
+Nota de contrato: `POST /api/v1/notifications` es el flujo normal autenticado para crear notificaciones en el tenant del usuario autenticado. Payload: `user_id`, `type`, `title`, `body`, `reference`.
 
 ### Modulo `messages`
 
@@ -387,6 +390,8 @@ Nota de contrato: `rental-machinery` soporta campos `machine_number`, `notes` e 
 | Metodo | Ruta | Fuente |
 |---|---|---|
 | POST | `/api/v1/internal/notifications` | `backend-fastapi/app/api/v1/internal.py` |
+
+Nota de contrato: `POST /api/v1/internal/notifications` es el flujo interno y requiere cabecera `X-SAAS-API-KEY`.
 
 ### Modulo `contracts_public`
 

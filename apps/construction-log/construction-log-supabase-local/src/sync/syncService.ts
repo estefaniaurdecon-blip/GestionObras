@@ -1,32 +1,35 @@
-﻿import { apiFetchJson } from '@/integrations/api/client';
-import { offlineDb } from '@/offline-db/db';
+﻿import { offlineDb } from '@/offline-db/db';
 import type { OutboxRow } from '@/offline-db/types';
 import { getToken, isTokenExpired } from '@/integrations/api/storage';
 import {
   API_WORK_REPORT_STATUSES,
-  type ApiErpWorkReport,
-  type WorkReportSyncAck,
   type WorkReportSyncOperation,
   type WorkReportSyncRequest,
-  type WorkReportSyncResponse,
 } from '@/services/workReportContract';
 import {
   buildDeterministicClientOpId,
   decideConsolidatedAction,
-  getCompatRetryPayload,
   shouldClearOutboxForAck,
 } from './syncRobustnessRules';
+import {
+  markEntriesAsSynced,
+  markPlanError,
+  resolveMappedServerId,
+} from './syncApplyResultsService';
+import { getLastSyncSince, runIncrementalPullSyncPhase } from './syncPullService';
+import { buildSyncAckMap, sendSyncBatch } from './syncTransportService';
+import {
+  asString,
+  resolveProjectIdForSync,
+  resolveServerReportId,
+  type ApiProjectLookup,
+} from './syncResolvers';
 
-const LAST_SYNC_KEY_PREFIX = 'work_reports_last_sync::';
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ALLOWED_SYNC_STATUSES = new Set(API_WORK_REPORT_STATUSES);
-type WorkReportServerChange = ApiErpWorkReport;
+const SYNC_PLAN_ERROR_PROJECT_ID_UNRESOLVED = 'project_id_unresolved';
+const SYNC_PLAN_ERROR_DATE_MISSING = 'date_missing';
 
-type ApiProjectLookup = {
-  id: number;
-  name?: string | null;
-  code?: string | null;
-};
 
 type PendingEntry = {
   id: string;
@@ -46,6 +49,11 @@ type LocalWorkReportSnapshot = {
   status: string;
   payload_json: string;
   deleted_at: number | null;
+};
+
+type BuildOperationDataResult = {
+  data: Record<string, unknown> | null;
+  errorMessage: string | null;
 };
 
 type SyncPlan =
@@ -109,24 +117,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function asString(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
-function toInteger(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const normalized = Math.trunc(value);
-    return normalized > 0 ? normalized : null;
-  }
-  if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }
-  return null;
-}
-
 function toJsonRecord(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value);
@@ -160,31 +150,6 @@ function isAuthApiError(error: unknown): boolean {
   return message.includes('sesion') || message.includes('session') || message.includes('unauthorized');
 }
 
-function shouldRetryServerChangesSerialization(error: unknown): boolean {
-  const message = toSyncErrorMessage(error).toLowerCase();
-  return (
-    message.includes('workreportsyncresponse') ||
-    message.includes('server_changes') ||
-    message.includes('workreportread') ||
-    message.includes('model_type')
-  );
-}
-
-function toEpochMs(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return Date.now();
-}
-
-function normalizeLookupText(value: unknown): string | null {
-  const base = asString(typeof value === 'number' ? String(value) : value);
-  if (!base) return null;
-  return base.toLowerCase();
-}
-
 function normalizeDateForSync(value: unknown): string | null {
   const direct = asString(value);
   if (direct && DATE_ONLY_PATTERN.test(direct)) return direct;
@@ -204,58 +169,10 @@ function normalizeDateForSync(value: unknown): string | null {
 
 function normalizeStatusForSync(value: unknown, fallback: string = 'draft'): string {
   const normalized = asString(value)?.toLowerCase();
-  if (normalized && ALLOWED_SYNC_STATUSES.has(normalized)) return normalized;
-  return fallback;
-}
-
-function sanitizeUpdateOperationDataForTransport(data: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...data };
-  delete next.date;
-
-  if (isRecord(next.patch)) {
-    const patch: Record<string, unknown> = { ...next.patch };
-    delete patch.date;
-    next.patch = patch;
+  if (normalized && ALLOWED_SYNC_STATUSES.has(normalized as (typeof API_WORK_REPORT_STATUSES)[number])) {
+    return normalized;
   }
-
-  return next;
-}
-
-function sanitizeSyncRequestForTransport(requestPayload: WorkReportSyncRequest): WorkReportSyncRequest {
-  return {
-    ...requestPayload,
-    operations: requestPayload.operations.map((operation) => {
-      if (operation.op !== 'update' || !isRecord(operation.data)) {
-        return operation;
-      }
-
-      return {
-        ...operation,
-        data: sanitizeUpdateOperationDataForTransport(operation.data),
-      };
-    }),
-  };
-}
-
-function getLastSyncMetaKey(tenantId: string): string {
-  return `${LAST_SYNC_KEY_PREFIX}${tenantId}`;
-}
-
-async function getLastSyncSince(tenantId: string): Promise<string | undefined> {
-  const rows = await offlineDb.query<{ value: string }>(
-    'SELECT value FROM local_meta WHERE key = ? LIMIT 1;',
-    [getLastSyncMetaKey(tenantId)]
-  );
-  return asString(rows[0]?.value) ?? undefined;
-}
-
-async function setLastSyncSince(tenantId: string, timestampIso: string): Promise<void> {
-  await offlineDb.exec(
-    `INSERT INTO local_meta (key, value)
-     VALUES (?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
-    [getLastSyncMetaKey(tenantId), timestampIso]
-  );
+  return fallback;
 }
 
 async function getWorkReportSnapshot(localReportId: string): Promise<LocalWorkReportSnapshot | null> {
@@ -269,148 +186,11 @@ async function getWorkReportSnapshot(localReportId: string): Promise<LocalWorkRe
   return rows[0] ?? null;
 }
 
-async function fetchProjectsForTenant(tenantId: string): Promise<ApiProjectLookup[]> {
-  try {
-    return await apiFetchJson<ApiProjectLookup[]>('/api/v1/erp/projects', {
-      method: 'GET',
-      headers: { 'X-Tenant-Id': tenantId },
-    });
-  } catch (error) {
-    console.warn('[Sync] No se pudieron cargar proyectos para resolver project_id.', {
-      tenantId,
-      error,
-    });
-    return [];
-  }
-}
-
-async function getTenantProjects(
-  tenantId: string,
-  cache: Map<string, Promise<ApiProjectLookup[]>>
-): Promise<ApiProjectLookup[]> {
-  const cached = cache.get(tenantId);
-  if (cached) return cached;
-  const request = fetchProjectsForTenant(tenantId);
-  cache.set(tenantId, request);
-  return request;
-}
-
-async function resolveProjectIdForSync(
-  snapshot: LocalWorkReportSnapshot,
-  payload: Record<string, unknown>,
-  tenantId: string,
-  projectCache: Map<string, Promise<ApiProjectLookup[]>>
-): Promise<number | null> {
-  const directCandidates: unknown[] = [
-    snapshot.project_id,
-    payload.project_id,
-    payload.projectId,
-    payload.work_id,
-    payload.workId,
-  ];
-
-  for (const candidate of directCandidates) {
-    const numeric = toInteger(candidate);
-    if (numeric !== null) return numeric;
-  }
-
-  const textCandidates = [
-    normalizeLookupText(snapshot.project_id),
-    normalizeLookupText(payload.project_id),
-    normalizeLookupText(payload.projectId),
-    normalizeLookupText(payload.work_id),
-    normalizeLookupText(payload.workId),
-    normalizeLookupText(payload.workNumber),
-    normalizeLookupText(payload.work_name),
-    normalizeLookupText(payload.workName),
-    normalizeLookupText(payload.project_name),
-    normalizeLookupText(payload.projectName),
-  ].filter((value): value is string => Boolean(value));
-
-  if (textCandidates.length === 0) return null;
-
-  const projects = await getTenantProjects(tenantId, projectCache);
-  if (projects.length === 0) return null;
-
-  for (const candidate of textCandidates) {
-    const numeric = toInteger(candidate);
-    if (numeric !== null && projects.some((project) => project.id === numeric)) {
-      return numeric;
-    }
-  }
-
-  for (const candidate of textCandidates) {
-    const byCode = projects.find((project) => normalizeLookupText(project.code) === candidate);
-    if (byCode) return byCode.id;
-  }
-
-  for (const candidate of textCandidates) {
-    const byName = projects.find((project) => normalizeLookupText(project.name) === candidate);
-    if (byName) return byName.id;
-  }
-
-  if (projects.length > 0 && typeof projects[0]?.id === 'number') {
-    console.warn('[Sync] project_id no resuelto por datos locales; usando obra fallback.', {
-      tenantId,
-      fallbackProjectId: projects[0].id,
-      candidates: textCandidates,
-    });
-    return projects[0].id;
-  }
-
-  return null;
-}
-
-function readServerReportIdFromPayload(payload: Record<string, unknown>): number | null {
-  const direct = toInteger(payload.serverReportId ?? payload.server_report_id);
-  if (direct !== null) return direct;
-
-  const nestedPayload = isRecord(payload.payload) ? payload.payload : null;
-  if (nestedPayload) {
-    const nested = toInteger(nestedPayload.serverReportId ?? nestedPayload.server_report_id);
-    if (nested !== null) return nested;
-  }
-
-  const patch = isRecord(payload.patch) ? payload.patch : null;
-  if (patch) {
-    const patchDirect = toInteger(patch.serverReportId ?? patch.server_report_id);
-    if (patchDirect !== null) return patchDirect;
-    const patchPayload = isRecord(patch.payload) ? patch.payload : null;
-    if (patchPayload) {
-      const patchNested = toInteger(patchPayload.serverReportId ?? patchPayload.server_report_id);
-      if (patchNested !== null) return patchNested;
-    }
-  }
-
-  return null;
-}
-
-function inferServerReportIdFromLocalId(localReportId: string): number | null {
-  if (!localReportId.startsWith('srv-')) return null;
-  return toInteger(localReportId.replace('srv-', ''));
-}
-
-function resolveServerReportId(
-  localReportId: string,
-  snapshotPayload: Record<string, unknown>,
-  sourceEntries: PendingEntry[]
-): number | null {
-  const fromSnapshot = readServerReportIdFromPayload(snapshotPayload);
-  if (fromSnapshot !== null) return fromSnapshot;
-
-  for (const entry of sourceEntries) {
-    const fromEntry = readServerReportIdFromPayload(entry.parsedPayload);
-    if (fromEntry !== null) return fromEntry;
-  }
-
-  return inferServerReportIdFromLocalId(localReportId);
-}
-
 async function buildCreateData(
   snapshot: LocalWorkReportSnapshot,
   tenantId: string,
   projectCache: Map<string, Promise<ApiProjectLookup[]>>
-): Promise<Record<string, unknown> | null> {
+): Promise<BuildOperationDataResult> {
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
   const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
   const date =
@@ -422,7 +202,13 @@ async function buildCreateData(
   const reportIdentifier = asString(payload.reportIdentifier) ?? asString(payload.report_identifier);
   const isClosed = status.toLowerCase() === 'closed' || Boolean(payload.isClosed ?? payload.is_closed);
 
-  if (projectId === null || date === null) return null;
+  if (projectId === null) {
+    return { data: null, errorMessage: SYNC_PLAN_ERROR_PROJECT_ID_UNRESOLVED };
+  }
+
+  if (date === null) {
+    return { data: null, errorMessage: SYNC_PLAN_ERROR_DATE_MISSING };
+  }
 
   const operationData: Record<string, unknown> = {
     project_id: projectId,
@@ -433,27 +219,31 @@ async function buildCreateData(
   if (snapshot.title !== null) operationData.title = snapshot.title;
   if (reportIdentifier !== null) operationData.report_identifier = reportIdentifier;
   if (isClosed) operationData.is_closed = true;
-  return operationData;
+  return { data: operationData, errorMessage: null };
 }
 
 async function buildUpdateData(
   snapshot: LocalWorkReportSnapshot,
   tenantId: string,
   projectCache: Map<string, Promise<ApiProjectLookup[]>>
-): Promise<Record<string, unknown>> {
+): Promise<BuildOperationDataResult> {
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
   const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
   const status = normalizeStatusForSync(snapshot.status ?? payload.status, 'draft');
   const reportIdentifier = asString(payload.reportIdentifier) ?? asString(payload.report_identifier);
   const isClosed = status.toLowerCase() === 'closed' || Boolean(payload.isClosed ?? payload.is_closed);
 
+  if (projectId === null) {
+    return { data: null, errorMessage: SYNC_PLAN_ERROR_PROJECT_ID_UNRESOLVED };
+  }
+
   const operationData: Record<string, unknown> = { payload };
-  if (projectId !== null) operationData.project_id = projectId;
+  operationData.project_id = projectId;
   if (snapshot.title !== null) operationData.title = snapshot.title;
   if (status) operationData.status = status;
   if (reportIdentifier !== null) operationData.report_identifier = reportIdentifier;
   if (isClosed) operationData.is_closed = true;
-  return operationData;
+  return { data: operationData, errorMessage: null };
 }
 
 async function buildSyncPlan(
@@ -543,13 +333,13 @@ async function buildSyncPlan(
 
   if (decision.kind === 'create') {
     const createData = await buildCreateData(snapshot, tenantId, projectCache);
-    if (!createData) {
+    if (!createData.data) {
       return {
         kind: 'error',
         tenantId,
         localReportId,
         outboxIds,
-        message: 'Create inválido: falta project_id o date en el parte local.',
+        message: createData.errorMessage ?? 'Create inválido: falta project_id o date en el parte local.',
       };
     }
 
@@ -570,8 +360,19 @@ async function buildSyncPlan(
         op: 'create',
         client_temp_id: localReportId,
         external_id: localReportId,
-        data: createData,
+        data: createData.data,
       },
+    };
+  }
+
+  const updateData = await buildUpdateData(snapshot, tenantId, projectCache);
+  if (!updateData.data) {
+    return {
+      kind: 'error',
+      tenantId,
+      localReportId,
+      outboxIds,
+      message: updateData.errorMessage ?? 'Update inválido: falta project_id fiable en el parte local.',
     };
   }
 
@@ -592,198 +393,9 @@ async function buildSyncPlan(
       op: 'update',
       report_id: serverReportId,
       external_id: localReportId,
-      data: await buildUpdateData(snapshot, tenantId, projectCache),
+      data: updateData.data,
     },
   };
-}
-
-function resolveMappedServerId(
-  plan: Extract<SyncPlan, { kind: 'operation' }>,
-  ack: WorkReportSyncAck | undefined,
-  response: WorkReportSyncResponse
-): number | null {
-  if (typeof ack?.mapped_server_id === 'number' && Number.isFinite(ack.mapped_server_id)) {
-    return ack.mapped_server_id;
-  }
-  if (typeof ack?.report_id === 'number' && Number.isFinite(ack.report_id)) {
-    return ack.report_id;
-  }
-  if (response.id_map && typeof response.id_map[plan.localReportId] === 'number') {
-    return response.id_map[plan.localReportId];
-  }
-  return plan.serverReportId ?? null;
-}
-
-async function markEntriesAsSynced(plan: SyncPlan, mappedServerId: number | null): Promise<void> {
-  const outboxIds = plan.outboxIds;
-  if (outboxIds.length === 0) return;
-
-  await offlineDb.transaction(async (tx) => {
-    const reportRows = await tx.query<{ payload_json: string }>(
-      'SELECT payload_json FROM work_reports WHERE id = ? LIMIT 1;',
-      [plan.localReportId]
-    );
-
-    if (reportRows.length > 0) {
-      const currentPayload = toJsonRecord(reportRows[0].payload_json);
-      if (mappedServerId !== null) {
-        currentPayload.serverReportId = mappedServerId;
-      }
-      await tx.run(
-        `UPDATE work_reports
-         SET payload_json = ?,
-             sync_status = 'synced',
-             last_sync_error = NULL
-         WHERE id = ?;`,
-        [JSON.stringify(currentPayload), plan.localReportId]
-      );
-    } else {
-      await tx.run(
-        `UPDATE work_reports
-         SET sync_status = 'synced',
-             last_sync_error = NULL
-         WHERE id = ?;`,
-        [plan.localReportId]
-      );
-    }
-
-    const placeholders = outboxIds.map(() => '?').join(', ');
-    await tx.run(`DELETE FROM outbox WHERE id IN (${placeholders});`, outboxIds);
-  });
-}
-
-async function markPlanError(plan: SyncPlan, errorMessage: string): Promise<void> {
-  const outboxIds = plan.outboxIds;
-  if (outboxIds.length === 0) return;
-
-  await offlineDb.transaction(async (tx) => {
-    const placeholders = outboxIds.map(() => '?').join(', ');
-    await tx.run(
-      `UPDATE outbox
-       SET status = 'pending',
-           attempts = attempts + 1,
-           last_error = ?
-       WHERE id IN (${placeholders});`,
-      [errorMessage, ...outboxIds]
-    );
-
-    await tx.run(
-      `UPDATE work_reports
-       SET sync_status = 'pending',
-           last_sync_error = ?
-       WHERE id = ?;`,
-      [errorMessage, plan.localReportId]
-    );
-  });
-}
-
-async function applyServerChanges(changes: WorkReportServerChange[] | undefined, tenantId: string): Promise<number> {
-  if (!Array.isArray(changes) || changes.length === 0) return 0;
-
-  let applied = 0;
-  await offlineDb.transaction(async (tx) => {
-    for (const change of changes) {
-      if (!change || typeof change.id !== 'number') continue;
-
-      const localId = asString(change.external_id) ?? `srv-${change.id}`;
-      const projectId =
-        change.project_id === null || change.project_id === undefined ? null : String(change.project_id);
-      const createdAt = toEpochMs(change.created_at);
-      const updatedAt = toEpochMs(change.updated_at);
-      const deletedAt = change.deleted_at ? toEpochMs(change.deleted_at) : null;
-      const payload = isRecord(change.payload) ? { ...change.payload } : {};
-      payload.serverReportId = change.id;
-
-      await tx.run(
-        `INSERT INTO work_reports (
-          id, tenant_id, project_id, title, date, status, payload_json,
-          created_at, updated_at, deleted_at, sync_status, last_sync_error
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', NULL)
-        ON CONFLICT(id) DO UPDATE SET
-          tenant_id = excluded.tenant_id,
-          project_id = excluded.project_id,
-          title = excluded.title,
-          date = excluded.date,
-          status = excluded.status,
-          payload_json = excluded.payload_json,
-          created_at = excluded.created_at,
-          updated_at = excluded.updated_at,
-          deleted_at = excluded.deleted_at,
-          sync_status = 'synced',
-          last_sync_error = NULL;`,
-        [
-          localId,
-          tenantId,
-          projectId,
-          asString(change.title),
-          asString(change.date) ?? new Date().toISOString().slice(0, 10),
-          asString(change.status) ?? 'draft',
-          JSON.stringify(payload),
-          createdAt,
-          updatedAt,
-          deletedAt,
-        ]
-      );
-      applied += 1;
-    }
-  });
-
-  return applied;
-}
-
-async function sendSyncBatch(
-  tenantId: string,
-  requestPayload: WorkReportSyncRequest
-): Promise<WorkReportSyncResponse> {
-  const sanitizedRequestPayload = sanitizeSyncRequestForTransport(requestPayload);
-
-  const doRequest = async (payload: WorkReportSyncRequest): Promise<WorkReportSyncResponse> => {
-    return apiFetchJson<WorkReportSyncResponse>('/api/v1/erp/work-reports/sync', {
-      method: 'POST',
-      headers: { 'X-Tenant-Id': tenantId },
-      body: JSON.stringify(payload),
-    });
-  };
-
-  try {
-    return await doRequest(sanitizedRequestPayload);
-  } catch (error) {
-    if (!shouldRetryServerChangesSerialization(error)) {
-      throw error;
-    }
-
-    const compatRetryPayload = getCompatRetryPayload(sanitizedRequestPayload, true);
-    if (!compatRetryPayload) {
-      throw error;
-    }
-
-    console.warn('[Sync][compat-retry] Reintento único por bug backend en server_changes.', {
-      tenantId,
-      retryPayload: compatRetryPayload,
-      originalError: toSyncErrorMessage(error),
-      todo: 'Backend debe serializar server_changes con model_dump() y no ORM directo.',
-    });
-    return doRequest(compatRetryPayload);
-  }
-}
-
-async function pullServerReports(
-  tenantId: string,
-  since: string | null | undefined,
-  limit: number = 200
-): Promise<WorkReportServerChange[]> {
-  const params = new URLSearchParams();
-  params.set('include_deleted', 'true');
-  params.set('limit', String(Math.max(1, Math.min(limit, 500))));
-  params.set('offset', '0');
-  if (since) {
-    params.set('updated_since', since);
-  }
-
-  return apiFetchJson<WorkReportServerChange[]>(`/api/v1/erp/work-reports?${params.toString()}`, {
-    method: 'GET',
-    headers: { 'X-Tenant-Id': tenantId },
-  });
 }
 
 export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
@@ -948,10 +560,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
         const response = await sendSyncBatch(tenantId, requestPayload);
         console.debug('[Sync] Response', { tenantId, response });
 
-        const ackMap = new Map<string, WorkReportSyncAck>();
-        for (const ack of response.ack ?? []) {
-          ackMap.set(ack.client_op_id, ack);
-        }
+        const ackMap = buildSyncAckMap(response);
 
       for (const plan of plans) {
         const ack = ackMap.get(plan.operation.client_op_id);
@@ -999,13 +608,11 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
     }
 
     try {
-      const pulled = await pullServerReports(tenantId, sinceFromMeta ?? null, 200);
-      const applied = await applyServerChanges(pulled, tenantId);
-      await setLastSyncSince(tenantId, new Date().toISOString());
+      const pullResult = await runIncrementalPullSyncPhase(tenantId, sinceFromMeta ?? null, 200);
       console.debug('[Sync] Pull aplicado', {
         tenantId,
-        pulled: pulled.length,
-        applied,
+        pulled: pullResult.pulledCount,
+        applied: pullResult.applied,
       });
     } catch (pullError) {
       if (isAuthApiError(pullError)) {
