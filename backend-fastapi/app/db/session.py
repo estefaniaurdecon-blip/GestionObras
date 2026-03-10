@@ -1,4 +1,3 @@
-from math import ceil
 from typing import Iterator
 
 from sqlalchemy import inspect, text
@@ -13,95 +12,6 @@ engine = create_engine(
     echo=settings.debug,
     future=True,
 )
-
-
-def _normalize_report_identifier(value: object) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _build_unique_report_identifier(base: str, row_id: int, used: set[str]) -> str:
-    # Keep identifier length bounded by the model max_length (64).
-    suffix = f"-{row_id}"
-    room = max(1, 64 - len(suffix))
-    candidate_base = (base or "parte")[:room]
-    candidate = f"{candidate_base}{suffix}"
-    counter = 1
-    while candidate in used:
-        counter_suffix = f"-{row_id}-{counter}"
-        room = max(1, 64 - len(counter_suffix))
-        candidate_base = (base or "parte")[:room]
-        candidate = f"{candidate_base}{counter_suffix}"
-        counter += 1
-    return candidate
-
-
-def _enforce_work_report_identifier_uniqueness() -> None:
-    from sqlmodel import select
-
-    from app.models.erp import WorkReport
-
-    with Session(engine) as session:
-        reports = session.exec(
-            select(WorkReport)
-            .where(WorkReport.report_identifier.is_not(None))
-            .order_by(WorkReport.tenant_id.asc(), WorkReport.created_at.asc(), WorkReport.id.asc())
-        ).all()
-
-        used_identifiers: set[str] = set()
-        has_changes = False
-
-        for report in reports:
-            original_identifier = report.report_identifier
-            normalized_identifier = _normalize_report_identifier(original_identifier)
-
-            final_identifier = normalized_identifier
-            if final_identifier is not None and final_identifier in used_identifiers:
-                final_identifier = _build_unique_report_identifier(
-                    final_identifier, int(report.id or 0), used_identifiers
-                )
-
-            if final_identifier is not None:
-                used_identifiers.add(final_identifier)
-
-            if final_identifier != original_identifier:
-                report.report_identifier = final_identifier
-                has_changes = True
-
-            payload = dict(report.payload or {})
-            payload_identifier = _normalize_report_identifier(
-                payload.get("reportIdentifier") or payload.get("report_identifier")
-            )
-            if final_identifier is None:
-                if payload_identifier is not None:
-                    payload.pop("reportIdentifier", None)
-                    payload.pop("report_identifier", None)
-                    report.payload = payload
-                    has_changes = True
-            elif payload_identifier != final_identifier:
-                payload["reportIdentifier"] = final_identifier
-                payload["report_identifier"] = final_identifier
-                report.payload = payload
-                has_changes = True
-
-        if has_changes:
-            session.commit()
-
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "DROP INDEX IF EXISTS ix_erp_work_report_tenant_report_identifier_uq"
-            )
-        )
-        conn.execute(
-            text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS "
-                "ix_erp_work_report_report_identifier_uq "
-                "ON erp_work_report (report_identifier)"
-            )
-        )
 
 
 def init_db() -> None:
@@ -119,9 +29,6 @@ def init_db() -> None:
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
 
-    if "erp_work_report" in table_names:
-        _enforce_work_report_identifier_uniqueness()
-
     if "erp_task" in table_names:
         task_columns = {col["name"] for col in inspector.get_columns("erp_task")}
         with engine.begin() as conn:
@@ -130,18 +37,10 @@ def init_db() -> None:
                     text("ALTER TABLE erp_task ADD COLUMN tenant_id INTEGER NULL")
                 )
             if "status" not in task_columns:
-                # Backfill rapido para entornos locales sin migraciones.
                 conn.execute(
                     text(
                         "ALTER TABLE erp_task "
                         "ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'pending'"
-                    )
-                )
-                conn.execute(
-                    text(
-                        "UPDATE erp_task "
-                        "SET status = CASE WHEN is_completed THEN 'done' ELSE 'pending' END "
-                        "WHERE status IS NULL"
                     )
                 )
             if "start_date" not in task_columns:
@@ -346,15 +245,6 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_project_budget_milestone ADD COLUMN tenant_id INTEGER NULL")
                 )
-            # Backfill tenant_id from project if missing.
-            conn.execute(
-                text(
-                    "UPDATE erp_project_budget_milestone m "
-                    "SET tenant_id = p.tenant_id "
-                    "FROM erp_project p "
-                    "WHERE m.project_id = p.id AND m.tenant_id IS NULL"
-                )
-            )
 
     if "erp_budget_line_milestone" in table_names:
         budget_link_columns = {col["name"] for col in inspector.get_columns("erp_budget_line_milestone")}
@@ -363,16 +253,6 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE erp_budget_line_milestone ADD COLUMN tenant_id INTEGER NULL")
                 )
-            # Backfill tenant_id from project through budget line if missing.
-            conn.execute(
-                text(
-                    "UPDATE erp_budget_line_milestone blm "
-                    "SET tenant_id = p.tenant_id "
-                    "FROM erp_project_budget_line bl "
-                    "JOIN erp_project p ON p.id = bl.project_id "
-                    "WHERE blm.budget_line_id = bl.id AND blm.tenant_id IS NULL"
-                )
-            )
 
     if "erp_external_collaboration" in table_names:
         collab_columns = {col["name"] for col in inspector.get_columns("erp_external_collaboration")}
@@ -392,43 +272,6 @@ def init_db() -> None:
                         "ADD COLUMN threshold_percent DECIMAL NULL"
                     )
                 )
-                conn.execute(
-                    text(
-                        "UPDATE erp_simulation_project "
-                        "SET threshold_percent = 50 "
-                        "WHERE threshold_percent IS NULL"
-                    )
-                )
-
-    if "erp_project" in table_names:
-        project_columns = {col["name"] for col in inspector.get_columns("erp_project")}
-        with engine.begin() as conn:
-            if "project_type" not in project_columns:
-                conn.execute(
-                    text("ALTER TABLE erp_project ADD COLUMN project_type VARCHAR(32) NULL")
-                )
-
-        from sqlmodel import select
-        from app.models.erp import Project
-
-        with Session(engine) as session:
-            projects = session.exec(select(Project)).all()
-            updated = False
-            for project in projects:
-                if (
-                    project.start_date
-                    and project.end_date
-                    and project.duration_months is None
-                ):
-                    start = project.start_date.date()
-                    end = project.end_date.date()
-                    if end >= start:
-                        total_days = (end - start).days + 1
-                        months = max(1, ceil(total_days / 30))
-                        project.duration_months = months
-                        updated = True
-            if updated:
-                session.commit()
 
     if "department" in table_names:
         dept_columns = {col["name"] for col in inspector.get_columns("department")}
@@ -438,13 +281,6 @@ def init_db() -> None:
                     text(
                         "ALTER TABLE department "
                         "ADD COLUMN project_allocation_percentage DECIMAL NULL"
-                    )
-                )
-                conn.execute(
-                    text(
-                        "UPDATE department "
-                        "SET project_allocation_percentage = 100 "
-                        "WHERE project_allocation_percentage IS NULL"
                     )
                 )
 
@@ -499,9 +335,6 @@ def init_db() -> None:
             if "source" not in audit_columns:
                 conn.execute(
                     text(f"ALTER TABLE {audit_table} ADD COLUMN source VARCHAR(16) NULL")
-                )
-                conn.execute(
-                    text(f"UPDATE {audit_table} SET source = 'app' WHERE source IS NULL")
                 )
 
     if "user" in table_names:
@@ -582,53 +415,6 @@ def init_db() -> None:
                 conn.execute(
                     text("ALTER TABLE employeeprofile ADD COLUMN titulacion VARCHAR(255) NULL")
                 )
-
-    # Migración sencilla a hitos dinámicos: si no hay hitos de presupuesto creados,
-    # creamos dos por proyecto y volcamos los valores existentes de hito1/hito2.
-    if "erp_project_budget_milestone" in table_names and "erp_project_budget_line" in table_names:
-        from sqlmodel import select
-        from app.models.erp import ProjectBudgetMilestone, ProjectBudgetLine, BudgetLineMilestone, Project
-
-        with Session(engine) as session:
-            existing = session.exec(select(ProjectBudgetMilestone)).first()
-            if not existing:
-                projects = session.exec(select(Project)).all()
-                # crea dos hitos por proyecto
-                created_milestones: dict[tuple[int, int], ProjectBudgetMilestone] = {}
-                for project in projects:
-                    m1 = ProjectBudgetMilestone(project_id=project.id, name="HITO 1", order_index=1)
-                    m2 = ProjectBudgetMilestone(project_id=project.id, name="HITO 2", order_index=2)
-                    session.add(m1)
-                    session.add(m2)
-                    session.commit()
-                    session.refresh(m1)
-                    session.refresh(m2)
-                    created_milestones[(project.id, 1)] = m1
-                    created_milestones[(project.id, 2)] = m2
-
-                lines = session.exec(select(ProjectBudgetLine)).all()
-                for line in lines:
-                    m1 = created_milestones.get((line.project_id, 1))
-                    m2 = created_milestones.get((line.project_id, 2))
-                    if m1:
-                        session.add(
-                            BudgetLineMilestone(
-                                budget_line_id=line.id,
-                                milestone_id=m1.id,
-                                amount=line.hito1_budget or 0,
-                                justified=line.justified_hito1 or 0,
-                            )
-                        )
-                    if m2:
-                        session.add(
-                            BudgetLineMilestone(
-                                budget_line_id=line.id,
-                                milestone_id=m2.id,
-                                amount=line.hito2_budget or 0,
-                                justified=line.justified_hito2 or 0,
-                            )
-                        )
-                session.commit()
 
 def get_session() -> Iterator[Session]:
     """
