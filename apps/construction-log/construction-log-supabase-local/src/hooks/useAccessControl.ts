@@ -1,3 +1,11 @@
+/**
+ * useAccessControl — hook unificado para control de accesos.
+ *
+ * Combina:
+ * - useAccessControlReports (capa de datos offline-first + API)
+ * - useAccessControlSync    (auto-sync WorkReport → AccessControlReport)
+ * - Form state + handlers   (antes en useAccessControlManager)
+ */
 import {
   useCallback,
   useRef,
@@ -22,6 +30,8 @@ import {
   type AccessPersonalEntry,
   type AccessPersonalFormState,
 } from '@/pages/indexHelpers';
+import { useAccessControlReports } from './useAccessControlReports';
+import { useAccessControlSync } from './useAccessControlSync';
 
 type WorkOption = {
   id: string;
@@ -34,16 +44,21 @@ type UserLike = {
   email?: string | null;
 } | null;
 
-type UseAccessControlManagerParams = {
+type UseAccessControlParams = {
   sortedWorks: WorkOption[];
   resolvedTenantId: string | null;
-  accessControlReports: AccessReport[];
-  saveAccessControlReport: (report: AccessReport) => Promise<void>;
-  reloadAccessControlReports: () => Promise<void>;
+  enabled: boolean;
   user: UserLike;
 };
 
-type UseAccessControlManagerResult = {
+type UseAccessControlResult = {
+  // Data layer
+  accessControlReports: AccessReport[];
+  accessControlLoading: boolean;
+  deleteAccessControlReport: (id: string) => Promise<void>;
+  bulkDeleteAccessControlReports: (ids: string[]) => Promise<void>;
+  syncPendingReports: () => Promise<void>;
+  // Form state
   accessReportWorkFilter: string;
   setAccessReportWorkFilter: Dispatch<SetStateAction<string>>;
   accessReportPeriodFilter: string;
@@ -57,6 +72,7 @@ type UseAccessControlManagerResult = {
   accessPersonalForm: AccessPersonalFormState;
   setAccessPersonalForm: Dispatch<SetStateAction<AccessPersonalFormState>>;
   accessImportInputRef: RefObject<HTMLInputElement | null>;
+  // Handlers
   handleNewAccessControlRecord: () => void;
   handleOpenAccessPersonalDialog: () => void;
   handleCancelAccessPersonalDialog: () => void;
@@ -68,14 +84,27 @@ type UseAccessControlManagerResult = {
   handleGenerateAccessControlReport: () => Promise<void>;
 };
 
-export const useAccessControlManager = ({
+export const useAccessControl = ({
   sortedWorks,
   resolvedTenantId,
-  accessControlReports,
-  saveAccessControlReport,
-  reloadAccessControlReports,
+  enabled,
   user,
-}: UseAccessControlManagerParams): UseAccessControlManagerResult => {
+}: UseAccessControlParams): UseAccessControlResult => {
+  // ── Data layer ──────────────────────────────────────────────────────────────
+  const {
+    reports: accessControlReports,
+    loading: accessControlLoading,
+    saveReport: saveAccessControlReport,
+    deleteReport: deleteAccessControlReport,
+    bulkDeleteReports: bulkDeleteAccessControlReports,
+    reloadReports: reloadAccessControlReports,
+    syncPendingReports,
+  } = useAccessControlReports({ tenantId: resolvedTenantId, enabled });
+
+  // ── Background sync (event-driven, was orphaned) ─────────────────────────
+  useAccessControlSync({ workReport: undefined, enabled });
+
+  // ── Form state ───────────────────────────────────────────────────────────
   const [accessReportWorkFilter, setAccessReportWorkFilter] = useState('all');
   const [accessReportPeriodFilter, setAccessReportPeriodFilter] = useState('all');
   const [accessObservations, setAccessObservations] = useState('');
@@ -87,6 +116,7 @@ export const useAccessControlManager = ({
   );
   const accessImportInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewAccessControlRecord = useCallback(() => {
     setAccessPersonalEntries([]);
     setAccessObservations('');
@@ -371,6 +401,13 @@ export const useAccessControlManager = ({
   }, [accessControlReports, accessReportPeriodFilter, accessReportWorkFilter]);
 
   return {
+    // Data
+    accessControlReports,
+    accessControlLoading,
+    deleteAccessControlReport,
+    bulkDeleteAccessControlReports,
+    syncPendingReports,
+    // Form state
     accessReportWorkFilter,
     setAccessReportWorkFilter,
     accessReportPeriodFilter,
@@ -384,6 +421,7 @@ export const useAccessControlManager = ({
     accessPersonalForm,
     setAccessPersonalForm,
     accessImportInputRef,
+    // Handlers
     handleNewAccessControlRecord,
     handleOpenAccessPersonalDialog,
     handleCancelAccessPersonalDialog,

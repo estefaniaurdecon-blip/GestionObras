@@ -5,8 +5,7 @@ import { IndexHeader } from '@/components/IndexHeader';
 import { WorkReportsTab } from '@/components/WorkReportsTab';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveReportPanelData } from '@/hooks/useActiveReportPanelData';
-import { useAccessControlManager } from '@/hooks/useAccessControlManager';
-import { useAccessControlReports } from '@/hooks/useAccessControlReports';
+import { useAccessControl } from '@/hooks/useAccessControl';
 import { useHistoryFilters } from '@/hooks/useHistoryFilters';
 import { useIndexUIState } from '@/hooks/useIndexUIState';
 import { useTenantGate } from '@/hooks/useTenantGate';
@@ -115,13 +114,6 @@ const Index = () => {
     handleConfirmTenantSelection,
   } = useTenantGate(user);
 
-  const {
-    reports: accessControlReports,
-    loading: accessControlLoading,
-    saveReport: saveAccessControlReport,
-    reloadReports: reloadAccessControlReports,
-  } = useAccessControlReports({ tenantId: resolvedTenantId, enabled: accessControlDataEnabled });
-
   const roles = useMemo(() => normalizeRoles(user?.roles), [user?.roles]);
   const permissions = useMemo(
     () =>
@@ -198,6 +190,8 @@ const Index = () => {
   );
 
   const {
+    accessControlReports,
+    accessControlLoading,
     accessReportWorkFilter,
     setAccessReportWorkFilter,
     accessReportPeriodFilter,
@@ -220,14 +214,7 @@ const Index = () => {
     handleExportAccessControlData,
     handleAccessDataFileSelected,
     handleGenerateAccessControlReport,
-  } = useAccessControlManager({
-    sortedWorks,
-    resolvedTenantId,
-    accessControlReports,
-    saveAccessControlReport,
-    reloadAccessControlReports,
-    user,
-  });
+  } = useAccessControl({ sortedWorks, resolvedTenantId, enabled: accessControlDataEnabled, user });
 
   const handlePending = (featureName: string) => {
     toast({
