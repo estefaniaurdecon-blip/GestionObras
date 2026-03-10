@@ -234,8 +234,7 @@ export const ContractsModule: React.FC = () => {
     () =>
       contracts.find(
         (contract) =>
-          contract.status.startsWith("PENDING") ||
-          contract.comparative_status === "PENDING_REVIEW",
+          contract.status.startsWith("PENDING"),
       ) ?? null,
     [contracts],
   );
@@ -1159,7 +1158,7 @@ const ComparativoReview: React.FC<ComparativoReviewProps> = ({
             </Text>
           </Box>
           <Badge colorScheme="yellow" rounded="full" px={3} py={1}>
-            {contract ? formatComparativeStatus(contract.comparative_status) : "Borrador"}
+            {"Borrador"}
           </Badge>
         </Flex>
       </Box>
@@ -1303,7 +1302,7 @@ const ComparativoReview: React.FC<ComparativoReviewProps> = ({
 
         <Box p={4} bg="blue.50" border="1px solid" borderColor="blue.200" rounded="lg">
           <Text fontSize="sm" color="blue.800">
-            <strong>Estado:</strong> {contract ? formatComparativeStatus(contract.comparative_status) : "Borrador"}
+            <strong>Estado:</strong> {"Borrador"}
             <br />
             <strong>Próximo paso:</strong> Enviar a Gerencia para aprobación
           </Text>
@@ -1588,7 +1587,7 @@ const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ contract }) => {
           <Stack spacing={4} p={6}>
             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} fontSize="sm">
               <Text>
-                <strong>Estado:</strong> {formatComparativeStatus(contract.comparative_status)}
+                <strong>Estado:</strong> {"Borrador"}
               </Text>
               <Text>
                 <strong>Tipo:</strong> {formatContractType(contract.type)}
@@ -1896,21 +1895,6 @@ const formatContractStatus = (status?: string | null) => {
       return "Rechazado";
     default:
       return "Pendiente";
-  }
-};
-
-const formatComparativeStatus = (status?: string | null) => {
-  switch (status) {
-    case "DRAFT":
-      return "Borrador";
-    case "PENDING_REVIEW":
-      return "En revisión";
-    case "APPROVED":
-      return "Aprobado";
-    case "REJECTED":
-      return "Rechazado";
-    default:
-      return "Borrador";
   }
 };
 

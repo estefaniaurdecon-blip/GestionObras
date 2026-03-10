@@ -14,12 +14,6 @@ export type ContractStatus =
   | "SIGNED"
   | "REJECTED";
 
-export type ComparativeStatus =
-  | "DRAFT"
-  | "PENDING_REVIEW"
-  | "APPROVED"
-  | "REJECTED";
-
 export type ContractType = "SUMINISTRO" | "SERVICIO" | "SUBCONTRATACION";
 
 export interface Contract {
@@ -29,7 +23,6 @@ export interface Contract {
   project_id?: number | null;
   type: ContractType;
   status: ContractStatus;
-  comparative_status?: ComparativeStatus;
   title?: string | null;
   description?: string | null;
   selected_offer_id?: number | null;
