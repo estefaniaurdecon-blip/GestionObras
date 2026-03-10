@@ -40,14 +40,16 @@ export function BulkPdfExport({ reports, companyLogo, brandColor }: BulkPdfExpor
       switch (exportPeriod) {
         case 'day':
           return isSameDay(reportDate, selectedDate);
-        case 'week':
+        case 'week': {
           const weekStart = startOfWeek(selectedDate, { locale: es, weekStartsOn: 1 });
           const weekEnd = endOfWeek(selectedDate, { locale: es, weekStartsOn: 1 });
           return isWithinInterval(reportDate, { start: weekStart, end: weekEnd });
-        case 'month':
+        }
+        case 'month': {
           const monthStart = startOfMonth(selectedDate);
           const monthEnd = endOfMonth(selectedDate);
           return isWithinInterval(reportDate, { start: monthStart, end: monthEnd });
+        }
         default:
           return false;
       }
@@ -129,10 +131,11 @@ export function BulkPdfExport({ reports, companyLogo, brandColor }: BulkPdfExpor
     switch (exportPeriod) {
       case 'day':
         return format(selectedDate, "d 'de' MMMM yyyy", { locale: es });
-      case 'week':
+      case 'week': {
         const weekStart = startOfWeek(selectedDate, { locale: es, weekStartsOn: 1 });
         const weekEnd = endOfWeek(selectedDate, { locale: es, weekStartsOn: 1 });
         return `${format(weekStart, "d MMM", { locale: es })} - ${format(weekEnd, "d MMM yyyy", { locale: es })}`;
+      }
       case 'month':
         return format(selectedDate, "MMMM yyyy", { locale: es });
       default:

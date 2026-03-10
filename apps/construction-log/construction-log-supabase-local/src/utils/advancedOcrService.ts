@@ -586,6 +586,7 @@ class AdvancedOCRService {
       /nombre[:\s]*([A-Z][A-Za-z\s&,.-]+)/i
     ];
 
+    /* eslint-disable no-useless-escape */
     const invoicePatterns = [
       /(?:albar[aá]n|factura|documento|n[úu]mero|ref(?:erencia)?)[:\s#-]*([A-Z0-9\/-]+)/i,
       /n[º°]\s*([A-Z0-9\/-]+)/i,
@@ -614,6 +615,7 @@ class AdvancedOCRService {
       // Formato con código: COD123 | Material | Cant | Ud | Precio
       /^(?:[A-Z0-9]+\s+)?([A-Za-záéíóúñ\s\-,\.]+?)\s+(\d+(?:[,\.]\d+)?)\s*([a-zA-Z²³]{1,4})\s+(\d+(?:[,\.]\d{2})?)\s*[€$]?/m
     ];
+    /* eslint-enable no-useless-escape */
 
     let fieldsFound = 0;
 

@@ -37,6 +37,7 @@ export const sanitizePdfText = (input: string): string => {
       .replace(/€/g, "EUR")
       // Strip characters outside Latin-1 + basic ASCII + newline
       // (this removes emojis and most problematic unicode)
+      // eslint-disable-next-line no-control-regex
       .replace(/[^\x0A\x20-\x7E\u00A0-\u00FF]/g, "")
       // Collapse whitespace
       .replace(/ {2,}/g, " ")

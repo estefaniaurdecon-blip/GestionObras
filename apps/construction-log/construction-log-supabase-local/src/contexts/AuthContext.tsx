@@ -329,11 +329,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         typeof error?.status !== 'number' ||
         error?.status === 0
       ) {
-        try {
-          return await signInOffline();
-        } catch (offlineError: any) {
-          throw offlineError;
-        }
+        return await signInOffline();
       }
       console.error('Login error:', error);
       throw error;

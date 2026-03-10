@@ -30,6 +30,7 @@ export const sanitizePdfFilename = (filename: string): string => {
 
   let sanitized = filename
     // Remove null bytes and control characters
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, '')
     // Remove path separators
     .replace(/[/\\]/g, '_')
@@ -83,6 +84,7 @@ export const createSecurePdfFilename = (parts: (string | undefined | null)[], se
     .filter((part): part is string => !!part && typeof part === 'string')
     .map(part => 
       part
+        // eslint-disable-next-line no-control-regex
         .replace(/[/\\<>:"|?*\x00-\x1f\x7f]/g, '')
         .replace(/\.\./g, '')
         .replace(/\s+/g, '_')

@@ -203,9 +203,9 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
           total: (editValues.quantity || 0) * (editValues.unitPrice || 0)
         };
         break;
-      case 'subcontract':
+      case 'subcontract': {
         const unitType = editValues.unitType || 'hora';
-        const total = unitType === 'hora' 
+        const total = unitType === 'hora'
           ? (editValues.workers || 0) * (editValues.hours || 0) * (editValues.hourlyRate || 0)
           : (editValues.quantity || 0) * (editValues.unitPrice || 0);
         newReport.subcontractGroups[groupIndex].items[itemIndex] = {
@@ -214,6 +214,7 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
           total
         };
         break;
+      }
       case 'rental':
         return; // DESHABILITADO
     }

@@ -106,6 +106,7 @@ class OCRService {
       /n[º°]\s*([A-Z0-9-]+)/i
     ];
 
+    /* eslint-disable no-useless-escape */
     const datePatterns = [
       /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,
       /(\d{1,2})\s+(?:de\s+)?(\w+)\s+(?:de\s+)?(\d{4})/i
@@ -116,6 +117,7 @@ class OCRService {
       /^([A-Za-z\s]+?)\s+(\d+(?:[,\.]\d+)?)\s*([a-zA-Z]{1,3})\s*(?:(\d+(?:[,\.]\d+)?)\s*[€$]?)?/,
       /(\d+(?:[,\.]\d+)?)\s+([a-zA-Z]{1,3})\s+([A-Za-z\s]+?)(?:\s+(\d+(?:[,\.]\d+)?)\s*[€$]?)?/
     ];
+    /* eslint-enable no-useless-escape */
 
     // Parse supplier
     for (const line of lines) {

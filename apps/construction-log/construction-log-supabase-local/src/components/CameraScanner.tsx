@@ -519,7 +519,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       // Asegurar que el video está listo
       if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
-        try { await video.play(); } catch {}
+        try { await video.play(); } catch (_e) { /* play() puede fallar en algunos navegadores */ }
         await new Promise((r) => setTimeout(r, 120));
         if (!video.videoWidth || !video.videoHeight) {
           toast({

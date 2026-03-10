@@ -334,7 +334,7 @@ export const generateAIAnalysisPDF = async (
           yPosition += 7;
           break;
 
-        case 'p':
+        case 'p': {
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(60, 60, 60);
@@ -346,6 +346,7 @@ export const generateAIAnalysisPDF = async (
           }
           yPosition += 2;
           break;
+        }
 
         case 'list':
           doc.setFontSize(10);
@@ -365,7 +366,7 @@ export const generateAIAnalysisPDF = async (
           yPosition += 3;
           break;
 
-        case 'table':
+        case 'table': {
           checkPageBreak(30);
           const tableData = section.content as string[][];
           if (tableData.length > 1) {
@@ -397,8 +398,9 @@ export const generateAIAnalysisPDF = async (
             yPosition = (doc as any).lastAutoTable.finalY + 8;
           }
           break;
+        }
 
-        case 'code':
+        case 'code': {
           checkPageBreak(15);
           doc.setFillColor(245, 245, 245);
           const codeContent = (section.content as string[]).join('\n');
@@ -415,6 +417,7 @@ export const generateAIAnalysisPDF = async (
           });
           yPosition += 5;
           break;
+        }
       }
     }
 

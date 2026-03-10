@@ -78,11 +78,12 @@ export const SavedEconomicReports = () => {
       let key: string;
 
       switch (grouping) {
-        case 'week':
+        case 'week': {
           const weekStart = startOfWeek(date, { locale: es });
           const weekEnd = endOfWeek(date, { locale: es });
           key = `${format(weekStart, 'dd/MM/yyyy', { locale: es })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: es })}`;
           break;
+        }
         case 'month':
           key = format(date, 'MMMM yyyy', { locale: es });
           break;
