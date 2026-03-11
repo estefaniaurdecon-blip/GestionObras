@@ -100,13 +100,13 @@ export const useCustomExportPeriodSelection = () => {
     const label = normalizedSelectedDays.map((day) => formatDateLabel(day)).join(', ');
     const dateKeys = normalizedSelectedDays.map((day) => toDateKey(day));
     setCustomSelections((previous) => [
-      ...previous,
       {
         id: crypto.randomUUID(),
         mode: 'single-days',
         dateKeys,
         label: `Dias: ${label}`,
       },
+      ...previous,
     ]);
     setSelectedDays([]);
   }, [normalizedSelectedDays]);
@@ -118,13 +118,13 @@ export const useCustomExportPeriodSelection = () => {
     const [from, to] = fromDate <= toDate ? [fromDate, toDate] : [toDate, fromDate];
     const dateKeys = expandRangeToDateKeys(from, to);
     setCustomSelections((previous) => [
-      ...previous,
       {
         id: crypto.randomUUID(),
         mode: 'range',
         dateKeys,
         label: `Rango: ${formatDateLabel(from)} - ${formatDateLabel(to)}`,
       },
+      ...previous,
     ]);
     setSelectedRange(undefined);
   }, [selectedRange]);

@@ -31,7 +31,6 @@ import type { WorkReport } from '@/offline-db/types';
 import { payloadText, type HistoryFilterKey } from '@/pages/indexHelpers';
 import type { PendingOverwrite } from '@/hooks/useWorkReportMutations';
 import { startupPerfPoint } from '@/utils/startupPerf';
-
 type SettingsDialogConfig = {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;

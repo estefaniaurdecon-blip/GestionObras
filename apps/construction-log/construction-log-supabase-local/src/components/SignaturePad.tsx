@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
+import { Capacitor } from "@capacitor/core";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { X, Check, Eraser } from "lucide-react";
@@ -14,6 +15,10 @@ interface SignaturePadProps {
 
 export const SignaturePad = ({ value, onChange, label, disabled = false }: SignaturePadProps) => {
   const { t } = useTranslation();
+  const isAndroidPlatform = Capacitor.getPlatform() === "android";
+  const accentActionButtonClass = isAndroidPlatform
+    ? "h-11 min-w-[122px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 px-4 text-[16px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+    : "h-10 min-w-[114px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 px-4 text-[15px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400";
   const sigCanvas = useRef<SignatureCanvas>(null);
   const [isEmpty, setIsEmpty] = useState(true);
   const [isLoadedFromValue, setIsLoadedFromValue] = useState(false);
@@ -50,7 +55,7 @@ export const SignaturePad = ({ value, onChange, label, disabled = false }: Signa
         console.error('Error loading signature:', error);
       }
     }
-  }, [value]);
+  }, [isLoadedFromValue, value]);
 
   return (
     <Card className="p-4 space-y-3">
@@ -69,10 +74,10 @@ export const SignaturePad = ({ value, onChange, label, disabled = false }: Signa
           </Button>
           <Button
             type="button"
-            variant="default"
-            size="sm"
+            variant="outline"
             onClick={saveSignature}
             disabled={disabled || isEmpty || isLoadedFromValue}
+            className={accentActionButtonClass}
           >
             <Check className="h-4 w-4 mr-1" />
             {t("common.save")}

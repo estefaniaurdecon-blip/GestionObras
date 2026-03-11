@@ -1,115 +1,369 @@
-import { useEffect, type ChangeEvent, type RefObject, type SetStateAction, type Dispatch } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useMemo, useState, type ChangeEvent, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TabsContent } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
+import { AccessControlGenerateReportDialog } from '@/components/AccessControlGenerateReportDialog';
+import {
+  AccessControlCustomPeriodDialog,
+  AccessControlSinglePeriodDialog,
+} from '@/components/AccessControlReportPeriodDialogs';
+import { AccessControlReportsList } from '@/components/AccessControlReportsList';
 import type { AccessReport } from '@/types/accessControl';
 import { startupPerfPoint } from '@/utils/startupPerf';
-import { FileDown, FileText, Plus, Save, Truck, Upload, Users } from 'lucide-react';
+import { HISTORY_FILTER_OPTIONS, type HistoryFilterKey } from '@/pages/indexHelpers';
+import { Capacitor } from '@capacitor/core';
+import { FileDown, FileText, Plus, Upload } from 'lucide-react';
 
-type WorkOption = {
-  id: string;
-  number?: string | null;
-  name?: string | null;
+type AccessReportSearchFilterKey = Exclude<HistoryFilterKey, 'workName'>;
+type AccessReportPeriodDialogMode = 'daily' | 'weekly' | 'monthly' | 'custom';
+
+const ACCESS_REPORT_SEARCH_FILTER_OPTIONS = HISTORY_FILTER_OPTIONS.filter(
+  (filterOption): filterOption is { key: AccessReportSearchFilterKey; label: string } => filterOption.key !== 'workName',
+);
+const ACCESS_REPORT_SEARCH_VALUE = '__search__';
+const ACCESS_REPORT_SELECTED_VALUE = '__selected__';
+const ACCESS_REPORT_SELECTED_PERIOD_VALUE = '__selected_period__';
+const ACCESS_REPORT_PERIOD_LABELS: Record<AccessReportPeriodDialogMode, string> = {
+  daily: 'Diario',
+  weekly: 'Semanal',
+  monthly: 'Mensual',
+  custom: 'Personalizado',
 };
 
-type AccessPersonalEntryPreview = {
-  id: string;
-  name: string;
-  dni: string;
-  company: string;
-  entryTime: string;
-  exitTime: string;
-  activity: string;
-  signature: string;
-};
+const isAccessReportPeriodDialogMode = (value: string): value is AccessReportPeriodDialogMode =>
+  value in ACCESS_REPORT_PERIOD_LABELS;
 
 type AccessControlTabProps = {
   accessControlLoading: boolean;
   accessControlReports: AccessReport[];
-  accessReportWorkFilter: string;
   setAccessReportWorkFilter: (value: string) => void;
+  accessReportSelectedWorks: string[];
+  setAccessReportSelectedWorks: (value: string[]) => void;
   accessReportPeriodFilter: string;
   setAccessReportPeriodFilter: (value: string) => void;
-  sortedWorks: WorkOption[];
+  accessReportSelectedDateKeys: string[];
+  setAccessReportSelectedDateKeys: (value: string[]) => void;
+  accessReportPeriodSelectionLabel: string;
+  setAccessReportPeriodSelectionLabel: (value: string) => void;
+  accessReportEnabledFilters: AccessReportSearchFilterKey[];
+  accessReportSelectedFiltersCount: number;
+  accessReportAppliedFiltersCount: number;
+  accessResponsibleFilter: string;
+  setAccessResponsibleFilter: (value: string) => void;
+  accessWeekFilter: string;
+  setAccessWeekFilter: (value: string) => void;
+  accessMonthFilter: string;
+  setAccessMonthFilter: (value: string) => void;
+  accessDateFilter: string;
+  setAccessDateFilter: (value: string) => void;
+  accessDatePickerOpen: boolean;
+  setAccessDatePickerOpen: (value: boolean) => void;
+  selectedAccessReportDate: Date | null;
+  filteredAccessControlReportsForGenerate: AccessReport[];
   accessImportInputRef: RefObject<HTMLInputElement | null>;
   handleNewAccessControlRecord: () => void;
+  handleEditAccessControlReport: (report: AccessReport) => void;
+  handleCloneAccessControlReport: (report: AccessReport) => Promise<void> | void;
+  deleteAccessControlReport: (id: string) => Promise<void> | void;
+  bulkDeleteAccessControlReports: (ids: string[]) => Promise<void> | void;
   handleExportAccessControlData: () => Promise<void> | void;
   handleAccessDataFileSelected: (event: ChangeEvent<HTMLInputElement>) => Promise<void> | void;
   handleGenerateAccessControlReport: () => void;
-  accessPersonalEntries: AccessPersonalEntryPreview[];
-  handleOpenAccessPersonalDialog: () => void;
-  handlePending: (featureName: string) => void;
-  accessObservations: string;
-  setAccessObservations: Dispatch<SetStateAction<string>>;
-  accessAdditionalTasks: string;
-  setAccessAdditionalTasks: Dispatch<SetStateAction<string>>;
-  handleSaveAccessControl: () => Promise<void> | void;
+  toggleAccessReportFilter: (filterKey: AccessReportSearchFilterKey) => void;
+  clearAccessReportFilters: () => void;
 };
 
 export const AccessControlTab = ({
   accessControlLoading,
   accessControlReports,
-  accessReportWorkFilter,
   setAccessReportWorkFilter,
+  accessReportSelectedWorks,
+  setAccessReportSelectedWorks,
   accessReportPeriodFilter,
   setAccessReportPeriodFilter,
-  sortedWorks,
+  accessReportSelectedDateKeys,
+  setAccessReportSelectedDateKeys,
+  accessReportPeriodSelectionLabel,
+  setAccessReportPeriodSelectionLabel,
+  accessReportEnabledFilters,
+  accessReportSelectedFiltersCount,
+  accessReportAppliedFiltersCount,
+  accessResponsibleFilter,
+  setAccessResponsibleFilter,
+  accessWeekFilter,
+  setAccessWeekFilter,
+  accessMonthFilter,
+  setAccessMonthFilter,
+  accessDateFilter,
+  setAccessDateFilter,
+  accessDatePickerOpen,
+  setAccessDatePickerOpen,
+  selectedAccessReportDate,
+  filteredAccessControlReportsForGenerate,
   accessImportInputRef,
   handleNewAccessControlRecord,
+  handleEditAccessControlReport,
+  handleCloneAccessControlReport,
+  deleteAccessControlReport,
+  bulkDeleteAccessControlReports,
   handleExportAccessControlData,
   handleAccessDataFileSelected,
   handleGenerateAccessControlReport,
-  accessPersonalEntries,
-  handleOpenAccessPersonalDialog,
-  handlePending,
-  accessObservations,
-  setAccessObservations,
-  accessAdditionalTasks,
-  setAccessAdditionalTasks,
-  handleSaveAccessControl,
+  toggleAccessReportFilter,
+  clearAccessReportFilters,
 }: AccessControlTabProps) => {
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
+  const [dataManagementOpen, setDataManagementOpen] = useState(false);
+  const [generateReportOpen, setGenerateReportOpen] = useState(false);
+  const [generateReportSearchOpen, setGenerateReportSearchOpen] = useState(false);
+  const [periodDialogMode, setPeriodDialogMode] = useState<AccessReportPeriodDialogMode | null>(null);
+  const [draftAccessReportSelectedWorks, setDraftAccessReportSelectedWorks] = useState<string[]>([]);
+
+  const lightButtonClass =
+    'h-10 px-4 justify-center border-slate-200 bg-slate-50 text-[15px] font-medium text-slate-700 shadow-none hover:bg-slate-100 hover:text-slate-900 sm:h-11 sm:text-base';
+  const primaryAccessButtonClass = isAndroidPlatform
+    ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800'
+    : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800';
+
   useEffect(() => {
     startupPerfPoint('panel:AccessControlTab mounted');
   }, []);
 
+  const reportSiteOptions = useMemo(() => {
+    const uniqueSiteNames = Array.from(
+      new Set(
+        filteredAccessControlReportsForGenerate
+          .map((report) => report.siteName.trim())
+          .filter((siteName) => siteName.length > 0),
+      ),
+    );
+
+    return uniqueSiteNames.sort((left, right) => left.localeCompare(right, 'es', { sensitivity: 'base' }));
+  }, [filteredAccessControlReportsForGenerate]);
+
+  const accessReportSelectedWorksLabel =
+    accessReportSelectedWorks.length === 0
+      ? 'Todas las obras'
+      : accessReportSelectedWorks.length === 1
+        ? accessReportSelectedWorks[0]
+        : `${accessReportSelectedWorks.length} obras seleccionadas`;
+  const accessReportWorkSelectValue =
+    accessReportSelectedWorks.length === 0 ? 'all' : ACCESS_REPORT_SELECTED_VALUE;
+  const accessReportPeriodOptionLabel =
+    accessReportPeriodFilter !== 'all'
+      ? accessReportPeriodSelectionLabel ||
+        (isAccessReportPeriodDialogMode(accessReportPeriodFilter)
+          ? ACCESS_REPORT_PERIOD_LABELS[accessReportPeriodFilter]
+          : 'Todo el periodo')
+      : 'Todo el periodo';
+  const accessReportPeriodSelectValue =
+    accessReportPeriodFilter === 'all' ? 'all' : ACCESS_REPORT_SELECTED_PERIOD_VALUE;
+
+  const reportsForPeriodSelection = useMemo(
+    () =>
+      accessReportSelectedWorks.length === 0
+        ? accessControlReports
+        : accessControlReports.filter((report) => accessReportSelectedWorks.includes(report.siteName.trim())),
+    [accessControlReports, accessReportSelectedWorks],
+  );
+
+  const handleAccessReportWorkFilterChange = (value: string) => {
+    if (value === ACCESS_REPORT_SEARCH_VALUE) {
+      setDraftAccessReportSelectedWorks(accessReportSelectedWorks);
+      setGenerateReportSearchOpen(true);
+      return;
+    }
+    if (value === ACCESS_REPORT_SELECTED_VALUE) return;
+    if (value === 'all') {
+      setAccessReportSelectedWorks([]);
+      setAccessReportWorkFilter('all');
+    }
+  };
+
+  const toggleDraftSelectedWork = (siteName: string) => {
+    setDraftAccessReportSelectedWorks((current) =>
+      current.includes(siteName) ? current.filter((item) => item !== siteName) : [...current, siteName],
+    );
+  };
+
+  const applyDraftSelectedWorks = () => {
+    setAccessReportSelectedWorks(draftAccessReportSelectedWorks);
+    setAccessReportWorkFilter(draftAccessReportSelectedWorks.length === 0 ? 'all' : ACCESS_REPORT_SELECTED_VALUE);
+    setGenerateReportSearchOpen(false);
+  };
+
+  const handleApplyAccessReportPeriodSelection = (
+    periodFilter: AccessReportPeriodDialogMode,
+    dateKeys: string[],
+    label: string,
+  ) => {
+    setAccessReportPeriodFilter(periodFilter);
+    setAccessReportSelectedDateKeys(dateKeys);
+    setAccessReportPeriodSelectionLabel(label);
+  };
+
+  const queuePeriodDialogOpen = (openDialog: () => void) => {
+    globalThis.setTimeout(() => {
+      openDialog();
+    }, 0);
+  };
+
+  const closePeriodDialog = () => setPeriodDialogMode(null);
+
+  const openPeriodDialog = (mode: AccessReportPeriodDialogMode) => {
+    queuePeriodDialogOpen(() => setPeriodDialogMode(mode));
+  };
+
+  const handleAccessReportPeriodChange = (value: string) => {
+    if (value === ACCESS_REPORT_SELECTED_PERIOD_VALUE) return;
+    if (value === 'all') {
+      setAccessReportPeriodFilter('all');
+      setAccessReportSelectedDateKeys([]);
+      setAccessReportPeriodSelectionLabel('');
+      return;
+    }
+    if (value === 'daily') {
+      openPeriodDialog('daily');
+      return;
+    }
+    if (value === 'weekly') {
+      openPeriodDialog('weekly');
+      return;
+    }
+    if (value === 'monthly') {
+      openPeriodDialog('monthly');
+      return;
+    }
+    if (value === 'custom') {
+      openPeriodDialog('custom');
+    }
+  };
+
+  const handleGenerateReportOpenChange = (open: boolean) => {
+    setGenerateReportOpen(open);
+    if (!open) {
+      setGenerateReportSearchOpen(false);
+      closePeriodDialog();
+    }
+  };
+
+  const toggleReportSelection = (reportId: string) => {
+    setSelectedReports((prev) => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSiteSelection = (reportIds: string[], allSelected: boolean) => {
+    setSelectedReports((prev) => {
+      const next = new Set(prev);
+      reportIds.forEach((id) => {
+        if (allSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedReports.size === 0) return;
+    void bulkDeleteAccessControlReports(Array.from(selectedReports));
+    setSelectedReports(new Set());
+    setSelectionMode(false);
+  };
+
+  const cancelSelection = () => {
+    setSelectedReports(new Set());
+    setSelectionMode(false);
+  };
+
   return (
-    <TabsContent value="access-control" className="m-0 space-y-4">
+    <TabsContent value="access-control" className="m-0 space-y-5 text-[15px]">
       <Card className="bg-white">
-        <CardHeader className="items-center text-center space-y-2">
-          <CardTitle className="text-xl sm:text-3xl font-bold text-slate-800">
-            Control de Accesos
-          </CardTitle>
-          <CardDescription className="text-sm text-slate-600">
-            Supervisión de Obra
-          </CardDescription>
-          <Button
-            className="mt-2 w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
-            onClick={handleNewAccessControlRecord}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Registro
-          </Button>
+        <CardHeader className="items-center space-y-2 text-center">
+          <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de Accesos</CardTitle>
+          <CardDescription className="text-[15px] text-muted-foreground">Supervision de Obra</CardDescription>
+          <div className="mt-2 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center">
+            <Button
+              variant="outline"
+              className={`w-full sm:w-auto ${primaryAccessButtonClass}`}
+              onClick={handleNewAccessControlRecord}
+            >
+              <Plus className={isAndroidPlatform ? 'mr-2 h-5 w-5' : 'mr-2 h-[18px] w-[18px]'} />
+              Nuevo Registro
+            </Button>
+            <Button
+              variant="outline"
+              className={`w-full sm:w-auto ${lightButtonClass}`}
+              onClick={() => setDataManagementOpen(true)}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Gestion de Datos
+            </Button>
+            <Button
+              variant="outline"
+              className={`w-full sm:w-auto ${lightButtonClass}`}
+              onClick={() => setGenerateReportOpen(true)}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Generar Informe
+            </Button>
+          </div>
         </CardHeader>
       </Card>
 
-      <Card className="bg-white">
-        <CardHeader className="text-center">
-          <CardTitle>Gestión de Datos</CardTitle>
-          <CardDescription>
-            Guarda todos tus partes en un archivo o carga datos guardados previamente.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-2 sm:flex-row">
+      <input
+        ref={accessImportInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(event) => {
+          void handleAccessDataFileSelected(event);
+        }}
+      />
+
+      <AccessControlReportsList
+        accessControlLoading={accessControlLoading}
+        accessControlReports={accessControlReports}
+        selectionMode={selectionMode}
+        selectedReports={selectedReports}
+        lightButtonClass={lightButtonClass}
+        onEnterSelectionMode={() => setSelectionMode(true)}
+        onCancelSelection={cancelSelection}
+        onBulkDelete={handleBulkDelete}
+        onToggleReportSelection={toggleReportSelection}
+        onToggleSiteSelection={toggleSiteSelection}
+        onCloneReport={handleCloneAccessControlReport}
+        onEditReport={handleEditAccessControlReport}
+        onDeleteReport={deleteAccessControlReport}
+      />
+
+      <Dialog open={dataManagementOpen} onOpenChange={setDataManagementOpen}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl">
+          <DialogHeader className="text-center">
+            <DialogTitle>Gestion de Datos</DialogTitle>
+            <DialogDescription>
+              Guarda todos tus partes en un archivo o carga datos guardados previamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
             <Button
               variant="outline"
               onClick={() => {
                 void handleExportAccessControlData();
               }}
-              className="w-full sm:w-auto"
+              className={`w-full sm:w-auto ${lightButtonClass}`}
             >
               <FileDown className="mr-2 h-4 w-4" />
               Guardar Datos
@@ -117,221 +371,98 @@ export const AccessControlTab = ({
             <Button
               variant="outline"
               onClick={() => accessImportInputRef.current?.click()}
-              className="w-full sm:w-auto"
+              className={`w-full sm:w-auto ${lightButtonClass}`}
             >
               <Upload className="mr-2 h-4 w-4" />
               Cargar Datos
             </Button>
-            <input
-              ref={accessImportInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={(event) => {
-                void handleAccessDataFileSelected(event);
-              }}
-            />
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
-      <Card className="bg-white">
-        <CardHeader className="text-center">
-          <CardTitle>Generar Informe</CardTitle>
-          <CardDescription>Sistema de Gestión de Obras</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Nombre de Obra</label>
-            <Select value={accessReportWorkFilter} onValueChange={setAccessReportWorkFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las obras" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las obras</SelectItem>
-                {sortedWorks.map((work) => (
-                  <SelectItem key={work.id} value={work.id}>
-                    {(work.number ? `${work.number} - ` : '') + (work.name || 'Sin nombre')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <AccessControlGenerateReportDialog
+        open={generateReportOpen}
+        onOpenChange={handleGenerateReportOpenChange}
+        searchOpen={generateReportSearchOpen}
+        reportSiteOptions={reportSiteOptions}
+        accessReportSelectedWorks={accessReportSelectedWorks}
+        accessReportSelectedWorksLabel={accessReportSelectedWorksLabel}
+        accessReportWorkSelectValue={accessReportWorkSelectValue}
+        accessReportPeriodFilter={accessReportPeriodFilter}
+        accessReportPeriodOptionLabel={accessReportPeriodOptionLabel}
+        accessReportPeriodSelectValue={accessReportPeriodSelectValue}
+        accessReportPeriodSelectionLabel={accessReportPeriodSelectionLabel}
+        accessReportSelectedDateKeys={accessReportSelectedDateKeys}
+        accessReportEnabledFilters={accessReportEnabledFilters}
+        accessReportSelectedFiltersCount={accessReportSelectedFiltersCount}
+        accessReportAppliedFiltersCount={accessReportAppliedFiltersCount}
+        accessResponsibleFilter={accessResponsibleFilter}
+        accessWeekFilter={accessWeekFilter}
+        accessMonthFilter={accessMonthFilter}
+        accessDateFilter={accessDateFilter}
+        accessDatePickerOpen={accessDatePickerOpen}
+        selectedAccessReportDate={selectedAccessReportDate}
+        filteredAccessControlReportsForGenerate={filteredAccessControlReportsForGenerate}
+        searchFilterOptions={ACCESS_REPORT_SEARCH_FILTER_OPTIONS}
+        draftAccessReportSelectedWorks={draftAccessReportSelectedWorks}
+        lightButtonClass={lightButtonClass}
+        onWorkFilterChange={handleAccessReportWorkFilterChange}
+        onPeriodChange={handleAccessReportPeriodChange}
+        onToggleSearchFilter={toggleAccessReportFilter}
+        onResponsibleFilterChange={setAccessResponsibleFilter}
+        onWeekFilterChange={setAccessWeekFilter}
+        onMonthFilterChange={setAccessMonthFilter}
+        onDateFilterChange={setAccessDateFilter}
+        onDatePickerOpenChange={setAccessDatePickerOpen}
+        onClearSearchFilters={clearAccessReportFilters}
+        onToggleDraftSelectedWork={toggleDraftSelectedWork}
+        onClearDraftSelectedWorks={() => setDraftAccessReportSelectedWorks([])}
+        onApplySelectedWorks={applyDraftSelectedWorks}
+        onGenerateReport={handleGenerateAccessControlReport}
+      />
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Periodo</label>
-            <Select value={accessReportPeriodFilter} onValueChange={setAccessReportPeriodFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las obras" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las obras</SelectItem>
-                <SelectItem value="daily">Diario</SelectItem>
-                <SelectItem value="weekly">Semanal</SelectItem>
-                <SelectItem value="monthly">Mensual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <AccessControlSinglePeriodDialog
+        open={periodDialogMode === 'daily'}
+        onOpenChange={(open) => {
+          if (!open) closePeriodDialog();
+        }}
+        mode="day"
+        reports={reportsForPeriodSelection}
+        applyButtonClassName={lightButtonClass}
+        onApply={(dateKeys, label) => handleApplyAccessReportPeriodSelection('daily', dateKeys, label)}
+      />
 
-          <Button
-            className="w-full bg-blue-600 text-white hover:bg-blue-700"
-            onClick={handleGenerateAccessControlReport}
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Generar Informe
-          </Button>
-        </CardContent>
-      </Card>
+      <AccessControlSinglePeriodDialog
+        open={periodDialogMode === 'weekly'}
+        onOpenChange={(open) => {
+          if (!open) closePeriodDialog();
+        }}
+        mode="week"
+        reports={reportsForPeriodSelection}
+        applyButtonClassName={lightButtonClass}
+        onApply={(dateKeys, label) => handleApplyAccessReportPeriodSelection('weekly', dateKeys, label)}
+      />
 
-      <Card className="bg-white">
-        <CardHeader className="text-center">
-          <CardTitle>Control de Accesos</CardTitle>
-          <CardDescription>
-            {accessControlLoading
-              ? 'Cargando controles de acceso...'
-              : accessControlReports.length === 0
-                ? 'No hay controles de acceso guardados'
-                : `${accessControlReports.length} control(es) guardado(s) en local`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {accessControlReports.length > 0 ? (
-            <div className="space-y-2">
-              {accessControlReports.slice(0, 5).map((report) => (
-                <div key={report.id} className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
-                  <div className="font-medium text-slate-900">{report.siteName || 'Sin obra'}</div>
-                  <div className="text-muted-foreground">
-                    Fecha: {report.date} | Responsable: {report.responsible || '-'}
-                  </div>
-                  <div className="text-muted-foreground">
-                    Personal: {report.personalEntries.length} | Maquinaria: {report.machineryEntries.length}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      <AccessControlSinglePeriodDialog
+        open={periodDialogMode === 'monthly'}
+        onOpenChange={(open) => {
+          if (!open) closePeriodDialog();
+        }}
+        mode="month"
+        reports={reportsForPeriodSelection}
+        applyButtonClassName={lightButtonClass}
+        onApply={(dateKeys, label) => handleApplyAccessReportPeriodSelection('monthly', dateKeys, label)}
+      />
 
-      <Card className="bg-white">
-        <CardHeader>
-          <div className="flex flex-col items-center gap-3 text-center">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Users className="h-5 w-5" />
-              Personal
-            </CardTitle>
-            <CardDescription>Registro de acceso del personal</CardDescription>
-            <Button
-              onClick={handleOpenAccessPersonalDialog}
-              className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Añadir Personal
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {accessPersonalEntries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay registros de personal. Haz clic en "Añadir Personal" para empezar.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {accessPersonalEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
-                >
-                  <div className="font-medium text-slate-900">{entry.name}</div>
-                  <div className="text-xs text-muted-foreground">DNI: {entry.dni}</div>
-                  <div className="text-xs text-muted-foreground">Empresa: {entry.company}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Horario: {entry.entryTime} - {entry.exitTime}
-                  </div>
-                  {entry.activity ? (
-                    <div className="text-xs text-muted-foreground">Actividad: {entry.activity}</div>
-                  ) : null}
-                  <div className="mt-1">
-                    {entry.signature ? (
-                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700">
-                        Firma guardada
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700">
-                        Sin firma
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="bg-white">
-        <CardHeader>
-          <div className="flex flex-col items-center gap-3 text-center">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Truck className="h-5 w-5" />
-              Maquinaria
-            </CardTitle>
-            <CardDescription>Registro de acceso de maquinaria</CardDescription>
-            <Button
-              onClick={() => handlePending('Añadir maquinaria en control de accesos')}
-              className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Añadir Máquina
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            No hay registros de maquinaria. Haz clic en "Añadir Máquina" para empezar.
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="bg-white">
-        <CardHeader className="text-center">
-          <CardTitle>Observaciones</CardTitle>
-          <CardDescription>Notas adicionales sobre el control de accesos</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={accessObservations}
-            onChange={(event) => setAccessObservations(event.target.value)}
-            placeholder="Observaciones, incidencias o notas adicionales..."
-            rows={4}
-          />
-        </CardContent>
-      </Card>
-
-      <Card className="bg-white">
-        <CardHeader className="text-center">
-          <CardTitle>Tareas adicionales</CardTitle>
-          <CardDescription>Anota tareas o acciones pendientes relacionadas con el acceso</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea
-            value={accessAdditionalTasks}
-            onChange={(event) => setAccessAdditionalTasks(event.target.value)}
-            placeholder="Tareas adicionales..."
-            rows={4}
-          />
-          <Button
-            className="w-full bg-blue-600 text-white hover:bg-blue-700"
-            onClick={() => {
-              void handleSaveAccessControl();
-            }}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            Guardar
-          </Button>
-        </CardContent>
-      </Card>
+      <AccessControlCustomPeriodDialog
+        open={periodDialogMode === 'custom'}
+        onOpenChange={(open) => {
+          if (!open) closePeriodDialog();
+        }}
+        reports={reportsForPeriodSelection}
+        applyButtonClassName={lightButtonClass}
+        onApply={(dateKeys, label) => handleApplyAccessReportPeriodSelection('custom', dateKeys, label)}
+      />
     </TabsContent>
   );
 };
-

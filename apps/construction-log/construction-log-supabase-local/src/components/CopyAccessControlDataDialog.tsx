@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Copy, Users, Truck, Calendar, Search, ChevronRight, CheckSquare, Clock, AlertTriangle } from 'lucide-react';
@@ -59,7 +59,7 @@ export const CopyAccessControlDataDialog = ({
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
   // Verificar si una entrada ya existe en el control actual (por DNI/identificador)
-  const isPersonalDuplicate = (entry: AccessEntry): boolean => {
+  const isPersonalDuplicate = useCallback((entry: AccessEntry): boolean => {
     // Solo es duplicado si tiene el mismo DNI (identifier)
     if (entry.identifier && entry.identifier.trim() !== '') {
       return currentPersonalEntries.some(
@@ -72,10 +72,10 @@ export const CopyAccessControlDataDialog = ({
            e.company.toLowerCase() === entry.company.toLowerCase() &&
            (!e.identifier || e.identifier.trim() === '')
     );
-  };
+  }, [currentPersonalEntries]);
 
   // Verificar si una maquinaria ya existe (por matrícula; si falta, por nombre+operador)
-  const isMachineryDuplicate = (entry: AccessEntry): boolean => {
+  const isMachineryDuplicate = useCallback((entry: AccessEntry): boolean => {
     const normText = (v?: string) => (v ?? '').toLowerCase().trim();
     const normPlate = (v?: string) => (v ?? '').toLowerCase().replace(/[\s-]/g, '').trim();
 
@@ -92,7 +92,7 @@ export const CopyAccessControlDataDialog = ({
       return normText(e.name) === normText(entry.name) &&
         normText(e.operator) === normText(entry.operator);
     });
-  };
+  }, [currentMachineryEntries]);
 
   // Reset al cambiar de reporte
   useEffect(() => {
@@ -128,7 +128,7 @@ export const CopyAccessControlDataDialog = ({
       });
       setMachineryTimeOverrides(machineryOverrides);
     }
-  }, [selectedReportId]);
+  }, [isMachineryDuplicate, isPersonalDuplicate, selectedReport, selectedReportId]);
 
   // Obtener duplicados seleccionados
   const getSelectedDuplicates = () => {
@@ -278,7 +278,10 @@ export const CopyAccessControlDataDialog = ({
       else setOpen(true);
     }}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="w-full sm:w-auto">
+        <Button
+          variant="outline"
+          className="h-10 w-full border-slate-200 bg-slate-50 px-4 text-[15px] font-medium text-slate-700 shadow-none hover:bg-slate-100 hover:text-slate-900 sm:h-11 sm:w-auto sm:text-base"
+        >
           <Copy className="h-4 w-4 mr-2" />
           Copiar de otro control
         </Button>

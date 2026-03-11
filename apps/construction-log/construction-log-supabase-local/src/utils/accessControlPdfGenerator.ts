@@ -17,7 +17,17 @@ declare module 'jspdf' {
   }
 }
 
-export const generateAccessControlPDF = async (report: AccessReport, companyLogo?: string, brandColor?: string) => {
+export const buildAccessControlPdfFilename = (report: AccessReport) => {
+  const rawFileName = `control_accesos_${report.siteName.replace(/\s+/g, '_')}_${report.date}.pdf`;
+  return sanitizePdfFilename(rawFileName);
+};
+
+export const generateAccessControlPDF = async (
+  report: AccessReport,
+  companyLogo?: string,
+  brandColor?: string,
+  returnBlob = false,
+) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -357,8 +367,12 @@ export const generateAccessControlPDF = async (report: AccessReport, companyLogo
   }
 
   // Save the PDF - sanitize filename to prevent path traversal (GHSA-f8cm-6447-x5h2)
-  const rawFileName = `control_accesos_${report.siteName.replace(/\s+/g, '_')}_${report.date}.pdf`;
-  const fileName = sanitizePdfFilename(rawFileName);
+  const fileName = buildAccessControlPdfFilename(report);
+  const pdfBlob = doc.output('blob');
+
+  if (returnBlob) {
+    return pdfBlob;
+  }
   
   if (isNative()) {
     // En Android/iOS, usar Capacitor Filesystem
@@ -366,8 +380,6 @@ export const generateAccessControlPDF = async (report: AccessReport, companyLogo
     return saveBase64File(fileName, pdfBase64);
   } else {
     // En web, intentar usar File System Access API para elegir ubicación
-    const pdfBlob = doc.output('blob');
-    
     // Verificar si el navegador soporta showSaveFilePicker
     if ('showSaveFilePicker' in window) {
       try {

@@ -8,6 +8,7 @@
  */
 import {
   useCallback,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -23,12 +24,15 @@ import { isNative, saveBase64File, textToBase64 } from '@/utils/nativeFile';
 import {
   asRecord,
   buildInitialAccessPersonalForm,
+  getIsoWeekKey,
+  normalizeComparableText,
   parseIsoDate,
   toIsoDate,
   toOptionalString,
   toStringValue,
   type AccessPersonalEntry,
   type AccessPersonalFormState,
+  type HistoryFilterKey,
 } from '@/pages/indexHelpers';
 import { useAccessControlReports } from './useAccessControlReports';
 import { useAccessControlSync } from './useAccessControlSync';
@@ -43,6 +47,8 @@ type UserLike = {
   full_name?: string | null;
   email?: string | null;
 } | null;
+
+type AccessReportSearchFilterKey = Exclude<HistoryFilterKey, 'workName'>;
 
 type UseAccessControlParams = {
   sortedWorks: WorkOption[];
@@ -59,21 +65,48 @@ type UseAccessControlResult = {
   bulkDeleteAccessControlReports: (ids: string[]) => Promise<void>;
   syncPendingReports: () => Promise<void>;
   // Form state
+  activeAccessControlReport: AccessReport | null;
   accessReportWorkFilter: string;
   setAccessReportWorkFilter: Dispatch<SetStateAction<string>>;
+  accessReportSelectedWorks: string[];
+  setAccessReportSelectedWorks: Dispatch<SetStateAction<string[]>>;
   accessReportPeriodFilter: string;
   setAccessReportPeriodFilter: Dispatch<SetStateAction<string>>;
+  accessReportSelectedDateKeys: string[];
+  setAccessReportSelectedDateKeys: Dispatch<SetStateAction<string[]>>;
+  accessReportPeriodSelectionLabel: string;
+  setAccessReportPeriodSelectionLabel: Dispatch<SetStateAction<string>>;
+  accessReportEnabledFilters: AccessReportSearchFilterKey[];
+  accessReportSelectedFiltersCount: number;
+  accessReportAppliedFiltersCount: number;
+  accessResponsibleFilter: string;
+  setAccessResponsibleFilter: Dispatch<SetStateAction<string>>;
+  accessWeekFilter: string;
+  setAccessWeekFilter: Dispatch<SetStateAction<string>>;
+  accessMonthFilter: string;
+  setAccessMonthFilter: Dispatch<SetStateAction<string>>;
+  accessDateFilter: string;
+  setAccessDateFilter: Dispatch<SetStateAction<string>>;
+  accessDatePickerOpen: boolean;
+  setAccessDatePickerOpen: Dispatch<SetStateAction<boolean>>;
+  selectedAccessReportDate: Date | null;
+  filteredAccessControlReportsForGenerate: AccessReport[];
   accessObservations: string;
   setAccessObservations: Dispatch<SetStateAction<string>>;
   accessAdditionalTasks: string;
   setAccessAdditionalTasks: Dispatch<SetStateAction<string>>;
   accessPersonalEntries: AccessPersonalEntry[];
   accessPersonalDialogOpen: boolean;
+  accessControlFormOpen: boolean;
   accessPersonalForm: AccessPersonalFormState;
   setAccessPersonalForm: Dispatch<SetStateAction<AccessPersonalFormState>>;
   accessImportInputRef: RefObject<HTMLInputElement | null>;
   // Handlers
   handleNewAccessControlRecord: () => void;
+  handleEditAccessControlReport: (report: AccessReport) => void;
+  handleCloneAccessControlReport: (report: AccessReport) => Promise<void>;
+  handleCloseAccessControlForm: () => void;
+  handleSaveAccessControlForm: (report: AccessReport) => Promise<void>;
   handleOpenAccessPersonalDialog: () => void;
   handleCancelAccessPersonalDialog: () => void;
   handleAccessPersonalDialogOpenChange: (open: boolean) => void;
@@ -82,6 +115,8 @@ type UseAccessControlResult = {
   handleExportAccessControlData: () => Promise<void>;
   handleAccessDataFileSelected: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleGenerateAccessControlReport: () => Promise<void>;
+  toggleAccessReportFilter: (filterKey: AccessReportSearchFilterKey) => void;
+  clearAccessReportFilters: () => void;
 };
 
 export const useAccessControl = ({
@@ -106,27 +141,141 @@ export const useAccessControl = ({
 
   // ── Form state ───────────────────────────────────────────────────────────
   const [accessReportWorkFilter, setAccessReportWorkFilter] = useState('all');
+  const [accessReportSelectedWorks, setAccessReportSelectedWorks] = useState<string[]>([]);
   const [accessReportPeriodFilter, setAccessReportPeriodFilter] = useState('all');
+  const [accessReportSelectedDateKeys, setAccessReportSelectedDateKeys] = useState<string[]>([]);
+  const [accessReportPeriodSelectionLabel, setAccessReportPeriodSelectionLabel] = useState('');
+  const [accessReportEnabledFilters, setAccessReportEnabledFilters] = useState<AccessReportSearchFilterKey[]>([]);
+  const [accessResponsibleFilter, setAccessResponsibleFilter] = useState('');
+  const [accessWeekFilter, setAccessWeekFilter] = useState('');
+  const [accessMonthFilter, setAccessMonthFilter] = useState('');
+  const [accessDateFilter, setAccessDateFilter] = useState('');
+  const [accessDatePickerOpen, setAccessDatePickerOpen] = useState(false);
   const [accessObservations, setAccessObservations] = useState('');
   const [accessAdditionalTasks, setAccessAdditionalTasks] = useState('');
   const [accessPersonalEntries, setAccessPersonalEntries] = useState<AccessPersonalEntry[]>([]);
   const [accessPersonalDialogOpen, setAccessPersonalDialogOpen] = useState(false);
+  const [accessControlFormOpen, setAccessControlFormOpen] = useState(false);
+  const [activeAccessControlReport, setActiveAccessControlReport] = useState<AccessReport | null>(null);
   const [accessPersonalForm, setAccessPersonalForm] = useState<AccessPersonalFormState>(() =>
     buildInitialAccessPersonalForm(),
   );
   const accessImportInputRef = useRef<HTMLInputElement | null>(null);
 
+  const filteredAccessControlReportsForGenerate = useMemo(() => {
+    const enabledFilters = new Set(accessReportEnabledFilters);
+    const normalizedResponsible = normalizeComparableText(accessResponsibleFilter);
+    const normalizedWeek = accessWeekFilter.trim();
+    const normalizedMonth = accessMonthFilter.trim();
+    const normalizedDate = accessDateFilter.trim();
+    const shouldFilterByResponsible = enabledFilters.has('foreman') && normalizedResponsible.length > 0;
+    const shouldFilterByWeek = enabledFilters.has('weeks') && normalizedWeek.length > 0;
+    const shouldFilterByMonth = enabledFilters.has('months') && normalizedMonth.length > 0;
+    const shouldFilterByDate = enabledFilters.has('date') && normalizedDate.length > 0;
+
+    return accessControlReports.filter((report) => {
+      const responsible = normalizeComparableText(report.responsible);
+      const reportDate = report.date.trim();
+      const reportWeek = getIsoWeekKey(reportDate);
+      const reportMonth = reportDate.slice(0, 7);
+
+      if (shouldFilterByResponsible && !responsible.includes(normalizedResponsible)) return false;
+      if (shouldFilterByWeek && reportWeek !== normalizedWeek) return false;
+      if (shouldFilterByMonth && reportMonth !== normalizedMonth) return false;
+      if (shouldFilterByDate && reportDate !== normalizedDate) return false;
+      return true;
+    });
+  }, [
+    accessControlReports,
+    accessDateFilter,
+    accessMonthFilter,
+    accessReportEnabledFilters,
+    accessResponsibleFilter,
+    accessWeekFilter,
+  ]);
+
+  const accessReportSelectedFiltersCount = accessReportEnabledFilters.length;
+  const selectedAccessReportDate = useMemo(() => parseIsoDate(accessDateFilter), [accessDateFilter]);
+
+  const accessReportAppliedFiltersCount = useMemo(() => {
+    let activeFilters = 0;
+    if (accessReportEnabledFilters.includes('foreman') && accessResponsibleFilter.trim()) activeFilters += 1;
+    if (accessReportEnabledFilters.includes('weeks') && accessWeekFilter.trim()) activeFilters += 1;
+    if (accessReportEnabledFilters.includes('months') && accessMonthFilter.trim()) activeFilters += 1;
+    if (accessReportEnabledFilters.includes('date') && accessDateFilter.trim()) activeFilters += 1;
+    return activeFilters;
+  }, [
+    accessDateFilter,
+    accessMonthFilter,
+    accessReportEnabledFilters,
+    accessResponsibleFilter,
+    accessWeekFilter,
+  ]);
+
+  const toggleAccessReportFilter = useCallback((filterKey: AccessReportSearchFilterKey) => {
+    setAccessReportEnabledFilters((current) =>
+      current.includes(filterKey)
+        ? current.filter((activeKey) => activeKey !== filterKey)
+        : [...current, filterKey],
+    );
+  }, []);
+
+  const clearAccessReportFilters = useCallback(() => {
+    setAccessReportEnabledFilters([]);
+    setAccessResponsibleFilter('');
+    setAccessWeekFilter('');
+    setAccessMonthFilter('');
+    setAccessDateFilter('');
+    setAccessDatePickerOpen(false);
+  }, []);
+
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewAccessControlRecord = useCallback(() => {
+    setActiveAccessControlReport(null);
     setAccessPersonalEntries([]);
     setAccessObservations('');
     setAccessAdditionalTasks('');
-    toast({
-      title: 'Nuevo registro',
-      description: 'Formulario de control de accesos reiniciado.',
-      variant: 'default',
-    });
+    setAccessControlFormOpen(true);
   }, []);
+
+  const handleEditAccessControlReport = useCallback((report: AccessReport) => {
+    setActiveAccessControlReport(report);
+    setAccessControlFormOpen(true);
+  }, []);
+
+  const handleCloneAccessControlReport = useCallback(
+    async (report: AccessReport) => {
+      const nowIso = new Date().toISOString();
+      const clonedReport: AccessReport = {
+        ...report,
+        id: crypto.randomUUID(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      await saveAccessControlReport(clonedReport);
+      await reloadAccessControlReports();
+      toast({
+        title: 'Control duplicado',
+        description: 'Se ha creado una copia del control de accesos.',
+        variant: 'default',
+      });
+    },
+    [reloadAccessControlReports, saveAccessControlReport],
+  );
+
+  const handleCloseAccessControlForm = useCallback(() => {
+    setActiveAccessControlReport(null);
+    setAccessControlFormOpen(false);
+  }, []);
+
+  const handleSaveAccessControlForm = useCallback(
+    async (report: AccessReport) => {
+      await saveAccessControlReport(report);
+      await reloadAccessControlReports();
+    },
+    [reloadAccessControlReports, saveAccessControlReport],
+  );
 
   const handleOpenAccessPersonalDialog = useCallback(() => {
     setAccessPersonalForm(buildInitialAccessPersonalForm());
@@ -345,10 +494,10 @@ export const useAccessControl = ({
           description: `Se importaron ${imported} controles de acceso.`,
           variant: 'default',
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast({
           title: 'Error al importar',
-          description: error?.message || 'No se pudo leer el archivo seleccionado.',
+          description: error instanceof Error ? error.message : 'No se pudo leer el archivo seleccionado.',
           variant: 'destructive',
         });
       }
@@ -358,28 +507,23 @@ export const useAccessControl = ({
 
   const handleGenerateAccessControlReport = useCallback(async () => {
     const filteredByWork =
-      accessReportWorkFilter === 'all'
+      accessReportSelectedWorks.length === 0
         ? accessControlReports
-        : accessControlReports.filter((report) => report.workId === accessReportWorkFilter);
+        : accessControlReports.filter((report) => accessReportSelectedWorks.includes(report.siteName.trim()));
 
-    const today = new Date();
-    const todayIso = toIsoDate(today);
-    const monthKey = todayIso.slice(0, 7);
-    const weekStart = new Date(today);
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(weekStart.getDate() - 6);
+    if (accessReportPeriodFilter !== 'all' && accessReportSelectedDateKeys.length === 0) {
+      toast({
+        title: 'Periodo sin seleccionar',
+        description: 'Selecciona un dia, semana, mes o rango personalizado antes de generar el informe.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const selectedDateSet = new Set(accessReportSelectedDateKeys);
 
     const filtered = filteredByWork.filter((report) => {
-      if (accessReportPeriodFilter === 'daily') {
-        return report.date === todayIso;
-      }
-      if (accessReportPeriodFilter === 'weekly') {
-        const reportDate = parseIsoDate(report.date);
-        return Boolean(reportDate && reportDate >= weekStart);
-      }
-      if (accessReportPeriodFilter === 'monthly') {
-        return report.date.startsWith(monthKey);
-      }
+      if (accessReportPeriodFilter !== 'all') return selectedDateSet.has(report.date.trim());
       return true;
     });
 
@@ -398,7 +542,7 @@ export const useAccessControl = ({
       description: `Se generó el informe con ${filtered.length} controles.`,
       variant: 'default',
     });
-  }, [accessControlReports, accessReportPeriodFilter, accessReportWorkFilter]);
+  }, [accessControlReports, accessReportPeriodFilter, accessReportSelectedDateKeys, accessReportSelectedWorks]);
 
   return {
     // Data
@@ -408,21 +552,48 @@ export const useAccessControl = ({
     bulkDeleteAccessControlReports,
     syncPendingReports,
     // Form state
+    activeAccessControlReport,
     accessReportWorkFilter,
     setAccessReportWorkFilter,
+    accessReportSelectedWorks,
+    setAccessReportSelectedWorks,
     accessReportPeriodFilter,
     setAccessReportPeriodFilter,
+    accessReportSelectedDateKeys,
+    setAccessReportSelectedDateKeys,
+    accessReportPeriodSelectionLabel,
+    setAccessReportPeriodSelectionLabel,
+    accessReportEnabledFilters,
+    accessReportSelectedFiltersCount,
+    accessReportAppliedFiltersCount,
+    accessResponsibleFilter,
+    setAccessResponsibleFilter,
+    accessWeekFilter,
+    setAccessWeekFilter,
+    accessMonthFilter,
+    setAccessMonthFilter,
+    accessDateFilter,
+    setAccessDateFilter,
+    accessDatePickerOpen,
+    setAccessDatePickerOpen,
+    selectedAccessReportDate,
+    filteredAccessControlReportsForGenerate,
     accessObservations,
     setAccessObservations,
     accessAdditionalTasks,
     setAccessAdditionalTasks,
     accessPersonalEntries,
     accessPersonalDialogOpen,
+    accessControlFormOpen,
     accessPersonalForm,
     setAccessPersonalForm,
     accessImportInputRef,
     // Handlers
     handleNewAccessControlRecord,
+    handleEditAccessControlReport,
+    handleCloneAccessControlReport,
+    handleCloseAccessControlForm,
+    handleSaveAccessControlForm,
     handleOpenAccessPersonalDialog,
     handleCancelAccessPersonalDialog,
     handleAccessPersonalDialogOpenChange,
@@ -431,5 +602,7 @@ export const useAccessControl = ({
     handleExportAccessControlData,
     handleAccessDataFileSelected,
     handleGenerateAccessControlReport,
+    toggleAccessReportFilter,
+    clearAccessReportFilters,
   };
 };

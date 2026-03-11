@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AccessControlForm } from '@/components/AccessControlForm';
 import { Tabs } from '@/components/ui/tabs';
 import { IndexHeader } from '@/components/IndexHeader';
 import { WorkReportsTab } from '@/components/WorkReportsTab';
@@ -192,28 +193,52 @@ const Index = () => {
   const {
     accessControlReports,
     accessControlLoading,
-    accessReportWorkFilter,
+    deleteAccessControlReport,
+    bulkDeleteAccessControlReports,
+    activeAccessControlReport,
     setAccessReportWorkFilter,
+    accessReportSelectedWorks,
+    setAccessReportSelectedWorks,
     accessReportPeriodFilter,
     setAccessReportPeriodFilter,
-    accessObservations,
-    setAccessObservations,
-    accessAdditionalTasks,
-    setAccessAdditionalTasks,
-    accessPersonalEntries,
+    accessReportSelectedDateKeys,
+    setAccessReportSelectedDateKeys,
+    accessReportPeriodSelectionLabel,
+    setAccessReportPeriodSelectionLabel,
+    accessReportEnabledFilters,
+    accessReportSelectedFiltersCount,
+    accessReportAppliedFiltersCount,
+    accessResponsibleFilter,
+    setAccessResponsibleFilter,
+    accessWeekFilter,
+    setAccessWeekFilter,
+    accessMonthFilter,
+    setAccessMonthFilter,
+    accessDateFilter,
+    setAccessDateFilter,
+    accessDatePickerOpen,
+    setAccessDatePickerOpen,
+    selectedAccessReportDate,
+    filteredAccessControlReportsForGenerate,
     accessPersonalDialogOpen,
+    accessControlFormOpen,
     accessPersonalForm,
     setAccessPersonalForm,
     accessImportInputRef,
     handleNewAccessControlRecord,
+    handleEditAccessControlReport,
+    handleCloneAccessControlReport,
+    handleCloseAccessControlForm,
+    handleSaveAccessControlForm,
     handleOpenAccessPersonalDialog,
     handleCancelAccessPersonalDialog,
     handleAccessPersonalDialogOpenChange,
     handleSaveAccessPersonal,
-    handleSaveAccessControl,
     handleExportAccessControlData,
     handleAccessDataFileSelected,
     handleGenerateAccessControlReport,
+    toggleAccessReportFilter,
+    clearAccessReportFilters,
   } = useAccessControl({ sortedWorks, resolvedTenantId, enabled: accessControlDataEnabled, user });
 
   const handlePending = (featureName: string) => {
@@ -421,28 +446,57 @@ const Index = () => {
 
           {shouldRenderAccessControlTab ? (
             <Suspense fallback={<div className="min-h-[30vh] bg-slate-100" />}>
-              <AccessControlTab
-                accessControlLoading={accessControlLoading}
-                accessControlReports={accessControlReports}
-                accessReportWorkFilter={accessReportWorkFilter}
-                setAccessReportWorkFilter={setAccessReportWorkFilter}
-                accessReportPeriodFilter={accessReportPeriodFilter}
-                setAccessReportPeriodFilter={setAccessReportPeriodFilter}
-                sortedWorks={sortedWorks}
-                accessImportInputRef={accessImportInputRef}
-                handleNewAccessControlRecord={handleNewAccessControlRecord}
-                handleExportAccessControlData={handleExportAccessControlData}
-                handleAccessDataFileSelected={handleAccessDataFileSelected}
-                handleGenerateAccessControlReport={handleGenerateAccessControlReport}
-                accessPersonalEntries={accessPersonalEntries}
-                handleOpenAccessPersonalDialog={handleOpenAccessPersonalDialog}
-                handlePending={handlePending}
-                accessObservations={accessObservations}
-                setAccessObservations={setAccessObservations}
-                accessAdditionalTasks={accessAdditionalTasks}
-                setAccessAdditionalTasks={setAccessAdditionalTasks}
-                handleSaveAccessControl={handleSaveAccessControl}
-              />
+              {accessControlFormOpen ? (
+                <div className="mx-auto w-full max-w-7xl">
+                  <AccessControlForm
+                    report={activeAccessControlReport ?? undefined}
+                    allReports={accessControlReports}
+                    onSave={handleSaveAccessControlForm}
+                    onBack={handleCloseAccessControlForm}
+                    onSaved={handleCloseAccessControlForm}
+                  />
+                </div>
+              ) : (
+                <AccessControlTab
+                  accessControlLoading={accessControlLoading}
+                  accessControlReports={accessControlReports}
+                  setAccessReportWorkFilter={setAccessReportWorkFilter}
+                  accessReportSelectedWorks={accessReportSelectedWorks}
+                  setAccessReportSelectedWorks={setAccessReportSelectedWorks}
+                  accessReportPeriodFilter={accessReportPeriodFilter}
+                  setAccessReportPeriodFilter={setAccessReportPeriodFilter}
+                  accessReportSelectedDateKeys={accessReportSelectedDateKeys}
+                  setAccessReportSelectedDateKeys={setAccessReportSelectedDateKeys}
+                  accessReportPeriodSelectionLabel={accessReportPeriodSelectionLabel}
+                  setAccessReportPeriodSelectionLabel={setAccessReportPeriodSelectionLabel}
+                  accessReportEnabledFilters={accessReportEnabledFilters}
+                  accessReportSelectedFiltersCount={accessReportSelectedFiltersCount}
+                  accessReportAppliedFiltersCount={accessReportAppliedFiltersCount}
+                  accessResponsibleFilter={accessResponsibleFilter}
+                  setAccessResponsibleFilter={setAccessResponsibleFilter}
+                  accessWeekFilter={accessWeekFilter}
+                  setAccessWeekFilter={setAccessWeekFilter}
+                  accessMonthFilter={accessMonthFilter}
+                  setAccessMonthFilter={setAccessMonthFilter}
+                  accessDateFilter={accessDateFilter}
+                  setAccessDateFilter={setAccessDateFilter}
+                  accessDatePickerOpen={accessDatePickerOpen}
+                  setAccessDatePickerOpen={setAccessDatePickerOpen}
+                  selectedAccessReportDate={selectedAccessReportDate}
+                  filteredAccessControlReportsForGenerate={filteredAccessControlReportsForGenerate}
+                  accessImportInputRef={accessImportInputRef}
+                  handleNewAccessControlRecord={handleNewAccessControlRecord}
+                  handleEditAccessControlReport={handleEditAccessControlReport}
+                  handleCloneAccessControlReport={handleCloneAccessControlReport}
+                  deleteAccessControlReport={deleteAccessControlReport}
+                  bulkDeleteAccessControlReports={bulkDeleteAccessControlReports}
+                  handleExportAccessControlData={handleExportAccessControlData}
+                  handleAccessDataFileSelected={handleAccessDataFileSelected}
+                  handleGenerateAccessControlReport={handleGenerateAccessControlReport}
+                  toggleAccessReportFilter={toggleAccessReportFilter}
+                  clearAccessReportFilters={clearAccessReportFilters}
+                />
+              )}
             </Suspense>
           ) : null}
 
@@ -533,4 +587,3 @@ const Index = () => {
 };
 
 export default Index;
-

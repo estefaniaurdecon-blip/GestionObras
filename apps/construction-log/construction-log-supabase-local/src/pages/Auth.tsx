@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const { user, loading: authLoading, signIn, verifyMFA } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [showMFA, setShowMFA] = useState(false);
@@ -43,6 +44,9 @@ export default function Auth() {
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordMessage, setForgotPasswordMessage] = useState('Necesito recuperar mi contrasena.');
+
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   const adminSupportEmail = (
     import.meta.env.VITE_ADMIN_SUPPORT_EMAIL ||
@@ -60,6 +64,38 @@ export default function Auth() {
       setRememberMe(true);
     }
   }, [user, authLoading, navigate]);
+
+  const focusInput = (input: HTMLInputElement | null) => {
+    if (!input) return;
+
+    window.requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      const valueLength = input.value.length;
+      if (typeof input.setSelectionRange === 'function') {
+        input.setSelectionRange(valueLength, valueLength);
+      }
+    });
+  };
+
+  const handleFieldContainerPointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+    input: HTMLInputElement | null,
+  ) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, button, textarea, a, [role="button"], [data-skip-container-focus="true"]')) {
+      return;
+    }
+
+    event.preventDefault();
+    focusInput(input);
+  };
+
+  const blurActiveElement = () => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  };
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -193,6 +229,9 @@ export default function Auth() {
   };
 
   const handleClearCache = async () => {
+    setClearingCache(true);
+    blurActiveElement();
+
     try {
       console.log('[Auth] Starting comprehensive cache cleanup...');
 
@@ -222,7 +261,7 @@ export default function Auth() {
 
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 150);
     } catch (error) {
       console.error('[Auth] Error clearing cache:', error);
       try {
@@ -239,7 +278,7 @@ export default function Auth() {
 
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 150);
     }
   };
 
@@ -349,43 +388,63 @@ export default function Auth() {
         </CardHeader>
         <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
           <form onSubmit={handleLogin} noValidate className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
-            <div className="space-y-1.5 sm:space-y-2">
+            <div
+              className="space-y-1.5 rounded-md p-1 -m-1 sm:space-y-2"
+              onPointerDown={(event) => handleFieldContainerPointerDown(event, emailInputRef.current)}
+            >
               <Label htmlFor="login-email" className="text-sm sm:text-base">
                 Email
               </Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  autoComplete="username"
-                  placeholder="tu@email.com"
-                  value={loginEmail}
-                  onChange={(event) => setLoginEmail(event.target.value)}
-                  className="text-sm sm:text-base h-10 sm:h-11"
-                  required
+              <Input
+                ref={emailInputRef}
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                enterKeyHint="next"
+                placeholder="tu@email.com"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    focusInput(passwordInputRef.current);
+                  }
+                }}
+                className="text-sm sm:text-base h-10 sm:h-11"
+                disabled={loading || clearingCache}
+                required
               />
             </div>
 
-            <div className="space-y-1.5 sm:space-y-2">
+            <div
+              className="space-y-1.5 rounded-md p-1 -m-1 sm:space-y-2"
+              onPointerDown={(event) => handleFieldContainerPointerDown(event, passwordInputRef.current)}
+            >
               <Label htmlFor="login-password" className="text-sm sm:text-base">
                 Contrasena
               </Label>
               <div className="relative">
                 <Input
+                  ref={passwordInputRef}
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  placeholder="••••••••"
+                  enterKeyHint="go"
+                  placeholder="********"
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
                   className="text-sm sm:text-base h-10 sm:h-11 pr-10"
+                  disabled={loading || clearingCache}
                   required
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
+                  data-skip-container-focus="true"
                   className="absolute right-0 top-0 h-full px-2 sm:px-3"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading || clearingCache}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
@@ -406,7 +465,7 @@ export default function Auth() {
             <Button
               type="submit"
               className="w-full btn-gradient h-10 sm:h-11 text-sm sm:text-base font-medium"
-              disabled={loading}
+              disabled={loading || clearingCache}
             >
               {loading ? 'Iniciando...' : 'Iniciar sesion'}
             </Button>
@@ -415,26 +474,30 @@ export default function Auth() {
               type="button"
               variant="outline"
               className="w-full h-10 sm:h-11 text-sm sm:text-base"
+              data-skip-container-focus="true"
+              onPointerDown={blurActiveElement}
               onClick={handleClearCache}
+              disabled={loading || clearingCache}
             >
-              Limpiar cache y reiniciar
+              {clearingCache ? 'Limpiando cache...' : 'Limpiar cache y reiniciar'}
             </Button>
-
           </form>
 
           <Button
             type="button"
             variant="link"
             className="w-full h-auto p-0 mt-2 text-xs text-primary underline underline-offset-2"
+            data-skip-container-focus="true"
             onClick={openForgotPasswordDialog}
+            disabled={loading || clearingCache}
           >
-            Olvidé mi contraseña
+            Olvide mi contrasena
           </Button>
 
           <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Recuperar contraseña</DialogTitle>
+                <DialogTitle>Recuperar contrasena</DialogTitle>
                 <DialogDescription>
                   Se enviara un correo al administrador para gestionar el acceso.
                 </DialogDescription>
