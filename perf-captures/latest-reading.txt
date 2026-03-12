@@ -1,1 +1,37 @@
-c:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-095532
+perf-captures/20260312-110903
+
+Pasada controlada limpia:
+- Cold start en Medium_Tablet
+- Foreground sostenido 20s
+- PID estable 6855 -> 6855
+- Sin kill/relaunch detectado en logcat
+- Perfetto trace valido: 19,490,977 bytes
+
+Lectura rapida:
+- 320 frames
+- 83.44% janky
+- p50 65 ms
+- p90 85 ms
+- p95 97 ms
+- p99 800 ms
+- Missed Vsync: 220
+- High input latency: 54
+- Slow UI thread: 173
+- Slow issue draw commands: 267
+- TOTAL PSS 100,329 KB
+- TOTAL RSS 243,472 KB
+- Displayed MainActivity: +1.924 s
+- Choreographer app PID: Skipped 48 y Skipped 60
+- Capacitor/Console Msg: undefined: 3 veces
+
+Comparacion vs 2026-03-12 10:15:05:
+- Mejora clara en ruido de consola: `Msg: undefined` cae de 28 a 3.
+- Mejora clara en tiempo visible y en el peor outlier: `Displayed MainActivity` baja de +3.348 s a +1.924 s y `p99` baja de 900 ms a 800 ms.
+- Mejora clara en presion general de arranque: Slow UI thread 205 -> 173 y Slow issue draw commands 319 -> 267.
+- Mejora ligera en memoria: PSS 101,075 -> 100,329 KB y RSS 244,480 -> 243,472 KB.
+- Los skips grandes siguen existiendo, aunque algo menores que la baseline inicial: 50/59 -> 48/60.
+
+Lectura:
+- El prewarm de `sql.js` y el diferido corto del primer `loadWorkReports` mejoran de forma real el cold start sin romper la logica actual.
+- La micro-optimizacion posterior para evitar exportaciones innecesarias en `offlineDb.init()` no aporta una mejora decisiva por si sola: las dos corridas de confirmacion (`20260312-110757` y `20260312-110903`) quedan en una banda parecida, con ganancias y perdidas pequenas segun la metrica.
+- El cuello pendiente sigue concentrado en la primera apertura real de `offline-db` scoped al tenant y en la primera carga local asociada; ya no parece venir del spam de storage ni de tareas diferidas fuera de ventana.

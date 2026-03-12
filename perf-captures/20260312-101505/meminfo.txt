@@ -1,0 +1,57 @@
+﻿Applications Memory Usage (in Kilobytes):
+Uptime: 745499 Realtime: 745499
+
+** MEMINFO in pid 4478 [com.partesdetrabajo.app] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    15928    15896        0       77    16936    31528    23414     3613
+  Dalvik Heap     5470     5340        0       73     9888    11212     5606     5606
+ Dalvik Other     8737     3440        4        4    14348                           
+        Stack     1612     1612        0        0     1616                           
+       Ashmem      266      172        0        0      916                           
+    Other dev       27        4       20        0      324                           
+     .so mmap     3684      176      600       24    35528                           
+    .jar mmap     2893        0      320        0    45748                           
+    .apk mmap    24903      452     5508        0    58260                           
+    .ttf mmap      234        0        0        0      652                           
+    .dex mmap       47        4        0        0      976                           
+    .oat mmap       45        0        0        0     1668                           
+    .art mmap     9979     8092     1368      131    24780                           
+   Other mmap     4338      236      400        0     9800                           
+      Unknown    22603    22584        8        0    23040                           
+        TOTAL   101075    58008     8228      309   244480    42740    29020     9219
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:    14800                          34668
+         Native Heap:    15896                          16936
+                Code:     7080                         153432
+               Stack:     1612                           1616
+            Graphics:        0                              0
+       Private Other:    26848
+              System:    34839
+             Unknown:                                   37828
+ 
+           TOTAL PSS:   101075            TOTAL RSS:   244480       TOTAL SWAP PSS:      309
+ 
+ Objects
+               Views:        9         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       27        AssetManagers:        0
+       Local Binders:       59        Proxy Binders:       65
+       Parcel memory:       12         Parcel count:       50
+    Death Recipients:        4             WebViews:        1
+ 
+ SQL
+         MEMORY_USED:       78
+  PAGECACHE_OVERFLOW:       16          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4       40             32     1    21     2  /data/user/0/com.partesdetrabajo.app/databases/com.google.android.datatransport.events
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+              1            22            23  /data/user/0/com.partesdetrabajo.app/databases/com.google.android.datatransport.events

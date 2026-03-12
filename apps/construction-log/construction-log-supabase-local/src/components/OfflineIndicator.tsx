@@ -61,7 +61,7 @@ function hasStoredPendingOperations(value: string | null): boolean {
 }
 
 export const OfflineIndicator = () => {
-  const INITIAL_NATIVE_PENDING_SCAN_DELAY_MS = 15000;
+  const INITIAL_NATIVE_PENDING_SCAN_DELAY_MS = 45000;
   const { isOnline, isOffline, lastOnlineTime } = useNetworkStatus();
   const [showOnlineBanner, setShowOnlineBanner] = useState(false);
   const [hasPendingOperations, setHasPendingOperations] = useState(false);

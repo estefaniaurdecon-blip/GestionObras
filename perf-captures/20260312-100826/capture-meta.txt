@@ -1,0 +1,22 @@
+﻿capture_dir=c:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-100826
+started_at=2026-03-12T10:08:26.9988393+01:00
+ended_at=2026-03-12T10:08:58.3296338+01:00
+device=emulator-5554
+package=com.partesdetrabajo.app
+duration=20s
+trace_file=c:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-100826\emulator-5554-perfetto-trace.bin
+logcat_file=c:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-100826\emulator-5554-logcat.txt
+mode=controlled-cold-start-foreground
+pid_start=4006
+pid_end=4006
+same_pid=true
+top_window_excerpt<<EOF
+Window #2: WindowStateAnimator{b92b318 com.partesdetrabajo.app/com.partesdetrabajo.app.MainActivity}
+mPackageName=com.partesdetrabajo.app
+mCurrentFocus=Window{d5a9f64 u0 com.partesdetrabajo.app/com.partesdetrabajo.app.MainActivity}
+mFocusedApp=ActivityRecord{49d5178 u0 com.partesdetrabajo.app/.MainActivity t21}
+mObscuringWindow=Window{d5a9f64 u0 com.partesdetrabajo.app/com.partesdetrabajo.app.MainActivity}
+mPreferredTopFocusableRootTask=Task{9e7051 #21 type=standard A=10216:com.partesdetrabajo.app}
+mLastFocusedRootTask=Task{9e7051 #21 type=standard A=10216:com.partesdetrabajo.app}
+* Task{9e7051 #21 type=standard A=10216:com.partesdetrabajo.app U=0 visible=true visibleRequested=true mode=fullscreen translucent=false sz=1}
+EOF

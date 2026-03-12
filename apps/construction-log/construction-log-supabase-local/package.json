@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "lint:changed": "node scripts/lint-changed.cjs",
+    "perf:android:capture": "powershell -ExecutionPolicy Bypass -File scripts/capture-android-startup-perf.ps1",
     "preview": "vite preview",
     "android:migration:check": "node scripts/android-migration-check.cjs",
     "sync:robustness": "node scripts/sync-robustness-harness.mjs"

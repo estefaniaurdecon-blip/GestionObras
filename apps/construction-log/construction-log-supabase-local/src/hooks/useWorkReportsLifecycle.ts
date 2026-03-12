@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 import type { ApiUser } from '@/integrations/api/client';
@@ -71,8 +72,9 @@ export const useWorkReportsLifecycle = ({
   setWorkReportsLoading,
   setSyncing,
 }: UseWorkReportsLifecycleParams): UseWorkReportsLifecycleResult => {
-  const BOOTSTRAP_SYNC_DELAY_MS = 12000;
-  const AUTO_CLONE_INITIAL_DELAY_MS = 12000;
+  const INITIAL_OFFLINE_LOAD_DELAY_MS = Capacitor.isNativePlatform() ? 1800 : 0;
+  const BOOTSTRAP_SYNC_DELAY_MS = Capacitor.isNativePlatform() ? 30000 : 12000;
+  const AUTO_CLONE_INITIAL_DELAY_MS = Capacitor.isNativePlatform() ? 30000 : 12000;
   const INITIAL_WORK_REPORTS_LIMIT = 120;
   const INITIAL_UNSYNCED_WORK_REPORTS_LIMIT = 80;
   const bootstrapSyncAttemptedRef = useRef<Record<string, boolean>>({});
@@ -444,8 +446,38 @@ export const useWorkReportsLifecycle = ({
   ]);
 
   useEffect(() => {
-    void loadWorkReports();
-  }, [loadWorkReports]);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const runInitialLoad = () => {
+      if (cancelled) return;
+      void loadWorkReports();
+    };
+
+    if (INITIAL_OFFLINE_LOAD_DELAY_MS <= 0) {
+      runInitialLoad();
+    } else {
+      timeoutId = globalThis.setTimeout(() => {
+        if (typeof window.requestIdleCallback === 'function') {
+          idleId = window.requestIdleCallback(runInitialLoad, { timeout: 2500 });
+          return;
+        }
+
+        runInitialLoad();
+      }, INITIAL_OFFLINE_LOAD_DELAY_MS);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [INITIAL_OFFLINE_LOAD_DELAY_MS, loadWorkReports]);
 
   useEffect(() => {
     if (!tenantResolved || !resolvedTenantId) return;

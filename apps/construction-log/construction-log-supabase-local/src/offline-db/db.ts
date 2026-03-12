@@ -12,6 +12,8 @@ export const LEGACY_OFFLINE_DB_STORAGE_KEY = LEGACY_DB_STORAGE_KEY;
 
 type Migration = { version: number; name: string; sql: string };
 
+let sqlJsStaticPromise: Promise<SqlJsStatic> | null = null;
+
 export type OfflineDbTx = {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   run(sql: string, params?: unknown[]): Promise<void>;
@@ -58,6 +60,27 @@ function fromBase64(b64: string): Uint8Array {
   return bytes;
 }
 
+async function yieldNativeStartupWork(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+
+  await new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, 0);
+  });
+}
+
+async function getSqlJsStatic(): Promise<SqlJsStatic> {
+  if (!sqlJsStaticPromise) {
+    sqlJsStaticPromise = (async () => {
+      const wasmUrl = (await import('sql.js/dist/sql-wasm.wasm?url')).default;
+      return initSqlJs({
+        locateFile: () => wasmUrl,
+      });
+    })();
+  }
+
+  return sqlJsStaticPromise;
+}
+
 function rowsFromExecResult<T = Record<string, unknown>>(
   result: { columns: string[]; values: unknown[][] } | undefined
 ): T[] {
@@ -78,6 +101,7 @@ class OfflineDb {
   private mutex = new AsyncMutex();
   private storageScope: string | null = null;
   private storageKey: string | null = null;
+  private lastPersistedBase64: string | null = null;
 
   setStorageScope(scope: string): void {
     const nextScope = scope.trim();
@@ -100,6 +124,7 @@ class OfflineDb {
     this.db = null;
     this.sql = null;
     this.initPromise = null;
+    this.lastPersistedBase64 = null;
   }
 
   async init(): Promise<void> {
@@ -111,19 +136,28 @@ class OfflineDb {
     this.initPromise = (async () => {
       const activeStorageKey = this.storageKey as string;
       this.sql = await this.loadSqlJs();
+      await yieldNativeStartupWork();
 
       const persisted = await storage.getItem(activeStorageKey);
+      this.lastPersistedBase64 = persisted;
+      await yieldNativeStartupWork();
       const bytes = persisted ? fromBase64(persisted) : undefined;
+      await yieldNativeStartupWork();
+      let currentDbByteLength = bytes?.length ?? 0;
 
       this.db = bytes ? new this.sql.Database(bytes) : new this.sql.Database();
+      await yieldNativeStartupWork();
 
       this.db.exec('PRAGMA foreign_keys = ON;');
+      await yieldNativeStartupWork();
 
-      await this.applyMigrations();
-      await this.persist(activeStorageKey);
+      const migrationsApplied = await this.applyMigrations();
+      if (!persisted || migrationsApplied) {
+        currentDbByteLength = await this.persist(activeStorageKey);
+      }
 
       console.log(
-        `[offline-db] Ready | platform=${Capacitor.getPlatform()} | scope=${this.storageScope ?? 'legacy'} | bytes=${this.db.export().length}`
+        `[offline-db] Ready | platform=${Capacitor.getPlatform()} | scope=${this.storageScope ?? 'legacy'} | bytes=${currentDbByteLength}`
       );
     })();
 
@@ -131,10 +165,12 @@ class OfflineDb {
   }
 
   private async loadSqlJs(): Promise<SqlJsStatic> {
-    const wasmUrl = (await import('sql.js/dist/sql-wasm.wasm?url')).default;
-    return initSqlJs({
-      locateFile: () => wasmUrl,
-    });
+    return getSqlJsStatic();
+  }
+
+  async preload(): Promise<void> {
+    if (this.sql) return;
+    this.sql = await this.loadSqlJs();
   }
 
   private getDbOrThrow(): Database {
@@ -192,7 +228,7 @@ class OfflineDb {
     });
   }
 
-  private async applyMigrations(): Promise<void> {
+  private async applyMigrations(): Promise<boolean> {
     const migrations: Migration[] = [
       { version: 1, name: '0001_init', sql: migration0001 },
       { version: 2, name: '0002_placeholder', sql: migration0002 },
@@ -200,6 +236,7 @@ class OfflineDb {
 
     const db = this.getDbOrThrow();
     const current = this.getSchemaVersion(db);
+    let applied = false;
 
     for (const migration of migrations) {
       if (migration.version <= current) continue;
@@ -208,7 +245,10 @@ class OfflineDb {
       console.log(`[offline-db] Applying migration v${migration.version} (${migration.name})`);
       db.exec(migration.sql);
       this.setMeta(db, META_SCHEMA_VERSION_KEY, String(migration.version));
+      applied = true;
     }
+
+    return applied;
   }
 
   private getSchemaVersion(db: Database): number {
@@ -237,19 +277,29 @@ class OfflineDb {
     }
   }
 
-  private async persist(targetKey?: string): Promise<void> {
+  private async persist(targetKey?: string): Promise<number> {
     const keyToUse = targetKey ?? this.storageKey;
     if (!keyToUse) {
       throw new Error('offline-db not scoped: cannot persist without tenant scope');
     }
     const db = this.getDbOrThrow();
     const bytes = db.export();
+    const byteLength = bytes.length;
     const b64 = toBase64(bytes);
+    if (b64 === this.lastPersistedBase64) {
+      return byteLength;
+    }
     await storage.setItem(keyToUse, b64);
+    this.lastPersistedBase64 = b64;
+    return byteLength;
   }
 }
 
 export const offlineDb = new OfflineDb();
+
+export async function preloadOfflineDbEngine(): Promise<void> {
+  await offlineDb.preload();
+}
 
 function sanitizeScope(scope: string): string {
   return scope.replace(/[^a-zA-Z0-9_-]/g, '_');

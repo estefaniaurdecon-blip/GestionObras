@@ -71,7 +71,7 @@ const logUpdatesDebug = (message: string, detail?: unknown) => {
 };
 
 export const useAppUpdates = () => {
-  const INITIAL_UPDATE_CHECK_DELAY_MS = 15000;
+  const INITIAL_UPDATE_CHECK_DELAY_MS = Capacitor.isNativePlatform() ? 45000 : 15000;
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -123,19 +123,19 @@ export const useAppUpdates = () => {
       
       // Si es plataforma nativa Android
       if (capPlatform === 'android' && isNative) {
-        console.log('[Updates] ✓ Native Android app detected');
+        logUpdatesDebug('[Updates] Native Android app detected');
         return 'android';
       }
       
       // Fallback por user agent si Capacitor no detecta correctamente
       if (isNative && ua.toLowerCase().includes('android')) {
-        console.log('[Updates] ✓ Android detected via UA (native app)');
+        logUpdatesDebug('[Updates] Android detected via UA (native app)');
         return 'android';
       }
       
       // Si capPlatform es android pero no isNative, probablemente sea preview
       if (capPlatform === 'android') {
-        console.log('[Updates] ⚠️ Android platform but not native - may be preview/browser');
+        logUpdatesDebug('[Updates] Android platform but not native - may be preview/browser');
         return 'android'; // Intentar con android de todos modos
       }
       
@@ -145,7 +145,7 @@ export const useAppUpdates = () => {
       console.error('[Updates] Error detecting platform:', e);
     }
 
-    console.log('[Updates] ⚠️ Defaulting to web - app may not be installed or running in browser');
+    logUpdatesDebug('[Updates] Defaulting to web - app may not be installed or running in browser');
     return 'web';
   }, []);
 

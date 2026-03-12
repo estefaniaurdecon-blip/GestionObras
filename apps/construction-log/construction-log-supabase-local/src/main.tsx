@@ -155,6 +155,35 @@ const requestNativeSplashHide = () => {
   void hideNativeSplashOnce({ log: logDebug });
 };
 
+const scheduleOfflineDbWarmup = () => {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const runWarmup = () => {
+    startupPerfStart("main:offline-db-warmup");
+    void import("./offline-db/db")
+      .then(({ preloadOfflineDbEngine }) => preloadOfflineDbEngine())
+      .then(() => {
+        startupPerfEnd("main:offline-db-warmup");
+        logDebug("offline-db/sql.js prewarm completado");
+      })
+      .catch((error) => {
+        startupPerfEnd("main:offline-db-warmup", "error");
+        logDebug(`offline-db/sql.js prewarm omitido por error: ${String(error)}`);
+      });
+  };
+
+  const triggerWarmup = () => {
+    globalThis.setTimeout(runWarmup, 250);
+  };
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(triggerWarmup, { timeout: 2500 });
+    return;
+  }
+
+  globalThis.setTimeout(triggerWarmup, 1200);
+};
+
 // Funcion para mostrar error en pantalla
 const showBootError = (title: string, detail: string) => {
   requestNativeSplashHide();
@@ -223,6 +252,7 @@ const initApp = async () => {
 
     const root = createRoot(rootElement);
     root.render(<App />);
+    scheduleOfflineDbWarmup();
     if (Capacitor.isNativePlatform()) {
       scheduleNativeSplashHideRetries([150, 400, 900, 1600], { log: logDebug });
     }

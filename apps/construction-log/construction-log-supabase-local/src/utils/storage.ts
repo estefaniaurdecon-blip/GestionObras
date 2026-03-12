@@ -10,6 +10,14 @@ const CHUNK_COUNT = '__chunk_count';
 const CHUNK_PREFIX = '__chunk_';
 export const STORAGE_CHANGE_EVENT = 'app-storage-changed';
 
+async function yieldNativeStorageWork(): Promise<void> {
+  if (!isNativePlatform) return;
+
+  await new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, 0);
+  });
+}
+
 type StorageChangeAction = 'set' | 'remove' | 'clear';
 
 function emitStorageChange(key: string, action: StorageChangeAction) {
@@ -122,6 +130,9 @@ async function setChunked(key: string, value: string) {
   await rawSet(key + CHUNK_COUNT, String(chunks.length));
   for (let i = 0; i < chunks.length; i++) {
     await rawSet(key + CHUNK_PREFIX + i, chunks[i]);
+    if (i < chunks.length - 1) {
+      await yieldNativeStorageWork();
+    }
   }
 }
 
@@ -146,6 +157,9 @@ async function removeChunked(key: string) {
   if (count && !Number.isNaN(count)) {
     for (let i = 0; i < count; i++) {
       await rawRemove(key + CHUNK_PREFIX + i);
+      if (i < count - 1) {
+        await yieldNativeStorageWork();
+      }
     }
   }
   await rawRemove(key + CHUNK_COUNT);
