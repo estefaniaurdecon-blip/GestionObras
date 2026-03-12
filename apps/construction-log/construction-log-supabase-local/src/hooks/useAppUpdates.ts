@@ -19,6 +19,12 @@ interface UpdateInfo {
 
 const DISMISSED_VERSIONS_KEY = 'dismissed_update_versions';
 const INSTALLED_VERSION_KEY = 'last_installed_version';
+const SILENT_UPDATE_CHECK_COOLDOWN_MS = 120000;
+const UPDATES_DEBUG_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_UPDATES_DEBUG === '1';
+
+let silentUpdateCheckInFlight: Promise<UpdateInfo | null> | null = null;
+let lastSilentUpdateCheckAt = 0;
 
 interface RendererProcess {
   type?: string;
@@ -48,6 +54,20 @@ const isPromiseLike = <T>(value: unknown): value is Promise<T> => {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as { then?: unknown };
   return typeof candidate.then === 'function';
+};
+
+const formatDebugValue = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const logUpdatesDebug = (message: string, detail?: unknown) => {
+  if (!UPDATES_DEBUG_ENABLED) return;
+  console.log(detail === undefined ? message : `${message} | ${formatDebugValue(detail)}`);
 };
 
 export const useAppUpdates = () => {
@@ -88,14 +108,18 @@ export const useAppUpdates = () => {
                         window.process?.type === 'renderer';
       
       if (isElectron) {
-        console.log('[Updates] Electron detected via electronAPI or userAgent');
+        logUpdatesDebug('[Updates] Electron detected via electronAPI or userAgent');
         return 'windows';
       }
 
       // Verificar si Capacitor está disponible y es plataforma nativa
       const isNative = Capacitor.isNativePlatform();
       const capPlatform = Capacitor.getPlatform();
-      console.log('[Updates] Capacitor - Platform:', capPlatform, '| isNative:', isNative, '| UA:', ua.substring(0, 50));
+      logUpdatesDebug('[Updates] Platform detection', {
+        platform: capPlatform,
+        isNative,
+        userAgentPrefix: ua.substring(0, 50),
+      });
       
       // Si es plataforma nativa Android
       if (capPlatform === 'android' && isNative) {
@@ -134,7 +158,7 @@ export const useAppUpdates = () => {
         if (window.Capacitor && App?.getInfo) {
           const info = await App.getInfo();
           if (info?.version) {
-            console.log('Using native Android version:', info.version);
+            logUpdatesDebug('[Updates] Using native Android version', info.version);
             return info.version;
           }
         }
@@ -162,69 +186,99 @@ export const useAppUpdates = () => {
 
   const checkForUpdates = useCallback(async (silent: boolean = false, createNotification: boolean = false) => {
     startupPerfStart('hook:useAppUpdates.checkForUpdates');
-    console.log('[Updates] checkForUpdates START', { silent, createNotification, timestamp: new Date().toISOString() });
-    try {
-      setChecking(true);
 
-      const currentVersion = await getCurrentVersion();
-      const platform = getPlatform() as UpdatePlatform;
-      console.log('[Updates] Current version/platform:', { currentVersion, platform });
+    if (silent) {
+      const now = Date.now();
+      if (silentUpdateCheckInFlight) {
+        startupPerfEnd('hook:useAppUpdates.checkForUpdates', 'skipped-in-flight');
+        return silentUpdateCheckInFlight;
+      }
 
-      const result = await checkAppUpdates({
-        currentVersion,
-        platform,
-      });
+      if (now - lastSilentUpdateCheckAt < SILENT_UPDATE_CHECK_COOLDOWN_MS) {
+        startupPerfEnd('hook:useAppUpdates.checkForUpdates', 'skipped-cooldown');
+        return updateInfo;
+      }
+    }
 
-      if (result.updateAvailable && !shouldIgnoreUpdate(result)) {
-        const normalizedUpdateInfo: UpdateInfo = {
-          updateAvailable: true,
-          version: result.version,
-          downloadUrl: result.downloadUrl,
-          fileSize: result.fileSize,
-          releaseNotes: result.releaseNotes,
-          isMandatory: Boolean(result.isMandatory),
-        };
+    const runCheck = async (): Promise<UpdateInfo | null> => {
+      try {
+        setChecking(true);
 
-        setUpdateInfo(normalizedUpdateInfo);
+        const currentVersion = await getCurrentVersion();
+        const platform = getPlatform() as UpdatePlatform;
 
-        if (createNotification && !silent) {
+        const result = await checkAppUpdates({
+          currentVersion,
+          platform,
+        });
+
+        if (result.updateAvailable && !shouldIgnoreUpdate(result)) {
+          const normalizedUpdateInfo: UpdateInfo = {
+            updateAvailable: true,
+            version: result.version,
+            downloadUrl: result.downloadUrl,
+            fileSize: result.fileSize,
+            releaseNotes: result.releaseNotes,
+            isMandatory: Boolean(result.isMandatory),
+          };
+
+          setUpdateInfo(normalizedUpdateInfo);
+
+          if (createNotification && !silent) {
+            toast({
+              title: 'Actualizacion disponible',
+              description: `Version ${result.version || 'nueva'} lista para descargar`,
+            });
+          }
+
+          return normalizedUpdateInfo;
+        }
+
+        setUpdateInfo(null);
+
+        if (!silent) {
           toast({
-            title: 'Actualizacion disponible',
-            description: `Version ${result.version || 'nueva'} lista para descargar`,
+            title: 'Sin actualizaciones',
+            description: `Version actual: ${currentVersion}`,
           });
         }
 
-        return normalizedUpdateInfo;
+        return null;
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+        if (!silent) {
+          toast({
+            title: 'Error',
+            description: 'No se pudo verificar actualizaciones',
+            variant: 'destructive',
+          });
+        }
+        return null;
+      } finally {
+        if (silent) {
+          lastSilentUpdateCheckAt = Date.now();
+        }
+        setChecking(false);
+        startupPerfEnd(
+          'hook:useAppUpdates.checkForUpdates',
+          `silent=${silent},notification=${createNotification}`,
+        );
       }
+    };
 
-      setUpdateInfo(null);
-
-      if (!silent) {
-        toast({
-          title: 'Sin actualizaciones',
-          description: `Version actual: ${currentVersion}`,
-        });
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Error checking for updates:', error);
-      if (!silent) {
-        toast({
-          title: 'Error',
-          description: 'No se pudo verificar actualizaciones',
-          variant: 'destructive',
-        });
-      }
-      return null;
-    } finally {
-      setChecking(false);
-      startupPerfEnd(
-        'hook:useAppUpdates.checkForUpdates',
-        `silent=${silent},notification=${createNotification}`,
-      );
+    const checkPromise = runCheck();
+    if (!silent) {
+      return checkPromise;
     }
-  }, [getCurrentVersion, getPlatform, shouldIgnoreUpdate]);
+
+    silentUpdateCheckInFlight = checkPromise.finally(() => {
+      if (silentUpdateCheckInFlight === checkPromise) {
+        silentUpdateCheckInFlight = null;
+      }
+    });
+
+    return silentUpdateCheckInFlight;
+  }, [getCurrentVersion, getPlatform, shouldIgnoreUpdate, updateInfo]);
 
   const downloadAndInstallUpdate = async () => {
     if (!updateInfo || !updateInfo.downloadUrl) {
@@ -527,13 +581,11 @@ export const useAppUpdates = () => {
 
   // Verificar actualizaciones al montar y al reanudar la app (silenciosamente)
   useEffect(() => {
-    console.log('[Updates] useEffect MOUNTED - scheduling deferred update check');
     startupPerfStart('hook:useAppUpdates.initialDelay');
     let timer: ReturnType<typeof setTimeout> | null = null;
     let idleId: number | null = null;
     timer = globalThis.setTimeout(() => {
       const triggerCheck = () => {
-        console.log('[Updates] Timer triggered, calling checkForUpdates');
         startupPerfEnd('hook:useAppUpdates.initialDelay');
         void checkForUpdates(true);
       };
@@ -550,9 +602,7 @@ export const useAppUpdates = () => {
     let removeListener: (() => void) | undefined;
     try {
       const p = App.addListener?.('appStateChange', ({ isActive }: { isActive: boolean }) => {
-        console.log('[Updates] App state changed:', isActive);
         if (isActive) {
-          console.log('[Updates] App resumed, re-checking for updates');
           void checkForUpdates(true);
         }
       });
@@ -563,11 +613,10 @@ export const useAppUpdates = () => {
         });
       }
     } catch (e) {
-      console.log('[Updates] Could not add appStateChange listener:', e);
+      console.warn('[Updates] Could not add appStateChange listener:', e);
     }
 
     return () => {
-      console.log('[Updates] useEffect CLEANUP');
       if (timer !== null) {
         globalThis.clearTimeout(timer);
       }

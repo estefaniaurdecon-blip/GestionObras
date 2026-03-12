@@ -32,7 +32,7 @@ type UseWorkReportMutationsParams = {
   workReportsReadOnlyByRole: boolean;
   cloneSourceReport: WorkReport | null;
   pendingOverwrite: PendingOverwrite | null;
-  loadWorkReports: () => Promise<void>;
+  loadWorkReports: (options?: { full?: boolean }) => Promise<void>;
   setGeneratePanelOpen: Dispatch<SetStateAction<boolean>>;
   setGeneratePanelSaving: Dispatch<SetStateAction<boolean>>;
   setGeneratePanelDate: Dispatch<SetStateAction<string | undefined>>;

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { WifiOff, Wifi, CloudOff, RefreshCw } from 'lucide-react';
@@ -60,9 +61,11 @@ function hasStoredPendingOperations(value: string | null): boolean {
 }
 
 export const OfflineIndicator = () => {
+  const INITIAL_NATIVE_PENDING_SCAN_DELAY_MS = 15000;
   const { isOnline, isOffline, lastOnlineTime } = useNetworkStatus();
   const [showOnlineBanner, setShowOnlineBanner] = useState(false);
   const [hasPendingOperations, setHasPendingOperations] = useState(false);
+  const initialScanCompletedRef = useRef(false);
 
   const checkPendingOperations = useCallback(async () => {
     try {
@@ -90,7 +93,26 @@ export const OfflineIndicator = () => {
   }, []);
 
   useEffect(() => {
-    void checkPendingOperations();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const scheduleInitialCheck = () => {
+      if (initialScanCompletedRef.current) return;
+      initialScanCompletedRef.current = true;
+      void checkPendingOperations();
+    };
+
+    if (Capacitor.isNativePlatform() && isOnline) {
+      timeoutId = globalThis.setTimeout(() => {
+        if (typeof window.requestIdleCallback === 'function') {
+          idleId = window.requestIdleCallback(scheduleInitialCheck, { timeout: 3000 });
+          return;
+        }
+        scheduleInitialCheck();
+      }, INITIAL_NATIVE_PENDING_SCAN_DELAY_MS);
+    } else {
+      scheduleInitialCheck();
+    }
 
     const handleStorageChange = (event: Event) => {
       const detail = (event as CustomEvent<StorageChangeDetail>).detail;
@@ -115,13 +137,22 @@ export const OfflineIndicator = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
       window.removeEventListener(STORAGE_CHANGE_EVENT, handleStorageChange as EventListener);
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [checkPendingOperations]);
+  }, [INITIAL_NATIVE_PENDING_SCAN_DELAY_MS, checkPendingOperations, isOnline]);
 
   useEffect(() => {
+    if (!initialScanCompletedRef.current && Capacitor.isNativePlatform() && isOnline) {
+      return;
+    }
     void checkPendingOperations();
   }, [checkPendingOperations, isOnline]);
 

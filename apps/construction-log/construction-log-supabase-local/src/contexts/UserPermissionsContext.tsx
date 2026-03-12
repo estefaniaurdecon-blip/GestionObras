@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/user';
 import { getCurrentUser, listManagedUserRoles } from '@/integrations/api/client';
@@ -21,13 +21,18 @@ interface UserPermissionsContextType {
 
 const UserPermissionsContext = createContext<UserPermissionsContextType | undefined>(undefined);
 
+const normalizeRoles = (roles: unknown): AppRole[] => {
+  if (!Array.isArray(roles)) return [];
+  return roles.map((role) => String(role).trim()).filter(Boolean) as AppRole[];
+};
+
 export const UserPermissionsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<{ full_name: string | null; organization_id: string | null } | null>(null);
 
-  const loadUserRoles = async () => {
+  const loadUserRoles = useCallback(async () => {
     if (!user) {
       setRoles([]);
       setUserProfile(null);
@@ -37,12 +42,36 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
 
     try {
       setLoading(true);
+      setRoles(normalizeRoles(user.roles));
+      setUserProfile({
+        full_name: user.full_name ?? null,
+        organization_id: user.tenant_id != null ? String(user.tenant_id) : null,
+      });
+    } catch (error) {
+      console.error('Error loading user roles:', error);
+      setRoles([]);
+      setUserProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-      // Load roles via API
+  useEffect(() => {
+    loadUserRoles();
+  }, [loadUserRoles]);
+
+  const reloadRoles = useCallback(async () => {
+    if (!user) {
+      setRoles([]);
+      setUserProfile(null);
+      return;
+    }
+
+    try {
+      setLoading(true);
       const userRoles = await listManagedUserRoles(Number(user.id));
       setRoles(userRoles as AppRole[]);
 
-      // Load profile via API
       try {
         const currentUser = await getCurrentUser();
         setUserProfile({
@@ -54,16 +83,15 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
       }
     } catch (error) {
       console.error('Error loading user roles:', error);
-      setRoles([]);
-      setUserProfile(null);
+      setRoles(normalizeRoles(user.roles));
+      setUserProfile({
+        full_name: user.full_name ?? null,
+        organization_id: user.tenant_id != null ? String(user.tenant_id) : null,
+      });
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadUserRoles();
-  }, [user?.id]); // Only depend on user.id to avoid unnecessary reloads
+  }, [user]);
 
   const isMaster = roles.includes('master');
   const isAdmin = roles.includes('admin');
@@ -90,7 +118,7 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
         canAssignRoles,
         canAssignWorks,
         canApprove,
-        reloadRoles: loadUserRoles,
+        reloadRoles,
         userProfile,
       }}
     >

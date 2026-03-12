@@ -16,6 +16,12 @@ export type WorkReportsListParams = {
   status?: WorkReportStatus;
 };
 
+export type WorkReportsUnsyncedListParams = {
+  tenantId: string;
+  projectId?: string | null;
+  limit?: number;
+};
+
 export type WorkReportDraftData = {
   tenantId: string;
   projectId?: string | null;
@@ -186,7 +192,7 @@ export const workReportsRepo = {
   },
 
   async list(params: WorkReportsListParams): Promise<WorkReport[]> {
-    const limit = Math.max(1, Math.min(params.limit ?? 100, 500));
+    const limit = Math.max(1, Math.min(params.limit ?? 100, 5000));
 
     const where: string[] = ['tenant_id = ?', 'deleted_at IS NULL'];
     const args: unknown[] = [params.tenantId];
@@ -208,6 +214,31 @@ export const workReportsRepo = {
       FROM work_reports
       WHERE ${where.join(' AND ')}
       ORDER BY date DESC, updated_at DESC
+      LIMIT ?;`,
+      [...args, limit]
+    );
+
+    return rows.map(toWorkReport);
+  },
+
+  async listUnsynced(params: WorkReportsUnsyncedListParams): Promise<WorkReport[]> {
+    const limit = Math.max(1, Math.min(params.limit ?? 100, 1000));
+
+    const where: string[] = ['tenant_id = ?', 'deleted_at IS NULL', "sync_status <> 'synced'"];
+    const args: unknown[] = [params.tenantId];
+
+    if (params.projectId) {
+      where.push('project_id = ?');
+      args.push(params.projectId);
+    }
+
+    const rows = await offlineDb.query<WorkReportRow>(
+      `SELECT
+        id, tenant_id, project_id, title, date, status, payload_json,
+        created_at, updated_at, deleted_at, sync_status, last_sync_error
+      FROM work_reports
+      WHERE ${where.join(' AND ')}
+      ORDER BY updated_at DESC, date DESC
       LIMIT ?;`,
       [...args, limit]
     );

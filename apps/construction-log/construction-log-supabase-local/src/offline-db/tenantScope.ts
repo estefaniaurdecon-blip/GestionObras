@@ -41,6 +41,7 @@ export class TenantResolutionError extends Error {
 }
 
 const migrationByTenant = new Map<string, Promise<void>>();
+const migratedTenants = new Set<string>();
 let hasLoggedDevTenantOverride = false;
 
 function normalizeTenantId(value: unknown): string | null {
@@ -298,9 +299,14 @@ function getLegacyUserScope(user: ApiUser | null | undefined): string | null {
 }
 
 async function runLegacyMigrationForTenant(tenantId: string, user: ApiUser | null | undefined): Promise<void> {
+  if (migratedTenants.has(tenantId)) return;
+
   const migrationFlagKey = getMigrationFlagKey(tenantId);
   const alreadyMigrated = (await storage.getItem(migrationFlagKey)) === '1';
-  if (alreadyMigrated) return;
+  if (alreadyMigrated) {
+    migratedTenants.add(tenantId);
+    return;
+  }
 
   const legacyUserScope = getLegacyUserScope(user);
   const candidateKeys = [LEGACY_OFFLINE_DB_STORAGE_KEY];
@@ -349,6 +355,7 @@ async function runLegacyMigrationForTenant(tenantId: string, user: ApiUser | nul
   }
 
   await storage.setItem(migrationFlagKey, '1');
+  migratedTenants.add(tenantId);
 
   for (const storageKey of snapshotKeysImported) {
     await storage.removeItem(storageKey);
@@ -370,6 +377,10 @@ async function runLegacyMigrationForTenant(tenantId: string, user: ApiUser | nul
 
 async function ensureTenantMigration(tenantId: string, user: ApiUser | null | undefined): Promise<void> {
   const normalizedTenantId = tenantId.trim();
+  if (migratedTenants.has(normalizedTenantId)) {
+    return;
+  }
+
   const runningMigration = migrationByTenant.get(normalizedTenantId);
   if (runningMigration) {
     await runningMigration;

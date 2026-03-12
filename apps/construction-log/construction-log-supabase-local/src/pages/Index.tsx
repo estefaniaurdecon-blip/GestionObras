@@ -68,6 +68,10 @@ const Index = () => {
     setWorkReports,
     allWorkReports,
     setAllWorkReports,
+    allWorkReportsLoaded,
+    setAllWorkReportsLoaded,
+    allWorkReportsLoading,
+    setAllWorkReportsLoading,
     workReportsLoading,
     setWorkReportsLoading,
     generatePanelOpen,
@@ -249,17 +253,20 @@ const Index = () => {
     });
   };
 
-  const { loadWorkReports, handleSyncNow } = useWorkReportsLifecycle({
+  const { loadWorkReports, ensureAllWorkReportsLoaded, handleSyncNow } = useWorkReportsLifecycle({
     user,
     resolvedTenantId,
     tenantResolved,
     tenantUnavailable,
     tenantErrorMessage,
+    allWorkReportsLoaded,
     workReportsLength: workReports.length,
     workReportsLoading,
     syncing,
     setWorkReports,
     setAllWorkReports,
+    setAllWorkReportsLoaded,
+    setAllWorkReportsLoading,
     setWorkReportsLoading,
     setSyncing,
   });
@@ -311,6 +318,11 @@ const Index = () => {
     setActiveReport(null);
     setPendingOverwrite(null);
   }, [setActiveReport, setGeneratePanelOpen, setPendingOverwrite, tenantUnavailable]);
+
+  useEffect(() => {
+    if (!historyOpen && !metricsOpen) return;
+    void ensureAllWorkReportsLoaded();
+  }, [ensureAllWorkReportsLoaded, historyOpen, metricsOpen]);
 
   const shouldRenderAccessControlTab = activeTab === 'access-control';
   const shouldRenderSecondaryTabs =
@@ -401,6 +413,8 @@ const Index = () => {
               workReportsLoading,
               workReports,
               allWorkReports,
+              allWorkReportsLoaded,
+              allWorkReportsLoading,
               workReportVisibleDays: WORK_REPORT_VISIBLE_DAYS,
               syncing,
               workReportsReadOnlyByRole,
@@ -408,6 +422,7 @@ const Index = () => {
             actions={{
               handleSyncNow,
               reloadWorkReports: loadWorkReports,
+              ensureAllWorkReportsLoaded,
               openGenerateWorkReport,
               setMetricsOpen,
               handlePending,
@@ -527,6 +542,8 @@ const Index = () => {
                 open: metricsOpen,
                 setOpen: setMetricsOpen,
                 workReports: allWorkReports,
+                allWorkReportsLoaded,
+                allWorkReportsLoading,
               }}
               accessPersonal={{
                 open: accessPersonalDialogOpen,
@@ -556,6 +573,8 @@ const Index = () => {
                 setHistoryDatePickerOpen,
                 selectedHistoryDate,
                 allWorkReports,
+                allWorkReportsLoaded,
+                allWorkReportsLoading,
                 filteredHistoryReports,
                 historyAppliedFiltersCount,
                 clearHistoryFilters,

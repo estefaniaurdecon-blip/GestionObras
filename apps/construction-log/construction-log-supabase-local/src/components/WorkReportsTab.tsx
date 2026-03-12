@@ -1,4 +1,5 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -124,6 +125,8 @@ type WorkReportsListConfig = {
   workReportsLoading: boolean;
   workReports: WorkReport[];
   allWorkReports: WorkReport[];
+  allWorkReportsLoaded: boolean;
+  allWorkReportsLoading: boolean;
   workReportVisibleDays: number;
   syncing: boolean;
   workReportsReadOnlyByRole: boolean;
@@ -132,6 +135,7 @@ type WorkReportsListConfig = {
 type WorkReportsActionsConfig = {
   handleSyncNow: () => Promise<void>;
   reloadWorkReports: () => Promise<void>;
+  ensureAllWorkReportsLoaded: () => Promise<void>;
   openGenerateWorkReport: (targetDate?: string) => void;
   setMetricsOpen: Dispatch<SetStateAction<boolean>>;
   handlePending: (featureName: string) => void;
@@ -161,7 +165,8 @@ export const WorkReportsTab = ({
   actions,
   history,
 }: WorkReportsTabProps) => {
-  const INITIAL_HEALTH_CHECK_DELAY_MS = 12000;
+  const INITIAL_HEALTH_CHECK_DELAY_MS = Capacitor.isNativePlatform() ? 20000 : 12000;
+  const HEALTH_CHECK_INTERVAL_MS = Capacitor.isNativePlatform() ? 30000 : 10000;
 
   const {
     open: generatePanelOpen,
@@ -204,6 +209,8 @@ export const WorkReportsTab = ({
     workReportsLoading,
     workReports,
     allWorkReports,
+    allWorkReportsLoaded,
+    allWorkReportsLoading,
     workReportVisibleDays,
     syncing,
     workReportsReadOnlyByRole,
@@ -211,6 +218,7 @@ export const WorkReportsTab = ({
   const {
     handleSyncNow,
     reloadWorkReports,
+    ensureAllWorkReportsLoaded,
     openGenerateWorkReport,
     setMetricsOpen,
     handlePending,
@@ -244,11 +252,18 @@ export const WorkReportsTab = ({
     setReportNavigationIds([]);
   }, [generatePanelOpen]);
 
+  useEffect(() => {
+    if (activeToolsTab === 'parts') return;
+    if (allWorkReportsLoaded || allWorkReportsLoading) return;
+    void ensureAllWorkReportsLoaded();
+  }, [activeToolsTab, allWorkReportsLoaded, allWorkReportsLoading, ensureAllWorkReportsLoaded]);
+
   const reportsById = useMemo(() => new Map(allWorkReports.map((report) => [report.id, report])), [allWorkReports]);
   const reportsForSummary = useMemo(
     () => (allWorkReports.length > 0 ? allWorkReports : workReports),
     [allWorkReports, workReports],
   );
+  const historyDataPending = activeToolsTab !== 'parts' && (!allWorkReportsLoaded || allWorkReportsLoading);
 
   const effectiveNavigationIds = useMemo(() => {
     if (!openedReportId) return [];
@@ -312,6 +327,9 @@ export const WorkReportsTab = ({
     let disposed = false;
 
     const checkSyncConnectivity = async () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
       startupPerfStart('component:WorkReportsTab.checkSyncConnectivity');
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         if (!disposed) setIsSyncOnline(false);
@@ -362,7 +380,7 @@ export const WorkReportsTab = ({
     }, INITIAL_HEALTH_CHECK_DELAY_MS);
     const intervalId = window.setInterval(() => {
       void checkSyncConnectivity();
-    }, 10000);
+    }, HEALTH_CHECK_INTERVAL_MS);
 
     return () => {
       disposed = true;
@@ -376,7 +394,7 @@ export const WorkReportsTab = ({
         window.cancelIdleCallback(initialIdleId);
       }
     };
-  }, [INITIAL_HEALTH_CHECK_DELAY_MS]);
+  }, [HEALTH_CHECK_INTERVAL_MS, INITIAL_HEALTH_CHECK_DELAY_MS]);
 
   const connectionPanelClass = isSyncOnline
     ? 'border-emerald-200 bg-emerald-50/60'
@@ -564,7 +582,11 @@ export const WorkReportsTab = ({
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {history ? (
+                    {historyDataPending ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        Cargando historial completo...
+                      </div>
+                    ) : history ? (
                       <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando historial...</div>}>
                         <HistoryReportsPanel {...history} onDeleteReport={setReportToDelete} />
                       </Suspense>
@@ -576,6 +598,13 @@ export const WorkReportsTab = ({
                   </CardContent>
                 </Card>
               ) : activeToolsTab !== 'parts' ? (
+                historyDataPending ? (
+                  <Card className="bg-white">
+                    <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                      Cargando historial completo...
+                    </CardContent>
+                  </Card>
+                ) : (
                 <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando herramientas...</div>}>
                   <LazyToolsPanelContent
                     activeToolsTab={activeToolsTab}
@@ -598,6 +627,7 @@ export const WorkReportsTab = ({
                     }}
                   />
                 </Suspense>
+                )
               ) : (
                 <PartsTabContent
                   tenantResolving={tenantResolving}

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { UserPermissionsProvider } from "./contexts/UserPermissionsContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { CacheCleaner } from "@/components/CacheCleaner";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
@@ -44,39 +45,41 @@ const App = () => {
         <NativeSplashHider />
         <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
-            <CacheCleaner />
-            <Suspense fallback={<div className="min-h-screen bg-slate-100" />}>
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/projects"
-                  element={
-                    <ProtectedRoute>
-                      <Projects />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/update-password" element={<UpdatePassword />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+            <UserPermissionsProvider>
+              <CacheCleaner />
+              <Suspense fallback={<div className="min-h-screen bg-slate-100" />}>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <Index />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Index />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/projects"
+                    element={
+                      <ProtectedRoute>
+                        <Projects />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/update-password" element={<UpdatePassword />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </UserPermissionsProvider>
           </AuthProvider>
         </HashRouter>
       </TooltipProvider>

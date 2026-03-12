@@ -5,11 +5,6 @@ const config: CapacitorConfig = {
   appName: 'Partes de Trabajo',
   webDir: 'dist',
   android: {
-    permissions: [
-      'android.permission.CAMERA',
-      'android.permission.RECORD_AUDIO',
-      'android.permission.MODIFY_AUDIO_SETTINGS'
-    ],
     backgroundColor: '#1e3a5f',
     // Permitir mixed content para desarrollo
     allowMixedContent: true
@@ -19,9 +14,10 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // NO mostrar splash nativo - usamos el HTML fallback
+      // Mantener el splash nativo hasta que React monte para evitar
+      // pantallas negras/intermedias en Android al arrancar.
       launchShowDuration: 0,
-      launchAutoHide: true,
+      launchAutoHide: false,
       backgroundColor: "#1e3a5f",
       showSpinner: false
     }

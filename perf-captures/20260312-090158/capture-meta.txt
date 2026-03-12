@@ -1,0 +1,7 @@
+capture_dir=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-090158
+started_at=2026-03-12T09:01:58.3214402+01:00
+device=emulator-5554
+package=com.partesdetrabajo.app
+duration=90s
+remote_trace=/data/local/tmp/partes-trace-20260312-090158.perfetto-trace
+config=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-090158\perfetto-config.pbtxt

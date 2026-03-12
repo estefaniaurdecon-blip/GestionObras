@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,6 +141,8 @@ const pickCostReference = (...values: unknown[]) => {
 };
 
 const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
+const PARTS_GROUPS_PAGE_SIZE = 20;
+const PARTS_REPORTS_PAGE_SIZE = 50;
 
 const sanitizeWorkbookSegment = (value: string) => {
   const cleaned = value
@@ -228,14 +230,15 @@ export const PartsTabContent = ({
     () => workReports.filter((report) => report.syncStatus !== 'synced').length,
     [workReports],
   );
-  const reportsForGrouping = useMemo(
-    () => (allWorkReports.length > 0 ? allWorkReports : workReports),
-    [allWorkReports, workReports],
-  );
+  // La vista principal no necesita recorrer todo el histórico completo.
+  // Usamos solo el subconjunto visible/de trabajo y lo diferimos para no bloquear el primer render.
+  const reportsForGrouping = useDeferredValue(workReports);
   const [partsGroupMode, setPartsGroupMode] = useState<PartsGroupMode>('foreman');
   const [showPartsFilters, setShowPartsFilters] = useState(false);
   const [selectedPartsGroupKey, setSelectedPartsGroupKey] = useState<string>('');
   const [openPartsGroupKey, setOpenPartsGroupKey] = useState<string>('');
+  const [visiblePartsGroupCount, setVisiblePartsGroupCount] = useState(PARTS_GROUPS_PAGE_SIZE);
+  const [visibleReportsByGroup, setVisibleReportsByGroup] = useState<Record<string, number>>({});
   const [excelExportingPeriod, setExcelExportingPeriod] = useState<'weekly' | 'monthly' | null>(null);
 
   const closePartsFilters = () => {
@@ -404,6 +407,11 @@ export const PartsTabContent = ({
   }, [partsGroupMode]);
 
   useEffect(() => {
+    setVisiblePartsGroupCount(PARTS_GROUPS_PAGE_SIZE);
+    setVisibleReportsByGroup({});
+  }, [activePartsGroups.length, partsGroupMode]);
+
+  useEffect(() => {
     if (selectedPartsGroupKey.length === 0) return;
     if (!activePartsGroups.some((group) => group.key === selectedPartsGroupKey)) {
       setSelectedPartsGroupKey('');
@@ -414,6 +422,11 @@ export const PartsTabContent = ({
     () => activePartsGroups.find((group) => group.key === selectedPartsGroupKey) ?? null,
     [activePartsGroups, selectedPartsGroupKey],
   );
+  const visiblePartsGroups = useMemo(
+    () => activePartsGroups.slice(0, visiblePartsGroupCount),
+    [activePartsGroups, visiblePartsGroupCount],
+  );
+  const hiddenPartsGroupsCount = Math.max(activePartsGroups.length - visiblePartsGroupCount, 0);
   const selectedPartsGroupReports = selectedPartsGroup?.reports ?? EMPTY_WORK_REPORTS;
   const recentReportsDefault = useMemo(() => {
     const endDate = new Date();
@@ -1024,53 +1037,107 @@ export const PartsTabContent = ({
                     No hay partes disponibles para la agrupacion seleccionada.
                   </div>
                 ) : (
-                  <Accordion
-                    type="single"
-                    collapsible
-                    value={openPartsGroupKey}
-                    onValueChange={(value) => {
-                      setOpenPartsGroupKey(value);
-                    }}
-                    className="rounded-md border bg-slate-50"
-                  >
-                    {activePartsGroups.map((group) => {
-                      const navigationIds = group.reports.map((report) => report.id);
-                      const isSelectedGroup = selectedPartsGroupKey === group.key;
-                      const isOpenGroup = openPartsGroupKey === group.key;
-                      return (
-                        <AccordionItem key={group.key} value={group.key} className="last:border-b-0">
-                          <div
-                            className={`flex items-center gap-2 border-b px-3 py-2 ${
-                              isSelectedGroup ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              className="flex min-w-0 flex-1 items-center justify-between gap-3 pr-2 text-left"
-                              onClick={() => handleTogglePartsGroupSelection(group.key)}
+                  <div className="space-y-3">
+                    <Accordion
+                      type="single"
+                      collapsible
+                      value={openPartsGroupKey}
+                      onValueChange={(value) => {
+                        setOpenPartsGroupKey(value);
+                        if (value) {
+                          setVisibleReportsByGroup((current) => ({
+                            ...current,
+                            [value]: current[value] ?? PARTS_REPORTS_PAGE_SIZE,
+                          }));
+                        }
+                      }}
+                      className="rounded-md border bg-slate-50"
+                    >
+                      {visiblePartsGroups.map((group) => {
+                        const navigationIds = group.reports.map((report) => report.id);
+                        const isSelectedGroup = selectedPartsGroupKey === group.key;
+                        const isOpenGroup = openPartsGroupKey === group.key;
+                        const visibleReportsForGroup = group.reports.slice(
+                          0,
+                          visibleReportsByGroup[group.key] ?? PARTS_REPORTS_PAGE_SIZE,
+                        );
+                        const hiddenReportsForGroup = Math.max(
+                          group.reports.length - visibleReportsForGroup.length,
+                          0,
+                        );
+
+                        return (
+                          <AccordionItem key={group.key} value={group.key} className="last:border-b-0">
+                            <div
+                              className={`flex items-center gap-2 border-b px-3 py-2 ${
+                                isSelectedGroup ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white'
+                              }`}
                             >
-                              <span className="truncate text-[16px] font-medium text-slate-900 sm:text-[17px]">
-                                {group.label}
-                              </span>
-                              <Badge variant="outline" className="shrink-0 border-slate-300 bg-white text-slate-700">
-                                {group.reports.length}
-                              </Badge>
-                            </button>
-                            <AccordionPrimitive.Header className="flex shrink-0">
-                              <AccordionPrimitive.Trigger className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100">
-                                <ChevronDown className={`h-4 w-4 transition-transform ${isOpenGroup ? 'rotate-180' : ''}`} />
-                              </AccordionPrimitive.Trigger>
-                            </AccordionPrimitive.Header>
-                          </div>
-                          <AccordionContent className="border-t bg-white pb-0 pt-0">
-                            <div className="divide-y">
-                              {group.reports.map((report) => renderReportCardRow(report, navigationIds, group.key))}
+                              <button
+                                type="button"
+                                className="flex min-w-0 flex-1 items-center justify-between gap-3 pr-2 text-left"
+                                onClick={() => handleTogglePartsGroupSelection(group.key)}
+                              >
+                                <span className="truncate text-[16px] font-medium text-slate-900 sm:text-[17px]">
+                                  {group.label}
+                                </span>
+                                <Badge variant="outline" className="shrink-0 border-slate-300 bg-white text-slate-700">
+                                  {group.reports.length}
+                                </Badge>
+                              </button>
+                              <AccordionPrimitive.Header className="flex shrink-0">
+                                <AccordionPrimitive.Trigger className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100">
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${isOpenGroup ? 'rotate-180' : ''}`} />
+                                </AccordionPrimitive.Trigger>
+                              </AccordionPrimitive.Header>
                             </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
+                            <AccordionContent className="border-t bg-white pb-0 pt-0">
+                              <div className="divide-y">
+                                {visibleReportsForGroup.map((report) =>
+                                  renderReportCardRow(report, navigationIds, group.key),
+                                )}
+                              </div>
+                              {hiddenReportsForGroup > 0 ? (
+                                <div className="border-t px-3 py-3 text-center">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      setVisibleReportsByGroup((current) => ({
+                                        ...current,
+                                        [group.key]: Math.min(
+                                          (current[group.key] ?? PARTS_REPORTS_PAGE_SIZE) + PARTS_REPORTS_PAGE_SIZE,
+                                          group.reports.length,
+                                        ),
+                                      }))
+                                    }
+                                  >
+                                    Mostrar {Math.min(PARTS_REPORTS_PAGE_SIZE, hiddenReportsForGroup)} mas
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </AccordionContent>
+                          </AccordionItem>
+                        );
+                      })}
+                    </Accordion>
+                    {hiddenPartsGroupsCount > 0 ? (
+                      <div className="flex items-center justify-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            setVisiblePartsGroupCount((current) =>
+                              Math.min(current + PARTS_GROUPS_PAGE_SIZE, activePartsGroups.length),
+                            )
+                          }
+                        >
+                          Mostrar {Math.min(PARTS_GROUPS_PAGE_SIZE, hiddenPartsGroupsCount)} grupos mas
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
                 </div>
               </div>

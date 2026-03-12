@@ -51,6 +51,8 @@ type HistoryReportsDialogProps = {
   setHistoryDatePickerOpen: Dispatch<SetStateAction<boolean>>;
   selectedHistoryDate: Date | null;
   allWorkReports: WorkReport[];
+  allWorkReportsLoaded: boolean;
+  allWorkReportsLoading: boolean;
   filteredHistoryReports: WorkReport[];
   historyAppliedFiltersCount: number;
   clearHistoryFilters: () => void;
@@ -82,6 +84,8 @@ export const HistoryReportsDialog = ({
   setHistoryDatePickerOpen,
   selectedHistoryDate,
   allWorkReports,
+  allWorkReportsLoaded,
+  allWorkReportsLoading,
   filteredHistoryReports,
   historyAppliedFiltersCount,
   clearHistoryFilters,
@@ -241,8 +245,15 @@ export const HistoryReportsDialog = ({
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-muted-foreground">
-              Total guardados: <span className="font-medium">{allWorkReports.length}</span>. Mostrando:{' '}
-              <span className="font-medium">{filteredHistoryReports.length}</span>. Filtros seleccionados:{' '}
+              Total guardados:{' '}
+              <span className="font-medium">
+                {allWorkReportsLoading || !allWorkReportsLoaded ? 'cargando...' : allWorkReports.length}
+              </span>
+              . Mostrando:{' '}
+              <span className="font-medium">
+                {allWorkReportsLoading || !allWorkReportsLoaded ? '--' : filteredHistoryReports.length}
+              </span>
+              . Filtros seleccionados:{' '}
               <span className="font-medium">{historySelectedFiltersCount}</span>/{HISTORY_FILTER_OPTIONS.length}. Aplicados:{' '}
               <span className="font-medium">{historyAppliedFiltersCount}</span>.
             </div>
@@ -253,7 +264,11 @@ export const HistoryReportsDialog = ({
             </div>
           </div>
 
-          {allWorkReports.length === 0 ? (
+          {allWorkReportsLoading || !allWorkReportsLoaded ? (
+            <div className="rounded-md border bg-slate-50 p-6 text-sm text-muted-foreground text-center">
+              Cargando historial completo...
+            </div>
+          ) : allWorkReports.length === 0 ? (
             <div className="rounded-md border bg-slate-50 p-6 text-sm text-muted-foreground text-center">
               No hay partes guardados todavía.
             </div>

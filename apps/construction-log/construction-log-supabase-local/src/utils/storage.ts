@@ -166,23 +166,26 @@ async function hasStoredValue(key: string): Promise<boolean> {
 export const storage = {
   async getItem(key: string): Promise<string | null> {
     try {
-      // Si esta guardado en chunks, reconstruir
-      const chunkedValue = await getChunked(key);
-      if (chunkedValue !== null) {
-        // Sanitizar al leer en Electron
-        const result = isElectron() ? sanitizeJsonValue(chunkedValue) : chunkedValue;
-        console.log(`[Storage] Read chunked key: ${key}, length: ${result?.length || 0}`);
-        return result;
+      // Intentar primero la clave directa para evitar varias lecturas nativas
+      // por acceso cuando el valor no esta fragmentado.
+      const value = await rawGet(key);
+      if (value !== null) {
+        const directResult = isElectron() ? sanitizeJsonValue(value) : value;
+        if (key.includes('ai_plan')) {
+          console.log(`[Storage] Read key: ${key}, length: ${directResult?.length || 0}, hasValue: ${!!directResult}`);
+        }
+        return directResult;
       }
 
-      // Si no, leer normalmente
-      const value = await rawGet(key);
-      // Sanitizar al leer en Electron
-      const result = value && isElectron() ? sanitizeJsonValue(value) : value;
-      if (key.includes('ai_plan')) {
-        console.log(`[Storage] Read key: ${key}, length: ${result?.length || 0}, hasValue: ${!!result}`);
+      // Si esta guardado en chunks, reconstruirlo solo cuando no exista valor directo.
+      const chunkedValue = await getChunked(key);
+      if (chunkedValue !== null) {
+        const chunkedResult = isElectron() ? sanitizeJsonValue(chunkedValue) : chunkedValue;
+        console.log(`[Storage] Read chunked key: ${key}, length: ${chunkedResult?.length || 0}`);
+        return chunkedResult;
       }
-      return result;
+
+      return null;
     } catch (error) {
       console.error(`[Storage] Error reading key ${key}:`, error);
       return null;

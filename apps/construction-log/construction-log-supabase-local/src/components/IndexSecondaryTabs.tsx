@@ -1,32 +1,26 @@
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EconomicsOverviewPanel } from '@/components/api/EconomicsOverviewPanel';
+import { CompanyPortfolio } from '@/components/CompanyPortfolio';
+import { ProjectsPanel } from '@/components/ProjectsPanel';
 import { startupPerfPoint } from '@/utils/startupPerf';
-import { HelpCircle, RefreshCw } from 'lucide-react';
-
-type WorkItem = {
-  id: string | number;
-  number?: string | null;
-  name?: string | null;
-};
+import { HelpCircle } from 'lucide-react';
 
 type IndexSecondaryTabsProps = {
-  sortedWorks: WorkItem[];
+  sortedWorks: Array<{ id: string | number; number?: string | null; name?: string | null }>;
   worksLoading: boolean;
-  // Optional for backwards compatibility with old Index prop wiring.
   showUpdatesTab?: boolean;
   onOpenProjects: () => void;
   onReloadWorks: () => void;
 };
 
 export const IndexSecondaryTabs = ({
-  sortedWorks,
-  worksLoading,
+  sortedWorks: _sortedWorks,
+  worksLoading: _worksLoading,
   showUpdatesTab: _showUpdatesTab,
-  onOpenProjects,
-  onReloadWorks,
+  onOpenProjects: _onOpenProjects,
+  onReloadWorks: _onReloadWorks,
 }: IndexSecondaryTabsProps) => {
   useEffect(() => {
     startupPerfPoint('panel:IndexSecondaryTabs mounted');
@@ -35,34 +29,35 @@ export const IndexSecondaryTabs = ({
   return (
     <>
       <TabsContent value="works" className="m-0 space-y-4">
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle>Obras</CardTitle>
-            <CardDescription>Datos cargados desde la API (`/api/v1/erp/projects`).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={onOpenProjects}>Abrir gestion completa</Button>
-              <Button variant="outline" onClick={onReloadWorks} disabled={worksLoading}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${worksLoading ? 'animate-spin' : ''}`} />
-                Recargar
-              </Button>
-            </div>
+        <Tabs defaultValue="projects" className="space-y-4">
+          <TabsList className="h-auto w-full justify-start gap-1 rounded-md border border-slate-200 bg-slate-100 p-1 text-slate-600">
+            <TabsTrigger
+              value="projects"
+              className="rounded px-3 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-slate-900"
+            >
+              Obras
+            </TabsTrigger>
+            <TabsTrigger
+              value="portfolio"
+              className="rounded px-3 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-slate-900"
+            >
+              Cartera de Empresas
+            </TabsTrigger>
+          </TabsList>
 
-            {sortedWorks.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No hay obras visibles.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {sortedWorks.slice(0, 12).map((work) => (
-                  <div key={work.id} className="rounded-md border bg-white p-3">
-                    <div className="font-medium text-sm">{work.name || 'Sin nombre'}</div>
-                    <div className="text-xs text-muted-foreground">Codigo: {work.number || '-'}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          <TabsContent value="projects" className="m-0">
+            <ProjectsPanel
+              title="Obras"
+              description="Datos cargados desde la API (`/api/v1/erp/projects`)."
+              createButtonLabel="Añadir Obras"
+              emptyMessage="No hay obras registradas."
+            />
+          </TabsContent>
+
+          <TabsContent value="portfolio" className="m-0">
+            <CompanyPortfolio />
+          </TabsContent>
+        </Tabs>
       </TabsContent>
 
       <TabsContent value="economics" className="m-0 space-y-4">
@@ -97,4 +92,3 @@ export const IndexSecondaryTabs = ({
     </>
   );
 };
-

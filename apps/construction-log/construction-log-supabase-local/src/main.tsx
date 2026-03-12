@@ -31,6 +31,20 @@ const logDebug = (msg: string) => {
   appendBootLog(`[AppBoot] ${msg}`);
 };
 
+const isElectronRuntime = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const windowWithElectron = window as Window & {
+    electronAPI?: unknown;
+    process?: { type?: string };
+  };
+  const ua = window.navigator.userAgent || "";
+  return (
+    windowWithElectron.electronAPI !== undefined ||
+    ua.toLowerCase().includes("electron") ||
+    windowWithElectron.process?.type === "renderer"
+  );
+};
+
 const clearNativeBrowserCaches = async (): Promise<number> => {
   if (!("caches" in window)) return 0;
   try {
@@ -61,28 +75,53 @@ const unregisterAllNativeServiceWorkers = async (): Promise<number> => {
   }
 };
 
-const NATIVE_ASSET_REFRESH_SESSION_KEY = "__native_assets_refresh_v2__";
+const APP_BUILD_MARKER = import.meta.env.VITE_APP_VERSION || "native-dev";
+const NATIVE_ASSET_REFRESH_SESSION_KEY = "__native_assets_refresh_v3__";
+const NATIVE_ASSET_REFRESH_VERSION_KEY = "__native_assets_refresh_version_v3__";
+
+const readNativeAssetRefreshVersion = (): string | null => {
+  try {
+    return window.localStorage.getItem(NATIVE_ASSET_REFRESH_VERSION_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const markNativeAssetsChecked = (): void => {
+  try {
+    window.sessionStorage.setItem(NATIVE_ASSET_REFRESH_SESSION_KEY, APP_BUILD_MARKER);
+  } catch {
+    // ignore sessionStorage errors
+  }
+
+  try {
+    window.localStorage.setItem(NATIVE_ASSET_REFRESH_VERSION_KEY, APP_BUILD_MARKER);
+  } catch {
+    // ignore localStorage errors
+  }
+};
 
 const ensureFreshNativeAssets = async (): Promise<boolean> => {
   if (!Capacitor.isNativePlatform()) return false;
 
   try {
-    if (window.sessionStorage.getItem(NATIVE_ASSET_REFRESH_SESSION_KEY) === "done") {
+    if (window.sessionStorage.getItem(NATIVE_ASSET_REFRESH_SESSION_KEY) === APP_BUILD_MARKER) {
       return false;
     }
   } catch {
     // ignore sessionStorage errors
   }
 
+  if (readNativeAssetRefreshVersion() === APP_BUILD_MARKER) {
+    markNativeAssetsChecked();
+    logDebug("Assets nativos ya verificados para esta version. Omitiendo limpieza.");
+    return false;
+  }
+
   logDebug("Modo nativo: limpiando Service Worker/cache antes de montar React...");
   const serviceWorkersRemoved = await unregisterAllNativeServiceWorkers();
   const cachesRemoved = await clearNativeBrowserCaches();
-
-  try {
-    window.sessionStorage.setItem(NATIVE_ASSET_REFRESH_SESSION_KEY, "done");
-  } catch {
-    // ignore sessionStorage errors
-  }
+  markNativeAssetsChecked();
 
   if (serviceWorkersRemoved > 0 || cachesRemoved > 0) {
     logDebug("Se detectaron assets cacheados. Recargando WebView para aplicar la version actual...");
@@ -100,6 +139,7 @@ startupPerfPoint("main.tsx evaluado");
 // Ocultar el loading fallback cuando React se monta
 const hideLoading = () => {
   logDebug("hideLoading llamado");
+  requestNativeSplashHide();
   const loading = document.getElementById("app-loading");
   if (loading) {
     loading.style.opacity = "0";
@@ -138,27 +178,20 @@ const initApp = async () => {
     logDebug("initApp comenzando...");
     startupPerfPoint("initApp start");
 
-    // Forzar ocultado temprano del splash nativo
-    requestNativeSplashHide();
-
     if (await ensureFreshNativeAssets()) {
       return;
     }
 
-    // Reintentos por si el plugin aun no estaba listo en el primer intento
-    if (Capacitor.isNativePlatform()) {
-      scheduleNativeSplashHideRetries([100, 500, 1000, 2000], { log: logDebug });
+    if (isElectronRuntime()) {
+      logDebug("Limpiando storage de Electron...");
+      void import("./utils/cleanElectronStorage")
+        .then(({ cleanElectronStorage }) => {
+          cleanElectronStorage();
+        })
+        .catch((error) => {
+          logDebug(`Error cargando limpieza de storage Electron: ${String(error)}`);
+        });
     }
-
-    // Clean any corrupted Electron storage before initializing
-    logDebug("Limpiando storage de Electron...");
-    void import("./utils/cleanElectronStorage")
-      .then(({ cleanElectronStorage }) => {
-        cleanElectronStorage();
-      })
-      .catch((error) => {
-        logDebug(`Error cargando limpieza de storage Electron: ${String(error)}`);
-      });
 
     // La DB offline se inicializa de forma lazy con scope de tenant al cargar el usuario.
     logDebug("DB offline: inicializacion diferida por tenant");
@@ -190,6 +223,9 @@ const initApp = async () => {
 
     const root = createRoot(rootElement);
     root.render(<App />);
+    if (Capacitor.isNativePlatform()) {
+      scheduleNativeSplashHideRetries([150, 400, 900, 1600], { log: logDebug });
+    }
     startupPerfEnd("main:react-mount");
 
     logDebug("React montado correctamente");

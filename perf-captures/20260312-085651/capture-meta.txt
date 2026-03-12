@@ -1,0 +1,5 @@
+capture_dir=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-085651
+started_at=2026-03-12T08:56:51.6624499+01:00
+device=emulator-5554
+package=com.partesdetrabajo.app
+duration=90s

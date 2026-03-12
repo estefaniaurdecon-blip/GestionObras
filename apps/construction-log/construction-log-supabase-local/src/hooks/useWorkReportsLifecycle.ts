@@ -32,17 +32,21 @@ type UseWorkReportsLifecycleParams = {
   tenantResolved: boolean;
   tenantUnavailable: boolean;
   tenantErrorMessage: string;
+  allWorkReportsLoaded: boolean;
   workReportsLength: number;
   workReportsLoading: boolean;
   syncing: boolean;
   setWorkReports: Dispatch<SetStateAction<WorkReport[]>>;
   setAllWorkReports: Dispatch<SetStateAction<WorkReport[]>>;
+  setAllWorkReportsLoaded: Dispatch<SetStateAction<boolean>>;
+  setAllWorkReportsLoading: Dispatch<SetStateAction<boolean>>;
   setWorkReportsLoading: Dispatch<SetStateAction<boolean>>;
   setSyncing: Dispatch<SetStateAction<boolean>>;
 };
 
 type UseWorkReportsLifecycleResult = {
-  loadWorkReports: () => Promise<void>;
+  loadWorkReports: (options?: { full?: boolean }) => Promise<void>;
+  ensureAllWorkReportsLoaded: () => Promise<void>;
   handleSyncNow: (options?: { silent?: boolean }) => Promise<void>;
   processScheduledAutoClones: (
     tenantId: string,
@@ -56,16 +60,21 @@ export const useWorkReportsLifecycle = ({
   tenantResolved,
   tenantUnavailable,
   tenantErrorMessage,
+  allWorkReportsLoaded,
   workReportsLength,
   workReportsLoading,
   syncing,
   setWorkReports,
   setAllWorkReports,
+  setAllWorkReportsLoaded,
+  setAllWorkReportsLoading,
   setWorkReportsLoading,
   setSyncing,
 }: UseWorkReportsLifecycleParams): UseWorkReportsLifecycleResult => {
   const BOOTSTRAP_SYNC_DELAY_MS = 12000;
   const AUTO_CLONE_INITIAL_DELAY_MS = 12000;
+  const INITIAL_WORK_REPORTS_LIMIT = 120;
+  const INITIAL_UNSYNCED_WORK_REPORTS_LIMIT = 80;
   const bootstrapSyncAttemptedRef = useRef<Record<string, boolean>>({});
 
   const processScheduledAutoClones = useCallback(
@@ -235,31 +244,75 @@ export const useWorkReportsLifecycle = ({
     return [...unsyncedOutsideRecent, ...recentReports];
   }, []);
 
-  const loadWorkReports = useCallback(async () => {
+  const sortReportsByRecency = useCallback((reports: WorkReport[]): WorkReport[] => {
+    return [...reports].sort((left, right) => right.createdAt - left.createdAt);
+  }, []);
+
+  const mergeUniqueReports = useCallback((reports: WorkReport[]): WorkReport[] => {
+    const byId = new Map<string, WorkReport>();
+    reports.forEach((report) => {
+      byId.set(report.id, report);
+    });
+    return sortReportsByRecency(Array.from(byId.values()));
+  }, [sortReportsByRecency]);
+
+  const loadWorkReports = useCallback(async (options: { full?: boolean } = {}) => {
     startupPerfStart('hook:useWorkReportsLifecycle.loadWorkReports');
+    const shouldLoadFull = options.full ?? allWorkReportsLoaded;
     if (!user || !tenantResolved || !resolvedTenantId) {
       setWorkReports([]);
       setAllWorkReports([]);
+      setAllWorkReportsLoaded(false);
+      setAllWorkReportsLoading(false);
       startupPerfEnd('hook:useWorkReportsLifecycle.loadWorkReports', 'missing-context');
       return;
     }
 
     setWorkReportsLoading(true);
+    if (shouldLoadFull) {
+      setAllWorkReportsLoading(true);
+    }
     try {
       startupPerfStart('hook:useWorkReportsLifecycle.prepareOfflineTenantScope');
       const preparedTenantId = await prepareOfflineTenantScope(user, { tenantId: resolvedTenantId });
       startupPerfEnd('hook:useWorkReportsLifecycle.prepareOfflineTenantScope');
-      await workReportsRepo.init();
+
+      if (shouldLoadFull) {
+        startupPerfStart('hook:useWorkReportsLifecycle.listWorkReports');
+        const reports = await workReportsRepo.list({
+          tenantId: preparedTenantId,
+          limit: WORK_REPORT_HISTORY_LIMIT,
+        });
+        startupPerfEnd('hook:useWorkReportsLifecycle.listWorkReports', `count=${reports.length},mode=full`);
+        const orderedReports = sortReportsByRecency(reports);
+        setAllWorkReports(orderedReports);
+        setWorkReports(buildVisibleWorkReports(orderedReports));
+        setAllWorkReportsLoaded(true);
+        return;
+      }
+
       startupPerfStart('hook:useWorkReportsLifecycle.listWorkReports');
-      const reports = await workReportsRepo.list({ tenantId: preparedTenantId, limit: WORK_REPORT_HISTORY_LIMIT });
-      startupPerfEnd('hook:useWorkReportsLifecycle.listWorkReports', `count=${reports.length}`);
-      const orderedReports = [...reports].sort((left, right) => right.createdAt - left.createdAt);
-      setAllWorkReports(orderedReports);
-      setWorkReports(buildVisibleWorkReports(orderedReports));
+      const [recentReports, unsyncedReports] = await Promise.all([
+        workReportsRepo.list({ tenantId: preparedTenantId, limit: INITIAL_WORK_REPORTS_LIMIT }),
+        workReportsRepo.listUnsynced({
+          tenantId: preparedTenantId,
+          limit: INITIAL_UNSYNCED_WORK_REPORTS_LIMIT,
+        }),
+      ]);
+      startupPerfEnd(
+        'hook:useWorkReportsLifecycle.listWorkReports',
+        `count=${recentReports.length + unsyncedReports.length},mode=partial`,
+      );
+
+      const mergedReports = mergeUniqueReports([...recentReports, ...unsyncedReports]);
+      setAllWorkReports(mergedReports);
+      setWorkReports(buildVisibleWorkReports(mergedReports));
+      setAllWorkReportsLoaded(false);
     } catch (error) {
       if (isTenantResolutionError(error)) {
         setWorkReports([]);
         setAllWorkReports([]);
+        setAllWorkReportsLoaded(false);
         return;
       }
       console.error('[WorkReports] Error loading local work reports:', error);
@@ -269,18 +322,33 @@ export const useWorkReportsLifecycle = ({
         variant: 'destructive',
       });
     } finally {
+      setAllWorkReportsLoading(false);
       setWorkReportsLoading(false);
       startupPerfEnd('hook:useWorkReportsLifecycle.loadWorkReports');
     }
   }, [
+    INITIAL_UNSYNCED_WORK_REPORTS_LIMIT,
+    INITIAL_WORK_REPORTS_LIMIT,
+    allWorkReportsLoaded,
     resolvedTenantId,
     setAllWorkReports,
+    setAllWorkReportsLoaded,
+    setAllWorkReportsLoading,
     setWorkReports,
     setWorkReportsLoading,
     tenantResolved,
     user,
     buildVisibleWorkReports,
+    mergeUniqueReports,
+    sortReportsByRecency,
   ]);
+
+  const ensureAllWorkReportsLoaded = useCallback(async () => {
+    if (allWorkReportsLoaded || !user || !tenantResolved || !resolvedTenantId) {
+      return;
+    }
+    await loadWorkReports({ full: true });
+  }, [allWorkReportsLoaded, loadWorkReports, resolvedTenantId, tenantResolved, user]);
 
   const handleSyncNow = useCallback(async (options: { silent?: boolean } = {}) => {
     startupPerfStart('hook:useWorkReportsLifecycle.handleSyncNow');
@@ -438,13 +506,7 @@ export const useWorkReportsLifecycle = ({
         const preparedTenantId = await prepareOfflineTenantScope(user, { tenantId: resolvedTenantId });
         const result = await processScheduledAutoClones(preparedTenantId, { notify: true });
         if (!cancelled && result.created > 0) {
-          const refreshedReports = await workReportsRepo.list({
-            tenantId: preparedTenantId,
-            limit: WORK_REPORT_HISTORY_LIMIT,
-          });
-          const orderedReports = [...refreshedReports].sort((left, right) => right.createdAt - left.createdAt);
-          setAllWorkReports(orderedReports);
-          setWorkReports(buildVisibleWorkReports(orderedReports));
+          await loadWorkReports({ full: allWorkReportsLoaded });
         }
       } catch (error) {
         if (isTenantResolutionError(error)) return;
@@ -479,17 +541,17 @@ export const useWorkReportsLifecycle = ({
     };
   }, [
     AUTO_CLONE_INITIAL_DELAY_MS,
+    allWorkReportsLoaded,
+    loadWorkReports,
     processScheduledAutoClones,
     resolvedTenantId,
-    setAllWorkReports,
-    setWorkReports,
     tenantResolved,
     user,
-    buildVisibleWorkReports,
   ]);
 
   return {
     loadWorkReports,
+    ensureAllWorkReportsLoaded,
     handleSyncNow,
     processScheduledAutoClones,
   };

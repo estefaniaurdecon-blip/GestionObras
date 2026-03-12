@@ -9,6 +9,8 @@ export const useIndexUIState = () => {
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [workReports, setWorkReports] = useState<WorkReport[]>([]);
   const [allWorkReports, setAllWorkReports] = useState<WorkReport[]>([]);
+  const [allWorkReportsLoaded, setAllWorkReportsLoaded] = useState(false);
+  const [allWorkReportsLoading, setAllWorkReportsLoading] = useState(false);
   const [workReportsLoading, setWorkReportsLoading] = useState(false);
   const [generatePanelOpen, setGeneratePanelOpen] = useState(false);
   const [generatePanelSaving, setGeneratePanelSaving] = useState(false);
@@ -32,6 +34,10 @@ export const useIndexUIState = () => {
     setWorkReports,
     allWorkReports,
     setAllWorkReports,
+    allWorkReportsLoaded,
+    setAllWorkReportsLoaded,
+    allWorkReportsLoading,
+    setAllWorkReportsLoading,
     workReportsLoading,
     setWorkReportsLoading,
     generatePanelOpen,

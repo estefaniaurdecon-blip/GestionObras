@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import type { WorkReport } from '@/offline-db/types';
 import {
   asRecord,
@@ -39,50 +39,60 @@ export const useHistoryFilters = (allWorkReports: WorkReport[]): UseHistoryFilte
   const [historyDateFilter, setHistoryDateFilter] = useState('');
   const [historyDatePickerOpen, setHistoryDatePickerOpen] = useState(false);
   const [historyEnabledFilters, setHistoryEnabledFilters] = useState<HistoryFilterKey[]>([]);
+  const deferredAllWorkReports = useDeferredValue(allWorkReports);
+  const deferredEnabledFilters = useDeferredValue(historyEnabledFilters);
+  const deferredForemanFilter = useDeferredValue(historyForemanFilter);
+  const deferredWeekFilter = useDeferredValue(historyWeekFilter);
+  const deferredMonthFilter = useDeferredValue(historyMonthFilter);
+  const deferredWorkNameFilter = useDeferredValue(historyWorkNameFilter);
+  const deferredDateFilter = useDeferredValue(historyDateFilter);
+
+  const sortedHistoryReports = useMemo(
+    () => [...deferredAllWorkReports].sort((left, right) => right.createdAt - left.createdAt),
+    [deferredAllWorkReports],
+  );
 
   const filteredHistoryReports = useMemo(() => {
-    const enabledFilters = new Set(historyEnabledFilters);
-    const normalizedForeman = normalizeComparableText(historyForemanFilter);
-    const normalizedWorkName = normalizeComparableText(historyWorkNameFilter);
-    const normalizedWeek = historyWeekFilter.trim();
-    const normalizedMonth = historyMonthFilter.trim();
-    const normalizedDate = historyDateFilter.trim();
+    const enabledFilters = new Set(deferredEnabledFilters);
+    const normalizedForeman = normalizeComparableText(deferredForemanFilter);
+    const normalizedWorkName = normalizeComparableText(deferredWorkNameFilter);
+    const normalizedWeek = deferredWeekFilter.trim();
+    const normalizedMonth = deferredMonthFilter.trim();
+    const normalizedDate = deferredDateFilter.trim();
     const shouldFilterByForeman = enabledFilters.has('foreman') && normalizedForeman.length > 0;
     const shouldFilterByWeek = enabledFilters.has('weeks') && normalizedWeek.length > 0;
     const shouldFilterByMonth = enabledFilters.has('months') && normalizedMonth.length > 0;
     const shouldFilterByWorkName = enabledFilters.has('workName') && normalizedWorkName.length > 0;
     const shouldFilterByDate = enabledFilters.has('date') && normalizedDate.length > 0;
 
-    return [...allWorkReports]
-      .sort((left, right) => right.createdAt - left.createdAt)
-      .filter((report) => {
-        const payload = asRecord(report.payload);
-        const foremanName = normalizeComparableText(
-          payloadText(payload, 'mainForeman') ??
-            payloadText(payload, 'foreman') ??
-            payloadText(payload, 'siteManager') ??
-            '',
-        );
-        const workName = normalizeComparableText(payloadText(payload, 'workName') ?? report.title ?? '');
-        const reportDate = report.date.trim();
-        const reportWeek = getIsoWeekKey(reportDate);
-        const reportMonth = reportDate.slice(0, 7);
+    return sortedHistoryReports.filter((report) => {
+      const payload = asRecord(report.payload);
+      const foremanName = normalizeComparableText(
+        payloadText(payload, 'mainForeman') ??
+          payloadText(payload, 'foreman') ??
+          payloadText(payload, 'siteManager') ??
+          '',
+      );
+      const workName = normalizeComparableText(payloadText(payload, 'workName') ?? report.title ?? '');
+      const reportDate = report.date.trim();
+      const reportWeek = getIsoWeekKey(reportDate);
+      const reportMonth = reportDate.slice(0, 7);
 
-        if (shouldFilterByForeman && !foremanName.includes(normalizedForeman)) return false;
-        if (shouldFilterByWeek && reportWeek !== normalizedWeek) return false;
-        if (shouldFilterByMonth && reportMonth !== normalizedMonth) return false;
-        if (shouldFilterByWorkName && !workName.includes(normalizedWorkName)) return false;
-        if (shouldFilterByDate && reportDate !== normalizedDate) return false;
-        return true;
-      });
+      if (shouldFilterByForeman && !foremanName.includes(normalizedForeman)) return false;
+      if (shouldFilterByWeek && reportWeek !== normalizedWeek) return false;
+      if (shouldFilterByMonth && reportMonth !== normalizedMonth) return false;
+      if (shouldFilterByWorkName && !workName.includes(normalizedWorkName)) return false;
+      if (shouldFilterByDate && reportDate !== normalizedDate) return false;
+      return true;
+    });
   }, [
-    allWorkReports,
-    historyEnabledFilters,
-    historyDateFilter,
-    historyForemanFilter,
-    historyMonthFilter,
-    historyWeekFilter,
-    historyWorkNameFilter,
+    deferredDateFilter,
+    deferredEnabledFilters,
+    deferredForemanFilter,
+    deferredMonthFilter,
+    deferredWeekFilter,
+    deferredWorkNameFilter,
+    sortedHistoryReports,
   ]);
 
   const historySelectedFiltersCount = historyEnabledFilters.length;

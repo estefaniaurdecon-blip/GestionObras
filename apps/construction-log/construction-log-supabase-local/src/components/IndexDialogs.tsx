@@ -45,6 +45,8 @@ type MetricsDialogConfig = {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
   workReports: WorkReport[];
+  allWorkReportsLoaded: boolean;
+  allWorkReportsLoading: boolean;
 };
 
 type AccessPersonalDialogConfig = {
@@ -76,6 +78,8 @@ type HistoryDialogConfig = {
   setHistoryDatePickerOpen: Dispatch<SetStateAction<boolean>>;
   selectedHistoryDate: Date | null;
   allWorkReports: WorkReport[];
+  allWorkReportsLoaded: boolean;
+  allWorkReportsLoading: boolean;
   filteredHistoryReports: WorkReport[];
   historyAppliedFiltersCount: number;
   clearHistoryFilters: () => void;
@@ -215,7 +219,13 @@ export const IndexDialogs = ({
           <DialogHeader>
             <DialogTitle>Resumen en tiempo real</DialogTitle>
           </DialogHeader>
-          <DashboardSummaryPanel workReports={metrics.workReports} />
+          {metrics.allWorkReportsLoading || !metrics.allWorkReportsLoaded ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Cargando historial completo...
+            </div>
+          ) : (
+            <DashboardSummaryPanel workReports={metrics.workReports} />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -239,6 +249,8 @@ export const IndexDialogs = ({
         setHistoryDatePickerOpen={history.setHistoryDatePickerOpen}
         selectedHistoryDate={history.selectedHistoryDate}
         allWorkReports={history.allWorkReports}
+        allWorkReportsLoaded={history.allWorkReportsLoaded}
+        allWorkReportsLoading={history.allWorkReportsLoading}
         filteredHistoryReports={history.filteredHistoryReports}
         historyAppliedFiltersCount={history.historyAppliedFiltersCount}
         clearHistoryFilters={history.clearHistoryFilters}

@@ -1,5 +1,4 @@
-﻿import { Capacitor } from "@capacitor/core";
-import { hideNativeSplashOnce, scheduleNativeSplashHideRetries } from "./utils/nativeSplash";
+import { Capacitor } from "@capacitor/core";
 
 const now = () => new Date().toISOString().replace("T", " ").replace("Z", "");
 
@@ -22,13 +21,6 @@ const setBootStatus = (text: string) => {
 };
 
 appendBootLog(`boot.ts cargado | platform=${Capacitor.getPlatform()} | isNative=${Capacitor.isNativePlatform()}`);
-setBootStatus("Ocultando splash nativo...");
-
-void hideNativeSplashOnce();
-if (Capacitor.isNativePlatform()) {
-  scheduleNativeSplashHideRetries([60, 200, 600, 1200]);
-}
-
 setBootStatus("Cargando aplicacion...");
 appendBootLog("Importando main.tsx...");
 
@@ -46,6 +38,6 @@ import("./main")
       new ErrorEvent("error", {
         message: msg,
         filename: "src/boot.ts",
-      })
+      }),
     );
   });
