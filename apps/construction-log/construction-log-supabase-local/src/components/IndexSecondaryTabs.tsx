@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EconomicsOverviewPanel } from '@/components/api/EconomicsOverviewPanel';
 import { CompanyPortfolio } from '@/components/CompanyPortfolio';
-import { ProjectsPanel } from '@/components/ProjectsPanel';
+import { WorkManagement } from '@/components/WorkManagement';
 import { startupPerfPoint } from '@/utils/startupPerf';
 import { HelpCircle } from 'lucide-react';
 
@@ -46,12 +46,7 @@ export const IndexSecondaryTabs = ({
           </TabsList>
 
           <TabsContent value="projects" className="m-0">
-            <ProjectsPanel
-              title="Obras"
-              description="Datos cargados desde la API (`/api/v1/erp/projects`)."
-              createButtonLabel="Añadir Obras"
-              emptyMessage="No hay obras registradas."
-            />
+            <WorkManagement />
           </TabsContent>
 
           <TabsContent value="portfolio" className="m-0">

@@ -1,0 +1,15 @@
+capture_dir=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-112550
+started_at=2026-03-12T11:25:50.7067635+01:00
+ended_at=2026-03-12T11:26:12.5508776+01:00
+device=emulator-5554
+package=com.partesdetrabajo.app
+duration=20s
+trace_file=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-112550\emulator-5554-perfetto-trace.bin
+logcat_file=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-112550\emulator-5554-logcat.txt
+mode=controlled-cold-start-foreground-device-perfetto
+pid_start=7456
+pid_end=7456
+same_pid=True
+top_window_excerpt<<EOF
+    WindowStateAnimator{502342d com.partesdetrabajo.app/com.partesdetrabajo.app.MainActivity}:
+EOF

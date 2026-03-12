@@ -28,6 +28,25 @@ import {
   listSavedEconomicReports,
 } from '@/integrations/api/client';
 import { mapApiWorkReportToLegacyWorkReport } from '@/services/workReportContract';
+import type { ApiSavedEconomicReport, EconomicWorkGroup, EconomicWorkGroupItem, EconomicMachineryGroup, EconomicMachineryGroupItem, EconomicMaterialGroup, EconomicMaterialGroupItem, EconomicSubcontractGroup, EconomicSubcontractGroupItem } from '@/integrations/api/modules/savedEconomicReports';
+import type { ApiRentalMachinery } from '@/integrations/api/modules/rentalMachinery';
+
+/** Rental machinery item enriched with computed fields for the analysis view */
+interface RentalAnalysisItem extends ApiRentalMachinery {
+  work_id: number;
+  delivery_date: string;
+  removal_date?: string | null;
+  daily_rate: number;
+  type: string;
+  totalDays?: number;
+  total?: number;
+  deliveryDate?: string;
+  removalDate?: string | null;
+  dailyRate?: number;
+  machineNumber?: string;
+  reportId?: string;
+  groupId?: string;
+}
 
 interface AdvancedReportsProps {
   reports: WorkReport[];
@@ -49,10 +68,10 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
   const [endDate, setEndDate] = useState<string>('');
   const [availableWorks, setAvailableWorks] = useState<Array<{id: string, number: string, name: string}>>([]);
   const [realtimeReports, setRealtimeReports] = useState<WorkReport[]>(initialReports);
-  const [editingRentalItem, setEditingRentalItem] = useState<{reportId: string, groupId: string, item: any} | null>(null);
+  const [editingRentalItem, setEditingRentalItem] = useState<{reportId: string, groupId: string, item: RentalAnalysisItem} | null>(null);
   const [editedValues, setEditedValues] = useState<{deliveryDate?: string, removalDate?: string, dailyRate?: number}>({});
-  const [economicReports, setEconomicReports] = useState<any[]>([]);
-  const [rentalMachinery, setRentalMachinery] = useState<any[]>([]);
+  const [economicReports, setEconomicReports] = useState<ApiSavedEconomicReport[]>([]);
+  const [rentalMachinery, setRentalMachinery] = useState<RentalAnalysisItem[]>([]);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   // Cargar partes de trabajo
@@ -121,7 +140,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
       try {
         const data = await listRentalMachinery();
-        setRentalMachinery(data.map(m => ({
+        setRentalMachinery(data.map((m): RentalAnalysisItem => ({
           ...m,
           work_id: m.project_id,
           delivery_date: m.start_date,
@@ -250,21 +269,21 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
   // Análisis de maquinaria de alquiler desde la tabla work_rental_machinery
   const rentalMachineryAnalysis = useMemo(() => {
-    const analysis: { 
-      [provider: string]: { 
-        [work: string]: { 
-          items: any[];
+    const analysis: {
+      [provider: string]: {
+        [work: string]: {
+          items: RentalAnalysisItem[];
           totalDays: number;
-        } 
-      } 
+        }
+      }
     } = {};
     
     // Obtener work_ids de los reportes filtrados
     const workIds = new Set(filteredReports.map(r => r.workId).filter(Boolean));
-    
+
     // Filtrar maquinaria de alquiler por las obras de los reportes
-    const relevantRental = rentalMachinery.filter(rm => 
-      rm.work_id && workIds.has(rm.work_id)
+    const relevantRental = rentalMachinery.filter(rm =>
+      rm.work_id && workIds.has(String(rm.work_id))
     );
     
     relevantRental.forEach(item => {
@@ -272,7 +291,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!provider) return;
       
       // Buscar el nombre de la obra
-      const report = filteredReports.find(r => r.workId === item.work_id);
+      const report = filteredReports.find(r => r.workId === String(item.work_id));
       const work = report ? `${report.workNumber} - ${report.workName}` : 'Obra desconocida';
       
       // Calcular días
@@ -360,11 +379,11 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
       // Mano de obra
       if (report.work_groups) {
-        report.work_groups.forEach((group: any) => {
+        report.work_groups.forEach((group: EconomicWorkGroup) => {
           let groupTotal = 0;
           if (group.items) {
-            group.items.forEach((item: any) => {
-              const cost = (item.hours || 0) * (item.hourlyRate || 0);
+            group.items.forEach((item: EconomicWorkGroupItem) => {
+              const cost = (Number(item.hours) || 0) * (Number(item.hourlyRate) || 0);
               groupTotal += cost;
               costsByCategory.manoDeObra += cost;
             });
@@ -378,11 +397,11 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
       // Maquinaria
       if (report.machinery_groups) {
-        report.machinery_groups.forEach((group: any) => {
+        report.machinery_groups.forEach((group: EconomicMachineryGroup) => {
           let groupTotal = 0;
           if (group.items) {
-            group.items.forEach((item: any) => {
-              const cost = (item.hours || 0) * (item.hourlyRate || 0);
+            group.items.forEach((item: EconomicMachineryGroupItem) => {
+              const cost = (Number(item.hours) || 0) * (Number(item.hourlyRate) || 0);
               groupTotal += cost;
               costsByCategory.maquinaria += cost;
             });
@@ -396,11 +415,11 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
       // Materiales
       if (report.material_groups) {
-        report.material_groups.forEach((group: any) => {
+        report.material_groups.forEach((group: EconomicMaterialGroup) => {
           let groupTotal = 0;
           if (group.items) {
-            group.items.forEach((item: any) => {
-              const cost = (item.quantity || 0) * (item.unitPrice || 0);
+            group.items.forEach((item: EconomicMaterialGroupItem) => {
+              const cost = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
               groupTotal += cost;
               costsByCategory.materiales += cost;
             });
@@ -414,15 +433,15 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
 
       // Subcontratas
       if (report.subcontract_groups) {
-        report.subcontract_groups.forEach((group: any) => {
+        report.subcontract_groups.forEach((group: EconomicSubcontractGroup) => {
           let groupTotal = 0;
           if (group.items) {
-            group.items.forEach((item: any) => {
+            group.items.forEach((item: EconomicSubcontractGroupItem) => {
               let cost = 0;
               if (item.unitType === 'hora') {
-                cost = (item.workers || 0) * (item.hours || 0) * (item.hourlyRate || 0);
+                cost = (Number(item.workers) || 0) * (Number(item.hours) || 0) * (Number(item.hourlyRate) || 0);
               } else {
-                cost = (item.quantity || 0) * (item.unitPrice || 0);
+                cost = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
               }
               groupTotal += cost;
               costsByCategory.subcontratas += cost;
@@ -436,13 +455,13 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       }
 
       // Alquiler de maquinaria desde work_rental_machinery
-      const workIds = new Set(filteredEconomic.map((r: any) => {
+      const workIds = new Set(filteredEconomic.map((r) => {
         const report = availableWorks.find(w => w.number === r.work_number);
         return report?.id;
       }).filter(Boolean));
-      
-      const relevantRental = rentalMachinery.filter(rm => 
-        rm.work_id && workIds.has(rm.work_id)
+
+      const relevantRental = rentalMachinery.filter(rm =>
+        rm.work_id && workIds.has(String(rm.work_id))
       );
       
       relevantRental.forEach(item => {
@@ -807,8 +826,8 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                                           size="sm"
                                           onClick={() => {
                                             setEditingRentalItem({ 
-                                              reportId: (item as any).reportId, 
-                                              groupId: (item as any).groupId, 
+                                              reportId: item.reportId ?? '',
+                                              groupId: item.groupId ?? '',
                                               item 
                                             });
                                             setEditedValues({
@@ -945,7 +964,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                                 </Pie>
                                 <Tooltip
                                   cursor={false}
-                                  formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
+                                  formatter={(value: number | string) => `${Number(value).toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                                 />
                               </PieChart>
                             </ResponsiveContainer>
@@ -985,7 +1004,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                             <YAxis fontSize={11} />
                             <Tooltip
                               cursor={false}
-                              formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
+                              formatter={(value: number | string) => `${Number(value).toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                             />
                             <Legend />
                             <Line type="monotone" dataKey="manoDeObra" stroke="hsl(var(--chart-1))" name="Mano de Obra" strokeWidth={2} />
@@ -1012,7 +1031,7 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
                             <YAxis dataKey="work" type="category" width={200} fontSize={10} />
                             <Tooltip
                               cursor={false}
-                              formatter={(value: any) => `${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
+                              formatter={(value: number | string) => `${Number(value).toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`}
                             />
                             <Bar dataKey="cost" fill="hsl(var(--primary))" name="Costo Total" />
                           </BarChart>

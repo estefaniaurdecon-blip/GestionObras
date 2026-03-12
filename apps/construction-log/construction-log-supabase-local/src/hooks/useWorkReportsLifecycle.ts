@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 import type { ApiUser } from '@/integrations/api/client';
+import { yieldNativeStartupWork } from '@/offline-db/db';
 import {
   prepareOfflineTenantScope,
   isTenantResolutionError,
@@ -78,6 +79,27 @@ export const useWorkReportsLifecycle = ({
   const INITIAL_WORK_REPORTS_LIMIT = 120;
   const INITIAL_UNSYNCED_WORK_REPORTS_LIMIT = 80;
   const bootstrapSyncAttemptedRef = useRef<Record<string, boolean>>({});
+  const eagerHydrationTenantRef = useRef<string | null>(null);
+
+  // Eagerly hydrate the offline DB as soon as tenant resolves,
+  // well before INITIAL_OFFLINE_LOAD_DELAY_MS fires.
+  // By the time loadWorkReports runs, offlineDb.init() will already be resolved.
+  useEffect(() => {
+    if (!user || !tenantResolved || !resolvedTenantId) return;
+    if (eagerHydrationTenantRef.current === resolvedTenantId) return;
+    eagerHydrationTenantRef.current = resolvedTenantId;
+
+    startupPerfStart('hook:useWorkReportsLifecycle.eagerHydration');
+    void prepareOfflineTenantScope(user, { tenantId: resolvedTenantId })
+      .then(() => {
+        startupPerfEnd('hook:useWorkReportsLifecycle.eagerHydration');
+      })
+      .catch(() => {
+        startupPerfEnd('hook:useWorkReportsLifecycle.eagerHydration', 'error');
+        // Reset so next attempt retries
+        eagerHydrationTenantRef.current = null;
+      });
+  }, [user, tenantResolved, resolvedTenantId]);
 
   const processScheduledAutoClones = useCallback(
     async (
@@ -293,14 +315,19 @@ export const useWorkReportsLifecycle = ({
         return;
       }
 
+      // Sequential with yield between queries to avoid back-to-back main
+      // thread blocks. The mutex already serializes them, so Promise.all
+      // gave no parallelism; yielding between lets the browser paint.
       startupPerfStart('hook:useWorkReportsLifecycle.listWorkReports');
-      const [recentReports, unsyncedReports] = await Promise.all([
-        workReportsRepo.list({ tenantId: preparedTenantId, limit: INITIAL_WORK_REPORTS_LIMIT }),
-        workReportsRepo.listUnsynced({
-          tenantId: preparedTenantId,
-          limit: INITIAL_UNSYNCED_WORK_REPORTS_LIMIT,
-        }),
-      ]);
+      const recentReports = await workReportsRepo.list({
+        tenantId: preparedTenantId,
+        limit: INITIAL_WORK_REPORTS_LIMIT,
+      });
+      await yieldNativeStartupWork();
+      const unsyncedReports = await workReportsRepo.listUnsynced({
+        tenantId: preparedTenantId,
+        limit: INITIAL_UNSYNCED_WORK_REPORTS_LIMIT,
+      });
       startupPerfEnd(
         'hook:useWorkReportsLifecycle.listWorkReports',
         `count=${recentReports.length + unsyncedReports.length},mode=partial`,

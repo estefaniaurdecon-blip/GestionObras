@@ -28,6 +28,32 @@ interface ContentMetrics {
   lineCount: number;
 }
 
+/** Minimal shape for work report metric estimation */
+interface WorkReportLike {
+  workGroups?: { items?: unknown[] }[];
+  machineryGroups?: { items?: unknown[] }[];
+  materialGroups?: { items?: unknown[] }[];
+  subcontractGroups?: { items?: { workerDetails?: unknown[] }[] }[];
+  observations?: string;
+  foremanEntries?: unknown[];
+}
+
+/** Minimal shape for economic report metric estimation */
+interface EconomicReportLike {
+  work_groups?: { items?: unknown[] }[];
+  machinery_groups?: { items?: unknown[] }[];
+  material_groups?: { items?: unknown[] }[];
+  subcontract_groups?: { items?: unknown[] }[];
+  rental_machinery_groups?: { items?: unknown[] }[];
+}
+
+/** Minimal shape for access control report metric estimation */
+interface AccessControlReportLike {
+  personalEntries?: { company?: string }[];
+  machineryEntries?: { company?: string }[];
+  observations?: string;
+}
+
 /**
  * Calculate optimal spacing multiplier based on content distribution
  */
@@ -112,49 +138,49 @@ export const calculateOptimalSpacing = (
 /**
  * Pre-calculate content metrics for a work report PDF
  */
-export const estimateWorkReportMetrics = (report: any): ContentMetrics => {
+export const estimateWorkReportMetrics = (report: WorkReportLike): ContentMetrics => {
   let contentHeight = 60; // Header
   let sectionCount = 0;
   let tableCount = 0;
   let lineCount = 0;
-  
+
   // Work groups
-  if (report.workGroups?.length > 0) {
+  if (report.workGroups?.length) {
     sectionCount++;
-    report.workGroups.forEach((group: any) => {
+    report.workGroups.forEach((group) => {
       lineCount++;
       tableCount++;
       contentHeight += 40 + (group.items?.length || 0) * 10;
     });
   }
-  
+
   // Machinery groups
-  if (report.machineryGroups?.length > 0) {
+  if (report.machineryGroups?.length) {
     sectionCount++;
-    report.machineryGroups.forEach((group: any) => {
+    report.machineryGroups.forEach((group) => {
       lineCount++;
       tableCount++;
       contentHeight += 40 + (group.items?.length || 0) * 10;
     });
   }
-  
+
   // Material groups
-  if (report.materialGroups?.length > 0) {
+  if (report.materialGroups?.length) {
     sectionCount++;
-    report.materialGroups.forEach((group: any) => {
+    report.materialGroups.forEach((group) => {
       lineCount += 2;
       tableCount++;
       contentHeight += 50 + (group.items?.length || 0) * 10;
     });
   }
-  
+
   // Subcontract groups
-  if (report.subcontractGroups?.length > 0) {
+  if (report.subcontractGroups?.length) {
     sectionCount++;
-    report.subcontractGroups.forEach((group: any) => {
+    report.subcontractGroups.forEach((group) => {
       lineCount++;
       tableCount++;
-      const workerDetails = group.items?.flatMap((i: any) => i.workerDetails || []) || [];
+      const workerDetails = group.items?.flatMap((i) => i.workerDetails || []) || [];
       contentHeight += 50 + (group.items?.length || 0) * 10 + workerDetails.length * 8;
     });
   }
@@ -187,56 +213,56 @@ export const estimateWorkReportMetrics = (report: any): ContentMetrics => {
 /**
  * Pre-calculate content metrics for an economic report PDF
  */
-export const estimateEconomicReportMetrics = (report: any): ContentMetrics => {
+export const estimateEconomicReportMetrics = (report: EconomicReportLike): ContentMetrics => {
   let contentHeight = 80; // Header and basic info
   let sectionCount = 0;
   let tableCount = 0;
   let lineCount = 4; // Basic info lines
-  
+
   // Work groups
-  if (report.work_groups?.length > 0) {
+  if (report.work_groups?.length) {
     sectionCount++;
-    report.work_groups.forEach((group: any) => {
+    report.work_groups.forEach((group) => {
       lineCount += 2;
       tableCount++;
       contentHeight += 50 + (group.items?.length || 0) * 12;
     });
   }
-  
+
   // Machinery groups
-  if (report.machinery_groups?.length > 0) {
+  if (report.machinery_groups?.length) {
     sectionCount++;
-    report.machinery_groups.forEach((group: any) => {
+    report.machinery_groups.forEach((group) => {
       lineCount += 2;
       tableCount++;
       contentHeight += 50 + (group.items?.length || 0) * 12;
     });
   }
-  
+
   // Material groups
-  if (report.material_groups?.length > 0) {
+  if (report.material_groups?.length) {
     sectionCount++;
-    report.material_groups.forEach((group: any) => {
+    report.material_groups.forEach((group) => {
       lineCount += 3;
       tableCount++;
       contentHeight += 60 + (group.items?.length || 0) * 12;
     });
   }
-  
+
   // Subcontract groups
-  if (report.subcontract_groups?.length > 0) {
+  if (report.subcontract_groups?.length) {
     sectionCount++;
-    report.subcontract_groups.forEach((group: any) => {
+    report.subcontract_groups.forEach((group) => {
       lineCount += 2;
       tableCount++;
       contentHeight += 50 + (group.items?.length || 0) * 12;
     });
   }
-  
+
   // Rental machinery groups
-  if (report.rental_machinery_groups?.length > 0) {
+  if (report.rental_machinery_groups?.length) {
     sectionCount++;
-    report.rental_machinery_groups.forEach((group: any) => {
+    report.rental_machinery_groups.forEach((group) => {
       tableCount++;
       contentHeight += 50 + (group.items?.length || 0) * 15;
     });
@@ -256,28 +282,28 @@ export const estimateEconomicReportMetrics = (report: any): ContentMetrics => {
 /**
  * Pre-calculate content metrics for access control PDF
  */
-export const estimateAccessControlMetrics = (report: any): ContentMetrics => {
+export const estimateAccessControlMetrics = (report: AccessControlReportLike): ContentMetrics => {
   let contentHeight = 100; // Header and report info
   let sectionCount = 0;
   let tableCount = 0;
   let lineCount = 3;
-  
+
   const personalEntries = Array.isArray(report.personalEntries) ? report.personalEntries : [];
   const machineryEntries = Array.isArray(report.machineryEntries) ? report.machineryEntries : [];
-  
+
   // Personal section
   if (personalEntries.length > 0) {
     sectionCount++;
-    const companies = new Set(personalEntries.map((e: any) => e.company || 'Sin empresa'));
+    const companies = new Set(personalEntries.map((e) => e.company || 'Sin empresa'));
     tableCount += companies.size;
     lineCount += companies.size * 2;
     contentHeight += 30 + personalEntries.length * 12;
   }
-  
+
   // Machinery section
   if (machineryEntries.length > 0) {
     sectionCount++;
-    const companies = new Set(machineryEntries.map((e: any) => e.company || 'Sin empresa'));
+    const companies = new Set(machineryEntries.map((e) => e.company || 'Sin empresa'));
     tableCount += companies.size;
     lineCount += companies.size * 2;
     contentHeight += 30 + machineryEntries.length * 12;

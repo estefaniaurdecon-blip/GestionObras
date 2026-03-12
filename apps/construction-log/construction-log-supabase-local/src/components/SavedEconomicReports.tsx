@@ -18,10 +18,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Capacitor } from '@capacitor/core';
 import { generateEconomicReportPDF } from '@/utils/economicReportPdfGenerator';
 import {
   listSavedEconomicReports,
@@ -107,14 +106,14 @@ export const SavedEconomicReports = () => {
   const exportIndividualToExcel = async (report: SavedEconomicReport) => {
     const XLSX = await import('xlsx-js-style');
     const wb = XLSX.utils.book_new();
-    const fmtMoney = (n: any) => {
+    const fmtMoney = (n: number | string | null | undefined) => {
       if (n == null || n === '' || isNaN(Number(n))) return '0.00';
       return Number(n).toFixed(2);
     };
 
     // Flatten the data structure
-    const workItems = (report.work_groups || []).flatMap((group: any) =>
-      (group.items || []).map((item: any) => ({
+    const workItems = (report.work_groups || []).flatMap((group) =>
+      (group.items || []).map((item) => ({
         company: group.company || group.employer || '-',
         name: item.name || item.worker || item.employee || item.personName || '-',
         category: item.category || item.role || '-',
@@ -124,8 +123,8 @@ export const SavedEconomicReports = () => {
       }))
     );
 
-    const machineryItems = (report.machinery_groups || []).flatMap((group: any) =>
-      (group.items || []).map((item: any) => ({
+    const machineryItems = (report.machinery_groups || []).flatMap((group) =>
+      (group.items || []).map((item) => ({
         company: group.company || '-',
         type: item.type || item.name || '-',
         activity: item.activity || '-',
@@ -135,10 +134,10 @@ export const SavedEconomicReports = () => {
       }))
     );
 
-    const rentalMachineryItems = (report.rental_machinery_groups || []).flatMap((group: any) =>
-      (group.items || []).map((item: any) => {
+    const rentalMachineryItems = (report.rental_machinery_groups || []).flatMap((group) =>
+      (group.items || []).map((item) => {
         const fuelTotal = Array.isArray(item.fuelRefills)
-          ? item.fuelRefills.reduce((s: number, r: any) => s + Number(r.total || 0), 0)
+          ? item.fuelRefills.reduce((s, r) => s + Number(r.total || 0), 0)
           : Number(item.fuelRefillsTotal || 0);
         return {
           company: group.company || '-',
@@ -152,8 +151,8 @@ export const SavedEconomicReports = () => {
       })
     );
 
-    const materialItems = (report.material_groups || []).flatMap((group: any) =>
-      (group.items || []).map((item: any) => ({
+    const materialItems = (report.material_groups || []).flatMap((group) =>
+      (group.items || []).map((item) => ({
         supplier: group.supplier || item.supplier || '-',
         description: item.description || item.name || item.material || '-',
         quantity: Number(item.quantity) || 0,
@@ -163,7 +162,7 @@ export const SavedEconomicReports = () => {
       }))
     );
 
-    const subcontractItems = (report.subcontract_groups || []).map((item: any) => ({
+    const subcontractItems = (report.subcontract_groups || []).map((item) => ({
       company: item.company || '-',
       description: item.description || '-',
       amount: Number(item.amount ?? 0),
@@ -177,7 +176,7 @@ export const SavedEconomicReports = () => {
     const subcontractTotal = subcontractItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
     // RESUMEN SHEET
-    const summaryData: any[][] = [
+    const summaryData: (string | number)[][] = [
       ['PARTE ECONÓMICO DE TRABAJO'],
       [],
       ['Obra:', report.work_name],
@@ -203,7 +202,7 @@ export const SavedEconomicReports = () => {
 
     // MANO DE OBRA SHEET
     if (workItems.length > 0) {
-      const workData: any[][] = [
+      const workData: (string | number)[][] = [
         ['MANO DE OBRA'],
         [],
         ['Empresa', 'Nombre', 'Categoría', 'Horas', 'Precio/h (€)', 'Total (€)'],
@@ -226,7 +225,7 @@ export const SavedEconomicReports = () => {
 
     // MAQUINARIA DE SUBCONTRATAS SHEET
     if (machineryItems.length > 0) {
-      const machineryData: any[][] = [
+      const machineryData: (string | number)[][] = [
         ['MAQUINARIA DE SUBCONTRATAS'],
         [],
         ['Empresa', 'Tipo', 'Actividad', 'Horas', 'Precio/h (€)', 'Total (€)'],
@@ -249,7 +248,7 @@ export const SavedEconomicReports = () => {
 
     // MAQUINARIA ALQUILADA SHEET
     if (rentalMachineryItems.length > 0) {
-      const rentalData: any[][] = [
+      const rentalData: (string | number)[][] = [
         ['MAQUINARIA ALQUILADA'],
         [],
         ['Empresa', 'Tipo', 'Actividad', 'Horas', 'Precio/h (€)', 'Repostajes (€)', 'Total (€)'],
@@ -273,7 +272,7 @@ export const SavedEconomicReports = () => {
 
     // MATERIALES SHEET
     if (materialItems.length > 0) {
-      const materialData: any[][] = [
+      const materialData: (string | number)[][] = [
         ['MATERIALES'],
         [],
         ['Proveedor', 'Descripción', 'Cantidad', 'Unidad', 'Precio/u (€)', 'Total (€)'],
@@ -296,7 +295,7 @@ export const SavedEconomicReports = () => {
 
     // SUBCONTRATAS SHEET
     if (subcontractItems.length > 0) {
-      const subcontractData: any[][] = [
+      const subcontractData: (string | number)[][] = [
         ['SUBCONTRATAS'],
         [],
         ['Empresa', 'Descripción', 'Importe (€)'],
@@ -317,7 +316,7 @@ export const SavedEconomicReports = () => {
     const fileName = `Parte_Económico_${report.work_number}_${format(parseISO(report.date), 'dd-MM-yyyy')}.xlsx`;
     
     // Detectar si es Capacitor (Android/iOS)
-    if ((window as any).Capacitor?.isNativePlatform()) {
+    if (Capacitor.isNativePlatform()) {
       // Para Android/iOS, usar Capacitor Filesystem
       import('@/utils/nativeFile').then(async ({ blobToBase64, saveBase64File }) => {
         const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
@@ -358,11 +357,11 @@ export const SavedEconomicReports = () => {
       });
 
       loadReports();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting report:', error);
       toast({
         title: "Error",
-        description: error.message || "No se pudo eliminar el parte.",
+        description: error instanceof Error ? error.message : "No se pudo eliminar el parte.",
         variant: "destructive",
       });
     }

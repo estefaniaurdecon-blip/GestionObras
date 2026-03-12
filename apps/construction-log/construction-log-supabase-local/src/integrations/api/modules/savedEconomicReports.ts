@@ -7,6 +7,105 @@ export interface SavedEconomicReportApiDeps {
   apiFetchJson: ApiFetchJsonFn;
 }
 
+export interface EconomicWorkGroupItem {
+  name?: string;
+  worker?: string;
+  employee?: string;
+  personName?: string;
+  activity?: string;
+  category?: string;
+  role?: string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+  pricePerHour?: number | string;
+  price_per_hour?: number | string;
+  total?: number | string;
+}
+
+export interface EconomicWorkGroup {
+  company?: string;
+  employer?: string;
+  items?: EconomicWorkGroupItem[];
+}
+
+export interface EconomicMachineryGroupItem {
+  type?: string;
+  name?: string;
+  activity?: string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+  pricePerHour?: number | string;
+  price_per_hour?: number | string;
+  total?: number | string;
+}
+
+export interface EconomicMachineryGroup {
+  company?: string;
+  items?: EconomicMachineryGroupItem[];
+}
+
+export interface EconomicMaterialGroupItem {
+  name?: string;
+  description?: string;
+  material?: string;
+  supplier?: string;
+  quantity?: number | string;
+  unit?: string;
+  unitPrice?: number | string;
+  pricePerUnit?: number | string;
+  price_per_unit?: number | string;
+  total?: number | string;
+}
+
+export interface EconomicMaterialGroup {
+  supplier?: string;
+  invoiceNumber?: string;
+  items?: EconomicMaterialGroupItem[];
+}
+
+export interface EconomicFuelRefill {
+  liters?: number;
+  pricePerLiter?: number;
+  total?: number;
+}
+
+export interface EconomicRentalMachineryGroupItem {
+  type?: string;
+  name?: string;
+  activity?: string;
+  totalDays?: number | string;
+  dailyRate?: number | string;
+  hours?: number | string;
+  pricePerHour?: number | string;
+  price_per_hour?: number | string;
+  fuelRefills?: EconomicFuelRefill[];
+  fuelRefillsTotal?: number | string;
+  total?: number | string;
+}
+
+export interface EconomicRentalMachineryGroup {
+  company?: string;
+  items?: EconomicRentalMachineryGroupItem[];
+}
+
+export interface EconomicSubcontractGroup {
+  company?: string;
+  description?: string;
+  amount?: number | string;
+  items?: EconomicSubcontractGroupItem[];
+}
+
+export interface EconomicSubcontractGroupItem {
+  contractedPart?: string;
+  activity?: string;
+  unitType?: string;
+  workers?: number | string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+  unitPrice?: number | string;
+  quantity?: number | string;
+}
+
 export interface ApiSavedEconomicReport {
   id: number;
   tenant_id: number;
@@ -17,11 +116,11 @@ export interface ApiSavedEconomicReport {
   date: string;
   foreman: string;
   site_manager: string;
-  work_groups: any[];
-  machinery_groups: any[];
-  material_groups: any[];
-  subcontract_groups: any[];
-  rental_machinery_groups: any[];
+  work_groups: EconomicWorkGroup[];
+  machinery_groups: EconomicMachineryGroup[];
+  material_groups: EconomicMaterialGroup[];
+  subcontract_groups: EconomicSubcontractGroup[];
+  rental_machinery_groups: EconomicRentalMachineryGroup[];
   total_amount: number;
   created_at: string;
   updated_at: string;
@@ -34,11 +133,11 @@ export interface SavedEconomicReportCreatePayload {
   date?: string;
   foreman?: string;
   site_manager?: string;
-  work_groups?: any[];
-  machinery_groups?: any[];
-  material_groups?: any[];
-  subcontract_groups?: any[];
-  rental_machinery_groups?: any[];
+  work_groups?: EconomicWorkGroup[];
+  machinery_groups?: EconomicMachineryGroup[];
+  material_groups?: EconomicMaterialGroup[];
+  subcontract_groups?: EconomicSubcontractGroup[];
+  rental_machinery_groups?: EconomicRentalMachineryGroup[];
   total_amount?: number;
 }
 

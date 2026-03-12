@@ -49,8 +49,14 @@ import { WorkPostventasSection } from '@/components/WorkPostventasSection';
 export const WorkManagement = () => {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const { works, loading, createWork, updateWork, deleteWork, getWorkAssignments, assignUserToWork, removeUserFromWork } = useWorks();
-  const { users, getUserRoles, getAssignableForemenForSiteManager } = useUsers();
+  const { works, loading, createWork, updateWork, deleteWork } = useWorks();
+  const {
+    users,
+    getUserAssignments,
+    assignUserToWork: assignManagedUserToWork,
+    removeUserFromWork: removeManagedUserFromWork,
+    getAssignableForemenForSiteManager,
+  } = useUsers();
   const { isAdmin, isSiteManager, canAssignWorks } = useUserPermissions();
   const { organization } = useOrganization();
   const { getCurrentPosition, loading: geoLoading, error: geoError } = useGeolocation();
@@ -301,8 +307,17 @@ export const WorkManagement = () => {
     setIsAssignDialogOpen(true);
     
     try {
-      const assignments = await getWorkAssignments(work.id);
-      setAssignedUsers(assignments);
+      const assignmentSnapshots = await Promise.all(
+        assignableUsers.map(async (assignableUser) => ({
+          userId: assignableUser.id,
+          workIds: await getUserAssignments(assignableUser.id),
+        })),
+      );
+      setAssignedUsers(
+        assignmentSnapshots
+          .filter(({ workIds }) => workIds.includes(String(work.id)))
+          .map(({ userId }) => userId),
+      );
     } catch (error) {
       console.error('Error loading assignments:', error);
     } finally {
@@ -321,10 +336,10 @@ export const WorkManagement = () => {
 
     try {
       if (assignedUsers.includes(userId)) {
-        await removeUserFromWork(userId, selectedWork.id);
+        await removeManagedUserFromWork(userId, selectedWork.id);
         setAssignedUsers(prev => prev.filter(id => id !== userId));
       } else {
-        await assignUserToWork(userId, selectedWork.id);
+        await assignManagedUserToWork(userId, selectedWork.id);
         setAssignedUsers(prev => [...prev, userId]);
       }
     } catch (error) {

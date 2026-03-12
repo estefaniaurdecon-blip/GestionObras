@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ProjectsPanel } from '@/components/ProjectsPanel';
+import { WorkManagement } from '@/components/WorkManagement';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorks } from '@/hooks/useWorks';
 import { ArrowLeft, Loader2, LogOut, RefreshCw } from 'lucide-react';
@@ -36,7 +36,7 @@ export default function Projects() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 space-y-4">
-        <ProjectsPanel title="Listado" />
+        <WorkManagement />
       </main>
     </div>
   );

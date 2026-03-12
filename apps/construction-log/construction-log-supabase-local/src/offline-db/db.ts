@@ -60,7 +60,7 @@ function fromBase64(b64: string): Uint8Array {
   return bytes;
 }
 
-async function yieldNativeStartupWork(): Promise<void> {
+export async function yieldNativeStartupWork(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
   await new Promise<void>((resolve) => {

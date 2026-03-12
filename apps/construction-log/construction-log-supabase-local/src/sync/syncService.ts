@@ -579,7 +579,7 @@ export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
           }
 
           failed += plan.outboxIds.length;
-          let errorMessage =
+          const errorMessage =
             asString(ack?.error) ??
             (ack ? 'Error de sincronización en servidor.' : 'El servidor no devolvió confirmación para la operación.');
 

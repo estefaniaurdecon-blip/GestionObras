@@ -2,13 +2,89 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Capacitor } from '@capacitor/core';
 import { sanitizePdfFilename } from './securePdfFilename';
-import { 
-  calculateOptimalSpacing, 
-  estimateEconomicReportMetrics, 
+import {
+  calculateOptimalSpacing,
+  estimateEconomicReportMetrics,
   getAdaptiveSpacing,
-  SpacingConfig 
+  SpacingConfig
 } from './pdfSpacingOptimizer';
+
+interface WorkGroupItem {
+  name?: string;
+  activity?: string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+}
+
+interface WorkGroup {
+  company?: string;
+  items?: WorkGroupItem[];
+}
+
+interface MachineryGroupItem {
+  type?: string;
+  activity?: string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+}
+
+interface MachineryGroup {
+  company?: string;
+  items?: MachineryGroupItem[];
+}
+
+interface MaterialGroupItem {
+  name?: string;
+  quantity?: number | string;
+  unit?: string;
+  unitPrice?: number | string;
+}
+
+interface MaterialGroup {
+  supplier?: string;
+  invoiceNumber?: string;
+  items?: MaterialGroupItem[];
+}
+
+interface SubcontractGroupItem {
+  contractedPart?: string;
+  activity?: string;
+  unitType?: string;
+  workers?: number | string;
+  hours?: number | string;
+  hourlyRate?: number | string;
+  unitPrice?: number | string;
+  quantity?: number | string;
+}
+
+interface SubcontractGroup {
+  company?: string;
+  items?: SubcontractGroupItem[];
+}
+
+interface FuelRefill {
+  liters?: number;
+  pricePerLiter?: number;
+  total?: number;
+}
+
+interface RentalMachineryGroupItem {
+  type?: string;
+  activity?: string;
+  totalDays?: number | string;
+  dailyRate?: number | string;
+  fuelRefills?: FuelRefill[];
+}
+
+interface RentalMachineryGroup {
+  items?: RentalMachineryGroupItem[];
+}
+
+interface JsPDFWithAutoTable extends jsPDF {
+  lastAutoTable: { finalY: number };
+}
 
 interface SavedEconomicReport {
   id: string | number;
@@ -18,11 +94,11 @@ interface SavedEconomicReport {
   date: string;
   foreman: string;
   site_manager: string;
-  work_groups: any[];
-  machinery_groups: any[];
-  material_groups: any[];
-  subcontract_groups: any[];
-  rental_machinery_groups: any[];
+  work_groups: WorkGroup[];
+  machinery_groups: MachineryGroup[];
+  material_groups: MaterialGroup[];
+  subcontract_groups: SubcontractGroup[];
+  rental_machinery_groups: RentalMachineryGroup[];
   total_amount: number;
   created_at: string;
 }
@@ -102,11 +178,11 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
       yPosition += getAdaptiveSpacing(5, 'line', spacingConfig);
 
       if (group.items && group.items.length > 0) {
-        const tableData = group.items.map((item: any) => {
+        const tableData = group.items.map((item) => {
           const hourlyRate = Number(item.hourlyRate) || 0;
           const hours = Number(item.hours) || 0;
           const total = hourlyRate > 0 ? hours * hourlyRate : 0;
-          
+
           return [
             item.name || '',
             item.activity || '',
@@ -122,8 +198,8 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           body: tableData,
           margin: { left: 20 },
           styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { 
-            fillColor: PRIMARY_COLOR, 
+          headStyles: {
+            fillColor: PRIMARY_COLOR,
             textColor: TEXT_COLOR,
             fontStyle: 'bold',
             halign: 'center'
@@ -135,10 +211,10 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           }
         });
 
-        yPosition = (doc as any).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
+        yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
 
         // Group subtotal
-        const groupTotal = group.items.reduce((sum: number, item: any) => {
+        const groupTotal = group.items.reduce((sum, item) => {
           const hourlyRate = Number(item.hourlyRate) || 0;
           const hours = Number(item.hours) || 0;
           return sum + (hourlyRate > 0 ? hours * hourlyRate : 0);
@@ -174,11 +250,11 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
       yPosition += getAdaptiveSpacing(5, 'line', spacingConfig);
 
       if (group.items && group.items.length > 0) {
-        const tableData = group.items.map((item: any) => {
+        const tableData = group.items.map((item) => {
           const hourlyRate = Number(item.hourlyRate) || 0;
           const hours = Number(item.hours) || 0;
           const total = hourlyRate > 0 ? hours * hourlyRate : 0;
-          
+
           return [
             item.type || '',
             item.activity || '',
@@ -194,8 +270,8 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           body: tableData,
           margin: { left: 20 },
           styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { 
-            fillColor: PRIMARY_COLOR, 
+          headStyles: {
+            fillColor: PRIMARY_COLOR,
             textColor: TEXT_COLOR,
             fontStyle: 'bold',
             halign: 'center'
@@ -207,10 +283,10 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           }
         });
 
-        yPosition = (doc as any).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
+        yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
 
         // Group subtotal
-        const groupTotal = group.items.reduce((sum: number, item: any) => {
+        const groupTotal = group.items.reduce((sum, item) => {
           const hourlyRate = Number(item.hourlyRate) || 0;
           const hours = Number(item.hours) || 0;
           return sum + (hourlyRate > 0 ? hours * hourlyRate : 0);
@@ -249,11 +325,11 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
       yPosition += getAdaptiveSpacing(5, 'line', spacingConfig);
 
       if (group.items && group.items.length > 0) {
-        const tableData = group.items.map((item: any) => {
+        const tableData = group.items.map((item) => {
           const unitPrice = Number(item.unitPrice) || 0;
           const quantity = Number(item.quantity) || 0;
           const total = unitPrice > 0 ? quantity * unitPrice : 0;
-          
+
           return [
             item.name || '',
             quantity.toString(),
@@ -269,8 +345,8 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           body: tableData,
           margin: { left: 20 },
           styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { 
-            fillColor: PRIMARY_COLOR, 
+          headStyles: {
+            fillColor: PRIMARY_COLOR,
             textColor: TEXT_COLOR,
             fontStyle: 'bold',
             halign: 'center'
@@ -282,10 +358,10 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           }
         });
 
-        yPosition = (doc as any).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
+        yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
 
         // Group subtotal
-        const groupTotal = group.items.reduce((sum: number, item: any) => {
+        const groupTotal = group.items.reduce((sum, item) => {
           const unitPrice = Number(item.unitPrice) || 0;
           const quantity = Number(item.quantity) || 0;
           return sum + (unitPrice > 0 ? quantity * unitPrice : 0);
@@ -321,10 +397,10 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
       yPosition += getAdaptiveSpacing(5, 'line', spacingConfig);
 
       if (group.items && group.items.length > 0) {
-        const tableData = group.items.map((item: any) => {
+        const tableData = group.items.map((item) => {
           const unitType = item.unitType || 'hora';
           const isHourBased = unitType === 'hora';
-          
+
           let total = 0;
           if (isHourBased) {
             const hourlyRate = Number(item.hourlyRate) || 0;
@@ -336,7 +412,7 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
             const quantity = Number(item.quantity) || 0;
             total = unitPrice > 0 ? quantity * unitPrice : 0;
           }
-          
+
           return [
             item.contractedPart || '',
             item.activity || '',
@@ -353,8 +429,8 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           body: tableData,
           margin: { left: 20 },
           styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { 
-            fillColor: PRIMARY_COLOR, 
+          headStyles: {
+            fillColor: PRIMARY_COLOR,
             textColor: TEXT_COLOR,
             fontStyle: 'bold',
             halign: 'center'
@@ -367,13 +443,13 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           }
         });
 
-        yPosition = (doc as any).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
+        yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + getAdaptiveSpacing(10, 'table', spacingConfig);
 
         // Group subtotal
-        const groupTotal = group.items.reduce((sum: number, item: any) => {
+        const groupTotal = group.items.reduce((sum, item) => {
           const unitType = item.unitType || 'hora';
           const isHourBased = unitType === 'hora';
-          
+
           let itemTotal = 0;
           if (isHourBased) {
             const hourlyRate = Number(item.hourlyRate) || 0;
@@ -385,7 +461,7 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
             const quantity = Number(item.quantity) || 0;
             itemTotal = unitPrice > 0 ? quantity * unitPrice : 0;
           }
-          
+
           return sum + itemTotal;
         }, 0);
         doc.setFont('helvetica', 'bold');
@@ -414,13 +490,13 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
       }
 
       if (group.items && group.items.length > 0) {
-        const tableData: any[] = [];
-        
-        group.items.forEach((item: any) => {
+        const tableData: string[][] = [];
+
+        group.items.forEach((item) => {
           const dailyRate = Number(item.dailyRate) || 0;
           const totalDays = Number(item.totalDays) || 0;
           const total = dailyRate > 0 ? totalDays * dailyRate : 0;
-          
+
           // Main rental item
           tableData.push([
             item.type || '',
@@ -432,7 +508,7 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
 
           // Fuel refills if any
           if (item.fuelRefills && item.fuelRefills.length > 0) {
-            item.fuelRefills.forEach((refill: any) => {
+            item.fuelRefills.forEach((refill) => {
               tableData.push([
                 `  └─ Repostaje`,
                 `${refill.liters || 0}L a ${(refill.pricePerLiter || 0).toFixed(2)}€/L`,
@@ -463,7 +539,7 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
           }
         });
 
-        yPosition = (doc as any).lastAutoTable.finalY + 10;
+        yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
       }
     });
   }
@@ -501,7 +577,7 @@ export const generateEconomicReportPDF = (report: SavedEconomicReport, companyLo
   const fileName = sanitizePdfFilename(rawFileName);
   
   // Para Capacitor (Android/iOS), guardar usando el sistema de archivos nativo
-  if ((window as any).Capacitor?.isNativePlatform()) {
+  if (Capacitor.isNativePlatform()) {
     import('./nativeFile').then(async ({ blobToBase64, saveBase64File }) => {
       const pdfBlob = doc.output('blob');
       const base64 = await blobToBase64(pdfBlob);

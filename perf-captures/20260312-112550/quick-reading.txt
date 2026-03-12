@@ -1,0 +1,12 @@
+C:/Users/pinnovacion/Desktop/rutas/Saas-Multi-Tenant-main/Saas-Multi-Tenant-main/perf-captures/20260312-112550
+
+Controlled cold start:
+- PID stable 7456 -> 7456
+- foreground sustained 20 s
+- trace valid: True
+
+Quick read:
+- trace bytes: 20468282
+- Displayed MainActivity: 03-12 10:24:21.810   582   606 I ActivityTaskManager: Displayed com.partesdetrabajo.app/.MainActivity for user 0: +2s23ms
+- Choreographer app PID: 03-12 10:24:21.640  7456  7456 I Choreographer: Skipped 65 frames!  The application may be doing too much work on its main thread. | 03-12 10:24:22.944  7456  7456 I Choreographer: Skipped 49 frames!  The application may be doing too much work on its main thread. | 03-12 10:24:25.092  7456  7456 I Choreographer: Skipped 61 frames!  The application may be doing too much work on its main thread.
+- Msg: undefined: 3
