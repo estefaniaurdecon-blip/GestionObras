@@ -598,10 +598,10 @@ export const AccessControlForm = ({
           </Button>
           <div className="flex flex-col items-center gap-1 px-14 text-center">
             <h1 className="text-xl font-semibold text-slate-900 sm:text-3xl">
-              {report ? "Editar Control de Accesos" : "Nuevo Registro"}
+              {report ? "Editar control de accesos" : "Nuevo registro"}
             </h1>
             <p className="text-[15px] text-muted-foreground">
-              Control de Accesos
+              Control de accesos
             </p>
           </div>
         </div>

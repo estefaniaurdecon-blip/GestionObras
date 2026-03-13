@@ -59,7 +59,7 @@ export const IndexHeader = ({
               <AppIcon size={34} className="flex-shrink-0" />
               <div className="min-w-0 leading-tight">
                 <div className="flex items-center gap-2 min-w-0">
-                  <h1 className="text-[15px] sm:text-lg font-semibold truncate">Partes de Trabajo y C.A. 2.0</h1>
+                  <h1 className="text-[15px] sm:text-lg font-semibold truncate">Partes de trabajo y C.A. 2.0</h1>
                   <Badge className="hidden sm:inline-flex bg-white/15 text-white border-white/20">
                     {roleLabel}
                   </Badge>
@@ -137,13 +137,13 @@ export const IndexHeader = ({
               value="work-reports"
               className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
             >
-              Partes de Trabajo
+              Partes de trabajo
             </TabsTrigger>
             <TabsTrigger
               value="access-control"
               className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
             >
-              Control de Accesos
+              Control de accesos
             </TabsTrigger>
             <TabsTrigger
               value="works"
@@ -155,7 +155,7 @@ export const IndexHeader = ({
               value="economics"
               className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
             >
-              Analisis Economico
+              Análisis económico
             </TabsTrigger>
           </TabsList>
         </div>

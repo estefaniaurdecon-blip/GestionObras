@@ -137,7 +137,6 @@ async function loadWorksFromOfflineReports(tenantId: string): Promise<Work[]> {
 }
 
 export const useWorks = () => {
-  const INITIAL_WORKS_LOAD_DELAY_MS = 12000;
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -206,33 +205,13 @@ export const useWorks = () => {
   }, [user]);
 
   useEffect(() => {
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let idleId: number | null = null;
-
-    const run = () => {
-      if (cancelled) return;
-      void loadWorks();
-    };
-
-    timeoutId = globalThis.setTimeout(() => {
-      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        idleId = window.requestIdleCallback(run, { timeout: 1500 });
-        return;
-      }
-      run();
-    }, INITIAL_WORKS_LOAD_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      if (timeoutId !== null) {
-        globalThis.clearTimeout(timeoutId);
-      }
-      if (idleId !== null && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-        window.cancelIdleCallback(idleId);
-      }
-    };
-  }, [INITIAL_WORKS_LOAD_DELAY_MS, loadWorks]);
+    if (!user) {
+      setWorks([]);
+      setLoading(false);
+      return;
+    }
+    void loadWorks();
+  }, [user, loadWorks]);
 
   const createWork = async (workData: Partial<Work>) => {
     if (!user) {

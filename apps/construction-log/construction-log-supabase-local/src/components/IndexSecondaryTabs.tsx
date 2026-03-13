@@ -41,7 +41,7 @@ export const IndexSecondaryTabs = ({
               value="portfolio"
               className="rounded px-3 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:text-slate-900"
             >
-              Cartera de Empresas
+              Cartera de empresas
             </TabsTrigger>
           </TabsList>
 
@@ -58,7 +58,7 @@ export const IndexSecondaryTabs = ({
       <TabsContent value="economics" className="m-0 space-y-4">
         <Card className="bg-white">
           <CardHeader>
-            <CardTitle>Analisis Economico</CardTitle>
+            <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Análisis económico</CardTitle>
             <CardDescription>
               Datos enlazados con `/api/v1/summary/*` y `/api/v1/erp/projects/*/budgets`.
             </CardDescription>

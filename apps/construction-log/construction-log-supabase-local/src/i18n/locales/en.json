@@ -720,6 +720,8 @@
     "selectAll": "Select all",
     "deselectAll": "Deselect all",
     "contactPreview": "Contact preview",
+    "duplicateDetectedConfirm": "\"{{name}}\" already exists with the same data. Do you want to import it as a duplicate anyway?",
+    "duplicatesSkipped": "{{count}} duplicates were skipped",
     "organization": "Organization"
   },
   "userManagement": {

@@ -32,20 +32,28 @@ const mapManagedUser = (user: ApiManagedUser): UserProfile => ({
   organization_id: String(user.organization_id),
 });
 
-export const useUsers = () => {
+interface UseUsersOptions {
+  autoLoad?: boolean;
+}
+
+export const useUsers = ({ autoLoad = true }: UseUsersOptions = {}) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  const loadUsers = async () => {
+  const loadUsers = async (): Promise<UserProfile[]> => {
     if (!user) {
+      setUsers([]);
       setLoading(false);
-      return;
+      return [];
     }
 
+    setLoading(true);
     try {
       const data = await listManagedUsers();
-      setUsers((data || []).map(mapManagedUser));
+      const mapped = (data || []).map(mapManagedUser);
+      setUsers(mapped);
+      return mapped;
     } catch (error: any) {
       console.error('Error loading users:', error);
       toast({
@@ -53,14 +61,22 @@ export const useUsers = () => {
         description: error.message,
         variant: 'destructive',
       });
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadUsers();
-  }, [user]);
+    if (!autoLoad) {
+      if (!user) {
+        setUsers([]);
+      }
+      setLoading(false);
+      return;
+    }
+    void loadUsers();
+  }, [autoLoad, user]);
 
   const getUserRoles = async (userId: string): Promise<AppRole[]> => {
     try {
@@ -129,7 +145,7 @@ export const useUsers = () => {
         description: 'El usuario ha sido aprobado y se le ha asignado un rol.',
       });
 
-      loadUsers();
+      void loadUsers();
     } catch (error: any) {
       console.error('Error approving user:', error);
       toast({
@@ -149,7 +165,7 @@ export const useUsers = () => {
         description: 'El usuario y todos sus datos han sido eliminados.',
       });
 
-      loadUsers();
+      void loadUsers();
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast({

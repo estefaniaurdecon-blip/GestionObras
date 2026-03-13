@@ -292,8 +292,8 @@ export const AccessControlTab = ({
     <TabsContent value="access-control" className="m-0 space-y-5 text-[15px]">
       <Card className="bg-white">
         <CardHeader className="items-center space-y-2 text-center">
-          <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de Accesos</CardTitle>
-          <CardDescription className="text-[15px] text-muted-foreground">Supervision de Obra</CardDescription>
+          <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de accesos</CardTitle>
+          <CardDescription className="text-[15px] text-muted-foreground">Supervisión de obra</CardDescription>
           <div className="mt-2 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center">
             <Button
               variant="outline"
@@ -301,7 +301,7 @@ export const AccessControlTab = ({
               onClick={handleNewAccessControlRecord}
             >
               <Plus className={isAndroidPlatform ? 'mr-2 h-5 w-5' : 'mr-2 h-[18px] w-[18px]'} />
-              Nuevo Registro
+              Nuevo registro
             </Button>
             <Button
               variant="outline"
@@ -309,7 +309,7 @@ export const AccessControlTab = ({
               onClick={() => setDataManagementOpen(true)}
             >
               <FileDown className="mr-2 h-4 w-4" />
-              Gestion de Datos
+              Gestión de datos
             </Button>
             <Button
               variant="outline"
@@ -317,7 +317,7 @@ export const AccessControlTab = ({
               onClick={() => setGenerateReportOpen(true)}
             >
               <FileText className="mr-2 h-4 w-4" />
-              Generar Informe
+              Generar informe
             </Button>
           </div>
         </CardHeader>
@@ -352,7 +352,7 @@ export const AccessControlTab = ({
       <Dialog open={dataManagementOpen} onOpenChange={setDataManagementOpen}>
         <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl">
           <DialogHeader className="text-center">
-            <DialogTitle>Gestion de Datos</DialogTitle>
+            <DialogTitle>Gestión de datos</DialogTitle>
             <DialogDescription>
               Guarda todos tus partes en un archivo o carga datos guardados previamente.
             </DialogDescription>
@@ -366,7 +366,7 @@ export const AccessControlTab = ({
               className={`w-full sm:w-auto ${lightButtonClass}`}
             >
               <FileDown className="mr-2 h-4 w-4" />
-              Guardar Datos
+              Guardar datos
             </Button>
             <Button
               variant="outline"
@@ -374,7 +374,7 @@ export const AccessControlTab = ({
               className={`w-full sm:w-auto ${lightButtonClass}`}
             >
               <Upload className="mr-2 h-4 w-4" />
-              Cargar Datos
+              Cargar datos
             </Button>
           </div>
         </DialogContent>

@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { Pencil, Trash2, Plus, Search, Building2, Phone, Mail, MapPin, FileText, Settings, Upload, Users } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { readVCFFile, VCFContact } from '@/utils/vcfParser';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
@@ -11,6 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -47,6 +58,20 @@ interface CompanyPortfolioItem {
   editor_name?: string;
 }
 
+type CompanyImportPayload = {
+  company_name: string;
+  company_type: string[];
+  contact_person: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  country: string | null;
+  fiscal_id: string | null;
+  notes: string | null;
+};
+
 const mapApiCompany = (item: ApiCompanyPortfolioItem): CompanyPortfolioItem => ({
   id: String(item.id),
   company_name: item.company_name,
@@ -75,8 +100,28 @@ const toNumericId = (value: string): number => {
   return parsed;
 };
 
+const normalizeText = (value?: string | null): string => (value || '').trim().toLowerCase();
+
+const normalizePhone = (value?: string | null): string =>
+  normalizeText(value).replace(/[\s\-().]/g, '');
+
+const buildCompanySignature = (company: CompanyImportPayload): string =>
+  JSON.stringify({
+    company_name: normalizeText(company.company_name),
+    contact_person: normalizeText(company.contact_person),
+    contact_phone: normalizePhone(company.contact_phone),
+    contact_email: normalizeText(company.contact_email),
+    address: normalizeText(company.address),
+    city: normalizeText(company.city),
+    postal_code: normalizeText(company.postal_code),
+    country: normalizeText(company.country),
+    fiscal_id: normalizeText(company.fiscal_id),
+    notes: normalizeText(company.notes),
+  });
+
 
 export const CompanyPortfolio: React.FC = () => {
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isAdmin, isSiteManager, isMaster } = useUserPermissions();
@@ -100,6 +145,9 @@ export const CompanyPortfolio: React.FC = () => {
   const [vcfContacts, setVcfContacts] = useState<VCFContact[]>([]);
   const [selectedVCFContacts, setSelectedVCFContacts] = useState<Set<number>>(new Set());
   const [importingVCF, setImportingVCF] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateCandidateName, setDuplicateCandidateName] = useState('');
+  const duplicateDialogResolverRef = useRef<((value: boolean) => void) | null>(null);
   const vcfInputRef = useRef<HTMLInputElement>(null);
   // Form state
   const [formData, setFormData] = useState({
@@ -111,7 +159,7 @@ export const CompanyPortfolio: React.FC = () => {
     address: '',
     city: '',
     postal_code: '',
-    country: 'EspaÃ±a',
+    country: 'España',
     fiscal_id: '',
     notes: ''
   });
@@ -345,7 +393,7 @@ export const CompanyPortfolio: React.FC = () => {
       address: company.address || '',
       city: company.city || '',
       postal_code: company.postal_code || '',
-      country: company.country || 'EspaÃ±a',
+      country: company.country || 'España',
       fiscal_id: company.fiscal_id || '',
       notes: company.notes || ''
     });
@@ -362,7 +410,7 @@ export const CompanyPortfolio: React.FC = () => {
       address: '',
       city: '',
       postal_code: '',
-      country: 'EspaÃ±a',
+      country: 'España',
       fiscal_id: '',
       notes: ''
     });
@@ -446,11 +494,29 @@ export const CompanyPortfolio: React.FC = () => {
     setImportingVCF(true);
     try {
       let importedCount = 0;
+      let skippedDuplicatesCount = 0;
+      const existingSignatures = new Set(
+        companies.map((company) =>
+          buildCompanySignature({
+            company_name: company.company_name || '',
+            company_type: company.company_type || [],
+            contact_person: company.contact_person || null,
+            contact_phone: company.contact_phone || null,
+            contact_email: company.contact_email || null,
+            address: company.address || null,
+            city: company.city || null,
+            postal_code: company.postal_code || null,
+            country: company.country || null,
+            fiscal_id: company.fiscal_id || null,
+            notes: company.notes || null,
+          })
+        )
+      );
       
       for (const index of selectedVCFContacts) {
         const contact = vcfContacts[index];
         
-        const companyData = {
+        const companyData: CompanyImportPayload = {
           company_name: contact.organization || contact.fullName || 'Contacto importado',
           company_type: [],
           contact_person: contact.fullName || null,
@@ -459,14 +525,29 @@ export const CompanyPortfolio: React.FC = () => {
           address: contact.address || null,
           city: contact.city || null,
           postal_code: contact.postalCode || null,
-          country: contact.country || 'EspaÃ±a',
+          country: contact.country || 'España',
           fiscal_id: null,
           notes: contact.notes || null,
         };
 
+        const signature = buildCompanySignature(companyData);
+        if (existingSignatures.has(signature)) {
+          const duplicateName = companyData.company_name || companyData.contact_person || 'Contacto';
+          const shouldContinue = await new Promise<boolean>((resolve) => {
+            duplicateDialogResolverRef.current = resolve;
+            setDuplicateCandidateName(duplicateName);
+            setDuplicateDialogOpen(true);
+          });
+          if (!shouldContinue) {
+            skippedDuplicatesCount++;
+            continue;
+          }
+        }
+
         try {
           await createCompanyPortfolioItem(companyData);
           importedCount++;
+          existingSignatures.add(signature);
         } catch (error) {
           console.error('Error importing VCF contact:', error);
         }
@@ -482,6 +563,14 @@ export const CompanyPortfolio: React.FC = () => {
         description: t('companyPortfolio.contactsImported', { count: importedCount })
       });
       setTimeout(() => importToast.dismiss(), 2000);
+
+      if (skippedDuplicatesCount > 0) {
+        const duplicatesToast = toast({
+          title: t('common.info'),
+          description: t('companyPortfolio.duplicatesSkipped', { count: skippedDuplicatesCount })
+        });
+        setTimeout(() => duplicatesToast.dismiss(), 2200);
+      }
     } catch (error) {
       console.error('Error importing VCF contacts:', error);
       toast({
@@ -494,73 +583,65 @@ export const CompanyPortfolio: React.FC = () => {
     }
   };
 
+  const handleDuplicateDialogAnswer = (allowDuplicate: boolean) => {
+    const resolver = duplicateDialogResolverRef.current;
+    duplicateDialogResolverRef.current = null;
+    setDuplicateDialogOpen(false);
+    if (resolver) resolver(allowDuplicate);
+  };
+
   const getTypeColor = (type: string) => {
     const index = customTypes.indexOf(type);
     const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-indigo-500', 'bg-pink-500', 'bg-yellow-500', 'bg-red-500'];
     return colors[index % colors.length] || 'bg-gray-500';
   };
+  const primaryPortfolioButtonClass = isAndroidPlatform
+    ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800'
+    : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800';
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">{t('companyPortfolio.title')}</h2>
-          <p className="text-muted-foreground">
-            {t('companyPortfolio.description')}
-          </p>
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-full text-center">
+          <h2 className="text-xl font-semibold text-slate-900 sm:text-3xl">Cartera de empresas</h2>
+          <p className="text-[15px] text-muted-foreground">Supervisión de obra</p>
         </div>
-        
-        <div className="flex flex-wrap gap-2">
-          {/* Hidden VCF file input */}
-          <input
-            ref={vcfInputRef}
-            type="file"
-            accept=".vcf,.vcard"
-            onChange={handleVCFFileChange}
-            className="hidden"
-          />
-          
-          <Button
-            variant="outline"
-            onClick={() => vcfInputRef.current?.click()}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {t('companyPortfolio.importVCF')}
-          </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => setIsManageTypesDialogOpen(true)}
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            {t('companyPortfolio.manageTypes')}
-          </Button>
-        
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+
+        {/* Hidden VCF file input */}
+        <input
+          ref={vcfInputRef}
+          type="file"
+          accept=".vcf,.vcard"
+          onChange={handleVCFFileChange}
+          className="hidden"
+        />
+
+        <div className="flex w-full flex-wrap justify-center gap-2">
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
           if (!open) resetForm();
         }}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('companyPortfolio.newCompany')}
+            <Button variant="outline" className={primaryPortfolioButtonClass}>
+              <Plus className={isAndroidPlatform ? 'mr-2 h-5 w-5' : 'mr-2 h-[18px] w-[18px]'} />
+              Nuevo registro
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {editingCompany ? t('companyPortfolio.editCompany') : t('companyPortfolio.newCompany')}
+                {editingCompany ? 'Editar empresa' : 'Nueva empresa'}
               </DialogTitle>
               <DialogDescription>
-                {t('companyPortfolio.fillComplete')}
+                Completa los datos de la empresa
               </DialogDescription>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="company_name">{t('companyPortfolio.companyName')} {t('companyPortfolio.required')}</Label>
+                  <Label htmlFor="company_name">Nombre de empresa *</Label>
                   <Input
                     id="company_name"
                     value={formData.company_name}
@@ -570,11 +651,11 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Label>{t('companyPortfolio.companyType')} {t('companyPortfolio.required')} ({t('companyPortfolio.companyTypeDesc')})</Label>
+                  <Label>Tipos * (Selecciona uno o más)</Label>
                   <div className="border rounded-lg p-4 space-y-2 max-h-[200px] overflow-y-auto">
                     {allCompanyTypes.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
-                        {t('companyPortfolio.noTypesAvailable')}
+                        No hay tipos disponibles. Añade uno nuevo abajo.
                       </p>
                     ) : (
                       allCompanyTypes.map((type) => (
@@ -604,12 +685,12 @@ export const CompanyPortfolio: React.FC = () => {
                       onClick={() => setIsAddingNewType(true)}
                     >
                       <Plus className="mr-2 h-4 w-4" />
-                      {t('companyPortfolio.addNewType')}
+                      Añadir nuevo tipo
                     </Button>
                   ) : (
                     <div className="flex gap-2 mt-2">
                       <Input
-                        placeholder={t('companyPortfolio.newTypePlaceholder')}
+                        placeholder="Nombre del nuevo tipo"
                         value={newTypeName}
                         onChange={(e) => setNewTypeName(e.target.value)}
                         onKeyDown={(e) => {
@@ -625,7 +706,7 @@ export const CompanyPortfolio: React.FC = () => {
                         size="sm"
                         onClick={addCustomType}
                       >
-                        {t('common.add')}
+                        Añadir
                       </Button>
                       <Button
                         type="button"
@@ -636,14 +717,14 @@ export const CompanyPortfolio: React.FC = () => {
                           setNewTypeName('');
                         }}
                       >
-                        {t('common.cancel')}
+                        Cancelar
                       </Button>
                     </div>
                   )}
                 </div>
                 
                 <div>
-                  <Label htmlFor="fiscal_id">{t('companyPortfolio.fiscalId')}</Label>
+                  <Label htmlFor="fiscal_id">CIF/NIF</Label>
                   <Input
                     id="fiscal_id"
                     value={formData.fiscal_id}
@@ -652,7 +733,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="contact_person">{t('companyPortfolio.contactPerson')}</Label>
+                  <Label htmlFor="contact_person">Persona de contacto</Label>
                   <Input
                     id="contact_person"
                     value={formData.contact_person}
@@ -661,7 +742,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="contact_phone">{t('companyPortfolio.contactPhone')}</Label>
+                  <Label htmlFor="contact_phone">Teléfono</Label>
                   <Input
                     id="contact_phone"
                     type="tel"
@@ -671,7 +752,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Label htmlFor="contact_email">{t('companyPortfolio.contactEmail')}</Label>
+                  <Label htmlFor="contact_email">Email</Label>
                   <Input
                     id="contact_email"
                     type="email"
@@ -681,7 +762,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Label htmlFor="address">{t('companyPortfolio.address')}</Label>
+                  <Label htmlFor="address">Dirección</Label>
                   <Input
                     id="address"
                     value={formData.address}
@@ -690,7 +771,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="city">{t('companyPortfolio.city')}</Label>
+                  <Label htmlFor="city">Ciudad</Label>
                   <Input
                     id="city"
                     value={formData.city}
@@ -699,7 +780,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="postal_code">{t('companyPortfolio.postalCode')}</Label>
+                  <Label htmlFor="postal_code">Código postal</Label>
                   <Input
                     id="postal_code"
                     value={formData.postal_code}
@@ -708,7 +789,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Label htmlFor="country">{t('companyPortfolio.country')}</Label>
+                  <Label htmlFor="country">País</Label>
                   <Input
                     id="country"
                     value={formData.country}
@@ -717,7 +798,7 @@ export const CompanyPortfolio: React.FC = () => {
                 </div>
                 
                 <div className="md:col-span-2">
-                  <Label htmlFor="notes">{t('companyPortfolio.notes')}</Label>
+                  <Label htmlFor="notes">Notas</Label>
                   <Textarea
                     id="notes"
                     value={formData.notes}
@@ -736,32 +817,48 @@ export const CompanyPortfolio: React.FC = () => {
                     resetForm();
                   }}
                 >
-                  {t('common.cancel')}
+                  Cancelar
                 </Button>
                 <Button type="submit">
-                  {editingCompany ? t('common.update') : t('common.add')}
+                  {editingCompany ? 'Actualizar' : 'Añadir'}
                 </Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
+
+          <Button
+            variant="outline"
+            onClick={() => setIsManageTypesDialogOpen(true)}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Gestión de tipos
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => vcfInputRef.current?.click()}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Importar contactos
+          </Button>
         </div>
       </div>
 
       {/* Manage Types Dialog */}
       <Dialog open={isManageTypesDialogOpen} onOpenChange={setIsManageTypesDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t('companyPortfolio.manageTypesTitle')}</DialogTitle>
+            <DialogTitle>Gestionar tipos de empresa</DialogTitle>
             <DialogDescription>
-              {t('companyPortfolio.manageTypesDesc')}
+              Edita o elimina los tipos personalizados
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {customTypes.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                {t('companyPortfolio.noCustomTypes')}
+                No hay tipos personalizados creados
               </p>
             ) : (
               customTypes.map((type, index) => (
@@ -779,10 +876,10 @@ export const CompanyPortfolio: React.FC = () => {
                         }}
                       />
                       <Button size="sm" onClick={saveEditType}>
-                        {t('common.save')}
+                        Guardar
                       </Button>
                       <Button size="sm" variant="outline" onClick={cancelEditType}>
-                        {t('common.cancel')}
+                        Cancelar
                       </Button>
                     </>
                   ) : (
@@ -812,6 +909,35 @@ export const CompanyPortfolio: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={duplicateDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && duplicateDialogOpen) {
+            handleDuplicateDialogAnswer(false);
+          } else {
+            setDuplicateDialogOpen(open);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Posible duplicado detectado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se detectó que "{duplicateCandidateName}" ya existe con los mismos datos.
+              ¿Quieres importarlo igualmente como duplicado?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleDuplicateDialogAnswer(false)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDuplicateDialogAnswer(true)}>
+              Duplicar igualmente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* VCF Import Dialog */}
       <Dialog open={isVCFDialogOpen} onOpenChange={(open) => {
@@ -941,7 +1067,7 @@ export const CompanyPortfolio: React.FC = () => {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t('companyPortfolio.searchPlaceholder')}
+            placeholder="Buscar por nombre, contacto o CIF..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -949,10 +1075,10 @@ export const CompanyPortfolio: React.FC = () => {
         </div>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-full md:w-[200px]">
-            <SelectValue placeholder={t('companyPortfolio.filterByType')} />
+            <SelectValue placeholder="Filtrar por tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t('companyPortfolio.allTypes')}</SelectItem>
+            <SelectItem value="all">Todos los tipos</SelectItem>
             {allCompanyTypes.map((type) => (
               <SelectItem key={type} value={type}>
                 {type}
@@ -969,8 +1095,8 @@ export const CompanyPortfolio: React.FC = () => {
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             {searchTerm || filterType !== 'all'
-              ? t('companyPortfolio.noCompaniesFound')
-              : t('companyPortfolio.noCompanies')}
+              ? 'No se encontraron empresas con los filtros seleccionados'
+              : 'No hay empresas registradas. Añade la primera empresa.'}
           </CardContent>
         </Card>
       ) : (

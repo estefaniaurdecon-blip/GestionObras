@@ -119,7 +119,7 @@ export const AccessControlReportsList = ({
   return (
     <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
       <CardHeader className="items-center text-center">
-        <CardTitle className="text-xl font-semibold text-slate-900 sm:text-2xl">Control de Accesos</CardTitle>
+        <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de accesos</CardTitle>
         <CardDescription className="text-[15px] text-muted-foreground">
           {accessControlLoading
             ? 'Cargando controles de acceso...'

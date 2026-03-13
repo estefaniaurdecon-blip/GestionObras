@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorks } from '@/hooks/useWorks';
 import { useUsers } from '@/hooks/useUsers';
@@ -51,12 +51,12 @@ export const WorkManagement = () => {
   const isMobile = useIsMobile();
   const { works, loading, createWork, updateWork, deleteWork } = useWorks();
   const {
-    users,
+    loadUsers,
     getUserAssignments,
     assignUserToWork: assignManagedUserToWork,
     removeUserFromWork: removeManagedUserFromWork,
     getAssignableForemenForSiteManager,
-  } = useUsers();
+  } = useUsers({ autoLoad: false });
   const { isAdmin, isSiteManager, canAssignWorks } = useUserPermissions();
   const { organization } = useOrganization();
   const { getCurrentPosition, loading: geoLoading, error: geoError } = useGeolocation();
@@ -93,28 +93,6 @@ export const WorkManagement = () => {
   const [assignedUsers, setAssignedUsers] = useState<string[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [assignableUsers, setAssignableUsers] = useState<any[]>([]);
-
-  // Filter users based on permission: admins can assign anyone, site managers can only assign foremen
-  useEffect(() => {
-    const loadAssignableUsers = async () => {
-      if (isAdmin) {
-        // Admins can assign any approved user
-        const approved = users.filter(u => u.approved);
-        setAssignableUsers(approved);
-      } else if (isSiteManager && organization) {
-        // Site managers can only assign foremen using backend function
-        const foremen = await getAssignableForemenForSiteManager(organization.id);
-        setAssignableUsers(foremen);
-      } else {
-        // Other roles should not see assignable users
-        setAssignableUsers([]);
-      }
-    };
-    
-    if ((isAdmin && users.length > 0) || (isSiteManager && organization)) {
-      loadAssignableUsers();
-    }
-  }, [users, isAdmin, isSiteManager, organization]);
 
   const handleOpenDialog = (work?: any) => {
     if (work) {
@@ -307,8 +285,18 @@ export const WorkManagement = () => {
     setIsAssignDialogOpen(true);
     
     try {
+      let nextAssignableUsers: any[] = [];
+      if (isAdmin) {
+        const managedUsers = await loadUsers();
+        nextAssignableUsers = managedUsers.filter((managedUser) => managedUser.approved);
+      } else if (isSiteManager && organization) {
+        nextAssignableUsers = await getAssignableForemenForSiteManager(organization.id);
+      }
+
+      setAssignableUsers(nextAssignableUsers);
+
       const assignmentSnapshots = await Promise.all(
-        assignableUsers.map(async (assignableUser) => ({
+        nextAssignableUsers.map(async (assignableUser) => ({
           userId: assignableUser.id,
           workIds: await getUserAssignments(assignableUser.id),
         })),
@@ -375,14 +363,20 @@ export const WorkManagement = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>{t('navigation.works')}</CardTitle>
-          {canManageWorks && (
-            <Button onClick={() => handleOpenDialog()}>
+        <CardHeader className="space-y-3">
+          <div className="text-center">
+            <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Obras</CardTitle>
+            <p className="text-[15px] text-muted-foreground">Supervisión de obra</p>
+          </div>
+          <div className="flex justify-center">
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="bg-[#1e3a5f] hover:bg-[#152a45] text-white"
+            >
               <Plus className="mr-2 h-4 w-4" />
-              {t('common.add')} {t('navigation.works')}
+              Añadir obras
             </Button>
-          )}
+          </div>
         </CardHeader>
         <CardContent>
           {isMobile ? (
@@ -390,18 +384,18 @@ export const WorkManagement = () => {
             <div className="space-y-4">
               {works.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  {t('workReports.noReports')}
+                  No hay obras registradas
                 </p>
               ) : (
                 works.map((work) => (
                   <Card key={work.id} className="border shadow-sm">
                     <CardContent className="p-4 space-y-3">
                       <div>
-                        <p className="text-xs text-muted-foreground">{t('workReports.workNumber')}</p>
+                        <p className="text-xs text-muted-foreground">Número de Obra</p>
                         <p className="font-bold text-lg">{work.number}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">{t('common.name')}</p>
+                        <p className="text-xs text-muted-foreground">Nombre</p>
                         <p className="font-medium">{work.name}</p>
                       </div>
                       <div className="flex flex-col gap-2 pt-2">
@@ -504,16 +498,16 @@ export const WorkManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('workReports.workNumber')}</TableHead>
-                  <TableHead>{t('common.name')}</TableHead>
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
+                  <TableHead>Número de Obra</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {works.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground">
-                      {t('workReports.noReports')}
+                      No hay obras registradas
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -617,320 +611,303 @@ export const WorkManagement = () => {
 
       {/* Dialog para crear/editar obra */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingWork ? t('common.edit') + ' ' + t('navigation.works') : t('common.add') + ' ' + t('navigation.works')}
+        <DialogContent className="max-w-none w-full h-full max-h-screen overflow-y-auto rounded-none">
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-xl font-semibold">
+              {editingWork ? 'Editar obra' : 'Añadir obras'}
             </DialogTitle>
-            <DialogDescription>
-              {editingWork
-                ? t('app.description')
-                : t('app.description')}
+            <DialogDescription className="text-muted-foreground">
+              Sistema de Gestión de Obras
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="workNumber">Número de Obra *</Label>
-                <Input
-                  id="workNumber"
-                  value={workData.number}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, number: e.target.value }))}
-                  placeholder="Ej: OB-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="executionPeriod">Plazo de Ejecución</Label>
-                <Input
-                  id="executionPeriod"
-                  value={workData.execution_period}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, execution_period: e.target.value }))}
-                  placeholder="Ej: 6 meses"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workName">Nombre de la Obra *</Label>
-              <Input
-                id="workName"
-                value={workData.name}
-                onChange={(e) => setWorkData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Ej: Construcción Edificio Central"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">Dirección</Label>
-              <Input
-                id="address"
-                value={workData.address}
-                onChange={(e) => setWorkData(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="Calle, número, ciudad"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="promoter">Promotor</Label>
-                <Input
-                  id="promoter"
-                  value={workData.promoter}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, promoter: e.target.value }))}
-                  placeholder="Nombre del promotor"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="budget">Presupuesto (€)</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  value={workData.budget}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, budget: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Fecha de Inicio</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={workData.start_date}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, start_date: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endDate">Fecha de Fin</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={workData.end_date}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, end_date: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea
-                id="description"
-                value={workData.description}
-                onChange={(e) => setWorkData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Descripción general de la obra"
-                rows={3}
-              />
-            </div>
-
+          
+          <div className="space-y-6 py-4">
+            {/* === MÓDULO 1: INFORMACIÓN GENERAL === */}
             <div className="space-y-4">
-              <h4 className="font-medium text-sm">Contacto</h4>
-              <div className="space-y-2">
-                <Label htmlFor="contactPerson">Persona de Contacto</Label>
-                <Input
-                  id="contactPerson"
-                  value={workData.contact_person}
-                  onChange={(e) => setWorkData(prev => ({ ...prev, contact_person: e.target.value }))}
-                  placeholder="Nombre completo"
-                />
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contactPhone">Teléfono</Label>
+                  <Label htmlFor="workNumber" className="text-sm font-medium">Número de Obra *</Label>
                   <Input
-                    id="contactPhone"
-                    type="tel"
-                    value={workData.contact_phone}
-                    onChange={(e) => setWorkData(prev => ({ ...prev, contact_phone: e.target.value }))}
-                    placeholder="+34 600 000 000"
+                    id="workNumber"
+                    value={workData.number}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, number: e.target.value }))}
+                    placeholder="Ej: OB-001"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contactEmail">Email</Label>
+                  <Label htmlFor="executionPeriod" className="text-sm font-medium">Plazo de Ejecución</Label>
                   <Input
-                    id="contactEmail"
-                    type="email"
-                    value={workData.contact_email}
-                    onChange={(e) => setWorkData(prev => ({ ...prev, contact_email: e.target.value }))}
-                    placeholder="contacto@ejemplo.com"
+                    id="executionPeriod"
+                    value={workData.execution_period}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, execution_period: e.target.value }))}
+                    placeholder="Ej: 6 meses"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="workName" className="text-sm font-medium">Nombre de la Obra *</Label>
+                <Input
+                  id="workName"
+                  value={workData.name}
+                  onChange={(e) => setWorkData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ej: Construcción Edificio Central"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address" className="text-sm font-medium">Dirección</Label>
+                <Input
+                  id="address"
+                  value={workData.address}
+                  onChange={(e) => setWorkData(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="Calle, número, ciudad"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="promoter" className="text-sm font-medium">Promotor</Label>
+                  <Input
+                    id="promoter"
+                    value={workData.promoter}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, promoter: e.target.value }))}
+                    placeholder="Nombre del promotor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="budget" className="text-sm font-medium">Presupuesto (€)</Label>
+                  <Input
+                    id="budget"
+                    type="number"
+                    value={workData.budget}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, budget: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startDate" className="text-sm font-medium">Fecha de Inicio</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={workData.start_date}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, start_date: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endDate" className="text-sm font-medium">Fecha de Fin</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={workData.end_date}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, end_date: e.target.value }))}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Sección de Ubicación */}
+            {/* === MÓDULO 2: DESCRIPCIÓN Y CONTACTO === */}
             <div className="space-y-4">
-              <h4 className="font-medium text-sm flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Ubicación
-              </h4>
-              
-              {/* Dirección Postal */}
-              <Card className="border border-border">
-                <CardHeader className="py-3 px-4">
-                  <CardTitle className="text-sm font-medium">Dirección Postal</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 px-4 pb-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="streetAddress">Dirección (Calle y número)</Label>
-                    <Input
-                      id="streetAddress"
-                      value={workData.street_address}
-                      onChange={(e) => setWorkData(prev => ({ ...prev, street_address: e.target.value }))}
-                      placeholder="Calle Mayor, 123"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">Población</Label>
-                      <Input
-                        id="city"
-                        value={workData.city}
-                        onChange={(e) => setWorkData(prev => ({ ...prev, city: e.target.value }))}
-                        placeholder="Madrid"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="province">Provincia / Región</Label>
-                      <Input
-                        id="province"
-                        value={workData.province}
-                        onChange={(e) => setWorkData(prev => ({ ...prev, province: e.target.value }))}
-                        placeholder="Madrid"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="country">País</Label>
-                    <Input
-                      id="country"
-                      value={workData.country}
-                      onChange={(e) => setWorkData(prev => ({ ...prev, country: e.target.value }))}
-                      placeholder="España"
-                    />
-                  </div>
-                  
-                  {/* Botón para buscar coordenadas desde dirección */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleGeocodeAddress}
-                    disabled={geocodingLoading || (!workData.street_address && !workData.city)}
-                    className="w-full"
-                  >
-                    {geocodingLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Buscando coordenadas...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-2 h-4 w-4" />
-                        🔍 Buscar Coordenadas desde Dirección
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-sm font-medium">Descripción</Label>
+                <Textarea
+                  id="description"
+                  value={workData.description}
+                  onChange={(e) => setWorkData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción general de la obra"
+                  rows={3}
+                />
+              </div>
 
-              {/* Mostrar estado de ubicación GPS */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Contacto</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="contactPerson" className="text-xs text-muted-foreground">Persona de Contacto</Label>
+                  <Input
+                    id="contactPerson"
+                    value={workData.contact_person}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, contact_person: e.target.value }))}
+                    placeholder="Nombre completo"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="contactPhone" className="text-xs text-muted-foreground">Teléfono</Label>
+                    <Input
+                      id="contactPhone"
+                      type="tel"
+                      value={workData.contact_phone}
+                      onChange={(e) => setWorkData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                      placeholder="+34 600 000 000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contactEmail" className="text-xs text-muted-foreground">Email</Label>
+                    <Input
+                      id="contactEmail"
+                      type="email"
+                      value={workData.contact_email}
+                      onChange={(e) => setWorkData(prev => ({ ...prev, contact_email: e.target.value }))}
+                      placeholder="contacto@ejemplo.com"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* === MÓDULO 3: UBICACIÓN === */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span>Ubicación</span>
+              </div>
+              
+              <div className="bg-muted/30 rounded-lg p-4 space-y-4">
+                <p className="text-xs font-medium text-muted-foreground">Dirección Postal</p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="streetAddress" className="text-xs text-muted-foreground">Dirección (Calle y número)</Label>
+                  <Input
+                    id="streetAddress"
+                    value={workData.street_address}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, street_address: e.target.value }))}
+                    placeholder="Calle Mayor, 123"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-xs text-muted-foreground">Población</Label>
+                    <Input
+                      id="city"
+                      value={workData.city}
+                      onChange={(e) => setWorkData(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="Madrid"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="province" className="text-xs text-muted-foreground">Provincia / Región</Label>
+                    <Input
+                      id="province"
+                      value={workData.province}
+                      onChange={(e) => setWorkData(prev => ({ ...prev, province: e.target.value }))}
+                      placeholder="Madrid"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="country" className="text-xs text-muted-foreground">País</Label>
+                  <Input
+                    id="country"
+                    value={workData.country}
+                    onChange={(e) => setWorkData(prev => ({ ...prev, country: e.target.value }))}
+                    placeholder="España"
+                  />
+                </div>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGeocodeAddress}
+                  disabled={geocodingLoading || (!workData.street_address && !workData.city)}
+                  className="w-full text-sm"
+                >
+                  {geocodingLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Buscando coordenadas...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      Buscar Coordenadas desde Dirección
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* === MÓDULO 4: COORDENADAS GPS Y BOTONES === */}
+            <div className="space-y-4">
               {workData.latitude && workData.longitude ? (
-                <>
-                  {/* Coordenadas actuales */}
-                  <div className="bg-muted/50 border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium">Ubicación definida</p>
-                          <p className="text-xs text-muted-foreground">
-                            {Number(workData.latitude).toFixed(6)}, {Number(workData.longitude).toFixed(6)}
-                          </p>
-                        </div>
+                <div className="bg-muted/50 border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Ubicación definida</p>
+                        <p className="text-xs text-muted-foreground">
+                          {Number(workData.latitude).toFixed(6)}, {Number(workData.longitude).toFixed(6)}
+                        </p>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setWorkData(prev => ({ ...prev, latitude: '', longitude: '' }));
-                          toast.info('Ubicación eliminada. Guarda los cambios para confirmar.');
-                        }}
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Eliminar ubicación"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setWorkData(prev => ({ ...prev, latitude: '', longitude: '' }));
+                        toast.info('Ubicación eliminada. Guarda los cambios para confirmar.');
+                      }}
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      title="Eliminar ubicación"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  
-                  {/* Botón para actualizar ubicación GPS */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCaptureLocation}
-                    disabled={geoLoading}
-                    className="w-full"
-                  >
-                    {geoLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Obteniendo ubicación...
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="mr-2 h-4 w-4" />
-                        Actualizar Ubicación GPS
-                      </>
-                    )}
-                  </Button>
-                </>
+                </div>
               ) : (
-                <>
-                  {/* Sin ubicación definida */}
-                  <div className="bg-muted/30 border border-dashed border-border rounded-lg p-4 text-center">
-                    <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Sin coordenadas definidas</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Usa el botón de arriba para buscar coordenadas o captura la ubicación GPS
-                    </p>
-                  </div>
-                  
-                  {/* Botón para capturar ubicación GPS */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCaptureLocation}
-                    disabled={geoLoading}
-                    className="w-full"
-                  >
-                    {geoLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Obteniendo ubicación...
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="mr-2 h-4 w-4" />
-                        📍 Capturar Ubicación GPS Actual
-                      </>
-                    )}
-                  </Button>
-                </>
+                <div className="text-center py-4">
+                  <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Sin coordenadas definidas</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Usa el botón de arriba para buscar coordenadas o captura la ubicación GPS
+                  </p>
+                </div>
               )}
+              
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCaptureLocation}
+                disabled={geoLoading}
+                className="w-full"
+              >
+                {geoLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Obteniendo ubicación...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Capturar Ubicación GPS Actual
+                  </>
+                )}
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog}>
-              {t('common.cancel')}
+          
+          {/* Botones finales */}
+          <div className="space-y-2 pt-2">
+            <Button 
+              onClick={handleSubmit}
+              className="w-full bg-[#1e3a5f] hover:bg-[#152a45] text-white"
+            >
+              {editingWork ? 'Guardar Cambios' : 'Añadir'}
             </Button>
-            <Button onClick={handleSubmit}>
-              {editingWork ? t('common.save') : t('common.add')}
+            <Button 
+              variant="outline" 
+              onClick={handleCloseDialog}
+              className="w-full"
+            >
+              Cancelar
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

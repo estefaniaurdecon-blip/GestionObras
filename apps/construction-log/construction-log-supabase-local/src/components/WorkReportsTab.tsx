@@ -450,7 +450,7 @@ export const WorkReportsTab = ({
       ) : (
         <>
           <div className="text-center space-y-1">
-            <h2 className="text-xl sm:text-3xl font-semibold text-slate-900">Partes de Trabajo</h2>
+            <h2 className="text-xl font-semibold text-slate-900 sm:text-3xl">Partes de trabajo</h2>
             <p className="text-[15px] text-muted-foreground">Gestiona tus partes diarios</p>
           </div>
           <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 xl:grid-cols-4">

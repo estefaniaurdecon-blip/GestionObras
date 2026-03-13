@@ -100,7 +100,7 @@ export const AccessControlGenerateReportDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl">
       <DialogHeader className="text-center">
-        <DialogTitle>Generar Informe</DialogTitle>
+        <DialogTitle>Generar informe</DialogTitle>
         <DialogDescription>Sistema de Gestion de Obras</DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
@@ -325,7 +325,7 @@ export const AccessControlGenerateReportDialog = ({
                 onClick={onGenerateReport}
               >
                 <FileText className="mr-2 h-4 w-4" />
-                Generar Informe
+                Generar informe
               </Button>
             </div>
           </>
