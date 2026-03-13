@@ -24,6 +24,8 @@ from app.models.erp import (
     TimeEntry,
     TimeSession,
     RentalMachinery,
+    WorkPostventa,
+    WorkRepaso,
     WorkReport,
     WorkReportSyncLog,
 )
@@ -54,6 +56,10 @@ from app.schemas.erp import (
     ProjectBudgetLineUpdate,
     RentalMachineryCreate,
     RentalMachineryUpdate,
+    WorkPostventaCreate,
+    WorkPostventaUpdate,
+    WorkRepasoCreate,
+    WorkRepasoUpdate,
     WorkReportCreate,
     WorkReportSyncAck,
     WorkReportSyncRequest,
@@ -76,6 +82,7 @@ WORK_REPORT_ALLOWED_STATUSES = {
 WORK_REPORT_CLOSED_STATUSES = {"closed"}
 RENTAL_ALLOWED_STATUSES = {"active", "inactive", "archived"}
 RENTAL_PRICE_UNITS = {"day", "hour", "month"}
+WORK_SERVICE_ALLOWED_STATUSES = {"pending", "in_progress", "completed"}
 
 # Valida que exista un tenant_id
 def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
@@ -2553,6 +2560,331 @@ def delete_rental_machinery(
     session.commit()
     session.refresh(machinery)
     return machinery
+
+
+def _normalize_work_service_status(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in WORK_SERVICE_ALLOWED_STATUSES:
+        raise ValueError(f"Estado invalido: {value}")
+    return normalized
+
+
+def _build_work_service_code(
+    session: Session,
+    model: type[WorkRepaso] | type[WorkPostventa],
+    tenant_id: int,
+    prefix: str,
+) -> str:
+    count = session.exec(
+        select(func.count()).select_from(model).where(model.tenant_id == tenant_id)
+    ).one()
+    return f"{prefix}-{int(count or 0) + 1:05d}"
+
+
+def _sanitize_optional_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _sanitize_required_text(value: str, field_name: str) -> str:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        raise ValueError(f"{field_name} es obligatorio.")
+    return cleaned
+
+
+def _get_repaso_or_404(
+    session: Session,
+    repaso_id: int,
+    tenant_id: int,
+    *,
+    include_deleted: bool = False,
+) -> WorkRepaso:
+    repaso = session.get(WorkRepaso, repaso_id)
+    if not repaso or repaso.tenant_id != tenant_id:
+        raise ValueError("Repaso no encontrado.")
+    if not include_deleted and repaso.deleted_at is not None:
+        raise ValueError("Repaso no encontrado.")
+    return repaso
+
+
+def _get_postventa_or_404(
+    session: Session,
+    postventa_id: int,
+    tenant_id: int,
+    *,
+    include_deleted: bool = False,
+) -> WorkPostventa:
+    postventa = session.get(WorkPostventa, postventa_id)
+    if not postventa or postventa.tenant_id != tenant_id:
+        raise ValueError("Post-venta no encontrada.")
+    if not include_deleted and postventa.deleted_at is not None:
+        raise ValueError("Post-venta no encontrada.")
+    return postventa
+
+
+def list_work_repasos(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    project_id: Optional[int] = None,
+    status: Optional[str] = None,
+    include_deleted: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[WorkRepaso]:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    if project_id is not None:
+        _get_project_or_404(session, project_id, resolved_tenant_id)
+
+    stmt = select(WorkRepaso).where(WorkRepaso.tenant_id == resolved_tenant_id)
+    if not include_deleted:
+        stmt = stmt.where(WorkRepaso.deleted_at.is_(None))
+    if project_id is not None:
+        stmt = stmt.where(WorkRepaso.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(WorkRepaso.status == _normalize_work_service_status(status))
+
+    stmt = stmt.order_by(WorkRepaso.updated_at.desc())
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    return session.exec(stmt).all()
+
+
+def create_work_repaso(
+    session: Session,
+    payload: WorkRepasoCreate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkRepaso:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+
+    external_id = _sanitize_optional_text(payload.external_id)
+    if external_id:
+        existing = session.exec(
+            select(WorkRepaso).where(
+                WorkRepaso.tenant_id == resolved_tenant_id,
+                WorkRepaso.external_id == external_id,
+            )
+        ).first()
+        if existing:
+            return existing
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    repaso = WorkRepaso(
+        tenant_id=resolved_tenant_id,
+        project_id=payload.project_id,
+        external_id=external_id,
+        code=_build_work_service_code(session, WorkRepaso, resolved_tenant_id, "REP"),
+        status=_normalize_work_service_status(payload.status),
+        description=_sanitize_required_text(payload.description, "La descripcion"),
+        assigned_company=_sanitize_optional_text(payload.assigned_company),
+        estimated_hours=payload.estimated_hours,
+        actual_hours=payload.actual_hours,
+        before_image=_sanitize_optional_text(payload.before_image),
+        after_image=_sanitize_optional_text(payload.after_image),
+        subcontract_groups=payload.subcontract_groups or [],
+        created_by_id=current_user_id,
+        updated_by_id=current_user_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(repaso)
+    session.commit()
+    session.refresh(repaso)
+    return repaso
+
+
+def update_work_repaso(
+    session: Session,
+    repaso_id: int,
+    payload: WorkRepasoUpdate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkRepaso:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    repaso = _get_repaso_or_404(session, repaso_id, resolved_tenant_id)
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+        repaso.project_id = payload.project_id
+    if payload.status is not None:
+        repaso.status = _normalize_work_service_status(payload.status)
+    if payload.description is not None:
+        repaso.description = _sanitize_required_text(payload.description, "La descripcion")
+    if payload.assigned_company is not None:
+        repaso.assigned_company = _sanitize_optional_text(payload.assigned_company)
+    if payload.estimated_hours is not None:
+        repaso.estimated_hours = payload.estimated_hours
+    if payload.actual_hours is not None:
+        repaso.actual_hours = payload.actual_hours
+    if payload.before_image is not None:
+        repaso.before_image = _sanitize_optional_text(payload.before_image)
+    if payload.after_image is not None:
+        repaso.after_image = _sanitize_optional_text(payload.after_image)
+    if payload.subcontract_groups is not None:
+        repaso.subcontract_groups = payload.subcontract_groups
+
+    repaso.updated_by_id = current_user_id
+    repaso.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    session.add(repaso)
+    session.commit()
+    session.refresh(repaso)
+    return repaso
+
+
+def delete_work_repaso(
+    session: Session,
+    repaso_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkRepaso:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    repaso = _get_repaso_or_404(session, repaso_id, resolved_tenant_id)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    repaso.deleted_at = now
+    repaso.updated_at = now
+    repaso.updated_by_id = current_user_id
+    session.add(repaso)
+    session.commit()
+    session.refresh(repaso)
+    return repaso
+
+
+def list_work_postventas(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    project_id: Optional[int] = None,
+    status: Optional[str] = None,
+    include_deleted: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[WorkPostventa]:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    if project_id is not None:
+        _get_project_or_404(session, project_id, resolved_tenant_id)
+
+    stmt = select(WorkPostventa).where(WorkPostventa.tenant_id == resolved_tenant_id)
+    if not include_deleted:
+        stmt = stmt.where(WorkPostventa.deleted_at.is_(None))
+    if project_id is not None:
+        stmt = stmt.where(WorkPostventa.project_id == project_id)
+    if status is not None:
+        stmt = stmt.where(WorkPostventa.status == _normalize_work_service_status(status))
+
+    stmt = stmt.order_by(WorkPostventa.updated_at.desc())
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    return session.exec(stmt).all()
+
+
+def create_work_postventa(
+    session: Session,
+    payload: WorkPostventaCreate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkPostventa:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+
+    external_id = _sanitize_optional_text(payload.external_id)
+    if external_id:
+        existing = session.exec(
+            select(WorkPostventa).where(
+                WorkPostventa.tenant_id == resolved_tenant_id,
+                WorkPostventa.external_id == external_id,
+            )
+        ).first()
+        if existing:
+            return existing
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    postventa = WorkPostventa(
+        tenant_id=resolved_tenant_id,
+        project_id=payload.project_id,
+        external_id=external_id,
+        code=_build_work_service_code(session, WorkPostventa, resolved_tenant_id, "POS"),
+        status=_normalize_work_service_status(payload.status),
+        description=_sanitize_required_text(payload.description, "La descripcion"),
+        assigned_company=_sanitize_optional_text(payload.assigned_company),
+        estimated_hours=payload.estimated_hours,
+        actual_hours=payload.actual_hours,
+        before_image=_sanitize_optional_text(payload.before_image),
+        after_image=_sanitize_optional_text(payload.after_image),
+        subcontract_groups=payload.subcontract_groups or [],
+        created_by_id=current_user_id,
+        updated_by_id=current_user_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(postventa)
+    session.commit()
+    session.refresh(postventa)
+    return postventa
+
+
+def update_work_postventa(
+    session: Session,
+    postventa_id: int,
+    payload: WorkPostventaUpdate,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkPostventa:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    postventa = _get_postventa_or_404(session, postventa_id, resolved_tenant_id)
+
+    if payload.project_id is not None:
+        _get_project_or_404(session, payload.project_id, resolved_tenant_id)
+        postventa.project_id = payload.project_id
+    if payload.status is not None:
+        postventa.status = _normalize_work_service_status(payload.status)
+    if payload.description is not None:
+        postventa.description = _sanitize_required_text(payload.description, "La descripcion")
+    if payload.assigned_company is not None:
+        postventa.assigned_company = _sanitize_optional_text(payload.assigned_company)
+    if payload.estimated_hours is not None:
+        postventa.estimated_hours = payload.estimated_hours
+    if payload.actual_hours is not None:
+        postventa.actual_hours = payload.actual_hours
+    if payload.before_image is not None:
+        postventa.before_image = _sanitize_optional_text(payload.before_image)
+    if payload.after_image is not None:
+        postventa.after_image = _sanitize_optional_text(payload.after_image)
+    if payload.subcontract_groups is not None:
+        postventa.subcontract_groups = payload.subcontract_groups
+
+    postventa.updated_by_id = current_user_id
+    postventa.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    session.add(postventa)
+    session.commit()
+    session.refresh(postventa)
+    return postventa
+
+
+def delete_work_postventa(
+    session: Session,
+    postventa_id: int,
+    tenant_id: Optional[int],
+    *,
+    current_user_id: Optional[int],
+) -> WorkPostventa:
+    resolved_tenant_id = _require_tenant(tenant_id)
+    postventa = _get_postventa_or_404(session, postventa_id, resolved_tenant_id)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    postventa.deleted_at = now
+    postventa.updated_at = now
+    postventa.updated_by_id = current_user_id
+    session.add(postventa)
+    session.commit()
+    session.refresh(postventa)
+    return postventa
 
 
 

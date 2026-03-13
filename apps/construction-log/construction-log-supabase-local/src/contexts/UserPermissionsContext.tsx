@@ -23,7 +23,7 @@ const UserPermissionsContext = createContext<UserPermissionsContextType | undefi
 
 const normalizeRoles = (roles: unknown): AppRole[] => {
   if (!Array.isArray(roles)) return [];
-  return roles.map((role) => String(role).trim()).filter(Boolean) as AppRole[];
+  return roles.map((role) => String(role).trim().toLowerCase()).filter(Boolean) as AppRole[];
 };
 
 export const UserPermissionsProvider = ({ children }: { children: ReactNode }) => {
@@ -70,7 +70,7 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
     try {
       setLoading(true);
       const userRoles = await listManagedUserRoles(Number(user.id));
-      setRoles(userRoles as AppRole[]);
+      setRoles(normalizeRoles(userRoles));
 
       try {
         const currentUser = await getCurrentUser();
@@ -93,12 +93,15 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
     }
   }, [user]);
 
-  const isMaster = roles.includes('master');
-  const isAdmin = roles.includes('admin');
-  const isSiteManager = roles.includes('site_manager');
-  const isForeman = roles.includes('foreman');
-  const isReader = roles.includes('reader');
-  const isOfi = roles.includes('ofi');
+  const normalizedRoleSet = new Set(roles.map((role) => String(role).trim().toLowerCase()));
+  const isSuperAdmin = Boolean(user?.is_super_admin) || normalizedRoleSet.has('super_admin');
+  const isMaster = isSuperAdmin || normalizedRoleSet.has('master');
+  const isAdmin = isSuperAdmin || normalizedRoleSet.has('admin');
+  const isSiteManager =
+    isSuperAdmin || normalizedRoleSet.has('site_manager') || normalizedRoleSet.has('tenant_admin');
+  const isForeman = normalizedRoleSet.has('foreman');
+  const isReader = normalizedRoleSet.has('reader');
+  const isOfi = normalizedRoleSet.has('ofi');
 
   const canAssignRoles = isMaster || isAdmin;
   const canAssignWorks = isMaster || isAdmin || isSiteManager;

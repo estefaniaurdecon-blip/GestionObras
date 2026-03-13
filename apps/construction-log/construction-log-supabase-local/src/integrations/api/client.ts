@@ -17,6 +17,8 @@ import { createCompanyPortfolioApi } from './modules/companyPortfolio';
 import { createPhasesApi } from './modules/phases';
 import { createRentalMachineryApi } from './modules/rentalMachinery';
 import { createRentalMachineryAssignmentsApi } from './modules/rentalMachineryAssignments';
+import { createWorkRepasosApi } from './modules/workRepasos';
+import { createWorkPostventasApi } from './modules/workPostventas';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
 import { createSavedEconomicReportsApi } from './modules/savedEconomicReports';
 import type {
@@ -1123,6 +1125,50 @@ export const updateRentalMachineryAssignment =
   rentalMachineryAssignmentsApi.updateRentalMachineryAssignment;
 export const deleteRentalMachineryAssignment =
   rentalMachineryAssignmentsApi.deleteRentalMachineryAssignment;
+
+// ============================================================
+// WORK REPASOS API
+// ============================================================
+
+export type {
+  ApiWorkRepaso,
+  CreateWorkRepasoPayload,
+  ListWorkRepasosParams,
+  UpdateWorkRepasoPayload,
+} from './modules/workRepasos';
+
+const workRepasosApi = createWorkRepasosApi({
+  apiFetchJson,
+  buildQueryParams,
+  tenantHeader,
+});
+
+export const listWorkRepasos = workRepasosApi.listWorkRepasos;
+export const createWorkRepaso = workRepasosApi.createWorkRepaso;
+export const updateWorkRepaso = workRepasosApi.updateWorkRepaso;
+export const deleteWorkRepaso = workRepasosApi.deleteWorkRepaso;
+
+// ============================================================
+// WORK POSTVENTAS API
+// ============================================================
+
+export type {
+  ApiWorkPostventa,
+  CreateWorkPostventaPayload,
+  ListWorkPostventasParams,
+  UpdateWorkPostventaPayload,
+} from './modules/workPostventas';
+
+const workPostventasApi = createWorkPostventasApi({
+  apiFetchJson,
+  buildQueryParams,
+  tenantHeader,
+});
+
+export const listWorkPostventas = workPostventasApi.listWorkPostventas;
+export const createWorkPostventa = workPostventasApi.createWorkPostventa;
+export const updateWorkPostventa = workPostventasApi.updateWorkPostventa;
+export const deleteWorkPostventa = workPostventasApi.deleteWorkPostventa;
 
 // ============================================================
 // WORK REPORT COMMENTS API

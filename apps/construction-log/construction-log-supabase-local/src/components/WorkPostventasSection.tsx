@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+﻿import { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkPostventas, WorkPostventa, CreatePostventaData, UpdatePostventaData, PostventaSubcontractGroup, PostventaWorker, PostventaMachinery } from '@/hooks/useWorkPostventas';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
@@ -419,6 +419,25 @@ export const WorkPostventasSection: React.FC<WorkPostventasSectionProps> = ({
 
   return (
     <div className="space-y-6">
+      <Card className="w-full bg-white">
+        <CardHeader className="space-y-4">
+          <div className="relative min-h-10">
+            {canManage && (
+              <Button
+                onClick={() => handleOpenDialog()}
+                className="absolute left-0 top-1/2 -translate-y-1/2"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Añadir post-venta
+              </Button>
+            )}
+            <div className="text-center">
+              <CardTitle className="text-2xl">Post-venta de Obra</CardTitle>
+              <p className="text-sm text-muted-foreground">Gestión de trabajos de cierre y garantía</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
       {/* Cabecera de métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -469,14 +488,7 @@ export const WorkPostventasSection: React.FC<WorkPostventasSectionProps> = ({
 
       {/* Barra de acciones */}
       <div className="flex flex-wrap gap-2 justify-between items-center">
-        <div className="flex gap-2">
-          {canManage && (
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Añadir Post-Venta
-            </Button>
-          )}
-        </div>
+        <div className="flex gap-2" />
         <div className="flex gap-2">
           <Button 
             variant="outline" 
@@ -633,6 +645,9 @@ export const WorkPostventasSection: React.FC<WorkPostventasSectionProps> = ({
           </Table>
         </Card>
       )}
+
+        </CardContent>
+      </Card>
 
       {/* Dialog para crear/editar post-venta */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -956,3 +971,5 @@ export const WorkPostventasSection: React.FC<WorkPostventasSectionProps> = ({
     </div>
   );
 };
+
+

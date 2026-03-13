@@ -1,10 +1,10 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorks } from '@/hooks/useWorks';
 import { useUsers } from '@/hooks/useUsers';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useOrganization } from '@/hooks/useOrganization';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,28 +27,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Users, Loader2, Trash2, Package, Truck, ClipboardCheck, ShoppingBag, MapPin, Search } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Plus, Users, Loader2, Trash2, Package, Truck, ClipboardCheck, ShoppingBag, MapPin, Search, Settings, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
-import { WorkInventory } from '@/components/WorkInventory';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WorkRentalMachineryManagement } from '@/components/WorkRentalMachineryManagement';
-import { WorkRepasosSection } from '@/components/WorkRepasosSection';
-import { WorkPostventasSection } from '@/components/WorkPostventasSection';
 
 export const WorkManagement = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
-  const isMobile = useIsMobile();
   const { works, loading, createWork, updateWork, deleteWork } = useWorks();
   const {
     loadUsers,
@@ -64,8 +52,6 @@ export const WorkManagement = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isInventoryDialogOpen, setIsInventoryDialogOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('inventory');
   const [editingWork, setEditingWork] = useState<any>(null);
   const [selectedWork, setSelectedWork] = useState<any>(null);
   const [workToDelete, setWorkToDelete] = useState<any>(null);
@@ -183,7 +169,7 @@ export const WorkManagement = () => {
         // También actualizar la dirección general si está vacía
         address: position.address || prev.address,
       }));
-      toast.success('📍 Ubicación GPS capturada y dirección auto-rellenada');
+      toast.success('?? Ubicación GPS capturada y dirección auto-rellenada');
     } else if (geoError) {
       toast.error(geoError);
     }
@@ -229,14 +215,14 @@ export const WorkManagement = () => {
           latitude: parseFloat(lat),
           longitude: parseFloat(lon),
         }));
-        toast.success('📍 Coordenadas encontradas y actualizadas');
+        toast.success('?? Coordenadas encontradas y actualizadas');
         console.log('[Geocoding] Dirección encontrada:', display_name);
       } else {
-        toast.error('❌ No se encontró la dirección. Revisa los datos');
+        toast.error('? No se encontró la dirección. Revisa los datos');
       }
     } catch (error) {
       console.error('[Geocoding] Error:', error);
-      toast.error('❌ Error al buscar las coordenadas. Inténtalo de nuevo');
+      toast.error('? Error al buscar las coordenadas. Inténtalo de nuevo');
     } finally {
       setGeocodingLoading(false);
     }
@@ -379,233 +365,118 @@ export const WorkManagement = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {isMobile ? (
-            // Vista móvil con cards
-            <div className="space-y-4">
-              {works.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  No hay obras registradas
-                </p>
-              ) : (
-                works.map((work) => (
-                  <Card key={work.id} className="border shadow-sm">
-                    <CardContent className="p-4 space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Número de Obra</p>
-                        <p className="font-bold text-lg">{work.number}</p>
+          <div className="space-y-3">
+            {works.length === 0 ? (
+              <p className="py-8 text-center text-muted-foreground">No hay obras registradas</p>
+            ) : (
+              works.map((work) => (
+                <Card key={work.id} className="border border-slate-200 bg-white shadow-none">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate text-lg font-semibold text-slate-900">{work.name || 'Sin nombre'}</p>
+                        <p className="text-sm text-muted-foreground">Identificador: {work.number || 'Sin número'}</p>
+                        {work.start_date ? (
+                          <p className="text-sm text-muted-foreground">Fecha de inicio: {work.start_date}</p>
+                        ) : null}
+                        {work.address ? (
+                          <p className="truncate text-sm text-muted-foreground">Dirección: {work.address}</p>
+                        ) : null}
                       </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Nombre</p>
-                        <p className="font-medium">{work.name}</p>
-                      </div>
-                      <div className="flex flex-col gap-2 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedWork(work);
-                            setSelectedTab('inventory');
-                            setIsInventoryDialogOpen(true);
-                          }}
-                          className="w-full justify-start"
-                        >
-                          <Package className="mr-2 h-4 w-4" />
-                          Inventario
-                        </Button>
-                        {canManageWorks && (
-                          <>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
+                              title="Ajustes de obra"
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
                               onClick={() => {
-                                setSelectedWork(work);
-                                setSelectedTab('rental');
-                                setIsInventoryDialogOpen(true);
+                                navigate(`/work-management/${work.id}?tab=inventory`);
                               }}
-                              className="w-full justify-start"
+                            >
+                              <Package className="mr-2 h-4 w-4" />
+                              Inventario
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!canManageWorks}
+                              onClick={() => {
+                                if (!canManageWorks) return;
+                                navigate(`/work-management/${work.id}?tab=rental`);
+                              }}
                             >
                               <Truck className="mr-2 h-4 w-4" />
-                              Maq. Alquiler
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
+                              Maq. alquiler
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!canManageWorks}
                               onClick={() => {
-                                setSelectedWork(work);
-                                setSelectedTab('repasos');
-                                setIsInventoryDialogOpen(true);
+                                if (!canManageWorks) return;
+                                navigate(`/work-management/${work.id}?tab=repasos`);
                               }}
-                              className="w-full justify-start"
                             >
                               <ClipboardCheck className="mr-2 h-4 w-4" />
                               Repasos
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!canManageWorks}
                               onClick={() => {
-                                setSelectedWork(work);
-                                setSelectedTab('postventa');
-                                setIsInventoryDialogOpen(true);
+                                if (!canManageWorks) return;
+                                navigate(`/work-management/${work.id}?tab=postventa`);
                               }}
-                              className="w-full justify-start"
                             >
                               <ShoppingBag className="mr-2 h-4 w-4" />
-                              Post-Venta
-                            </Button>
-                          </>
-                        )}
-                        {canAssignWorks && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenAssignDialog(work)}
-                            className="w-full justify-start"
-                          >
-                            <Users className="mr-2 h-4 w-4" />
-                            {t('common.assign')}
-                          </Button>
-                        )}
-                        {canManageWorks && (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenDialog(work)}
-                              className="flex-1"
-                            >
-                              {t('common.edit')}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenDeleteDialog(work)}
-                              className="flex-1"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              {t('common.delete')}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          ) : (
-            // Vista desktop con tabla
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número de Obra</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {works.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
-                      No hay obras registradas
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  works.map((work) => (
-                    <TableRow key={work.id}>
-                      <TableCell className="font-medium">{work.number}</TableCell>
-                      <TableCell>{work.name}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-wrap gap-2 justify-end">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedWork(work);
-                              setSelectedTab('inventory');
-                              setIsInventoryDialogOpen(true);
-                            }}
-                          >
-                            <Package className="mr-2 h-4 w-4" />
-                            Inventario
-                          </Button>
-                          {canManageWorks && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedWork(work);
-                                  setSelectedTab('rental');
-                                  setIsInventoryDialogOpen(true);
-                                }}
-                              >
-                                <Truck className="mr-2 h-4 w-4" />
-                                Maq. Alquiler
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedWork(work);
-                                  setSelectedTab('repasos');
-                                  setIsInventoryDialogOpen(true);
-                                }}
-                              >
-                                <ClipboardCheck className="mr-2 h-4 w-4" />
-                                Repasos
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedWork(work);
-                                  setSelectedTab('postventa');
-                                  setIsInventoryDialogOpen(true);
-                                }}
-                              >
-                                <ShoppingBag className="mr-2 h-4 w-4" />
-                                Post-Venta
-                              </Button>
-                            </>
-                          )}
-                          {canAssignWorks && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenAssignDialog(work)}
+                              Post-venta
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!canAssignWorks}
+                              onClick={() => {
+                                if (!canAssignWorks) return;
+                                handleOpenAssignDialog(work);
+                              }}
                             >
                               <Users className="mr-2 h-4 w-4" />
-                              {t('common.assign')}
-                            </Button>
-                          )}
-                          {canManageWorks && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenDialog(work)}
-                              >
-                                {t('common.edit')}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenDeleteDialog(work)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                {t('common.delete')}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
+                              Asignar encargado
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Editar obra"
+                          disabled={!canManageWorks}
+                          onClick={() => {
+                            if (!canManageWorks) return;
+                            handleOpenDialog(work);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Eliminar obra"
+                          disabled={!canManageWorks}
+                          onClick={() => {
+                            if (!canManageWorks) return;
+                            handleOpenDeleteDialog(work);
+                          }}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -983,74 +854,14 @@ export const WorkManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Dialog para ver inventario y maquinaria de alquiler */}
-      <Dialog open={isInventoryDialogOpen} onOpenChange={setIsInventoryDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Gestión de Obra</DialogTitle>
-            <DialogDescription>
-              {selectedWork && `Obra: ${selectedWork.number} - ${selectedWork.name}`}
-            </DialogDescription>
-          </DialogHeader>
-          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="inventory">
-                <Package className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Inventario</span>
-                <span className="sm:hidden">Inv.</span>
-              </TabsTrigger>
-              <TabsTrigger value="rental">
-                <Truck className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Maq. Alquiler</span>
-                <span className="sm:hidden">Alq.</span>
-              </TabsTrigger>
-              <TabsTrigger value="repasos">
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Repasos</span>
-                <span className="sm:hidden">Rep.</span>
-              </TabsTrigger>
-              <TabsTrigger value="postventa">
-                <ShoppingBag className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Post-Venta</span>
-                <span className="sm:hidden">P-V</span>
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="inventory" className="flex-1 overflow-y-auto mt-4">
-              {selectedWork && organization && (
-                <WorkInventory 
-                  workId={selectedWork.id} 
-                  workName={`${selectedWork.number} - ${selectedWork.name}`}
-                  onBack={() => setIsInventoryDialogOpen(false)}
-                />
-              )}
-            </TabsContent>
-            <TabsContent value="rental" className="flex-1 overflow-y-auto mt-4">
-              {selectedWork && (
-                <WorkRentalMachineryManagement workId={selectedWork.id} />
-              )}
-            </TabsContent>
-            <TabsContent value="repasos" className="flex-1 overflow-y-auto mt-4">
-              {selectedWork && (
-                <WorkRepasosSection 
-                  workId={selectedWork.id} 
-                  workName={selectedWork.name}
-                  workNumber={selectedWork.number}
-                />
-              )}
-            </TabsContent>
-            <TabsContent value="postventa" className="flex-1 overflow-y-auto mt-4">
-              {selectedWork && (
-                <WorkPostventasSection 
-                  workId={selectedWork.id} 
-                  workName={selectedWork.name}
-                  workNumber={selectedWork.number}
-                />
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
+
+
+
+
+
+
+
+

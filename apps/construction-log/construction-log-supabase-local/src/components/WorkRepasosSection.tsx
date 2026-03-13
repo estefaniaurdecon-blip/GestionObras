@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+﻿import { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkRepasos, WorkRepaso, CreateRepasoData, UpdateRepasoData, RepasoSubcontractGroup, RepasoWorker, RepasoMachinery } from '@/hooks/useWorkRepasos';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
@@ -427,6 +427,25 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
 
   return (
     <div className="space-y-6">
+      <Card className="w-full bg-white">
+        <CardHeader className="space-y-4">
+          <div className="relative min-h-10">
+            {canManage && (
+              <Button
+                onClick={() => handleOpenDialog()}
+                className="absolute left-0 top-1/2 -translate-y-1/2"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Añadir repaso
+              </Button>
+            )}
+            <div className="text-center">
+              <CardTitle className="text-2xl">Repasos de Obra</CardTitle>
+              <p className="text-sm text-muted-foreground">Gestión de incidencias y correcciones en obra</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
       {/* Cabecera de métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -477,14 +496,7 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
 
       {/* Barra de acciones */}
       <div className="flex flex-wrap gap-2 justify-between items-center">
-        <div className="flex gap-2">
-          {canManage && (
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Añadir Repaso
-            </Button>
-          )}
-        </div>
+        <div className="flex gap-2" />
         <div className="flex gap-2">
           <Button 
             variant="outline" 
@@ -687,6 +699,8 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
           </Table>
         </Card>
       )}
+        </CardContent>
+      </Card>
 
       {/* Dialog para crear/editar repaso */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1075,3 +1089,5 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
     </div>
   );
 };
+
+

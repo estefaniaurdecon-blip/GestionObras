@@ -376,3 +376,63 @@ class RentalMachinery(SQLModel, table=True):
         Index("ix_erp_rental_tenant_status", "tenant_id", "status"),
     )
 
+
+class WorkRepaso(SQLModel, table=True):
+    __tablename__ = "erp_work_repaso"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    project_id: int = Field(foreign_key="erp_project.id", index=True)
+
+    external_id: Optional[str] = Field(default=None, max_length=128, index=True)
+    code: str = Field(max_length=64, index=True)
+    status: str = Field(default="pending", max_length=32, index=True)
+    description: str = Field(sa_column=Column(Text, nullable=False))
+    assigned_company: Optional[str] = Field(default=None, max_length=255)
+    estimated_hours: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2), nullable=False))
+    actual_hours: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2), nullable=False))
+    before_image: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    after_image: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    subcontract_groups: Any = Field(default=[], sa_column=Column(JSON, nullable=False, server_default="[]"))
+
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    deleted_at: Optional[datetime] = Field(default=None, index=True)
+
+    __table_args__ = (
+        Index("ix_erp_work_repaso_tenant_project_updated", "tenant_id", "project_id", "updated_at"),
+        Index("ix_erp_work_repaso_tenant_external", "tenant_id", "external_id", unique=True),
+    )
+
+
+class WorkPostventa(SQLModel, table=True):
+    __tablename__ = "erp_work_postventa"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id", index=True)
+    project_id: int = Field(foreign_key="erp_project.id", index=True)
+
+    external_id: Optional[str] = Field(default=None, max_length=128, index=True)
+    code: str = Field(max_length=64, index=True)
+    status: str = Field(default="pending", max_length=32, index=True)
+    description: str = Field(sa_column=Column(Text, nullable=False))
+    assigned_company: Optional[str] = Field(default=None, max_length=255)
+    estimated_hours: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2), nullable=False))
+    actual_hours: Decimal = Field(default=0, sa_column=Column(Numeric(10, 2), nullable=False))
+    before_image: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    after_image: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    subcontract_groups: Any = Field(default=[], sa_column=Column(JSON, nullable=False, server_default="[]"))
+
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    deleted_at: Optional[datetime] = Field(default=None, index=True)
+
+    __table_args__ = (
+        Index("ix_erp_work_postventa_tenant_project_updated", "tenant_id", "project_id", "updated_at"),
+        Index("ix_erp_work_postventa_tenant_external", "tenant_id", "external_id", unique=True),
+    )
+

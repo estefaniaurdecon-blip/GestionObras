@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -112,9 +112,12 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
+  const [showRecalculateConfirm, setShowRecalculateConfirm] = useState(false);
   const [validating, setValidating] = useState(false);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [activeInventoryTab, setActiveInventoryTab] = useState<'dashboard' | 'pending' | 'materials' | 'tools'>('dashboard');
+  const [activeTopPanel, setActiveTopPanel] = useState<'actions' | 'maintenance' | 'search' | null>('search');
 
   const formSchema = z.object({
     name: z.string().min(1, "El nombre es obligatorio"),
@@ -169,13 +172,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       if (data.itemsUpdated > 0) messages.push(`${data.itemsUpdated} actualizados`);
       if (data.immediateConsumptionItems > 0) messages.push(`${data.immediateConsumptionItems} consumo directo`);
       
-      toast.success(`Inventario sincronizado`, {
+      toast.success(`Inventario recalculado`, {
         description: messages.join(', ') + ` de ${data.reportsAnalyzed} partes analizados`
       });
       loadInventory();
     } catch (error) {
       console.error('Error syncing inventory:', error);
-      toast.error('Error al sincronizar el inventario');
+      toast.error('Error al recalcular el inventario');
     } finally {
       setSyncing(false);
     }
@@ -350,7 +353,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Â¿EstÃ¡s seguro de eliminar este elemento del inventario?')) return;
+    if (!window.confirm('¿Estás seguro de eliminar este elemento del inventario?')) return;
 
     try {
       await deleteInventoryItem(workId, id);
@@ -380,8 +383,8 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const generateWorksheet = (items: InventoryItem[], sheetName: string) => {
       const wsData = [
         [
-          'Nombre', 'Tipo', 'CategorÃ­a', 'CÃ³digo', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
-          'Precio Unitario', 'Precio Total', 'NÂº AlbarÃ¡n', 'Lote/Serie', 'Proveedor', 'UbicaciÃ³n',
+          'Nombre', 'Tipo', 'Categoría', 'Código', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
+          'Precio Unitario', 'Precio Total', 'Nº Albarán', 'Lote/Serie', 'Proveedor', 'Ubicación',
           'Estado', 'Fecha Entrada', 'Fecha Salida', 'Observaciones'
         ],
         ...items.map(item => [
@@ -426,7 +429,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const itemsWithDeliveryNotes = allItems.filter(item => item.delivery_note_number);
   
     if (itemsWithDeliveryNotes.length === 0) {
-      toast.error('No hay elementos con albarÃ¡n para exportar.');
+      toast.error('No hay elementos con albarán para exportar.');
       setExportingNotes(false);
       return;
     }
@@ -438,8 +441,8 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     const generateWorksheet = (items: InventoryItem[], sheetName: string) => {
       const wsData = [
         [
-          'Nombre', 'Tipo', 'CategorÃ­a', 'CÃ³digo', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
-          'Precio Unitario', 'Precio Total', 'NÂº AlbarÃ¡n', 'Lote/Serie', 'Proveedor', 'UbicaciÃ³n',
+          'Nombre', 'Tipo', 'Categoría', 'Código', 'Marca', 'Modelo', 'Cantidad', 'Unidad',
+          'Precio Unitario', 'Precio Total', 'Nº Albarán', 'Lote/Serie', 'Proveedor', 'Ubicación',
           'Estado', 'Fecha Entrada', 'Fecha Salida', 'Observaciones'
         ],
         ...items.map(item => [
@@ -471,7 +474,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
   const filterItems = (items: InventoryItem[]) => {
     let filtered = items;
     
-    // Filtrar por bÃºsqueda de texto
+    // Filtrar por búsqueda de texto
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(item =>
@@ -483,7 +486,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
       );
     }
     
-    // Filtrar por mes y aÃ±o
+    // Filtrar por mes y año
     if (filterMonth !== null || filterYear !== null) {
       filtered = filtered.filter(item => {
         if (!item.last_entry_date) return false;
@@ -507,13 +510,22 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     return filtered;
   };
 
-  // Agrupar items por proveedor, luego por fecha y nÃºmero de albarÃ¡n
+  const filteredMaterials = useMemo(
+    () => filterItems(materials),
+    [materials, searchTerm, filterMonth, filterYear],
+  );
+  const filteredTools = useMemo(
+    () => filterItems(tools),
+    [tools, searchTerm, filterMonth, filterYear],
+  );
+
+  // Agrupar items por proveedor, luego por fecha y número de albarán
   const groupItemsByDelivery = (items: InventoryItem[]) => {
     const grouped: Record<string, Record<string, InventoryItem[]>> = {};
 
     items.forEach(item => {
       const supplier = item.last_supplier || 'Sin proveedor';
-      const deliveryKey = `${item.delivery_note_number || 'Sin albarÃ¡n'}_${item.last_entry_date || 'Sin fecha'}`;
+      const deliveryKey = `${item.delivery_note_number || 'Sin albarán'}_${item.last_entry_date || 'Sin fecha'}`;
       
       if (!grouped[supplier]) {
         grouped[supplier] = {};
@@ -527,9 +539,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
     return grouped;
   };
 
-  const renderInventoryTable = (items: InventoryItem[], type: 'material' | 'herramienta') => {
-    const filteredItems = filterItems(items);
-
+  const renderInventoryTable = (filteredItems: InventoryItem[], type: 'material' | 'herramienta') => {
     if (filteredItems.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -564,13 +574,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                     <div className="text-left">
                       <div className="font-semibold">{supplier}</div>
                       <div className="text-sm text-muted-foreground">
-                        {supplierItemCount} elementos â€¢ {Object.keys(deliveries).length} albaranes
+                        {supplierItemCount} elementos • {Object.keys(deliveries).length} albaranes
                       </div>
                     </div>
                   </div>
                   {supplierTotal > 0 && (
                     <Badge variant="secondary" className="text-base font-semibold">
-                      {supplierTotal.toFixed(2)}â‚¬
+                      {supplierTotal.toFixed(2)}€
                     </Badge>
                   )}
                 </div>
@@ -591,10 +601,10 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                           <div className="flex items-center justify-between w-full pr-4">
                             <div className="text-left">
                               <div className="font-medium text-sm">
-                                {deliveryNote !== 'Sin albarÃ¡n' && (
+                                {deliveryNote !== 'Sin albarán' && (
                                   <span className="font-mono">{deliveryNote}</span>
                                 )}
-                                {deliveryNote === 'Sin albarÃ¡n' && (
+                                {deliveryNote === 'Sin albarán' && (
                                   <span className="text-muted-foreground">{deliveryNote}</span>
                                 )}
                               </div>
@@ -602,12 +612,12 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                 {entryDate !== 'Sin fecha' 
                                   ? format(new Date(entryDate), "d 'de' MMMM, yyyy", { locale: es })
                                   : 'Sin fecha'
-                                } â€¢ {deliveryItems.length} elementos
+                                } • {deliveryItems.length} elementos
                               </div>
                             </div>
                             {deliveryTotal > 0 && (
                               <Badge variant="outline" className="font-semibold">
-                                {deliveryTotal.toFixed(2)}â‚¬
+                                {deliveryTotal.toFixed(2)}€
                               </Badge>
                             )}
                           </div>
@@ -618,13 +628,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead className="h-8">CÃ³digo</TableHead>
+                                  <TableHead className="h-8">Código</TableHead>
                                   <TableHead className="h-8">Nombre</TableHead>
                                   <TableHead className="h-8">Marca/Modelo</TableHead>
                                   <TableHead className="h-8">Cantidad</TableHead>
                                   <TableHead className="h-8">P. Unit.</TableHead>
                                   <TableHead className="h-8">P. Total</TableHead>
-                                  <TableHead className="h-8">UbicaciÃ³n</TableHead>
+                                  <TableHead className="h-8">Ubicación</TableHead>
                                   <TableHead className="h-8">Estado</TableHead>
                                   <TableHead className="h-8">Acciones</TableHead>
                                 </TableRow>
@@ -638,16 +648,16 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                       {item.brand && item.model ? `${item.brand} ${item.model}` : item.brand || item.model || '-'}
                                     </TableCell>
                                     <TableCell>{item.quantity} {item.unit}</TableCell>
-                                    <TableCell>{item.unit_price ? `${item.unit_price.toFixed(2)}â‚¬` : '-'}</TableCell>
+                                    <TableCell>{item.unit_price ? `${item.unit_price.toFixed(2)}€` : '-'}</TableCell>
                                     <TableCell className="font-semibold">
-                                      {item.total_price ? `${item.total_price.toFixed(2)}â‚¬` : '-'}
+                                      {item.total_price ? `${item.total_price.toFixed(2)}€` : '-'}
                                     </TableCell>
                                     <TableCell>{item.location || '-'}</TableCell>
                                     <TableCell>
                                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                         item.condition === 'nuevo' ? 'bg-green-100 text-green-800' :
                                         item.condition === 'usado' ? 'bg-yellow-100 text-yellow-800' :
-                                        item.condition === 'daÃ±ado' ? 'bg-red-100 text-red-800' :
+                                        item.condition === 'dañado' ? 'bg-red-100 text-red-800' :
                                         'bg-gray-100 text-gray-800'
                                       }`}>
                                         {item.condition || 'nuevo'}
@@ -693,7 +703,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                     </div>
                                     {item.total_price && (
                                       <Badge variant="secondary" className="font-semibold">
-                                        {item.total_price.toFixed(2)}â‚¬
+                                        {item.total_price.toFixed(2)}€
                                       </Badge>
                                     )}
                                   </div>
@@ -718,12 +728,12 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                                     {item.unit_price && (
                                       <div>
                                         <span className="text-muted-foreground">P. Unit.:</span>
-                                        <p className="font-medium">{item.unit_price.toFixed(2)}â‚¬</p>
+                                        <p className="font-medium">{item.unit_price.toFixed(2)}€</p>
                                       </div>
                                     )}
                                     {item.location && (
                                       <div>
-                                        <span className="text-muted-foreground">UbicaciÃ³n:</span>
+                                        <span className="text-muted-foreground">Ubicación:</span>
                                         <p className="font-medium">{item.location}</p>
                                       </div>
                                     )}
@@ -779,179 +789,234 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
 
   return (
     <Card className="w-full">
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {onBack && (
-              <Button variant="ghost" size="icon" onClick={onBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
-            <div>
-              <CardTitle>Inventario de Obra</CardTitle>
-              <CardDescription>{workName}</CardDescription>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <CardHeader className="space-y-4">
+        <div className="relative min-h-10">
+          {onBack && (
             <Button
-              variant="outline"
-              size="sm"
-              onClick={syncInventoryFromReports}
-              disabled={syncing}
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              className="absolute left-0 top-1/2 -translate-y-1/2"
             >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Sincronizar
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cleanInventory}
-              disabled={cleaning}
-            >
-              {cleaning ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
-              )}
-              Limpiar Servicios
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={validateAndFixInventory}
-              disabled={validating}
-            >
-              {validating ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle className="h-4 w-4 mr-2" />
-              )}
-              Validar y Corregir
-            </Button>
-            {selectedSuppliers.length >= 2 && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setShowMergeConfirm(true)}
-                disabled={mergingSuppliers}
-              >
-                {mergingSuppliers ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <GitMerge className="h-4 w-4 mr-2" />
-                )}
-                Fusionar ({selectedSuppliers.length})
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToExcel}
-              disabled={exportingNotes}
-            >
-              {exportingNotes ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              Exportar Excel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportMaterialDeliveryNotes}
-              disabled={exportingNotes}
-            >
-              {exportingNotes ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FileText className="h-4 w-4 mr-2" />
-              )}
-              Exportar Albaranes
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Buscar por nombre, cÃ³digo, marca..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          
-          <div className="flex flex-wrap gap-2 items-end">
-            <div className="flex-1 min-w-[150px]">
-              <label className="text-sm font-medium mb-1 block">Mes</label>
-              <Select
-                value={filterMonth !== null ? filterMonth.toString() : "all"}
-                onValueChange={(value) => setFilterMonth(value === "all" ? null : parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los meses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los meses</SelectItem>
-                  <SelectItem value="0">Enero</SelectItem>
-                  <SelectItem value="1">Febrero</SelectItem>
-                  <SelectItem value="2">Marzo</SelectItem>
-                  <SelectItem value="3">Abril</SelectItem>
-                  <SelectItem value="4">Mayo</SelectItem>
-                  <SelectItem value="5">Junio</SelectItem>
-                  <SelectItem value="6">Julio</SelectItem>
-                  <SelectItem value="7">Agosto</SelectItem>
-                  <SelectItem value="8">Septiembre</SelectItem>
-                  <SelectItem value="9">Octubre</SelectItem>
-                  <SelectItem value="10">Noviembre</SelectItem>
-                  <SelectItem value="11">Diciembre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex-1 min-w-[150px]">
-              <label className="text-sm font-medium mb-1 block">AÃ±o</label>
-              <Select
-                value={filterYear !== null ? filterYear.toString() : "all"}
-                onValueChange={(value) => setFilterYear(value === "all" ? null : parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los aÃ±os" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los aÃ±os</SelectItem>
-                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {(filterMonth !== null || filterYear !== null) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFilterMonth(null);
-                  setFilterYear(null);
-                }}
-              >
-                Limpiar filtros
-              </Button>
-            )}
+          )}
+          <div className="text-center">
+            <CardTitle className="text-2xl">Inventario de Obra</CardTitle>
+            <CardDescription>{workName}</CardDescription>
+            <div className="text-[11px] text-muted-foreground">UI Inventario v2</div>
           </div>
         </div>
 
-        <Tabs defaultValue="dashboard" className="w-full">
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Button
+            variant={activeTopPanel === 'actions' ? 'default' : 'outline'}
+            onClick={() => setActiveTopPanel((prev) => (prev === 'actions' ? null : 'actions'))}
+          >
+            Acciones de Obra
+          </Button>
+          <Button
+            variant={activeTopPanel === 'maintenance' ? 'default' : 'outline'}
+            onClick={() => setActiveTopPanel((prev) => (prev === 'maintenance' ? null : 'maintenance'))}
+          >
+            Mantenimiento
+          </Button>
+          <Button
+            variant={activeTopPanel === 'search' ? 'default' : 'outline'}
+            onClick={() => setActiveTopPanel((prev) => (prev === 'search' ? null : 'search'))}
+          >
+            Busqueda
+          </Button>
+        </div>
+
+        {activeTopPanel === 'actions' && (
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">Acciones de obra</div>
+                <p className="text-xs text-muted-foreground">
+                  Exportacion global: incluye toda la obra y no depende de filtros ni pestana.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setActiveTopPanel(null)}>
+                Ocultar
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowRecalculateConfirm(true)}
+                disabled={syncing}
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Recalcular desde partes
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportToExcel} disabled={exportingNotes}>
+                {exportingNotes ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Exportar Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportMaterialDeliveryNotes} disabled={exportingNotes}>
+                {exportingNotes ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                Exportar Albaranes
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {activeTopPanel === 'maintenance' && (
+          <div className="rounded-lg border p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">Mantenimiento</div>
+                <p className="text-xs text-muted-foreground">Correcciones avanzadas del inventario.</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setActiveTopPanel(null)}>
+                Ocultar
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={cleanInventory} disabled={cleaning}>
+                {cleaning ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Limpiar Servicios
+              </Button>
+              <Button variant="outline" size="sm" onClick={validateAndFixInventory} disabled={validating}>
+                {validating ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                )}
+                Validar y Corregir
+              </Button>
+              {selectedSuppliers.length >= 2 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowMergeConfirm(true)}
+                  disabled={mergingSuppliers}
+                >
+                  {mergingSuppliers ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <GitMerge className="h-4 w-4 mr-2" />
+                  )}
+                  Fusionar ({selectedSuppliers.length})
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTopPanel === 'search' && (
+          <div className="rounded-lg border p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">Busqueda y filtros</div>
+                <p className="text-xs text-muted-foreground">
+                  Filtran la visualizacion de materiales y herramientas de esta obra.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setActiveTopPanel(null)}>
+                Ocultar
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Buscar por nombre, codigo, marca..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[150px]">
+                  <label className="text-sm font-medium mb-1 block">Mes</label>
+                  <Select
+                    value={filterMonth !== null ? filterMonth.toString() : "all"}
+                    onValueChange={(value) => setFilterMonth(value === "all" ? null : parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los meses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los meses</SelectItem>
+                      <SelectItem value="0">Enero</SelectItem>
+                      <SelectItem value="1">Febrero</SelectItem>
+                      <SelectItem value="2">Marzo</SelectItem>
+                      <SelectItem value="3">Abril</SelectItem>
+                      <SelectItem value="4">Mayo</SelectItem>
+                      <SelectItem value="5">Junio</SelectItem>
+                      <SelectItem value="6">Julio</SelectItem>
+                      <SelectItem value="7">Agosto</SelectItem>
+                      <SelectItem value="8">Septiembre</SelectItem>
+                      <SelectItem value="9">Octubre</SelectItem>
+                      <SelectItem value="10">Noviembre</SelectItem>
+                      <SelectItem value="11">Diciembre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="text-sm font-medium mb-1 block">Ano</label>
+                  <Select
+                    value={filterYear !== null ? filterYear.toString() : "all"}
+                    onValueChange={(value) => setFilterYear(value === "all" ? null : parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos los anos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los anos</SelectItem>
+                      {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(filterMonth !== null || filterYear !== null || searchTerm.trim().length > 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFilterMonth(null);
+                      setFilterYear(null);
+                      setSearchTerm('');
+                    }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <Tabs
+          value={activeInventoryTab}
+          onValueChange={(value) => setActiveInventoryTab(value as 'dashboard' | 'pending' | 'materials' | 'tools')}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="dashboard">
               <LayoutDashboard className="h-4 w-4 mr-2" />
@@ -963,20 +1028,20 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
             </TabsTrigger>
             <TabsTrigger value="materials">
               <Package className="h-4 w-4 mr-2" />
-              Materiales ({filterItems(materials).length})
+              Materiales ({filteredMaterials.length})
             </TabsTrigger>
             <TabsTrigger value="tools">
               <Wrench className="h-4 w-4 mr-2" />
-              Herramientas ({filterItems(tools).length})
+              Herramientas ({filteredTools.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-4">
-            <InventoryDashboard workId={workId} workName={workName} />
+            {activeInventoryTab === 'dashboard' ? <InventoryDashboard workId={workId} workName={workName} /> : null}
           </TabsContent>
 
           <TabsContent value="pending" className="mt-4">
-            <DeliveryNoteReview workId={workId} workName={workName} />
+            {activeInventoryTab === 'pending' ? <DeliveryNoteReview workId={workId} workName={workName} /> : null}
           </TabsContent>
 
           <TabsContent value="materials">
@@ -985,7 +1050,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                 <Loader2 className="h-8 w-8 animate-spin mx-auto" />
               </div>
             ) : (
-              renderInventoryTable(materials, 'material')
+              activeInventoryTab === 'materials' ? renderInventoryTable(filteredMaterials, 'material') : null
             )}
           </TabsContent>
 
@@ -995,7 +1060,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                 <Loader2 className="h-8 w-8 animate-spin mx-auto" />
               </div>
             ) : (
-              renderInventoryTable(tools, 'herramienta')
+              activeInventoryTab === 'tools' ? renderInventoryTable(filteredTools, 'herramienta') : null
             )}
           </TabsContent>
         </Tabs>
@@ -1040,7 +1105,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="product_code"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>CÃ³digo</FormLabel>
+                      <FormLabel>Código</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Ej: MAT-001" />
                       </FormControl>
@@ -1054,7 +1119,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="category"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>CategorÃ­a</FormLabel>
+                      <FormLabel>Categoría</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -1127,13 +1192,13 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                           <SelectItem value="kg">kg (Kilogramos)</SelectItem>
                           <SelectItem value="t">t (Toneladas)</SelectItem>
                           <SelectItem value="m">m (Metros)</SelectItem>
-                          <SelectItem value="mÂ²">mÂ² (Metros cuadrados)</SelectItem>
-                          <SelectItem value="mÂ³">mÂ³ (Metros cÃºbicos)</SelectItem>
+                          <SelectItem value="m²">m² (Metros cuadrados)</SelectItem>
+                          <SelectItem value="m³">m³ (Metros cúbicos)</SelectItem>
                           <SelectItem value="l">l (Litros)</SelectItem>
                           <SelectItem value="ml">ml (Mililitros)</SelectItem>
                           <SelectItem value="g">g (Gramos)</SelectItem>
                           <SelectItem value="h">h (Horas)</SelectItem>
-                          <SelectItem value="dÃ­a">dÃ­a (DÃ­as)</SelectItem>
+                          <SelectItem value="día">día (Días)</SelectItem>
                           <SelectItem value="mes">mes (Meses)</SelectItem>
                           <SelectItem value="pza">pza (Piezas)</SelectItem>
                           <SelectItem value="caja">caja (Cajas)</SelectItem>
@@ -1153,7 +1218,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="unit_price"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Precio Unitario (â‚¬)</FormLabel>
+                      <FormLabel>Precio Unitario (€)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -1172,7 +1237,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="delivery_note_number"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>NÂº AlbarÃ¡n</FormLabel>
+                      <FormLabel>Nº Albarán</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -1214,7 +1279,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>UbicaciÃ³n</FormLabel>
+                      <FormLabel>Ubicación</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Planta 2, Zona A" />
                       </FormControl>
@@ -1238,7 +1303,7 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
                         <SelectContent>
                           <SelectItem value="nuevo">Nuevo</SelectItem>
                           <SelectItem value="usado">Usado</SelectItem>
-                          <SelectItem value="daÃ±ado">DaÃ±ado</SelectItem>
+                          <SelectItem value="dañado">Dañado</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1300,21 +1365,46 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={showRecalculateConfirm} onOpenChange={setShowRecalculateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recalcular inventario desde partes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se reprocesarán todos los partes completados de esta obra para actualizar el inventario.
+              Esta acción puede modificar cantidades y clasificaciones actuales.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={syncInventoryFromReports} disabled={syncing}>
+              {syncing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Recalculando...
+                </>
+              ) : (
+                'Recalcular'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Merge Suppliers Confirmation Dialog */}
       <AlertDialog open={showMergeConfirm} onOpenChange={setShowMergeConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Fusionar Proveedores</AlertDialogTitle>
             <AlertDialogDescription>
-              Los siguientes proveedores se fusionarÃ¡n en <strong>"{selectedSuppliers[0]}"</strong>:
+              Los siguientes proveedores se fusionarán en <strong>"{selectedSuppliers[0]}"</strong>:
               <ul className="mt-2 ml-4 list-disc space-y-1">
                 {selectedSuppliers.slice(1).map(supplier => (
                   <li key={supplier} className="text-sm">{supplier}</li>
                 ))}
               </ul>
               <p className="mt-3 text-destructive font-medium">
-                Todos los albaranes e Ã­tems de los proveedores fusionados se asignarÃ¡n a "{selectedSuppliers[0]}".
-                Esta acciÃ³n no se puede deshacer.
+                Todos los albaranes e ítems de los proveedores fusionados se asignarán a "{selectedSuppliers[0]}".
+                Esta acción no se puede deshacer.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>

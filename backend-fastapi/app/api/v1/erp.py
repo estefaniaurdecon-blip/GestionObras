@@ -52,6 +52,12 @@ from app.schemas.erp import (
     RentalMachineryCreate,
     RentalMachineryRead,
     RentalMachineryUpdate,
+    WorkRepasoCreate,
+    WorkRepasoRead,
+    WorkRepasoUpdate,
+    WorkPostventaCreate,
+    WorkPostventaRead,
+    WorkPostventaUpdate,
 )
 from app.services.erp_service import (
     create_activity,
@@ -97,6 +103,14 @@ from app.services.erp_service import (
     create_rental_machinery,
     update_rental_machinery,
     delete_rental_machinery,
+    list_work_repasos,
+    create_work_repaso,
+    update_work_repaso,
+    delete_work_repaso,
+    list_work_postventas,
+    create_work_postventa,
+    update_work_postventa,
+    delete_work_postventa,
     start_time_session,
     stop_time_session,
     update_activity,
@@ -1239,6 +1253,180 @@ def api_delete_rental_machinery(
         delete_rental_machinery(
             session,
             machinery_id,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrada" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.get("/work-repasos", response_model=list[WorkRepasoRead])
+def api_list_work_repasos(
+    project_id: Optional[int] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[WorkRepasoRead]:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return list_work_repasos(
+            session,
+            tenant_id,
+            project_id=project_id,
+            status=status_filter,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/work-repasos", response_model=WorkRepasoRead, status_code=status.HTTP_201_CREATED)
+def api_create_work_repaso(
+    payload: WorkRepasoCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkRepasoRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return create_work_repaso(
+            session,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/work-repasos/{repaso_id}", response_model=WorkRepasoRead)
+def api_update_work_repaso(
+    repaso_id: int,
+    payload: WorkRepasoUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkRepasoRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return update_work_repaso(
+            session,
+            repaso_id,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrado" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.delete("/work-repasos/{repaso_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_work_repaso(
+    repaso_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        delete_work_repaso(
+            session,
+            repaso_id,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrado" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.get("/work-postventas", response_model=list[WorkPostventaRead])
+def api_list_work_postventas(
+    project_id: Optional[int] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[WorkPostventaRead]:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+        return list_work_postventas(
+            session,
+            tenant_id,
+            project_id=project_id,
+            status=status_filter,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/work-postventas", response_model=WorkPostventaRead, status_code=status.HTTP_201_CREATED)
+def api_create_work_postventa(
+    payload: WorkPostventaCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkPostventaRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return create_work_postventa(
+            session,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.patch("/work-postventas/{postventa_id}", response_model=WorkPostventaRead)
+def api_update_work_postventa(
+    postventa_id: int,
+    payload: WorkPostventaUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkPostventaRead:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        return update_work_postventa(
+            session,
+            postventa_id,
+            payload,
+            tenant_id,
+            current_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        code = status.HTTP_404_NOT_FOUND if "no encontrada" in str(exc).lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.delete("/work-postventas/{postventa_id}", status_code=status.HTTP_204_NO_CONTENT)
+def api_delete_work_postventa(
+    postventa_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:manage"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> None:
+    try:
+        tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=True)
+        delete_work_postventa(
+            session,
+            postventa_id,
             tenant_id,
             current_user_id=current_user.id,
         )

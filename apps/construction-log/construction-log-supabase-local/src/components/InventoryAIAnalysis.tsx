@@ -228,11 +228,11 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          AnÃ¡lisis de Inventario con IA
+          Análisis de Inventario con IA
         </CardTitle>
         <CardDescription>
-          La IA analizarÃ¡ el inventario para clasificar correctamente materiales y herramientas, 
-          corregir valores errÃ³neos y eliminar maquinaria incorrectamente categorizada.
+          La IA analizará el inventario para clasificar correctamente materiales y herramientas, 
+          corregir valores erróneos y eliminar maquinaria incorrectamente categorizada.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -250,7 +250,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Iniciar AnÃ¡lisis Exhaustivo
+                Iniciar Análisis Exhaustivo
               </>
             )}
           </Button>
@@ -338,7 +338,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                Resultados del anÃ¡lisis: {deleteCount} items a eliminar, {updateCount} items a actualizar, {keepCount} items correctos.
+                Resultados del análisis: {deleteCount} items a eliminar, {updateCount} items a actualizar, {keepCount} items correctos.
               </AlertDescription>
             </Alert>
 
@@ -358,16 +358,16 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
                           <strong>Cambios sugeridos:</strong>
                           <ul className="mt-1 space-y-1">
                             {result.suggested_changes.item_type && (
-                              <li>â€¢ Tipo: {result.suggested_changes.item_type}</li>
+                              <li>• Tipo: {result.suggested_changes.item_type}</li>
                             )}
                             {result.suggested_changes.category && (
-                              <li>â€¢ CategorÃ­a: {result.suggested_changes.category}</li>
+                              <li>• Categoría: {result.suggested_changes.category}</li>
                             )}
                             {result.suggested_changes.unit && (
-                              <li>â€¢ Unidad: {result.suggested_changes.unit}</li>
+                              <li>• Unidad: {result.suggested_changes.unit}</li>
                             )}
                             {result.suggested_changes.name && (
-                              <li>â€¢ Nombre: {result.suggested_changes.name}</li>
+                              <li>• Nombre: {result.suggested_changes.name}</li>
                             )}
                           </ul>
                         </div>
@@ -408,7 +408,7 @@ export const InventoryAIAnalysis = ({ workId, onAnalysisComplete }: InventoryAIA
           <Alert>
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
-              No se encontraron items que requieran correcciones. El inventario estÃ¡ correcto.
+              No se encontraron items que requieran correcciones. El inventario está correcto.
             </AlertDescription>
           </Alert>
         )}

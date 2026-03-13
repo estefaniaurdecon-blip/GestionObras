@@ -44,6 +44,8 @@ from app.models.erp import (  # noqa: F401
     TimeEntry,
     TimeSession,
     ProjectDocument,
+    WorkRepaso,
+    WorkPostventa,
 )
 from app.models.summary import SummaryYear  # noqa: F401
 from app.models.inventory import (  # noqa: F401

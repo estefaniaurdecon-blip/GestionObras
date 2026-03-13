@@ -575,3 +575,98 @@ class RentalMachineryUpdate(BaseModel):
     price: Optional[Decimal] = None
     price_unit: Optional[RentalMachineryPriceUnit] = None
     status: Optional[RentalMachineryStatus] = None
+
+
+WorkServiceStatus = Literal["pending", "in_progress", "completed"]
+
+
+class WorkRepasoRead(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int
+    external_id: Optional[str] = None
+    code: str
+    status: WorkServiceStatus
+    description: str
+    assigned_company: Optional[str] = None
+    estimated_hours: Decimal = Field(default=0)
+    actual_hours: Decimal = Field(default=0)
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: list[Any] = Field(default_factory=list)
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class WorkRepasoCreate(BaseModel):
+    project_id: int
+    external_id: Optional[str] = None
+    status: WorkServiceStatus = "pending"
+    description: str
+    assigned_company: Optional[str] = None
+    estimated_hours: Decimal = Field(default=0)
+    actual_hours: Decimal = Field(default=0)
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: list[Any] = Field(default_factory=list)
+
+
+class WorkRepasoUpdate(BaseModel):
+    project_id: Optional[int] = None
+    status: Optional[WorkServiceStatus] = None
+    description: Optional[str] = None
+    assigned_company: Optional[str] = None
+    estimated_hours: Optional[Decimal] = None
+    actual_hours: Optional[Decimal] = None
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: Optional[list[Any]] = None
+
+
+class WorkPostventaRead(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int
+    external_id: Optional[str] = None
+    code: str
+    status: WorkServiceStatus
+    description: str
+    assigned_company: Optional[str] = None
+    estimated_hours: Decimal = Field(default=0)
+    actual_hours: Decimal = Field(default=0)
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: list[Any] = Field(default_factory=list)
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class WorkPostventaCreate(BaseModel):
+    project_id: int
+    external_id: Optional[str] = None
+    status: WorkServiceStatus = "pending"
+    description: str
+    assigned_company: Optional[str] = None
+    estimated_hours: Decimal = Field(default=0)
+    actual_hours: Decimal = Field(default=0)
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: list[Any] = Field(default_factory=list)
+
+
+class WorkPostventaUpdate(BaseModel):
+    project_id: Optional[int] = None
+    status: Optional[WorkServiceStatus] = None
+    description: Optional[str] = None
+    assigned_company: Optional[str] = None
+    estimated_hours: Optional[Decimal] = None
+    actual_hours: Optional[Decimal] = None
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    subcontract_groups: Optional[list[Any]] = None
