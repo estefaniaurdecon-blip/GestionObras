@@ -528,6 +528,10 @@ export interface ApiProject {
   country?: string;
   start_date?: string;
   end_date?: string;
+  duration_months?: number;
+  loan_percent?: number;
+  subsidy_percent?: number;
+  is_active?: boolean;
   status?: string;
   budget?: number;
   tenant_id?: number;
@@ -593,26 +597,86 @@ export interface ApiProjectBudgetMilestone {
   created_at: string;
 }
 
+export interface ApiProjectBudgetLinePayload {
+  concept: string;
+  hito1_budget: number;
+  justified_hito1: number;
+  hito2_budget: number;
+  justified_hito2: number;
+  approved_budget: number;
+  percent_spent: number;
+  forecasted_spent: number;
+}
+
+export interface ApiProjectBudgetLineUpdatePayload
+  extends Partial<
+    ApiProjectBudgetLinePayload & {
+      milestones: Array<{
+        milestone_id: number;
+        amount?: number | null;
+        justified?: number | null;
+      }>;
+    }
+  > {}
+
+export interface ApiProjectBudgetMilestonePayload {
+  name: string;
+  order_index?: number;
+}
+
+export interface ApiExternalCollaboration {
+  id: number;
+  collaboration_type: string;
+  name: string;
+  legal_name: string;
+  cif: string;
+  contact_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiErpMilestone {
+  id: number;
+  project_id: number;
+  activity_id?: number | null;
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  allow_late_submission?: boolean;
+  created_at: string;
+}
+
 /**
  * List all projects (Obras)
  */
-export async function listProjects(): Promise<ApiProject[]> {
-  return apiFetchJson<ApiProject[]>('/api/v1/erp/projects');
+export async function listProjects(tenantId?: string | number | null): Promise<ApiProject[]> {
+  return apiFetchJson<ApiProject[]>('/api/v1/erp/projects', {
+    headers: tenantHeader(tenantId),
+  });
 }
 
 /**
  * Get a single project by ID
  */
-export async function getProject(projectId: number): Promise<ApiProject> {
-  return apiFetchJson<ApiProject>(`/api/v1/erp/projects/${projectId}`);
+export async function getProject(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<ApiProject> {
+  return apiFetchJson<ApiProject>(`/api/v1/erp/projects/${projectId}`, {
+    headers: tenantHeader(tenantId),
+  });
 }
 
 /**
  * Create a new project
  */
-export async function createProject(data: ProjectCreate): Promise<ApiProject> {
+export async function createProject(
+  data: ProjectCreate,
+  tenantId?: string | number | null
+): Promise<ApiProject> {
   return apiFetchJson<ApiProject>('/api/v1/erp/projects', {
     method: 'POST',
+    headers: tenantHeader(tenantId),
     body: JSON.stringify(data),
   });
 }
@@ -620,9 +684,14 @@ export async function createProject(data: ProjectCreate): Promise<ApiProject> {
 /**
  * Update a project
  */
-export async function updateProject(projectId: number, data: ProjectUpdate): Promise<ApiProject> {
+export async function updateProject(
+  projectId: number,
+  data: ProjectUpdate,
+  tenantId?: string | number | null
+): Promise<ApiProject> {
   return apiFetchJson<ApiProject>(`/api/v1/erp/projects/${projectId}`, {
     method: 'PATCH',
+    headers: tenantHeader(tenantId),
     body: JSON.stringify(data),
   });
 }
@@ -630,9 +699,13 @@ export async function updateProject(projectId: number, data: ProjectUpdate): Pro
 /**
  * Delete a project
  */
-export async function deleteProject(projectId: number): Promise<void> {
+export async function deleteProject(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<void> {
   return apiFetchJson<void>(`/api/v1/erp/projects/${projectId}`, {
     method: 'DELETE',
+    headers: tenantHeader(tenantId),
   });
 }
 
@@ -722,16 +795,120 @@ function tenantHeader(tenantId?: string | number | null): Record<string, string>
   return { 'X-Tenant-Id': normalized };
 }
 
-export async function listProjectBudgets(projectId: number): Promise<ApiProjectBudgetLine[]> {
-  return apiFetchJson<ApiProjectBudgetLine[]>(`/api/v1/erp/projects/${projectId}/budgets`);
+export async function listProjectBudgets(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<ApiProjectBudgetLine[]> {
+  return apiFetchJson<ApiProjectBudgetLine[]>(`/api/v1/erp/projects/${projectId}/budgets`, {
+    headers: tenantHeader(tenantId),
+  });
 }
 
 export async function listProjectBudgetMilestones(
-  projectId: number
+  projectId: number,
+  tenantId?: string | number | null
 ): Promise<ApiProjectBudgetMilestone[]> {
   return apiFetchJson<ApiProjectBudgetMilestone[]>(
-    `/api/v1/erp/projects/${projectId}/budget-milestones`
+    `/api/v1/erp/projects/${projectId}/budget-milestones`,
+    {
+      headers: tenantHeader(tenantId),
+    }
   );
+}
+
+export async function createProjectBudgetLine(
+  projectId: number,
+  payload: ApiProjectBudgetLinePayload,
+  tenantId?: string | number | null
+): Promise<ApiProjectBudgetLine> {
+  return apiFetchJson<ApiProjectBudgetLine>(`/api/v1/erp/projects/${projectId}/budgets`, {
+    method: 'POST',
+    headers: tenantHeader(tenantId),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProjectBudgetLine(
+  projectId: number,
+  budgetId: number,
+  payload: ApiProjectBudgetLineUpdatePayload,
+  tenantId?: string | number | null
+): Promise<ApiProjectBudgetLine> {
+  return apiFetchJson<ApiProjectBudgetLine>(`/api/v1/erp/projects/${projectId}/budgets/${budgetId}`, {
+    method: 'PATCH',
+    headers: tenantHeader(tenantId),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteProjectBudgetLine(
+  projectId: number,
+  budgetId: number,
+  tenantId?: string | number | null
+): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/erp/projects/${projectId}/budgets/${budgetId}`, {
+    method: 'DELETE',
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function createProjectBudgetMilestone(
+  projectId: number,
+  payload: ApiProjectBudgetMilestonePayload,
+  tenantId?: string | number | null
+): Promise<ApiProjectBudgetMilestone> {
+  return apiFetchJson<ApiProjectBudgetMilestone>(`/api/v1/erp/projects/${projectId}/budget-milestones`, {
+    method: 'POST',
+    headers: tenantHeader(tenantId),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProjectBudgetMilestone(
+  projectId: number,
+  milestoneId: number,
+  payload: Partial<ApiProjectBudgetMilestonePayload>,
+  tenantId?: string | number | null
+): Promise<ApiProjectBudgetMilestone> {
+  return apiFetchJson<ApiProjectBudgetMilestone>(
+    `/api/v1/erp/projects/${projectId}/budget-milestones/${milestoneId}`,
+    {
+      method: 'PATCH',
+      headers: tenantHeader(tenantId),
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function deleteProjectBudgetMilestone(
+  projectId: number,
+  milestoneId: number,
+  tenantId?: string | number | null
+): Promise<void> {
+  return apiFetchJson<void>(`/api/v1/erp/projects/${projectId}/budget-milestones/${milestoneId}`, {
+    method: 'DELETE',
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function listExternalCollaborations(
+  tenantId?: string | number | null
+): Promise<ApiExternalCollaboration[]> {
+  return apiFetchJson<ApiExternalCollaboration[]>('/api/v1/erp/external-collaborations', {
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function listErpMilestones(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<ApiErpMilestone[]> {
+  const query = buildQueryParams({
+    project_id: projectId,
+  });
+  return apiFetchJson<ApiErpMilestone[]>(`/api/v1/erp/milestones${query}`, {
+    headers: tenantHeader(tenantId),
+  });
 }
 
 // ============================================================
@@ -889,7 +1066,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 }
 
 export async function getYearlySummary(year: number): Promise<YearlySummary> {
-  return apiFetchJson<YearlySummary>(`/api/v1/summary/summary/${year}`);
+  return apiFetchJson<YearlySummary>(`/api/v1/erp/summary/${year}`);
 }
 
 // ============================================================
@@ -1723,6 +1900,7 @@ export type {
 
 const savedEconomicReportsApi = createSavedEconomicReportsApi({
   apiFetchJson,
+  tenantHeader,
 });
 
 export const listSavedEconomicReports = savedEconomicReportsApi.listSavedEconomicReports;

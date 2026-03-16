@@ -1,5 +1,6 @@
 import { apiFetchJson } from '@/integrations/api/client';
 import { offlineDb } from '@/offline-db/db';
+import { upsertForemanCatalogEntriesTx } from '@/offline-db/repositories/foremanCatalogRepo';
 import { type ApiErpWorkReport } from '@/services/workReportContract';
 
 const LAST_SYNC_KEY_PREFIX = 'work_reports_last_sync::';
@@ -98,6 +99,7 @@ async function applyServerChanges(changes: WorkReportServerChange[] | undefined,
           deletedAt,
         ]
       );
+      await upsertForemanCatalogEntriesTx(tx, tenantId, payload, updatedAt);
       applied += 1;
     }
   });

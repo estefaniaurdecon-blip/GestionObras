@@ -6,6 +6,11 @@ export type ApiProjectLookup = {
   code?: string | null;
 };
 
+type ProjectCreatePayload = {
+  name: string;
+  code?: string;
+};
+
 type LocalWorkReportSnapshot = {
   id: string;
   project_id: string | null;
@@ -55,7 +60,18 @@ export function toInteger(value: unknown): number | null {
 function normalizeLookupText(value: unknown): string | null {
   const base = asString(typeof value === 'number' ? String(value) : value);
   if (!base) return null;
-  return base.toLowerCase();
+  return base
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProjectCode(value: unknown): string | null {
+  const raw = asString(value);
+  if (!raw) return null;
+  return raw.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +90,29 @@ async function fetchProjectsForTenant(tenantId: string): Promise<ApiProjectLooku
       error,
     });
     return [];
+  }
+}
+
+async function createProjectForTenant(
+  tenantId: string,
+  payload: ProjectCreatePayload
+): Promise<ApiProjectLookup | null> {
+  try {
+    return await apiFetchJson<ApiProjectLookup>('/api/v1/erp/projects', {
+      method: 'POST',
+      headers: {
+        'X-Tenant-Id': tenantId,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn('[Sync] No se pudo crear proyecto fallback para sincronización.', {
+      tenantId,
+      payload,
+      error,
+    });
+    return null;
   }
 }
 
@@ -107,7 +146,8 @@ export async function resolveProjectIdForSync(
   snapshot: LocalWorkReportSnapshot,
   payload: Record<string, unknown>,
   tenantId: string,
-  projectCache: Map<string, Promise<ApiProjectLookup[]>>
+  projectCache: Map<string, Promise<ApiProjectLookup[]>>,
+  extraCandidates: unknown[] = []
 ): Promise<number | null> {
   const directCandidates: unknown[] = [
     snapshot.project_id,
@@ -115,33 +155,71 @@ export async function resolveProjectIdForSync(
     payload.projectId,
     payload.work_id,
     payload.workId,
+    ...extraCandidates,
   ];
-
-  for (const candidate of directCandidates) {
-    const numeric = toInteger(candidate);
-    if (numeric !== null) return numeric;
-  }
+  const numericCandidates = directCandidates
+    .map((candidate) => toInteger(candidate))
+    .filter((candidate): candidate is number => candidate !== null);
 
   const textCandidates = [
+    normalizeLookupText(snapshot.title),
     normalizeLookupText(snapshot.project_id),
     normalizeLookupText(payload.project_id),
     normalizeLookupText(payload.projectId),
     normalizeLookupText(payload.work_id),
     normalizeLookupText(payload.workId),
+    normalizeLookupText(payload.title),
     normalizeLookupText(payload.workNumber),
     normalizeLookupText(payload.work_name),
     normalizeLookupText(payload.workName),
     normalizeLookupText(payload.project_name),
     normalizeLookupText(payload.projectName),
+    ...extraCandidates.map((candidate) => normalizeLookupText(candidate)),
   ].filter((value): value is string => Boolean(value));
 
+  const fallbackWorkName =
+    asString(payload.workName) ??
+    asString(payload.work_name) ??
+    asString(payload.projectName) ??
+    asString(payload.project_name) ??
+    asString(payload.title) ??
+    asString(snapshot.title);
+  const fallbackWorkCode =
+    normalizeProjectCode(payload.workNumber) ??
+    normalizeProjectCode(payload.projectCode) ??
+    normalizeProjectCode(payload.work_number);
+
+  const projects = await getTenantProjects(tenantId, projectCache);
+
+  for (const candidate of numericCandidates) {
+    if (projects.some((project) => project.id === candidate)) {
+      return candidate;
+    }
+  }
+
   if (textCandidates.length === 0) {
+    if (numericCandidates.length > 0) {
+      console.warn('[Sync] project_id numerico descartado por no pertenecer al tenant activo.', {
+        tenantId,
+        localReportId: snapshot.id,
+        numericCandidates,
+      });
+    }
     warnUnresolvedProjectId(tenantId, snapshot, payload, 'no_candidates');
     return null;
   }
 
-  const projects = await getTenantProjects(tenantId, projectCache);
   if (projects.length === 0) {
+    if (fallbackWorkName) {
+      const created = await createProjectForTenant(tenantId, {
+        name: fallbackWorkName,
+        ...(fallbackWorkCode ? { code: fallbackWorkCode } : {}),
+      });
+      if (created?.id) {
+        projectCache.set(tenantId, Promise.resolve([created]));
+        return created.id;
+      }
+    }
     warnUnresolvedProjectId(tenantId, snapshot, payload, 'no_projects');
     return null;
   }
@@ -161,6 +239,37 @@ export async function resolveProjectIdForSync(
   for (const candidate of textCandidates) {
     const byName = projects.find((project) => normalizeLookupText(project.name) === candidate);
     if (byName) return byName.id;
+  }
+
+  for (const candidate of textCandidates) {
+    const byCodeContains = projects.find((project) => {
+      const code = normalizeLookupText(project.code);
+      return Boolean(code) && (candidate.includes(code) || code.includes(candidate));
+    });
+    if (byCodeContains) return byCodeContains.id;
+  }
+
+  for (const candidate of textCandidates) {
+    const byNameContains = projects.find((project) => {
+      const name = normalizeLookupText(project.name);
+      return Boolean(name) && (candidate.includes(name) || name.includes(candidate));
+    });
+    if (byNameContains) return byNameContains.id;
+  }
+
+  if (projects.length === 1) {
+    return projects[0].id;
+  }
+
+  if (fallbackWorkName) {
+    const created = await createProjectForTenant(tenantId, {
+      name: fallbackWorkName,
+      ...(fallbackWorkCode ? { code: fallbackWorkCode } : {}),
+    });
+    if (created?.id) {
+      projectCache.set(tenantId, Promise.resolve([...projects, created]));
+      return created.id;
+    }
   }
 
   warnUnresolvedProjectId(tenantId, snapshot, payload, 'no_match');

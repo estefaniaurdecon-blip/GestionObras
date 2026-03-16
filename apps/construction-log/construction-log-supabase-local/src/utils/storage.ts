@@ -115,8 +115,9 @@ async function rawRemove(key: string): Promise<void> {
 }
 
 async function setChunked(key: string, value: string) {
-  // Primero limpiar restos previos
+  // Primero limpiar restos previos y cualquier copia directa obsoleta.
   await removeChunked(key);
+  await rawRemove(key);
 
   // Sanitizar el valor completo antes de chunkearlo
   const sanitizedValue = isElectron() ? sanitizeJsonValue(value) : value;
@@ -142,12 +143,10 @@ async function getChunked(key: string): Promise<string | null> {
   const countStr = await rawGet(key + CHUNK_COUNT);
   const count = Number(countStr || 0);
   if (!count || Number.isNaN(count)) return null;
-  const parts: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const part = await rawGet(key + CHUNK_PREFIX + i);
-    if (part == null) return null;
-    parts.push(part);
-  }
+  const parts = await Promise.all(
+    Array.from({ length: count }, (_, i) => rawGet(key + CHUNK_PREFIX + i)),
+  );
+  if (parts.some((part) => part == null)) return null;
   return parts.join('');
 }
 
@@ -180,9 +179,21 @@ async function hasStoredValue(key: string): Promise<boolean> {
 export const storage = {
   async getItem(key: string): Promise<string | null> {
     try {
-      // Intentar primero la clave directa para evitar varias lecturas nativas
-      // por acceso cuando el valor no esta fragmentado.
-      const value = await rawGet(key);
+      // Leer la bandera chunked en paralelo para no devolver copias directas obsoletas.
+      const [value, chunkedFlag] = await Promise.all([
+        rawGet(key),
+        rawGet(key + CHUNKED_FLAG),
+      ]);
+
+      if (chunkedFlag !== null) {
+        const chunkedValue = await getChunked(key);
+        if (chunkedValue !== null) {
+          const chunkedResult = isElectron() ? sanitizeJsonValue(chunkedValue) : chunkedValue;
+          console.log(`[Storage] Read chunked key: ${key}, length: ${chunkedResult?.length || 0}`);
+          return chunkedResult;
+        }
+      }
+
       if (value !== null) {
         const directResult = isElectron() ? sanitizeJsonValue(value) : value;
         if (key.includes('ai_plan')) {
@@ -191,7 +202,6 @@ export const storage = {
         return directResult;
       }
 
-      // Si esta guardado en chunks, reconstruirlo solo cuando no exista valor directo.
       const chunkedValue = await getChunked(key);
       if (chunkedValue !== null) {
         const chunkedResult = isElectron() ? sanitizeJsonValue(chunkedValue) : chunkedValue;
@@ -218,6 +228,7 @@ export const storage = {
         emitStorageChange(key, 'set');
         return;
       }
+      await removeChunked(key);
       await rawSet(key, value);
       emitStorageChange(key, 'set');
 

@@ -133,6 +133,55 @@ function sanitizePayloadForSync(payload: Record<string, unknown>): Record<string
   return next;
 }
 
+const PROJECT_LOOKUP_KEYS = [
+  'project_id',
+  'projectId',
+  'work_id',
+  'workId',
+  'title',
+  'workNumber',
+  'work_name',
+  'workName',
+  'project_name',
+  'projectName',
+] as const;
+
+function collectProjectLookupCandidatesFromRecord(record: Record<string, unknown>): unknown[] {
+  const candidates: unknown[] = [];
+  for (const key of PROJECT_LOOKUP_KEYS) {
+    if (key in record) {
+      candidates.push(record[key]);
+    }
+  }
+  return candidates;
+}
+
+function collectProjectLookupCandidates(entries: PendingEntry[]): unknown[] {
+  const candidates: unknown[] = [];
+
+  for (const entry of entries) {
+    const root = entry.parsedPayload;
+    candidates.push(...collectProjectLookupCandidatesFromRecord(root));
+
+    const nestedPayload = isRecord(root.payload) ? root.payload : null;
+    if (nestedPayload) {
+      candidates.push(...collectProjectLookupCandidatesFromRecord(nestedPayload));
+    }
+
+    const patch = isRecord(root.patch) ? root.patch : null;
+    if (patch) {
+      candidates.push(...collectProjectLookupCandidatesFromRecord(patch));
+
+      const patchPayload = isRecord(patch.payload) ? patch.payload : null;
+      if (patchPayload) {
+        candidates.push(...collectProjectLookupCandidatesFromRecord(patchPayload));
+      }
+    }
+  }
+
+  return candidates;
+}
+
 function toTenantIdFromPayload(payload: Record<string, unknown>): string | null {
   return asString(payload.tenantId) ?? asString(payload.tenant_id);
 }
@@ -189,10 +238,17 @@ async function getWorkReportSnapshot(localReportId: string): Promise<LocalWorkRe
 async function buildCreateData(
   snapshot: LocalWorkReportSnapshot,
   tenantId: string,
-  projectCache: Map<string, Promise<ApiProjectLookup[]>>
+  projectCache: Map<string, Promise<ApiProjectLookup[]>>,
+  extraProjectCandidates: unknown[] = []
 ): Promise<BuildOperationDataResult> {
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
-  const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
+  const projectId = await resolveProjectIdForSync(
+    snapshot,
+    payload,
+    tenantId,
+    projectCache,
+    extraProjectCandidates
+  );
   const date =
     normalizeDateForSync(snapshot.date) ??
     normalizeDateForSync(payload.date) ??
@@ -225,10 +281,17 @@ async function buildCreateData(
 async function buildUpdateData(
   snapshot: LocalWorkReportSnapshot,
   tenantId: string,
-  projectCache: Map<string, Promise<ApiProjectLookup[]>>
+  projectCache: Map<string, Promise<ApiProjectLookup[]>>,
+  extraProjectCandidates: unknown[] = []
 ): Promise<BuildOperationDataResult> {
   const payload = sanitizePayloadForSync(toJsonRecord(snapshot.payload_json));
-  const projectId = await resolveProjectIdForSync(snapshot, payload, tenantId, projectCache);
+  const projectId = await resolveProjectIdForSync(
+    snapshot,
+    payload,
+    tenantId,
+    projectCache,
+    extraProjectCandidates
+  );
   const status = normalizeStatusForSync(snapshot.status ?? payload.status, 'draft');
   const reportIdentifier = asString(payload.reportIdentifier) ?? asString(payload.report_identifier);
   const isClosed = status.toLowerCase() === 'closed' || Boolean(payload.isClosed ?? payload.is_closed);
@@ -266,6 +329,7 @@ async function buildSyncPlan(
 
   const snapshotPayload = toJsonRecord(snapshot.payload_json);
   const serverReportId = resolveServerReportId(localReportId, snapshotPayload, sourceEntries);
+  const projectLookupCandidates = collectProjectLookupCandidates(sourceEntries);
   const decision = decideConsolidatedAction({
     localReportId,
     entries: sourceEntries,
@@ -332,7 +396,12 @@ async function buildSyncPlan(
   }
 
   if (decision.kind === 'create') {
-    const createData = await buildCreateData(snapshot, tenantId, projectCache);
+    const createData = await buildCreateData(
+      snapshot,
+      tenantId,
+      projectCache,
+      projectLookupCandidates
+    );
     if (!createData.data) {
       return {
         kind: 'error',
@@ -365,7 +434,12 @@ async function buildSyncPlan(
     };
   }
 
-  const updateData = await buildUpdateData(snapshot, tenantId, projectCache);
+  const updateData = await buildUpdateData(
+    snapshot,
+    tenantId,
+    projectCache,
+    projectLookupCandidates
+  );
   if (!updateData.data) {
     return {
       kind: 'error',

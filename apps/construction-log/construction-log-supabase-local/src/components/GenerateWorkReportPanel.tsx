@@ -13,6 +13,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { foremanCatalogRepo } from '@/offline-db/repositories/foremanCatalogRepo';
 import {
   filterActiveMachines,
   getRentalMachinesByWorksite,
@@ -250,6 +251,7 @@ export const GenerateWorkReportPanel = ({
 
   const [foremanResources, setForemanResources] = useState<ForemanResource[]>([createForemanResource()]);
   const [mainForeman, setMainForeman] = useState('');
+  const [catalogForemanNames, setCatalogForemanNames] = useState<string[]>([]);
   const [mainForemanHours, setMainForemanHours] = useState(0);
   const [siteManager, setSiteManager] = useState('');
 
@@ -279,6 +281,7 @@ export const GenerateWorkReportPanel = ({
   const sectionTriggerClass = isAndroidPlatform
     ? 'text-[19px] leading-tight font-semibold [&>svg]:h-5 [&>svg]:w-5'
     : 'text-[15px] sm:text-base font-semibold';
+  const readOnlyLockedClass = readOnly ? 'pointer-events-none select-none opacity-95' : '';
 
   const totalWorkforceHours = useMemo(
     () =>
@@ -298,6 +301,21 @@ export const GenerateWorkReportPanel = ({
     () => totalForemanResourceHours + nonNegative(mainForemanHours),
     [mainForemanHours, totalForemanResourceHours],
   );
+
+  const foremanNameSuggestions = useMemo(() => {
+    const names = new Set<string>();
+    const addName = (value: unknown) => {
+      const normalized = typeof value === 'string' ? value.trim() : '';
+      if (!normalized) return;
+      names.add(normalized);
+    };
+
+    catalogForemanNames.forEach(addName);
+    addName(mainForeman);
+    foremanResources.forEach((resource) => addName(resource.name));
+
+    return Array.from(names);
+  }, [catalogForemanNames, foremanResources, mainForeman]);
 
   const subcontractComputedGroups = useMemo(
     () =>
@@ -485,6 +503,27 @@ export const GenerateWorkReportPanel = ({
     setSiteManagerSignature('');
     setSaveStatusSelection(['completed']);
   }, [initialDate, initialDraft]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadForemanCatalog = async () => {
+      try {
+        const names = await foremanCatalogRepo.listForemanNames();
+        if (cancelled) return;
+        setCatalogForemanNames(names);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[foreman-catalog] No se pudo cargar el catalogo local de encargados', error);
+      }
+    };
+
+    void loadForemanCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setActiveMaterialGroupId((current) => {
@@ -2299,7 +2338,7 @@ export const GenerateWorkReportPanel = ({
         onWorkNameChange={setWorkName}
       />
 
-      <div className={readOnly ? 'pointer-events-none select-none opacity-95' : ''}>
+      <div className={readOnlyLockedClass}>
       <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="space-y-3">
         <WorkforceSection
           sectionTriggerClass={sectionTriggerClass}
@@ -2419,6 +2458,7 @@ export const GenerateWorkReportPanel = ({
           setGalleryImages={setGalleryImages}
         />
       </Accordion>
+      </div>
       <ForemanResourcesCard
         readOnly={readOnly}
         totalForemanSectionHours={totalForemanSectionHours}
@@ -2436,11 +2476,13 @@ export const GenerateWorkReportPanel = ({
         onMainForemanHoursChange={setMainForemanHours}
         siteManager={siteManager}
         onSiteManagerChange={setSiteManager}
+        foremanNameSuggestions={foremanNameSuggestions}
         editableNumericValue={editableNumericValue}
         parseNumeric={parseNumeric}
         nonNegative={nonNegative}
       />
 
+      <div className={readOnlyLockedClass}>
       <AutoCloneSettingsCard
         autoCloneNextDay={autoCloneNextDay}
         onAutoCloneNextDayChange={setAutoCloneNextDay}

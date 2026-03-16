@@ -1,4 +1,5 @@
 import { offlineDb, type OfflineDbTx } from '@/offline-db/db';
+import { upsertForemanCatalogEntriesTx } from '@/offline-db/repositories/foremanCatalogRepo';
 import type {
   OutboxOp,
   OutboxStatus,
@@ -20,6 +21,11 @@ export type WorkReportsUnsyncedListParams = {
   tenantId: string;
   projectId?: string | null;
   limit?: number;
+};
+
+export type WorkReportsListAnyParams = {
+  limit?: number;
+  includeDeleted?: boolean;
 };
 
 export type WorkReportDraftData = {
@@ -246,6 +252,24 @@ export const workReportsRepo = {
     return rows.map(toWorkReport);
   },
 
+  async listAny(params: WorkReportsListAnyParams = {}): Promise<WorkReport[]> {
+    const limit = Math.max(1, Math.min(params.limit ?? 500, 5000));
+    const where = params.includeDeleted ? '' : 'WHERE deleted_at IS NULL';
+
+    const rows = await offlineDb.query<WorkReportRow>(
+      `SELECT
+        id, tenant_id, project_id, title, date, status, payload_json,
+        created_at, updated_at, deleted_at, sync_status, last_sync_error
+      FROM work_reports
+      ${where}
+      ORDER BY date DESC, updated_at DESC
+      LIMIT ?;`,
+      [limit]
+    );
+
+    return rows.map(toWorkReport);
+  },
+
   async getById(id: string): Promise<WorkReport | null> {
     const rows = await offlineDb.query<WorkReportRow>(
       `SELECT
@@ -279,6 +303,8 @@ export const workReportsRepo = {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL);`,
         [id, draft.tenantId, projectId, title, date, status, JSON.stringify(payload), now, now]
       );
+
+      await upsertForemanCatalogEntriesTx(tx, draft.tenantId, payload, now);
 
       await insertOutboxEvent(tx, {
         tenantId: draft.tenantId,
@@ -538,6 +564,7 @@ export const workReportsRepo = {
             lastSyncError,
           ]
         );
+        await upsertForemanCatalogEntriesTx(tx, tenantId, safeJsonParse(payloadJson), updatedAt);
         reportsImported += 1;
       }
 

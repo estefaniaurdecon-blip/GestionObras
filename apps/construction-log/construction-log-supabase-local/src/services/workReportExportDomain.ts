@@ -280,9 +280,23 @@ export const buildExportWorkReport = (
     date: workDate,
     workName: safeText(payload.workName, report.title ?? 'Parte'),
     workId: safeText(payload.workId, report.projectId ?? '') || undefined,
-    foreman: safeText(payload.mainForeman, safeText(payload.foreman)),
-    foremanHours: safeNumber(payload.mainForemanHours, safeNumber(payload.foremanHours)),
-    foremanEntries: safeArray(payload.foremanEntries)
+    foreman: safeText(
+      payload.mainForeman,
+      safeText(payload.main_foreman, safeText(payload.foreman))
+    ),
+    foremanHours: safeNumber(
+      payload.mainForemanHours,
+      safeNumber(payload.main_foreman_hours, safeNumber(payload.foremanHours))
+    ),
+    foremanEntries: (
+      safeArray(payload.foremanEntries).length > 0
+        ? safeArray(payload.foremanEntries)
+        : safeArray(payload.foreman_entries).length > 0
+          ? safeArray(payload.foreman_entries)
+          : safeArray(payload.foremanResources).length > 0
+            ? safeArray(payload.foremanResources)
+            : safeArray(payload.foreman_resources)
+    )
       .map((rawEntry, entryIndex) => {
         const entry = asRecord(rawEntry);
         if (!entry) return null;
@@ -297,9 +311,10 @@ export const buildExportWorkReport = (
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null),
-    foremanSignature: safeText(payload.foremanSignature) || undefined,
-    siteManager: safeText(payload.siteManager),
-    siteManagerSignature: safeText(payload.siteManagerSignature) || undefined,
+    foremanSignature: safeText(payload.foremanSignature, safeText(payload.foreman_signature)) || undefined,
+    siteManager: safeText(payload.siteManager, safeText(payload.site_manager)),
+    siteManagerSignature:
+      safeText(payload.siteManagerSignature, safeText(payload.site_manager_signature)) || undefined,
     observations: safeText(payload.observationsText, safeText(payload.observations)),
     workGroups,
     machineryGroups,

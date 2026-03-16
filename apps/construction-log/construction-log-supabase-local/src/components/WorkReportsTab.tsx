@@ -252,12 +252,6 @@ export const WorkReportsTab = ({
     setReportNavigationIds([]);
   }, [generatePanelOpen]);
 
-  useEffect(() => {
-    if (activeToolsTab === 'parts') return;
-    if (allWorkReportsLoaded || allWorkReportsLoading) return;
-    void ensureAllWorkReportsLoaded();
-  }, [activeToolsTab, allWorkReportsLoaded, allWorkReportsLoading, ensureAllWorkReportsLoaded]);
-
   const reportsById = useMemo(() => new Map(allWorkReports.map((report) => [report.id, report])), [allWorkReports]);
   const reportsForSummary = useMemo(
     () => (allWorkReports.length > 0 ? allWorkReports : workReports),

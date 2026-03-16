@@ -100,8 +100,8 @@ export const AccessControlGenerateReportDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl">
       <DialogHeader className="text-center">
-        <DialogTitle>Generar informe</DialogTitle>
-        <DialogDescription>Sistema de Gestion de Obras</DialogDescription>
+        <DialogTitle className="app-dialog-title">Generar informe</DialogTitle>
+        <DialogDescription className="app-page-subtitle">Sistema de Gestión de Obras</DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
         {searchOpen ? (
@@ -141,7 +141,7 @@ export const AccessControlGenerateReportDialog = ({
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {accessReportEnabledFilters.includes('foreman') ? (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="access-report-foreman">
+                    <label className="app-field-label" htmlFor="access-report-foreman">
                       Encargado
                     </label>
                     <Input
@@ -155,7 +155,7 @@ export const AccessControlGenerateReportDialog = ({
 
                 {accessReportEnabledFilters.includes('weeks') ? (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="access-report-week">
+                    <label className="app-field-label" htmlFor="access-report-week">
                       Semana
                     </label>
                     <Input
@@ -169,7 +169,7 @@ export const AccessControlGenerateReportDialog = ({
 
                 {accessReportEnabledFilters.includes('months') ? (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="access-report-month">
+                    <label className="app-field-label" htmlFor="access-report-month">
                       Mes
                     </label>
                     <Input
@@ -183,7 +183,7 @@ export const AccessControlGenerateReportDialog = ({
 
                 {accessReportEnabledFilters.includes('date') ? (
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="access-report-date">
+                    <label className="app-field-label" htmlFor="access-report-date">
                       Fecha
                     </label>
                     <Popover open={accessDatePickerOpen} onOpenChange={onDatePickerOpenChange}>
@@ -226,19 +226,25 @@ export const AccessControlGenerateReportDialog = ({
             ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm text-muted-foreground">
+              <div className="app-section-subtitle">
                 Obras encontradas: <span className="font-medium">{reportSiteOptions.length}</span>. Controles
                 coincidentes: <span className="font-medium">{filteredAccessControlReportsForGenerate.length}</span>.
                 Filtros seleccionados: <span className="font-medium">{accessReportSelectedFiltersCount}</span>/
                 {searchFilterOptions.length}. Aplicados: <span className="font-medium">{accessReportAppliedFiltersCount}</span>.
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={onClearSearchFilters}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="app-btn-soft h-9 px-3 text-sm sm:h-10 sm:text-[15px]"
+                onClick={onClearSearchFilters}
+              >
                 Limpiar filtros
               </Button>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Resultados de obras</label>
+              <label className="app-field-label">Resultados de obras</label>
               {reportSiteOptions.length === 0 ? (
                 <div className="rounded-md border bg-slate-50 p-6 text-center text-sm text-muted-foreground">
                   No hay obras que coincidan con la busqueda.
@@ -268,7 +274,13 @@ export const AccessControlGenerateReportDialog = ({
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onClearDraftSelectedWorks}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="app-btn-soft h-9 px-3 text-sm sm:h-10 sm:text-[15px]"
+                onClick={onClearDraftSelectedWorks}
+              >
                 Todas las obras
               </Button>
               <Button type="button" variant="outline" className={lightButtonClass} onClick={onApplySelectedWorks}>
@@ -279,7 +291,7 @@ export const AccessControlGenerateReportDialog = ({
         ) : (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Nombre de Obra</label>
+              <label className="app-field-label">Nombre de Obra</label>
               <Select value={accessReportWorkSelectValue} onValueChange={onWorkFilterChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todas las obras" />
@@ -295,7 +307,7 @@ export const AccessControlGenerateReportDialog = ({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Periodo</label>
+              <label className="app-field-label">Periodo</label>
               <Select value={accessReportPeriodSelectValue} onValueChange={onPeriodChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todo el periodo" />
@@ -312,7 +324,7 @@ export const AccessControlGenerateReportDialog = ({
                 </SelectContent>
               </Select>
               {accessReportPeriodFilter !== 'all' && accessReportPeriodSelectionLabel ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="app-section-subtitle">
                   {accessReportPeriodSelectionLabel}. Fechas incluidas: {accessReportSelectedDateKeys.length}
                 </p>
               ) : null}

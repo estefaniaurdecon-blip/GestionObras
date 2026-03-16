@@ -4,6 +4,7 @@ import { storage } from '@/utils/storage';
 
 import migration0001 from './schema/0001_init.sql?raw';
 import migration0002 from './schema/0002_placeholder.sql?raw';
+import migration0003 from './schema/0003_foreman_catalog.sql?raw';
 
 const LEGACY_DB_STORAGE_KEY = 'offline_db_sqlite_file_b64_v1';
 const SCOPED_DB_STORAGE_KEY_PREFIX = 'offline_db_sqlite_file_b64_v2_scope_';
@@ -232,6 +233,7 @@ class OfflineDb {
     const migrations: Migration[] = [
       { version: 1, name: '0001_init', sql: migration0001 },
       { version: 2, name: '0002_placeholder', sql: migration0002 },
+      { version: 3, name: '0003_foreman_catalog', sql: migration0003 },
     ];
 
     const db = this.getDbOrThrow();

@@ -294,9 +294,17 @@ export function mapApiWorkReportToLegacyWorkReport(
     workNumber: detail.workNumber,
     date: detail.date,
     workName: detail.workName,
-    foreman: toText(payload.foreman),
-    foremanHours: toNumber(payload.foremanHours ?? payload.foreman_hours, 0),
-    foremanEntries: toArray(payload.foremanEntries ?? payload.foreman_entries),
+    foreman: toText(payload.mainForeman, payload.main_foreman, payload.foreman),
+    foremanHours: toNumber(
+      payload.mainForemanHours ?? payload.main_foreman_hours ?? payload.foremanHours ?? payload.foreman_hours,
+      0,
+    ),
+    foremanEntries: toArray(
+      payload.foremanEntries ??
+      payload.foreman_entries ??
+      payload.foremanResources ??
+      payload.foreman_resources,
+    ),
     foremanSignature: toText(payload.foremanSignature, payload.foreman_signature) || undefined,
     siteManager: toText(payload.siteManager, payload.site_manager),
     siteManagerSignature:

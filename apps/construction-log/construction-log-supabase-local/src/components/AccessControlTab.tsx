@@ -122,11 +122,10 @@ export const AccessControlTab = ({
   const [periodDialogMode, setPeriodDialogMode] = useState<AccessReportPeriodDialogMode | null>(null);
   const [draftAccessReportSelectedWorks, setDraftAccessReportSelectedWorks] = useState<string[]>([]);
 
-  const lightButtonClass =
-    'h-10 px-4 justify-center border-slate-200 bg-slate-50 text-[15px] font-medium text-slate-700 shadow-none hover:bg-slate-100 hover:text-slate-900 sm:h-11 sm:text-base';
+  const lightButtonClass = 'app-btn-soft';
   const primaryAccessButtonClass = isAndroidPlatform
-    ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800'
-    : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800';
+    ? 'app-btn-soft h-11 w-[158px] gap-1.5 border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800'
+    : 'app-btn-soft w-[148px] gap-1.5 border-cyan-500 bg-slate-100 font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800';
 
   useEffect(() => {
     startupPerfPoint('panel:AccessControlTab mounted');
@@ -292,8 +291,8 @@ export const AccessControlTab = ({
     <TabsContent value="access-control" className="m-0 space-y-5 text-[15px]">
       <Card className="bg-white">
         <CardHeader className="items-center space-y-2 text-center">
-          <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de accesos</CardTitle>
-          <CardDescription className="text-[15px] text-muted-foreground">Supervisión de obra</CardDescription>
+          <CardTitle className="app-page-title">Control de accesos</CardTitle>
+          <CardDescription className="app-page-subtitle">Supervisión de obra</CardDescription>
           <div className="mt-2 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center">
             <Button
               variant="outline"
@@ -352,8 +351,8 @@ export const AccessControlTab = ({
       <Dialog open={dataManagementOpen} onOpenChange={setDataManagementOpen}>
         <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl">
           <DialogHeader className="text-center">
-            <DialogTitle>Gestión de datos</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="app-dialog-title">Gestión de datos</DialogTitle>
+            <DialogDescription className="app-page-subtitle">
               Guarda todos tus partes en un archivo o carga datos guardados previamente.
             </DialogDescription>
           </DialogHeader>
@@ -466,3 +465,4 @@ export const AccessControlTab = ({
     </TabsContent>
   );
 };
+

@@ -22,6 +22,7 @@ import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Capacitor } from '@capacitor/core';
 import { generateEconomicReportPDF } from '@/utils/economicReportPdfGenerator';
+import { getActiveTenantId } from '@/offline-db/tenantScope';
 import {
   listSavedEconomicReports,
   deleteSavedEconomicReport,
@@ -52,7 +53,8 @@ export const SavedEconomicReports = () => {
 
     setLoading(true);
     try {
-      const data = await listSavedEconomicReports();
+      const tenantId = await getActiveTenantId(user);
+      const data = await listSavedEconomicReports(tenantId);
       setReports(data);
     } catch (error) {
       console.error('Error loading saved reports:', error);
@@ -348,8 +350,11 @@ export const SavedEconomicReports = () => {
   };
 
   const handleDelete = async (reportId: number) => {
+    if (!user) return;
+
     try {
-      await deleteSavedEconomicReport(reportId);
+      const tenantId = await getActiveTenantId(user);
+      await deleteSavedEconomicReport(reportId, tenantId);
 
       toast({
         title: "Parte eliminado",

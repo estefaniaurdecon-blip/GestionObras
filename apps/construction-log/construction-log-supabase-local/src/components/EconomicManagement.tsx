@@ -1,21 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { WorkReport, WorkItem, MachineryItem, SubcontractItem } from '@/types/workReport';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Edit2, Trash2, Save } from 'lucide-react';
+import { Edit2, Trash2, Save, Check, ChevronsUpDown } from 'lucide-react';
 import {
   listManagedUserAssignments,
   upsertSavedEconomicReport,
 } from '@/integrations/api/client';
+import { getActiveTenantId } from '@/offline-db/tenantScope';
+import { cn } from '@/lib/utils';
 
 interface EconomicManagementProps {
   reports: WorkReport[];
@@ -28,6 +32,9 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
   const [selectedReport, setSelectedReport] = useState<WorkReport | null>(null);
   const [editedReport, setEditedReport] = useState<WorkReport | null>(null);
   const [assignedWorkIds, setAssignedWorkIds] = useState<string[]>([]);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [selectedForeman, setSelectedForeman] = useState<string>('all');
+  const [foremanPopoverOpen, setForemanPopoverOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState<{
     type: 'work' | 'machinery' | 'material' | 'subcontract' | 'rental';
@@ -37,28 +44,101 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
   } | null>(null);
   const [editValues, setEditValues] = useState<any>({});
 
+  // Temporary policy: all roles can operate with full visibility in economic management.
+  const hasElevatedVisibility = true;
+
   useEffect(() => {
     loadAssignedWorks();
-  }, [user]);
+  }, [user, hasElevatedVisibility]);
 
   const loadAssignedWorks = async () => {
     if (!user) return;
 
+    if (hasElevatedVisibility) {
+      setAssignmentsError(null);
+      setAssignedWorkIds([]);
+      setLoading(false);
+      return;
+    }
+
     try {
+      setAssignmentsError(null);
       const workIds = await listManagedUserAssignments(Number(user.id));
       setAssignedWorkIds(workIds.map(String));
     } catch (error) {
       console.error('Error loading assigned works:', error);
+      setAssignmentsError('No se pudieron cargar tus asignaciones de obras.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter reports from foremen assigned to the site manager's works - SOLO completados
-  const availableReports = reports.filter(report => {
-    // Show only COMPLETED reports from works assigned to this site manager
-    return report.workNumber && assignedWorkIds.length > 0 && report.status === 'completed';
-  });
+  // Base reports scoped by assigned works and completed status.
+  const scopedReports = useMemo(() => {
+    const eligibleReports = reports.filter((report) => report.workNumber && !report.isArchived);
+    const orderedEligibleReports = [...eligibleReports].sort((left, right) => {
+      const updatedAtDiff =
+        new Date(right.updatedAt ?? right.date).getTime() - new Date(left.updatedAt ?? left.date).getTime();
+      if (updatedAtDiff !== 0) return updatedAtDiff;
+      return right.date.localeCompare(left.date);
+    });
+    if (assignedWorkIds.length === 0) {
+      if (assignmentsError || hasElevatedVisibility) {
+        return orderedEligibleReports;
+      }
+      return [];
+    }
+
+    return eligibleReports
+      .filter((report) => {
+        const reportWorkId = String(report.workId ?? '').trim();
+        if (!reportWorkId) return true;
+        return assignedWorkIds.includes(reportWorkId);
+      })
+      .sort((left, right) => right.date.localeCompare(left.date));
+  }, [assignedWorkIds, assignmentsError, hasElevatedVisibility, reports]);
+
+  // Foremen extracted from reports already stored offline.
+  const availableForemen = useMemo(() => {
+    const names = new Set<string>();
+
+    scopedReports.forEach((report) => {
+      const mainForeman = String(report.foreman ?? '').trim();
+      if (mainForeman) names.add(mainForeman);
+
+      if (Array.isArray(report.foremanEntries)) {
+        report.foremanEntries.forEach((entry) => {
+          const entryName = String(entry?.name ?? '').trim();
+          if (entryName) names.add(entryName);
+        });
+      }
+    });
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [scopedReports]);
+
+  // Filter reports by selected foreman and free-text search.
+  const availableReports = useMemo(() => {
+    const filteredReports = scopedReports.filter((report) => {
+      const names = new Set<string>();
+      const mainForeman = String(report.foreman ?? '').trim();
+      if (mainForeman) names.add(mainForeman);
+      if (Array.isArray(report.foremanEntries)) {
+        report.foremanEntries.forEach((entry) => {
+          const entryName = String(entry?.name ?? '').trim();
+          if (entryName) names.add(entryName);
+        });
+      }
+
+      const allNames = Array.from(names);
+      if (selectedForeman !== 'all' && !allNames.includes(selectedForeman)) {
+        return false;
+      }
+
+      return true;
+    });
+    return filteredReports.slice(0, 10);
+  }, [scopedReports, selectedForeman]);
 
   const handleReportSelect = (reportId: string) => {
     const report = availableReports.find(r => r.id === reportId);
@@ -264,21 +344,22 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
     try {
       // Calculate total amount
       const totalAmount = calculateTotal();
+      const tenantId = await getActiveTenantId(user);
 
       // Upsert saved economic report via API (handles check + insert/update)
       await upsertSavedEconomicReport({
-        work_report_id: editedReport.id,
-        work_name: editedReport.workName,
-        work_number: editedReport.workNumber,
-        date: editedReport.date,
-        foreman: editedReport.foreman,
-        site_manager: editedReport.siteManager,
+        work_report_id: String(editedReport.id ?? '').trim(),
+        work_name: String(editedReport.workName ?? '').trim(),
+        work_number: String(editedReport.workNumber ?? '').trim(),
+        date: String(editedReport.date ?? '').trim(),
+        foreman: String(editedReport.foreman ?? '').trim(),
+        site_manager: String(editedReport.siteManager ?? '').trim(),
         work_groups: editedReport.workGroups as any,
         machinery_groups: editedReport.machineryGroups as any,
         material_groups: editedReport.materialGroups as any,
         subcontract_groups: editedReport.subcontractGroups as any,
-        total_amount: totalAmount,
-      });
+        total_amount: Number.isFinite(totalAmount) ? totalAmount : 0,
+      }, tenantId);
 
       toast({
         title: "Precios guardados",
@@ -385,6 +466,72 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
         <CardContent>
           <div className="space-y-4">
             <div>
+              <Label>Encargado</Label>
+              <Popover open={foremanPopoverOpen} onOpenChange={setForemanPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={foremanPopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedForeman === 'all' ? 'Todos los encargados' : selectedForeman}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar encargado..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontraron encargados.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="Todos los encargados"
+                          onSelect={() => {
+                            setSelectedForeman('all');
+                            setSelectedReport(null);
+                            setEditedReport(null);
+                            setForemanPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              selectedForeman === 'all' ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          Todos los encargados
+                        </CommandItem>
+                        {availableForemen.map((foremanName) => (
+                          <CommandItem
+                            key={foremanName}
+                            value={foremanName}
+                            onSelect={() => {
+                              setSelectedForeman(foremanName);
+                              setSelectedReport(null);
+                              setEditedReport(null);
+                              setForemanPopoverOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                selectedForeman === foremanName ? 'opacity-100' : 'opacity-0'
+                              )}
+                            />
+                            {foremanName}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
               <Label>Seleccionar Parte</Label>
               <Select onValueChange={handleReportSelect}>
                 <SelectTrigger>
@@ -402,6 +549,24 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
                 </SelectContent>
               </Select>
             </div>
+
+            {!loading && assignmentsError ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {assignmentsError} Mostrando partes disponibles como fallback.
+              </div>
+            ) : null}
+
+            {!loading && !assignmentsError && !hasElevatedVisibility && assignedWorkIds.length === 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                No tienes obras asignadas. Sin asignaciones no se pueden listar partes en gestion de precios.
+              </div>
+            ) : null}
+
+            {!loading && !assignmentsError && !hasElevatedVisibility && assignedWorkIds.length > 0 && availableReports.length === 0 ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                No hay partes disponibles de tus obras asignadas para valorar.
+              </div>
+            ) : null}
 
             {editedReport && (
               <div className="space-y-6">

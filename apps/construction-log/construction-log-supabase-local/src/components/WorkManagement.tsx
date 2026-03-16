@@ -47,7 +47,7 @@ export const WorkManagement = () => {
   } = useUsers({ autoLoad: false });
   const { isAdmin, isSiteManager, canAssignWorks } = useUserPermissions();
   const { organization } = useOrganization();
-  const { getCurrentPosition, loading: geoLoading, error: geoError } = useGeolocation();
+  const { getCurrentPosition, loading: geoLoading } = useGeolocation();
   const canManageWorks = isAdmin || isSiteManager;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -155,23 +155,29 @@ export const WorkManagement = () => {
   };
 
   const handleCaptureLocation = async () => {
-    const position = await getCurrentPosition();
-    if (position.latitude !== null && position.longitude !== null) {
-      setWorkData(prev => ({
-        ...prev,
-        latitude: position.latitude!,
-        longitude: position.longitude!,
-        // Auto-rellenar los campos de dirección desde reverse geocoding
-        street_address: position.addressDetails?.street_address || prev.street_address,
-        city: position.addressDetails?.city || prev.city,
-        province: position.addressDetails?.province || prev.province,
-        country: position.addressDetails?.country || prev.country || 'España',
-        // También actualizar la dirección general si está vacía
-        address: position.address || prev.address,
-      }));
-      toast.success('?? Ubicación GPS capturada y dirección auto-rellenada');
-    } else if (geoError) {
-      toast.error(geoError);
+    try {
+      const position = await getCurrentPosition();
+      if (position.latitude !== null && position.longitude !== null) {
+        setWorkData(prev => ({
+          ...prev,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          // Auto-rellenar los campos de dirección desde reverse geocoding
+          street_address: position.addressDetails?.street_address || prev.street_address,
+          city: position.addressDetails?.city || prev.city,
+          province: position.addressDetails?.province || prev.province,
+          country: position.addressDetails?.country || prev.country || 'España',
+          // También actualizar la dirección general si está vacía
+          address: position.address || prev.address,
+        }));
+        toast.success('Ubicación GPS capturada y dirección auto-rellenada');
+        return;
+      }
+
+      toast.error(position.error || 'No se pudo capturar la ubicación GPS.');
+    } catch (error) {
+      console.error('[Geolocation] Error capturando ubicación:', error);
+      toast.error('No se pudo capturar la ubicación GPS. Revisa permisos e inténtalo de nuevo.');
     }
   };
 
@@ -215,14 +221,14 @@ export const WorkManagement = () => {
           latitude: parseFloat(lat),
           longitude: parseFloat(lon),
         }));
-        toast.success('?? Coordenadas encontradas y actualizadas');
+        toast.success('Coordenadas encontradas y actualizadas');
         console.log('[Geocoding] Dirección encontrada:', display_name);
       } else {
-        toast.error('? No se encontró la dirección. Revisa los datos');
+        toast.error('No se encontró la dirección. Revisa los datos');
       }
     } catch (error) {
       console.error('[Geocoding] Error:', error);
-      toast.error('? Error al buscar las coordenadas. Inténtalo de nuevo');
+      toast.error('Error al buscar las coordenadas. Inténtalo de nuevo');
     } finally {
       setGeocodingLoading(false);
     }
@@ -351,13 +357,13 @@ export const WorkManagement = () => {
       <Card>
         <CardHeader className="space-y-3">
           <div className="text-center">
-            <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Obras</CardTitle>
-            <p className="text-[15px] text-muted-foreground">Supervisión de obra</p>
+            <CardTitle className="app-page-title">Obras</CardTitle>
+            <p className="app-page-subtitle">Supervisión de obra</p>
           </div>
           <div className="flex justify-center">
             <Button
               onClick={() => handleOpenDialog()}
-              className="bg-[#1e3a5f] hover:bg-[#152a45] text-white"
+              className="app-btn-primary"
             >
               <Plus className="mr-2 h-4 w-4" />
               Añadir obras
@@ -484,10 +490,10 @@ export const WorkManagement = () => {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-none w-full h-full max-h-screen overflow-y-auto rounded-none">
           <DialogHeader className="text-center">
-            <DialogTitle className="text-xl font-semibold">
+            <DialogTitle className="app-dialog-title">
               {editingWork ? 'Editar obra' : 'Añadir obras'}
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription className="app-page-subtitle">
               Sistema de Gestión de Obras
             </DialogDescription>
           </DialogHeader>
@@ -497,7 +503,7 @@ export const WorkManagement = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="workNumber" className="text-sm font-medium">Número de Obra *</Label>
+                  <Label htmlFor="workNumber" className="app-field-label">Número de Obra *</Label>
                   <Input
                     id="workNumber"
                     value={workData.number}
@@ -506,7 +512,7 @@ export const WorkManagement = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="executionPeriod" className="text-sm font-medium">Plazo de Ejecución</Label>
+                  <Label htmlFor="executionPeriod" className="app-field-label">Plazo de Ejecución</Label>
                   <Input
                     id="executionPeriod"
                     value={workData.execution_period}
@@ -517,7 +523,7 @@ export const WorkManagement = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="workName" className="text-sm font-medium">Nombre de la Obra *</Label>
+                <Label htmlFor="workName" className="app-field-label">Nombre de la Obra *</Label>
                 <Input
                   id="workName"
                   value={workData.name}
@@ -527,7 +533,7 @@ export const WorkManagement = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="address" className="text-sm font-medium">Dirección</Label>
+                <Label htmlFor="address" className="app-field-label">Dirección</Label>
                 <Input
                   id="address"
                   value={workData.address}
@@ -538,7 +544,7 @@ export const WorkManagement = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="promoter" className="text-sm font-medium">Promotor</Label>
+                  <Label htmlFor="promoter" className="app-field-label">Promotor</Label>
                   <Input
                     id="promoter"
                     value={workData.promoter}
@@ -547,7 +553,7 @@ export const WorkManagement = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="budget" className="text-sm font-medium">Presupuesto (€)</Label>
+                  <Label htmlFor="budget" className="app-field-label">Presupuesto (€)</Label>
                   <Input
                     id="budget"
                     type="number"
@@ -560,7 +566,7 @@ export const WorkManagement = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="startDate" className="text-sm font-medium">Fecha de Inicio</Label>
+                  <Label htmlFor="startDate" className="app-field-label">Fecha de Inicio</Label>
                   <Input
                     id="startDate"
                     type="date"
@@ -569,7 +575,7 @@ export const WorkManagement = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="endDate" className="text-sm font-medium">Fecha de Fin</Label>
+                  <Label htmlFor="endDate" className="app-field-label">Fecha de Fin</Label>
                   <Input
                     id="endDate"
                     type="date"
@@ -583,7 +589,7 @@ export const WorkManagement = () => {
             {/* === MÓDULO 2: DESCRIPCIÓN Y CONTACTO === */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm font-medium">Descripción</Label>
+                <Label htmlFor="description" className="app-field-label">Descripción</Label>
                 <Textarea
                   id="description"
                   value={workData.description}
@@ -594,9 +600,9 @@ export const WorkManagement = () => {
               </div>
 
               <div className="space-y-3">
-                <Label className="text-sm font-medium">Contacto</Label>
+                <Label className="app-field-label">Contacto</Label>
                 <div className="space-y-2">
-                  <Label htmlFor="contactPerson" className="text-xs text-muted-foreground">Persona de Contacto</Label>
+                  <Label htmlFor="contactPerson" className="app-field-label-muted">Persona de Contacto</Label>
                   <Input
                     id="contactPerson"
                     value={workData.contact_person}
@@ -606,7 +612,7 @@ export const WorkManagement = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="contactPhone" className="text-xs text-muted-foreground">Teléfono</Label>
+                    <Label htmlFor="contactPhone" className="app-field-label-muted">Teléfono</Label>
                     <Input
                       id="contactPhone"
                       type="tel"
@@ -616,7 +622,7 @@ export const WorkManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contactEmail" className="text-xs text-muted-foreground">Email</Label>
+                    <Label htmlFor="contactEmail" className="app-field-label-muted">Email</Label>
                     <Input
                       id="contactEmail"
                       type="email"
@@ -631,16 +637,16 @@ export const WorkManagement = () => {
 
             {/* === MÓDULO 3: UBICACIÓN === */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center gap-2 app-field-label-muted">
                 <MapPin className="h-4 w-4" />
                 <span>Ubicación</span>
               </div>
               
               <div className="bg-muted/30 rounded-lg p-4 space-y-4">
-                <p className="text-xs font-medium text-muted-foreground">Dirección Postal</p>
+                <p className="app-field-label-muted">Dirección Postal</p>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="streetAddress" className="text-xs text-muted-foreground">Dirección (Calle y número)</Label>
+                  <Label htmlFor="streetAddress" className="app-field-label-muted">Dirección (Calle y número)</Label>
                   <Input
                     id="streetAddress"
                     value={workData.street_address}
@@ -651,7 +657,7 @@ export const WorkManagement = () => {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="city" className="text-xs text-muted-foreground">Población</Label>
+                    <Label htmlFor="city" className="app-field-label-muted">Población</Label>
                     <Input
                       id="city"
                       value={workData.city}
@@ -660,7 +666,7 @@ export const WorkManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="province" className="text-xs text-muted-foreground">Provincia / Región</Label>
+                    <Label htmlFor="province" className="app-field-label-muted">Provincia / Región</Label>
                     <Input
                       id="province"
                       value={workData.province}
@@ -671,7 +677,7 @@ export const WorkManagement = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="country" className="text-xs text-muted-foreground">País</Label>
+                  <Label htmlFor="country" className="app-field-label-muted">País</Label>
                   <Input
                     id="country"
                     value={workData.country}
@@ -685,7 +691,7 @@ export const WorkManagement = () => {
                   variant="outline"
                   onClick={handleGeocodeAddress}
                   disabled={geocodingLoading || (!workData.street_address && !workData.city)}
-                  className="w-full text-sm"
+                  className="app-btn-soft w-full"
                 >
                   {geocodingLoading ? (
                     <>
@@ -746,7 +752,7 @@ export const WorkManagement = () => {
                 variant="outline"
                 onClick={handleCaptureLocation}
                 disabled={geoLoading}
-                className="w-full"
+                className="app-btn-soft w-full"
               >
                 {geoLoading ? (
                   <>
@@ -767,14 +773,14 @@ export const WorkManagement = () => {
           <div className="space-y-2 pt-2">
             <Button 
               onClick={handleSubmit}
-              className="w-full bg-[#1e3a5f] hover:bg-[#152a45] text-white"
+              className="app-btn-primary w-full"
             >
               {editingWork ? 'Guardar Cambios' : 'Añadir'}
             </Button>
             <Button 
               variant="outline" 
               onClick={handleCloseDialog}
-              className="w-full"
+              className="app-btn-soft w-full"
             >
               Cancelar
             </Button>

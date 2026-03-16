@@ -219,9 +219,14 @@ export const IndexDialogs = ({
           <DialogHeader>
             <DialogTitle>Resumen en tiempo real</DialogTitle>
           </DialogHeader>
-          {metrics.allWorkReportsLoading || !metrics.allWorkReportsLoaded ? (
+          {!metrics.allWorkReportsLoaded && metrics.allWorkReportsLoading && metrics.workReports.length > 0 ? (
+            <div className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              Mostrando datos disponibles mientras termina la carga completa en segundo plano.
+            </div>
+          ) : null}
+          {metrics.workReports.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              Cargando historial completo...
+              Cargando partes disponibles...
             </div>
           ) : (
             <DashboardSummaryPanel workReports={metrics.workReports} />

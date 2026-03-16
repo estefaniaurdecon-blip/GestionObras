@@ -119,8 +119,8 @@ export const AccessControlReportsList = ({
   return (
     <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
       <CardHeader className="items-center text-center">
-        <CardTitle className="text-xl font-semibold text-slate-900 sm:text-3xl">Control de accesos</CardTitle>
-        <CardDescription className="text-[15px] text-muted-foreground">
+        <CardTitle className="app-page-title">Control de accesos</CardTitle>
+        <CardDescription className="app-page-subtitle">
           {accessControlLoading
             ? 'Cargando controles de acceso...'
             : `${accessControlReports.length} ${accessControlReports.length === 1 ? 'reporte' : 'reportes'}`}
@@ -131,7 +131,7 @@ export const AccessControlReportsList = ({
               <>
                 <Button
                   variant="destructive"
-                  className="h-10 px-4 text-[15px] sm:h-11 sm:text-base"
+                  className="app-btn-soft bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground"
                   onClick={onBulkDelete}
                   disabled={selectedReports.size === 0}
                 >
@@ -146,7 +146,7 @@ export const AccessControlReportsList = ({
             ) : (
               <Button variant="outline" onClick={onEnterSelectionMode} className={lightButtonClass}>
                 <CheckSquare className="mr-2 h-4 w-4" />
-                Seleccion mltiple
+                Selección múltiple
               </Button>
             )}
           </div>
@@ -169,7 +169,7 @@ export const AccessControlReportsList = ({
                           <div className="flex items-center gap-2">
                             <ChevronDown className="h-5 w-5 text-primary transition-transform data-[state=closed]:rotate-[-90deg]" />
                             <Calendar className="h-5 w-5 text-primary" />
-                            <CardTitle className="text-base text-slate-700">
+                            <CardTitle className="app-card-title text-slate-700">
                               {format(new Date(dateKey), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                             </CardTitle>
                           </div>
@@ -206,7 +206,7 @@ export const AccessControlReportsList = ({
                                         ) : null}
                                         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=closed]:rotate-[-90deg]" />
                                         <Building2 className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-sm font-medium text-slate-700">{siteName}</span>
+                                        <span className="app-field-label">{siteName}</span>
                                       </div>
                                       <Badge className="border-0 bg-orange-500 text-white hover:bg-orange-500">
                                         {selectionMode && selectedCount > 0 ? `${selectedCount}/` : null}

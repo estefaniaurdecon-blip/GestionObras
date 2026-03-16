@@ -1187,8 +1187,8 @@ export const WorkReportList = ({
       {/* Header Actions - Mobile optimized */}
       <div className="flex flex-col gap-3">
         <div className="text-center">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">{t('workReports.title')}</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">{t('workReports.description')}</p>
+          <h1 className="app-page-title">{t('workReports.title')}</h1>
+          <p className="app-page-subtitle mt-1">{t('workReports.description')}</p>
         </div>
         
         {/* Resumen de estados - usar reportes filtrados por rol para las estadísticas */}
@@ -1200,18 +1200,18 @@ export const WorkReportList = ({
         
         {!isOfi && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-            <Button onClick={onCreateNew} className="btn-gradient w-full">
+            <Button onClick={onCreateNew} className="app-btn-primary w-full">
               <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-              <span className="text-sm sm:text-base">{t('workReports.createReport')}</span>
+              <span>{t('workReports.createReport')}</span>
             </Button>
             {onGoToToday && (
               <Button 
                 onClick={onGoToToday} 
                 variant="default"
-                className="w-full"
+                className="app-btn-primary w-full"
               >
                 <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                <span className="text-sm sm:text-base">{t('workReports.goToToday')}</span>
+                <span>{t('workReports.goToToday')}</span>
               </Button>
             )}
           </div>
@@ -1263,7 +1263,7 @@ export const WorkReportList = ({
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <div className="py-2 space-y-3">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="app-section-subtitle">
                     {t('workReports.dataManagementDesc')}
                   </p>
                   <div className="flex flex-col gap-2">
@@ -1390,20 +1390,20 @@ export const WorkReportList = ({
       {isOfi && (
         <Card className="work-card">
           <CardHeader>
-            <CardTitle className="flex items-center justify-center gap-2 text-center text-lg sm:text-xl">
+            <CardTitle className="app-card-title flex items-center justify-center gap-2 text-center">
               <Download className="h-5 w-5 text-primary" />
               Exportación de Informes
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center mb-4">
+            <p className="app-section-subtitle text-center mb-4">
               Selecciona la obra y el período para exportar los partes aprobados
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Selector de obra */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Seleccionar Obra</label>
+                <label className="app-field-label">Seleccionar Obra</label>
                 <Select value={officeExportWork} onValueChange={setOfficeExportWork}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una obra" />
@@ -1423,7 +1423,7 @@ export const WorkReportList = ({
               
               {/* Selector de período */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Período de Exportación</label>
+                <label className="app-field-label">Período de Exportación</label>
                 <Select value={officeExportPeriod} onValueChange={(value: 'weekly' | 'monthly') => setOfficeExportPeriod(value)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1441,7 +1441,7 @@ export const WorkReportList = ({
               <Button
                 onClick={() => handleOfficeExport('excel')}
                 disabled={!officeExportWork}
-                className="w-full"
+                className="app-btn-soft w-full"
                 variant="outline"
               >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -1450,7 +1450,7 @@ export const WorkReportList = ({
               <Button
                 onClick={() => handleOfficeExport('pdf')}
                 disabled={!officeExportWork}
-                className="w-full btn-gradient"
+                className="app-btn-primary w-full"
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Exportar PDFs
@@ -1459,7 +1459,7 @@ export const WorkReportList = ({
             
             {officeExportWork && (
               <div className="mt-4 p-3 bg-muted rounded-md">
-                <p className="text-xs text-muted-foreground">
+                <p className="app-section-subtitle">
                   <strong>Nota:</strong> Se exportarán solo los partes aprobados de la obra seleccionada agrupados por {officeExportPeriod === 'weekly' ? 'semanas' : 'meses'}.
                 </p>
               </div>
@@ -1477,7 +1477,7 @@ export const WorkReportList = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Filter className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-base sm:text-lg">
+                  <CardTitle className="app-card-title">
                     {t('common.filter')}s Avanzados
                   </CardTitle>
                   {activeFiltersCount > 0 && (
@@ -1606,7 +1606,7 @@ export const WorkReportList = ({
       {/* Reports Display */}
       <Card className="work-card">
         <CardHeader>
-          <CardTitle className="text-center text-lg sm:text-xl">
+          <CardTitle className="app-card-title text-center">
             {`${t('workReports.title')} (${filteredReports.length})`}
           </CardTitle>
         </CardHeader>
@@ -1739,7 +1739,7 @@ export const WorkReportList = ({
                                 {isOfi ? (
                                   <Building2 className="h-5 w-5 text-primary" />
                                 ) : null}
-                                <CardTitle className="text-base font-semibold">{groupName}</CardTitle>
+                                <CardTitle className="app-card-title">{groupName}</CardTitle>
                               </div>
                               <div className="flex items-center gap-2">
                                 {canArchiveGroup && (
@@ -2229,7 +2229,7 @@ export const WorkReportList = ({
                               <div className="flex items-center gap-2">
                                 <ChevronDown className="h-5 w-5 text-primary transition-transform group-data-[state=closed]:rotate-[-90deg]" />
                                 <CalendarDays className="h-5 w-5 text-primary" />
-                                <CardTitle className="text-base capitalize">{monthName}</CardTitle>
+                                <CardTitle className="app-card-title capitalize">{monthName}</CardTitle>
                               </div>
                               <Badge variant="secondary">{totalReports} {totalReports === 1 ? t('workReports.part') : t('workReports.parts')}</Badge>
                             </div>
@@ -2439,14 +2439,15 @@ export const WorkReportList = ({
       <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Incluir imágenes en el PDF</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="app-dialog-title">Incluir imágenes en el PDF</DialogTitle>
+            <DialogDescription className="app-page-subtitle">
               ¿Deseas incluir las imágenes de los albaranes y documentos en el PDF?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
+              className="app-btn-soft"
               onClick={() => {
                 if (pendingReport) {
                   if (pendingAction === 'download') {
@@ -2459,7 +2460,7 @@ export const WorkReportList = ({
             >
               No, sin imágenes
             </Button>
-            <Button
+            <Button className="app-btn-primary"
               onClick={() => {
                 if (pendingReport) {
                   if (pendingAction === 'download') {
@@ -2480,8 +2481,8 @@ export const WorkReportList = ({
       <Dialog open={showBulkImageDialog} onOpenChange={setShowBulkImageDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Descargar partes seleccionados</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="app-dialog-title">Descargar partes seleccionados</DialogTitle>
+            <DialogDescription className="app-page-subtitle">
               Vas a descargar {selectedReports.size} {selectedReports.size === 1 ? 'parte' : 'partes'} de trabajo en formato PDF.
               ¿Deseas incluir las imágenes de los albaranes y documentos?
             </DialogDescription>
@@ -2489,12 +2490,13 @@ export const WorkReportList = ({
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
+              className="app-btn-soft"
               onClick={() => downloadSelectedPDFs(false)}
               disabled={isDownloadingBulk}
             >
               No, sin imágenes
             </Button>
-            <Button
+            <Button className="app-btn-primary"
               onClick={() => downloadSelectedPDFs(true)}
               disabled={isDownloadingBulk}
             >
@@ -2508,11 +2510,11 @@ export const WorkReportList = ({
       <Dialog open={showArchiveConfirmDialog} onOpenChange={setShowArchiveConfirmDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="app-dialog-title flex items-center gap-2">
               <Archive className="h-5 w-5" />
               Confirmar archivado
             </DialogTitle>
-            <DialogDescription className="pt-4">
+            <DialogDescription className="app-page-subtitle pt-4">
               {pendingArchiveGroup && (
                 <>
                   ¿Estás seguro de que deseas archivar <strong>{pendingArchiveGroup.reports.length}</strong>{' '}
@@ -2527,6 +2529,7 @@ export const WorkReportList = ({
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
+              className="app-btn-soft"
               onClick={() => {
                 setShowArchiveConfirmDialog(false);
                 setPendingArchiveGroup(null);
@@ -2536,6 +2539,7 @@ export const WorkReportList = ({
             </Button>
             <Button
               variant="destructive"
+              className="app-btn-soft bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground"
               onClick={confirmArchiveGroup}
               disabled={isArchiving}
             >
@@ -2548,16 +2552,16 @@ export const WorkReportList = ({
       <Dialog open={showStatusWarning} onOpenChange={setShowStatusWarning}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-warning">
+            <DialogTitle className="app-dialog-title flex items-center gap-2 text-warning">
               <FileText className="h-5 w-5" />
               Parte No Completado
             </DialogTitle>
-            <DialogDescription className="pt-4">
+            <DialogDescription className="app-page-subtitle pt-4">
               {statusWarningMessage}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setShowStatusWarning(false)}>
+            <Button className="app-btn-primary" onClick={() => setShowStatusWarning(false)}>
               Entendido
             </Button>
           </DialogFooter>
@@ -2568,7 +2572,7 @@ export const WorkReportList = ({
       <Dialog open={pdfViewerOpen} onOpenChange={handleClosePdfViewer}>
         <DialogContent className="max-w-6xl h-[90vh] p-0 flex flex-col">
           <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle>Visualizador de Parte de Trabajo</DialogTitle>
+            <DialogTitle className="app-dialog-title">Visualizador de Parte de Trabajo</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
             {pdfBuffer ? (

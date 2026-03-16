@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, RefreshCw, Wallet } from 'lucide-react';
+import { CalendarDays, RefreshCw, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   getYearlySummary,
-  listProjectBudgets,
   listProjects,
   type ApiProject,
-  type ApiProjectBudgetLine,
   type YearlySummary,
 } from '@/integrations/api/client';
+import { ErpBudgetManager } from '@/components/api/ErpBudgetManager';
 
 const currentYear = new Date().getFullYear();
 
@@ -36,7 +35,6 @@ export function EconomicsOverviewPanel() {
   const [summary, setSummary] = useState<YearlySummary | null>(null);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [budgetLines, setBudgetLines] = useState<ApiProjectBudgetLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +56,6 @@ export function EconomicsOverviewPanel() {
         setSelectedProjectId(projectId);
       } else {
         setSelectedProjectId(null);
-        setBudgetLines([]);
       }
     } catch (loadError: any) {
       setError(loadError?.message || 'No se pudieron cargar los datos economicos');
@@ -67,24 +64,9 @@ export function EconomicsOverviewPanel() {
     }
   }, [selectedProjectId, year]);
 
-  const loadProjectBudgets = useCallback(async (projectId: number) => {
-    try {
-      const lines = await listProjectBudgets(projectId);
-      setBudgetLines(lines);
-    } catch (budgetError: any) {
-      setError(budgetError?.message || 'No se pudieron cargar los presupuestos del proyecto');
-      setBudgetLines([]);
-    }
-  }, []);
-
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
-
-  useEffect(() => {
-    if (!selectedProjectId) return;
-    void loadProjectBudgets(selectedProjectId);
-  }, [loadProjectBudgets, selectedProjectId]);
 
   const justifyTotal = useMemo(() => {
     if (!summary?.projectJustify) return 0;
@@ -151,46 +133,11 @@ export function EconomicsOverviewPanel() {
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-blue-700" />
-            Presupuesto por obra
-          </CardTitle>
-          <select
-            className="h-8 rounded-md border bg-background px-2 text-sm"
-            value={selectedProjectId ?? ''}
-            onChange={(event) => setSelectedProjectId(Number(event.target.value))}
-          >
-            {projects.length === 0 ? <option value="">Sin obras</option> : null}
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {budgetLines.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No hay lineas de presupuesto para la obra seleccionada.
-            </div>
-          ) : null}
-
-          {budgetLines.map((line) => (
-            <div key={line.id} className="rounded-md border bg-white p-3 space-y-1">
-              <div className="font-medium text-sm">{line.concept}</div>
-              <div className="text-xs text-muted-foreground">
-                Aprobado: {getCurrencyValue(line.approved_budget)} | Ejecutado: {getCurrencyValue(line.forecasted_spent)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                % consumido: {toNumber(line.percent_spent).toFixed(2)}%
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <ErpBudgetManager
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectedProjectIdChange={setSelectedProjectId}
+      />
     </div>
   );
 }

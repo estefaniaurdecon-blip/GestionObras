@@ -148,8 +148,9 @@ export const useWorks = () => {
     startupPerfStart('hook:useWorks.loadWorks');
     setLoading(true);
     try {
+      const activeTenantId = await getActiveTenantId(user);
       startupPerfStart('hook:useWorks.listProjects');
-      const projects = await listProjects();
+      const projects = await listProjects(activeTenantId);
       startupPerfEnd('hook:useWorks.listProjects', `count=${projects.length}`);
       const mappedWorks = projects.map(mapApiProjectToWork);
       setWorks(mappedWorks);
@@ -221,13 +222,14 @@ export const useWorks = () => {
     }
 
     try {
+      const activeTenantId = await getActiveTenantId(user);
       const projectData = mapWorkToProjectCreate(workData);
 
       if (!projectData.name) {
         throw new Error('El nombre de la obra es obligatorio');
       }
 
-      const newProject = await createProject(projectData);
+      const newProject = await createProject(projectData, activeTenantId);
 
       if (!newProject) {
         throw new Error('No se pudo crear la obra');
@@ -248,6 +250,7 @@ export const useWorks = () => {
 
   const updateWork = async (id: string, workData: Partial<Work>) => {
     try {
+      const activeTenantId = await getActiveTenantId(user);
       const projectId = parseInt(id, 10);
       if (isNaN(projectId)) {
         throw new Error('ID de obra inválido');
@@ -266,7 +269,7 @@ export const useWorks = () => {
         budget: workData.budget,
       };
 
-      await updateProject(projectId, updateData);
+      await updateProject(projectId, updateData, activeTenantId);
 
       toast.success('Obra actualizada correctamente');
       await loadWorks();
@@ -294,12 +297,13 @@ export const useWorks = () => {
 
   const deleteWork = async (id: string) => {
     try {
+      const activeTenantId = await getActiveTenantId(user);
       const projectId = parseInt(id, 10);
       if (isNaN(projectId)) {
         throw new Error('ID de obra inválido');
       }
 
-      await deleteProject(projectId);
+      await deleteProject(projectId, activeTenantId);
 
       toast.success('Obra eliminada correctamente');
       await loadWorks();

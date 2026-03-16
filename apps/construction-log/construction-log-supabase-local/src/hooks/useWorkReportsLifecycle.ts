@@ -35,6 +35,7 @@ type UseWorkReportsLifecycleParams = {
   tenantUnavailable: boolean;
   tenantErrorMessage: string;
   allWorkReportsLoaded: boolean;
+  allWorkReportsLoading: boolean;
   workReportsLength: number;
   workReportsLoading: boolean;
   syncing: boolean;
@@ -63,6 +64,7 @@ export const useWorkReportsLifecycle = ({
   tenantUnavailable,
   tenantErrorMessage,
   allWorkReportsLoaded,
+  allWorkReportsLoading,
   workReportsLength,
   workReportsLoading,
   syncing,
@@ -73,7 +75,8 @@ export const useWorkReportsLifecycle = ({
   setWorkReportsLoading,
   setSyncing,
 }: UseWorkReportsLifecycleParams): UseWorkReportsLifecycleResult => {
-  const INITIAL_OFFLINE_LOAD_DELAY_MS = Capacitor.isNativePlatform() ? 1800 : 0;
+  const INITIAL_OFFLINE_LOAD_DELAY_MS = 0;
+  const BACKGROUND_FULL_LOAD_DELAY_MS = Capacitor.isNativePlatform() ? 10000 : 4000;
   const BOOTSTRAP_SYNC_DELAY_MS = Capacitor.isNativePlatform() ? 30000 : 12000;
   const AUTO_CLONE_INITIAL_DELAY_MS = Capacitor.isNativePlatform() ? 30000 : 12000;
   const INITIAL_WORK_REPORTS_LIMIT = 120;
@@ -303,10 +306,21 @@ export const useWorkReportsLifecycle = ({
 
       if (shouldLoadFull) {
         startupPerfStart('hook:useWorkReportsLifecycle.listWorkReports');
-        const reports = await workReportsRepo.list({
+        let reports = await workReportsRepo.list({
           tenantId: preparedTenantId,
           limit: WORK_REPORT_HISTORY_LIMIT,
         });
+        if (reports.length === 0) {
+          const fallbackAnyTenant = await workReportsRepo.listAny({
+            limit: WORK_REPORT_HISTORY_LIMIT,
+          });
+          if (fallbackAnyTenant.length > 0) {
+            console.warn(
+              `[WorkReports] No hay filas para tenant ${preparedTenantId}, usando fallback local (${fallbackAnyTenant.length})`
+            );
+            reports = fallbackAnyTenant;
+          }
+        }
         startupPerfEnd('hook:useWorkReportsLifecycle.listWorkReports', `count=${reports.length},mode=full`);
         const orderedReports = sortReportsByRecency(reports);
         setAllWorkReports(orderedReports);
@@ -333,7 +347,18 @@ export const useWorkReportsLifecycle = ({
         `count=${recentReports.length + unsyncedReports.length},mode=partial`,
       );
 
-      const mergedReports = mergeUniqueReports([...recentReports, ...unsyncedReports]);
+      let mergedReports = mergeUniqueReports([...recentReports, ...unsyncedReports]);
+      if (mergedReports.length === 0) {
+        const fallbackAnyTenant = await workReportsRepo.listAny({
+          limit: Math.max(INITIAL_WORK_REPORTS_LIMIT, INITIAL_UNSYNCED_WORK_REPORTS_LIMIT),
+        });
+        if (fallbackAnyTenant.length > 0) {
+          console.warn(
+            `[WorkReports] Carga parcial vacía para tenant ${preparedTenantId}, usando fallback local (${fallbackAnyTenant.length})`
+          );
+          mergedReports = sortReportsByRecency(fallbackAnyTenant);
+        }
+      }
       setAllWorkReports(mergedReports);
       setWorkReports(buildVisibleWorkReports(mergedReports));
       setAllWorkReportsLoaded(false);
@@ -507,6 +532,49 @@ export const useWorkReportsLifecycle = ({
   }, [INITIAL_OFFLINE_LOAD_DELAY_MS, loadWorkReports]);
 
   useEffect(() => {
+    if (allWorkReportsLoaded || allWorkReportsLoading) return;
+    if (!user || !tenantResolved || !resolvedTenantId) return;
+    if (workReportsLength === 0) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const runBackgroundFullLoad = () => {
+      if (cancelled) return;
+      void loadWorkReports({ full: true });
+    };
+
+    timeoutId = globalThis.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(runBackgroundFullLoad, { timeout: 3000 });
+        return;
+      }
+
+      runBackgroundFullLoad();
+    }, BACKGROUND_FULL_LOAD_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [
+    BACKGROUND_FULL_LOAD_DELAY_MS,
+    allWorkReportsLoaded,
+    allWorkReportsLoading,
+    loadWorkReports,
+    resolvedTenantId,
+    tenantResolved,
+    user,
+    workReportsLength,
+  ]);
+
+  useEffect(() => {
     if (!tenantResolved || !resolvedTenantId) return;
     if (tenantUnavailable || workReportsLoading || syncing) return;
     if (workReportsLength > 0) return;
@@ -615,5 +683,3 @@ export const useWorkReportsLifecycle = ({
     processScheduledAutoClones,
   };
 };
-
-

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
@@ -21,6 +21,7 @@ type ForemanResourcesCardProps = {
   onMainForemanHoursChange: (value: number) => void;
   siteManager: string;
   onSiteManagerChange: (value: string) => void;
+  foremanNameSuggestions: string[];
   editableNumericValue: (value: number) => string | number;
   parseNumeric: (value: string) => number;
   nonNegative: (value: number) => number;
@@ -39,11 +40,22 @@ export const ForemanResourcesCard = ({
   onMainForemanHoursChange,
   siteManager,
   onSiteManagerChange,
+  foremanNameSuggestions,
   editableNumericValue,
   parseNumeric,
   nonNegative,
 }: ForemanResourcesCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [mainForemanDropdownOpen, setMainForemanDropdownOpen] = useState(false);
+
+  const filteredMainForemanSuggestions = useMemo(() => {
+    const uniqueSuggestions = Array.from(
+      new Set(foremanNameSuggestions.map((value) => value.trim()).filter(Boolean)),
+    );
+    const query = mainForeman.trim().toLowerCase();
+    if (!query) return uniqueSuggestions;
+    return uniqueSuggestions.filter((name) => name.toLowerCase().includes(query));
+  }, [foremanNameSuggestions, mainForeman]);
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -148,13 +160,52 @@ export const ForemanResourcesCard = ({
                 <Label htmlFor="main-foreman" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
                   Encargado principal:
                 </Label>
-                <Input
-                  id="main-foreman"
-                  className="mt-2"
-                  disabled={readOnly}
-                  value={mainForeman}
-                  onChange={(event) => onMainForemanChange(event.target.value)}
-                />
+                <div className="relative mt-2">
+                  <Input
+                    id="main-foreman"
+                    disabled={readOnly}
+                    value={mainForeman}
+                    onFocus={() => {
+                      if (!readOnly) setMainForemanDropdownOpen(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setMainForemanDropdownOpen(false), 120);
+                    }}
+                    onChange={(event) => {
+                      onMainForemanChange(event.target.value);
+                      if (!readOnly) setMainForemanDropdownOpen(true);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setMainForemanDropdownOpen((prev) => !prev)}
+                    aria-label="Mostrar sugerencias de encargados"
+                  >
+                    <ChevronDown className={`h-4 w-4 transition-transform ${mainForemanDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {!readOnly && mainForemanDropdownOpen && filteredMainForemanSuggestions.length > 0 ? (
+                    <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md">
+                      {filteredMainForemanSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            onMainForemanChange(suggestion);
+                            setMainForemanDropdownOpen(false);
+                          }}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <div className="p-3">
                 <Label

@@ -19,10 +19,10 @@ import { es } from 'date-fns/locale';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/hooks/useOrganization';
+import { getActiveTenantId } from '@/offline-db/tenantScope';
 import {
   generateSummaryReport,
   listErpWorkReports,
-  listManagedUserAssignments,
   listProjects,
   listRentalMachinery,
   listSavedEconomicReports,
@@ -100,13 +100,8 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!user) return;
 
       try {
-        const [workIds, allProjects] = await Promise.all([
-          listManagedUserAssignments(Number(user.id)),
-          listProjects(),
-        ]);
-        const workIdSet = new Set(workIds);
+        const allProjects = await listProjects();
         const works = allProjects
-          .filter(p => workIdSet.has(p.id))
           .map(p => ({ id: String(p.id), number: String(p.code ?? p.id), name: p.name }));
         setAvailableWorks(works);
       } catch (error) {
@@ -123,7 +118,8 @@ export const AdvancedReports: React.FC<AdvancedReportsProps> = ({
       if (!user || !isOpen) return;
 
       try {
-        const data = await listSavedEconomicReports();
+        const tenantId = await getActiveTenantId(user);
+        const data = await listSavedEconomicReports(tenantId);
         setEconomicReports(data || []);
       } catch (error) {
         console.error('Error loading economic reports:', error);

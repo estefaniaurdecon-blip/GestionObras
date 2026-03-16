@@ -247,11 +247,11 @@ export const HistoryReportsDialog = ({
             <div className="text-xs text-muted-foreground">
               Total guardados:{' '}
               <span className="font-medium">
-                {allWorkReportsLoading || !allWorkReportsLoaded ? 'cargando...' : allWorkReports.length}
+                {allWorkReports.length}
               </span>
               . Mostrando:{' '}
               <span className="font-medium">
-                {allWorkReportsLoading || !allWorkReportsLoaded ? '--' : filteredHistoryReports.length}
+                {filteredHistoryReports.length}
               </span>
               . Filtros seleccionados:{' '}
               <span className="font-medium">{historySelectedFiltersCount}</span>/{HISTORY_FILTER_OPTIONS.length}. Aplicados:{' '}
@@ -264,11 +264,13 @@ export const HistoryReportsDialog = ({
             </div>
           </div>
 
-          {allWorkReportsLoading || !allWorkReportsLoaded ? (
-            <div className="rounded-md border bg-slate-50 p-6 text-sm text-muted-foreground text-center">
-              Cargando historial completo...
+          {!allWorkReportsLoaded && allWorkReportsLoading ? (
+            <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+              Cargando historial completo en segundo plano. Ya puedes trabajar con los partes disponibles.
             </div>
-          ) : allWorkReports.length === 0 ? (
+          ) : null}
+
+          {allWorkReports.length === 0 ? (
             <div className="rounded-md border bg-slate-50 p-6 text-sm text-muted-foreground text-center">
               No hay partes guardados todavía.
             </div>

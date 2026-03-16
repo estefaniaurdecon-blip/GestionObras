@@ -70,7 +70,7 @@ const Index = () => {
     setAllWorkReports,
     allWorkReportsLoaded,
     setAllWorkReportsLoaded,
-    allWorkReportsLoading,
+    allWorkReportsLoading: allReportsBackgroundLoading,
     setAllWorkReportsLoading,
     workReportsLoading,
     setWorkReportsLoading,
@@ -260,6 +260,7 @@ const Index = () => {
     tenantUnavailable,
     tenantErrorMessage,
     allWorkReportsLoaded,
+    allWorkReportsLoading: allReportsBackgroundLoading,
     workReportsLength: workReports.length,
     workReportsLoading,
     syncing,
@@ -319,11 +320,6 @@ const Index = () => {
     setPendingOverwrite(null);
   }, [setActiveReport, setGeneratePanelOpen, setPendingOverwrite, tenantUnavailable]);
 
-  useEffect(() => {
-    if (!historyOpen && !metricsOpen) return;
-    void ensureAllWorkReportsLoaded();
-  }, [ensureAllWorkReportsLoaded, historyOpen, metricsOpen]);
-
   const shouldRenderAccessControlTab = activeTab === 'access-control';
   const shouldRenderSecondaryTabs =
     activeTab === 'works' ||
@@ -336,6 +332,7 @@ const Index = () => {
     historyOpen ||
     cloneDialogOpen ||
     Boolean(pendingOverwrite);
+  const reportsForExpandedViews = allWorkReports.length > 0 ? allWorkReports : workReports;
 
   if (authLoading || !user) {
     return (
@@ -414,7 +411,7 @@ const Index = () => {
               workReports,
               allWorkReports,
               allWorkReportsLoaded,
-              allWorkReportsLoading,
+              allWorkReportsLoading: allReportsBackgroundLoading,
               workReportVisibleDays: WORK_REPORT_VISIBLE_DAYS,
               syncing,
               workReportsReadOnlyByRole,
@@ -520,6 +517,9 @@ const Index = () => {
               <IndexSecondaryTabs
                 sortedWorks={sortedWorks}
                 worksLoading={worksLoading}
+                economicSourceReports={reportsForExpandedViews}
+                economicReportsLoaded={allWorkReportsLoaded}
+                economicReportsLoading={allReportsBackgroundLoading}
                 onOpenProjects={() => navigate('/projects')}
                 onReloadWorks={loadWorks}
               />
@@ -541,9 +541,9 @@ const Index = () => {
               metrics={{
                 open: metricsOpen,
                 setOpen: setMetricsOpen,
-                workReports: allWorkReports,
+                workReports: reportsForExpandedViews,
                 allWorkReportsLoaded,
-                allWorkReportsLoading,
+                allWorkReportsLoading: allReportsBackgroundLoading,
               }}
               accessPersonal={{
                 open: accessPersonalDialogOpen,
@@ -572,9 +572,9 @@ const Index = () => {
                 historyDatePickerOpen,
                 setHistoryDatePickerOpen,
                 selectedHistoryDate,
-                allWorkReports,
+                allWorkReports: reportsForExpandedViews,
                 allWorkReportsLoaded,
-                allWorkReportsLoading,
+                allWorkReportsLoading: allReportsBackgroundLoading,
                 filteredHistoryReports,
                 historyAppliedFiltersCount,
                 clearHistoryFilters,
