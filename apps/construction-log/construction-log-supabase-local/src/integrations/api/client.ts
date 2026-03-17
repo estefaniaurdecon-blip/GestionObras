@@ -535,6 +535,8 @@ export interface ApiProject {
   status?: string;
   budget?: number;
   tenant_id?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -564,6 +566,8 @@ export interface ProjectUpdate {
   end_date?: string;
   status?: string;
   budget?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ApiBudgetLineMilestone {

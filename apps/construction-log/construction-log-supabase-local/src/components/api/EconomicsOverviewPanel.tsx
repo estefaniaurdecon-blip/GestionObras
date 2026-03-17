@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, RefreshCw, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   getYearlySummary,
-  listProjects,
-  type ApiProject,
   type YearlySummary,
 } from '@/integrations/api/client';
-import { ErpBudgetManager } from '@/components/api/ErpBudgetManager';
 
 const currentYear = new Date().getFullYear();
 
@@ -33,8 +30,6 @@ function getCurrencyValue(value: unknown): string {
 export function EconomicsOverviewPanel() {
   const [year, setYear] = useState(currentYear);
   const [summary, setSummary] = useState<YearlySummary | null>(null);
-  const [projects, setProjects] = useState<ApiProject[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,26 +38,14 @@ export function EconomicsOverviewPanel() {
     setError(null);
 
     try {
-      const [summaryData, projectData] = await Promise.all([
-        getYearlySummary(year),
-        listProjects(),
-      ]);
+      const summaryData = await getYearlySummary(year);
       setSummary(summaryData);
-      setProjects(projectData);
-
-      const firstProject = projectData[0];
-      if (firstProject) {
-        const projectId = selectedProjectId || firstProject.id;
-        setSelectedProjectId(projectId);
-      } else {
-        setSelectedProjectId(null);
-      }
     } catch (loadError: any) {
       setError(loadError?.message || 'No se pudieron cargar los datos economicos');
     } finally {
       setLoading(false);
     }
-  }, [selectedProjectId, year]);
+  }, [year]);
 
   useEffect(() => {
     void loadSummary();
@@ -88,23 +71,35 @@ export function EconomicsOverviewPanel() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-blue-700" />
-            Resumen economico
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setYear((prev) => prev - 1)}>
-              <CalendarDays className="h-4 w-4 mr-2" />
-              {year - 1}
+        <CardHeader className="space-y-4">
+          <div className="text-center">
+            <CardTitle className="app-page-title inline-flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-blue-700" />
+              Resumen ERP
+            </CardTitle>
+            <p className="app-page-subtitle mt-1">Vista agregada anual de justificación, ejecución y horas imputadas.</p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-btn-soft min-w-[56px] px-3"
+              onClick={() => setYear((prev) => prev - 1)}
+              aria-label="Año anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setYear((prev) => prev + 1)}>
-              <CalendarDays className="h-4 w-4 mr-2" />
-              {year + 1}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void loadSummary()} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
+            <div className="flex min-w-[110px] items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-base font-semibold text-slate-900">
+              {year}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="app-btn-soft min-w-[56px] px-3"
+              onClick={() => setYear((prev) => prev + 1)}
+              aria-label="Año siguiente"
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
@@ -133,11 +128,6 @@ export function EconomicsOverviewPanel() {
           </div>
         </CardContent>
       </Card>
-      <ErpBudgetManager
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        onSelectedProjectIdChange={setSelectedProjectId}
-      />
     </div>
   );
 }

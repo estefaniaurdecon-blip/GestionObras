@@ -33,7 +33,7 @@ type SavedEconomicReport = ApiSavedEconomicReport;
 
 type GroupingType = 'day' | 'week' | 'month';
 
-export const SavedEconomicReports = () => {
+export const SavedEconomicReports = ({ refreshKey }: { refreshKey?: number }) => {
   const { user } = useAuth();
   const { companySettings } = useCompanySettings();
   const [reports, setReports] = useState<SavedEconomicReport[]>([]);
@@ -42,7 +42,7 @@ export const SavedEconomicReports = () => {
 
   useEffect(() => {
     loadReports();
-  }, [user]);
+  }, [user, refreshKey]);
 
   const loadReports = async () => {
     if (!user) {
@@ -381,17 +381,17 @@ export const SavedEconomicReports = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Partes Guardados - Gestión Económica</CardTitle>
-          <CardDescription>
+        <CardHeader className="text-center">
+          <CardTitle className="app-page-title">Reportes guardados</CardTitle>
+          <CardDescription className="app-page-subtitle">
             Visualiza y exporta los partes con precios guardados
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center mb-6">
-            <label className="text-sm font-medium mr-2">Agrupar por:</label>
+          <div className="mb-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+            <label className="app-field-label">Agrupar por:</label>
             <Select value={grouping} onValueChange={(value) => setGrouping(value as GroupingType)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -21,6 +21,8 @@ class ProjectRead(BaseModel):
     loan_percent: Optional[float] = None
     subsidy_percent: Optional[float] = None
     is_active: bool
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime
 
 
@@ -46,6 +48,8 @@ class ProjectUpdate(BaseModel):
     loan_percent: Optional[float] = None
     subsidy_percent: Optional[float] = None
     is_active: Optional[bool] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class TaskRead(BaseModel):

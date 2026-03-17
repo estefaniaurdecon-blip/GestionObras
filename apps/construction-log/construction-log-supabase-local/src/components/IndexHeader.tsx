@@ -2,24 +2,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppIcon } from '@/components/AppIcon';
-import { LanguageSelector } from '@/components/LanguageSelector';
 import { NetworkStatusIcon } from '@/components/NetworkStatusIcon';
+import { NotificationsCenter } from '@/components/NotificationsCenter';
+import { MobileActionsMenu } from '@/components/MobileActionsMenu';
 import { Capacitor } from '@capacitor/core';
-import { CloudUpload, LogOut, RefreshCw, Settings } from 'lucide-react';
+import { Globe, LogOut, MessageSquare, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useMessages } from '@/hooks/useMessages';
 
 type IndexHeaderProps = {
   roleLabel: string;
   userEmail: string;
   roleName: string;
-  worksLoading: boolean;
-  syncing: boolean;
-  tenantUnavailable: boolean;
-  tenantErrorMessage: string;
   // Optional for backwards compatibility with old Index prop wiring.
+  worksLoading?: boolean;
+  syncing?: boolean;
+  tenantUnavailable?: boolean;
+  tenantErrorMessage?: string;
   showUpdatesTab?: boolean;
   hasPendingUpdate?: boolean;
-  onReloadWorks: () => void;
-  onSyncNow: () => Promise<void>;
+  onReloadWorks?: () => void;
+  onSyncNow?: () => Promise<void>;
   onOpenSettings: () => void;
   onSignOut: () => Promise<void>;
 };
@@ -28,18 +31,14 @@ export const IndexHeader = ({
   roleLabel,
   userEmail,
   roleName,
-  worksLoading,
-  syncing,
-  tenantUnavailable,
-  tenantErrorMessage,
   showUpdatesTab: _showUpdatesTab,
   hasPendingUpdate = false,
-  onReloadWorks,
-  onSyncNow,
   onOpenSettings,
   onSignOut,
 }: IndexHeaderProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+  const navigate = useNavigate();
+  const { unreadCount } = useMessages();
 
   return (
     <>
@@ -74,31 +73,32 @@ export const IndexHeader = ({
             <div className="flex w-full items-center justify-end gap-1 sm:w-auto sm:gap-2 flex-shrink-0">
               <NetworkStatusIcon />
 
+              <NotificationsCenter />
+
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={onReloadWorks}
-                disabled={worksLoading}
-                className="h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
-                title="Recargar datos"
+                onClick={() => document.dispatchEvent(new Event('open-chat-center'))}
+                className="relative h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
+                title="Mensajería"
               >
-                <RefreshCw className={`h-4 w-4 ${worksLoading ? 'animate-spin' : ''}`} />
+                <MessageSquare className="h-4 w-4" />
+                {unreadCount > 0 ? (
+                  <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Badge>
+                ) : null}
               </Button>
 
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => void onSyncNow()}
-                disabled={syncing || tenantUnavailable}
+                onClick={() => navigate('/radar')}
                 className="h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
-                title={tenantUnavailable ? tenantErrorMessage : 'Sincronizar (outbox)'}
+                title="Radar de Obras"
               >
-                <CloudUpload className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                <Globe className="h-4 w-4" />
               </Button>
-
-              <div className="hidden sm:block">
-                <LanguageSelector />
-              </div>
 
               <Button
                 variant="ghost"
@@ -125,6 +125,10 @@ export const IndexHeader = ({
               >
                 <LogOut className="h-4 w-4" />
               </Button>
+
+              <div className="sm:hidden">
+                <MobileActionsMenu />
+              </div>
             </div>
           </div>
         </div>

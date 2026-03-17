@@ -24,6 +24,8 @@ class Project(SQLModel, table=True):
     loan_percent: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
     subsidy_percent: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(5, 2)))
     is_active: bool = Field(default=True)
+    latitude: Optional[float] = Field(default=None)
+    longitude: Optional[float] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

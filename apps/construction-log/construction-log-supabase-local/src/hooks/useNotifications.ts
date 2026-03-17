@@ -81,7 +81,7 @@ export const useNotifications = () => {
   const { user } = useAuth();
 
   const loadNotifications = useCallback(async (options?: { silent?: boolean }) => {
-    if (!user) {
+    if (!user?.tenant_id) {
       setLoading(false);
       return;
     }
@@ -108,7 +108,7 @@ export const useNotifications = () => {
   useEffect(() => {
     void loadNotifications();
 
-    if (!user) return;
+    if (!user?.tenant_id) return;
 
     const pollId = window.setInterval(() => {
       void loadNotifications({ silent: true });
@@ -117,7 +117,7 @@ export const useNotifications = () => {
     return () => {
       window.clearInterval(pollId);
     };
-  }, [user, loadNotifications]);
+  }, [user?.tenant_id, loadNotifications]);
 
   const markAsRead = async (notificationId: string) => {
     const apiNotificationId = toApiNotificationId(notificationId);

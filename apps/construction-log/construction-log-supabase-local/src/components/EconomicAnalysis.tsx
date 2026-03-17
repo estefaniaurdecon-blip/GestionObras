@@ -527,14 +527,14 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Análisis y Resúmenes Económicos</CardTitle>
-          <CardDescription>
+        <CardHeader className="text-center">
+          <CardTitle className="app-page-title">Análisis y resúmenes económicos</CardTitle>
+          <CardDescription className="app-page-subtitle">
             Visualiza y analiza los costes agrupados por período
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row">
             <div className="flex-1">
               <Select value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
                 <SelectTrigger>
@@ -560,12 +560,12 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleExportExcel} variant="outline">
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={handleExportExcel} variant="outline" className="app-btn-soft">
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Excel
               </Button>
-              <Button onClick={handleExportPDF} variant="outline">
+              <Button onClick={handleExportPDF} variant="outline" className="app-btn-soft">
                 <FileText className="h-4 w-4 mr-2" />
                 PDF
               </Button>
@@ -610,12 +610,12 @@ export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
 
           {/* Charts */}
           <Tabs defaultValue="evolution" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="evolution">Evolución</TabsTrigger>
-              <TabsTrigger value="distribution">Distribución</TabsTrigger>
-              <TabsTrigger value="companies">Empresas</TabsTrigger>
-              <TabsTrigger value="suppliers">Proveedores</TabsTrigger>
-              <TabsTrigger value="table">Tabla</TabsTrigger>
+            <TabsList className="h-auto w-full justify-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-2 text-slate-600">
+              <TabsTrigger value="evolution" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white">Evolución</TabsTrigger>
+              <TabsTrigger value="distribution" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white">Distribución</TabsTrigger>
+              <TabsTrigger value="companies" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white">Empresas</TabsTrigger>
+              <TabsTrigger value="suppliers" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white">Proveedores</TabsTrigger>
+              <TabsTrigger value="table" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white">Tabla</TabsTrigger>
             </TabsList>
 
             <TabsContent value="evolution" className="space-y-4">

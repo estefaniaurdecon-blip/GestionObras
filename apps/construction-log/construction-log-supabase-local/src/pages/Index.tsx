@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AccessControlForm } from '@/components/AccessControlForm';
 import { Tabs } from '@/components/ui/tabs';
 import { IndexHeader } from '@/components/IndexHeader';
@@ -43,8 +43,22 @@ const IndexDialogs = lazy(() =>
   })),
 );
 
+const ChatCenter = lazy(() =>
+  import('@/components/ChatCenter').then((module) => ({
+    default: module.ChatCenter,
+  })),
+);
+
+const FileTransfer = lazy(() =>
+  import('@/components/FileTransfer').then((module) => ({
+    default: module.FileTransfer,
+  })),
+);
+
 const Index = () => {
   const navigate = useNavigate();
+  const { search } = useLocation();
+  const initialWorkId = useMemo(() => new URLSearchParams(search).get('workId') ?? undefined, [search]);
   const { toast } = useToast();
   const { user, loading: authLoading, signOut, refreshUser } = useAuth();
   const indexFirstRenderMeasuredRef = useRef(false);
@@ -101,6 +115,10 @@ const Index = () => {
     if (activeTab !== 'access-control') return;
     setAccessControlDataEnabled(true);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (initialWorkId) setActiveTab('works');
+  }, [initialWorkId]);
 
   const {
     resolvedTenantId,
@@ -522,6 +540,7 @@ const Index = () => {
                 economicReportsLoading={allReportsBackgroundLoading}
                 onOpenProjects={() => navigate('/projects')}
                 onReloadWorks={loadWorks}
+                initialWorkId={initialWorkId}
               />
             </Suspense>
           ) : null}
@@ -601,6 +620,17 @@ const Index = () => {
           </Suspense>
         ) : null}
       </Tabs>
+
+      {tenantResolved ? (
+        <>
+          <Suspense fallback={null}>
+            <ChatCenter />
+          </Suspense>
+          <Suspense fallback={null}>
+            <FileTransfer />
+          </Suspense>
+        </>
+      ) : null}
     </div>
   );
 };

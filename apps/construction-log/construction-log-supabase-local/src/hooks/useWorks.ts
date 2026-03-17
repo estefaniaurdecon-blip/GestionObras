@@ -41,8 +41,8 @@ function mapApiProjectToWork(project: ApiProject): Work {
     created_by: String(project.tenant_id || ''),
     organization_id: String(project.tenant_id || ''),
     updated_at: project.updated_at,
-    latitude: undefined,
-    longitude: undefined,
+    latitude: project.latitude ?? undefined,
+    longitude: project.longitude ?? undefined,
     street_address: project.address,
     city: project.city,
     province: project.province,
@@ -267,6 +267,8 @@ export const useWorks = () => {
         start_date: workData.start_date,
         end_date: workData.end_date,
         budget: workData.budget,
+        latitude: workData.latitude !== undefined ? workData.latitude : undefined,
+        longitude: workData.longitude !== undefined ? workData.longitude : undefined,
       };
 
       await updateProject(projectId, updateData, activeTenantId);

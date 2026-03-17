@@ -12,9 +12,21 @@ import {
   isExternalCollaborationConcept,
   isGeneralExpensesConcept,
   normalizeConceptKey,
+  parseEuroInput,
   parsePercentFromConcept,
+  safeNumber,
 } from '@/utils/erpBudget';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,38 +39,26 @@ type ErpBudgetManagerProps = {
   onSelectedProjectIdChange: (projectId: number | null) => void;
 };
 
-const toNumber = (value: unknown, fallback = 0) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-};
-
-const parseInputNumber = (value: string) => {
-  const raw = value.trim();
-  if (!raw) return '0';
-  return raw.replace(/\./g, '').replace(',', '.');
-};
-
-function EditableMoneyCell({
-  value,
-  editable,
-  onSubmit,
-}: {
+type EditableMoneyCellProps = {
   value: number;
   editable: boolean;
+  /** Required when editable=true */
   onSubmit?: (value: string) => void;
-}) {
+};
+
+function EditableMoneyCell({ value, editable, onSubmit }: EditableMoneyCellProps) {
   if (!editable || !onSubmit) {
-    return <span className="font-mono text-sm">{formatEuroValue(value)}</span>;
+    return <span className="font-mono text-base">{formatEuroValue(value)}</span>;
   }
 
   return (
     <Input
-      className="h-8 min-w-[92px] text-center font-mono text-sm"
+      className="h-9 min-w-[100px] text-center font-mono text-base"
       defaultValue={value.toLocaleString('es-ES')}
-      onBlur={(event) => onSubmit(parseInputNumber(event.target.value))}
+      onBlur={(event) => onSubmit(String(parseEuroInput(event.target.value)))}
       onKeyDown={(event) => {
         if (event.key !== 'Enter') return;
-        onSubmit(parseInputNumber((event.target as HTMLInputElement).value));
+        onSubmit(String(parseEuroInput((event.target as HTMLInputElement).value)));
       }}
     />
   );
@@ -74,6 +74,7 @@ export function ErpBudgetManager({
   const canManage = Boolean(user?.is_super_admin) || isMaster || isAdmin || isSiteManager;
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [milestoneToRemove, setMilestoneToRemove] = useState('');
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
 
   const budgetEditor = useBudgetEditor({
     projectId: selectedProjectId,
@@ -133,136 +134,125 @@ export function ErpBudgetManager({
       ? resolveActiveMonthsInYear(projectDateRange.start, projectDateRange.end, resolvedSelectedYear)
       : 0;
 
-  const milestonesToRender: ApiProjectBudgetMilestone[] =
-    budgetEditor.budgetMilestones.length > 0
-      ? [...budgetEditor.budgetMilestones].sort((a, b) => a.order_index - b.order_index)
-      : [
-          { id: -1, project_id: selectedProjectId ?? 0, name: 'HITO 1', order_index: 1, created_at: new Date().toISOString() },
-          { id: -2, project_id: selectedProjectId ?? 0, name: 'HITO 2', order_index: 2, created_at: new Date().toISOString() },
-        ];
+  const milestonesToRender = useMemo<ApiProjectBudgetMilestone[]>(
+    () =>
+      budgetEditor.budgetMilestones.length > 0
+        ? [...budgetEditor.budgetMilestones].sort((a, b) => a.order_index - b.order_index)
+        : [
+            { id: -1, project_id: selectedProjectId ?? 0, name: 'HITO 1', order_index: 1, created_at: new Date().toISOString() },
+            { id: -2, project_id: selectedProjectId ?? 0, name: 'HITO 2', order_index: 2, created_at: new Date().toISOString() },
+          ],
+    [budgetEditor.budgetMilestones, selectedProjectId]
+  );
 
   const removableMilestones = budgetEditor.budgetMilestones.filter((milestone) => milestone.id > 0);
 
-  const resolveMilestoneValue = (
-    row: ApiProjectBudgetLine,
-    milestoneId: number,
-    index: number,
-    field: 'amount' | 'justified'
-  ) => {
-    const draftMilestone = budgetEditor.budgetDrafts[row.id]?.milestones?.find((milestone) => milestone.milestone_id === milestoneId);
-    if (draftMilestone) {
-      return field === 'amount' ? toNumber(draftMilestone.amount) : toNumber(draftMilestone.justified);
-    }
-    const storedMilestone = row.milestones?.find((milestone) => milestone.milestone_id === milestoneId);
-    if (storedMilestone) {
-      return field === 'amount' ? toNumber(storedMilestone.amount) : toNumber(storedMilestone.justified);
-    }
-    if (index === 0) {
-      return field === 'amount' ? toNumber(row.hito1_budget) : toNumber(row.justified_hito1);
-    }
-    if (index === 1) {
-      return field === 'amount' ? toNumber(row.hito2_budget) : toNumber(row.justified_hito2);
-    }
+  const resolveMilestoneValue = (row: ApiProjectBudgetLine, milestoneId: number, index: number, field: 'amount' | 'justified') => {
+    const draftMilestone = budgetEditor.budgetDrafts[row.id]?.milestones?.find((m) => m.milestone_id === milestoneId);
+    if (draftMilestone) return field === 'amount' ? safeNumber(draftMilestone.amount) : safeNumber(draftMilestone.justified);
+    const storedMilestone = row.milestones?.find((m) => m.milestone_id === milestoneId);
+    if (storedMilestone) return field === 'amount' ? safeNumber(storedMilestone.amount) : safeNumber(storedMilestone.justified);
+    if (index === 0) return field === 'amount' ? safeNumber(row.hito1_budget) : safeNumber(row.justified_hito1);
+    if (index === 1) return field === 'amount' ? safeNumber(row.hito2_budget) : safeNumber(row.justified_hito2);
     return 0;
   };
 
-  const childToParentKey = useMemo(() => {
-    const map: Record<string, string> = {};
-    Object.entries(budgetEditor.budgetParentMap).forEach(([parentKey, children]) => {
-      children.forEach((child) => {
-        map[child] = parentKey;
-      });
-    });
-    return map;
-  }, [budgetEditor.budgetParentMap]);
+  const { childToParentKey, parentMilestoneTotals, budgetTableTotals } = useMemo(() => {
+    const parentMap = budgetEditor.budgetParentMap;
+    const rows = budgetEditor.groupedBudgetRows;
+    const milestoneCount = milestonesToRender.length;
 
-  const parentMilestoneTotals = useMemo(() => {
-    const totals: Record<string, { amount: number[]; justified: number[] }> = {};
-    budgetEditor.groupedBudgetRows.forEach((row) => {
+    // Step 1: invert parent map (child key → parent key)
+    const childToParent: Record<string, string> = {};
+    for (const [parentKey, children] of Object.entries(parentMap)) {
+      for (const child of children) childToParent[child] = parentKey;
+    }
+
+    // Step 2: accumulate per-parent milestone totals from child rows
+    const parentTotals: Record<string, { amount: number[]; justified: number[] }> = {};
+    for (const row of rows) {
       const rowKey = normalizeConceptKey(row.concept);
-      const parentKey = childToParentKey[rowKey];
-      if (!parentKey) return;
-      if (!totals[parentKey]) {
-        totals[parentKey] = {
-          amount: Array(milestonesToRender.length).fill(0),
-          justified: Array(milestonesToRender.length).fill(0),
-        };
+      const parentKey = childToParent[rowKey];
+      if (!parentKey) continue;
+      if (!parentTotals[parentKey]) {
+        parentTotals[parentKey] = { amount: Array(milestoneCount).fill(0), justified: Array(milestoneCount).fill(0) };
       }
       milestonesToRender.forEach((milestone, index) => {
-        totals[parentKey].amount[index] += resolveMilestoneValue(row, milestone.id, index, 'amount');
-        totals[parentKey].justified[index] += resolveMilestoneValue(row, milestone.id, index, 'justified');
+        parentTotals[parentKey].amount[index] += resolveMilestoneValue(row, milestone.id, index, 'amount');
+        parentTotals[parentKey].justified[index] += resolveMilestoneValue(row, milestone.id, index, 'justified');
       });
-    });
-    return totals;
-  }, [budgetEditor.groupedBudgetRows, childToParentKey, milestonesToRender]);
+    }
 
-  const budgetTableTotals = useMemo(() => {
-    const parentKeys = new Set(Object.keys(budgetEditor.budgetParentMap));
+    // Step 3: aggregate footer totals (parent rows + general expenses)
+    const parentKeys = new Set(Object.keys(parentMap));
     const totalsByMilestone = milestonesToRender.map(() => ({ amount: 0, justified: 0 }));
     let totalApproved = 0;
     let totalForecasted = 0;
 
-    budgetEditor.groupedBudgetRows.forEach((row) => {
+    for (const row of rows) {
       const rowKey = normalizeConceptKey(row.concept);
-      const isParentBudgetRow = parentKeys.has(rowKey) && isAllCapsConcept(row.concept);
-      const isGeneralExpensesRow = isGeneralExpensesConcept(row.concept);
-      if (!isParentBudgetRow && !isGeneralExpensesRow) return;
+      const isParentRow = parentKeys.has(rowKey) && isAllCapsConcept(row.concept);
+      const isGenExp = isGeneralExpensesConcept(row.concept);
+      if (!isParentRow && !isGenExp) continue;
 
       let rowApproved = 0;
       milestonesToRender.forEach((milestone, index) => {
-        const useParentTotals = isParentBudgetRow && !isGeneralExpensesRow && parentMilestoneTotals[rowKey];
-        const amountValue = useParentTotals
-          ? parentMilestoneTotals[rowKey].amount[index]
-          : resolveMilestoneValue(row, milestone.id, index, 'amount');
-        const justifiedValue = useParentTotals
-          ? parentMilestoneTotals[rowKey].justified[index]
-          : resolveMilestoneValue(row, milestone.id, index, 'justified');
-        totalsByMilestone[index].amount += amountValue;
-        totalsByMilestone[index].justified += justifiedValue;
-        rowApproved += amountValue;
+        const useParent = isParentRow && !isGenExp && parentTotals[rowKey];
+        const amount = useParent ? parentTotals[rowKey].amount[index] : resolveMilestoneValue(row, milestone.id, index, 'amount');
+        const justified = useParent ? parentTotals[rowKey].justified[index] : resolveMilestoneValue(row, milestone.id, index, 'justified');
+        totalsByMilestone[index].amount += amount;
+        totalsByMilestone[index].justified += justified;
+        rowApproved += amount;
       });
       totalApproved += rowApproved;
-      totalForecasted += toNumber(row.forecasted_spent);
-    });
+      totalForecasted += safeNumber(row.forecasted_spent);
+    }
 
     return {
-      totalsByMilestone,
-      totalApproved,
-      totalForecasted,
-      totalJustified: totalsByMilestone.reduce((sum, item) => sum + item.justified, 0),
+      childToParentKey: childToParent,
+      parentMilestoneTotals: parentTotals,
+      budgetTableTotals: {
+        totalsByMilestone,
+        totalApproved,
+        totalForecasted,
+        totalJustified: totalsByMilestone.reduce((sum, t) => sum + t.justified, 0),
+      },
     };
-  }, [budgetEditor.budgetParentMap, budgetEditor.groupedBudgetRows, milestonesToRender, parentMilestoneTotals]);
+  }, [budgetEditor.budgetParentMap, budgetEditor.groupedBudgetRows, budgetEditor.budgetDrafts, milestonesToRender]);
 
   const baseResult = (budgetTableTotals.totalApproved * subsidyPercent) / 100 - budgetTableTotals.totalForecasted;
   const annualizedResult =
     durationMonths != null && durationMonths > 0 ? (baseResult / durationMonths) * monthsActivePerYear : 0;
+  const lightActionButtonClass = 'app-btn-soft h-10 border-sky-300 px-4 text-[15px] font-medium text-sky-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-800';
 
   return (
     <Card className="bg-white">
       <CardHeader className="space-y-4">
+        <div className="flex justify-center">
+          <CardTitle className="text-center text-lg font-semibold text-slate-900 sm:text-xl">Presupuestos ERP por obra</CardTitle>
+        </div>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid gap-2">
-            <CardTitle className="text-base">Presupuestos ERP por obra</CardTitle>
-            <div className="grid gap-2 sm:min-w-[260px]">
-              <Label htmlFor="erp-budget-project">Obra</Label>
-              <select
-                id="erp-budget-project"
-                className="h-10 rounded-md border bg-background px-3 text-sm"
-                value={selectedProjectId ?? ''}
-                onChange={(event) => onSelectedProjectIdChange(event.target.value ? Number(event.target.value) : null)}
-              >
-                <option value="">Selecciona una obra</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="grid gap-2 sm:min-w-[260px]">
+            <Label htmlFor="erp-budget-project" className="text-sm text-muted-foreground">
+              Obra
+            </Label>
+            <select
+              id="erp-budget-project"
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+              value={selectedProjectId ?? ''}
+              onChange={(event) => onSelectedProjectIdChange(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="">Selecciona una obra</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid gap-1 text-sm text-slate-700">
-            <div className="font-semibold">Resultado: {formatEuroValue(baseResult)} EUR</div>
+          <div className="grid gap-1 text-sm text-muted-foreground">
+            <div className="text-sm font-medium text-slate-700">Resultado: {formatEuroValue(baseResult)} EUR</div>
             <div>Duracion del proyecto: {durationLabel}</div>
             {resolvedSelectedYear != null ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -285,64 +275,66 @@ export function ErpBudgetManager({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => void budgetEditor.addBudgetMilestone()} disabled={!selectedProjectId || !canManage}>
-            + Hito
-          </Button>
-          <select
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-            value={milestoneToRemove}
-            onChange={(event) => setMilestoneToRemove(event.target.value)}
-            disabled={!selectedProjectId || removableMilestones.length === 0 || !canManage}
-          >
-            <option value="">Selecciona hito</option>
-            {removableMilestones.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>
-                {milestone.name}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (!milestoneToRemove) return;
-              budgetEditor.removeBudgetMilestone(Number(milestoneToRemove));
-              setMilestoneToRemove('');
-            }}
-            disabled={!selectedProjectId || !milestoneToRemove || !canManage}
-          >
-            Eliminar hito
-          </Button>
-          <Button
-            size="sm"
-            variant={budgetEditor.budgetsEditMode ? 'secondary' : 'outline'}
-            onClick={() => budgetEditor.setBudgetsEditMode((prev) => !prev)}
-            disabled={!selectedProjectId || !canManage}
-          >
-            <Edit3 className="mr-2 h-4 w-4" />
-            {budgetEditor.budgetsEditMode ? 'Cerrar edicion' : 'Editar tabla'}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void budgetEditor.handleBudgetSaveAll()}
-            disabled={!budgetEditor.hasBudgetDrafts || budgetEditor.savingBudgets || !canManage}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {budgetEditor.savingBudgets ? 'Guardando...' : 'Guardar tabla'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void budgetEditor.seedTemplateBudgetLines()}
-            disabled={!selectedProjectId || budgetEditor.seedingTemplate || budgetEditor.hasRealBudgets || !canManage}
-          >
-            {budgetEditor.seedingTemplate ? 'Creando...' : 'Crear plantilla en proyecto'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => budgetEditor.openBudgetModal('create')} disabled={!selectedProjectId || !canManage}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo presupuesto
-          </Button>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {budgetEditor.budgetsEditMode ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+                  <Button size="sm" variant="outline" onClick={() => void budgetEditor.addBudgetMilestone()} disabled={!selectedProjectId || !canManage}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Hito
+                  </Button>
+                  {removableMilestones.length > 0 ? (
+                    <>
+                      <select
+                        className="h-9 rounded-md border bg-background px-2 text-sm"
+                        value={milestoneToRemove}
+                        onChange={(event) => setMilestoneToRemove(event.target.value)}
+                        disabled={!selectedProjectId || !canManage}
+                      >
+                        <option value="">Selecciona hito</option>
+                        {removableMilestones.map((milestone) => (
+                          <option key={milestone.id} value={milestone.id}>
+                            {milestone.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        className="h-9 w-9"
+                        title="Eliminar hito seleccionado"
+                        onClick={() => {
+                          if (!milestoneToRemove) return;
+                          budgetEditor.removeBudgetMilestone(Number(milestoneToRemove));
+                          setMilestoneToRemove('');
+                        }}
+                        disabled={!selectedProjectId || !milestoneToRemove || !canManage}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : null}
+                  <Button size="sm" variant="outline" onClick={() => budgetEditor.openBudgetModal('create')} disabled={!selectedProjectId || !canManage}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Añadir presupuesto
+                  </Button>
+                </div>
+              ) : null}
+
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className={lightActionButtonClass}
+              onClick={() => budgetEditor.setBudgetsEditMode((prev) => !prev)}
+              disabled={!selectedProjectId || !canManage}
+            >
+              <Edit3 className="mr-2 h-4 w-4" />
+              {budgetEditor.budgetsEditMode ? 'Cerrar edicion' : 'Editar tabla'}
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -354,24 +346,20 @@ export function ErpBudgetManager({
         ) : budgetEditor.budgetsQuery.isError ? (
           <p className="text-sm text-red-600">No se pudieron cargar los presupuestos.</p>
         ) : (
-          <Table>
+          <>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[260px]">Concepto</TableHead>
+                <TableHead className="w-[30%] min-w-[220px] text-base">Concepto</TableHead>
                 {milestonesToRender.map((milestone) => (
-                  <TableHead key={`${milestone.id}-amount`} className="min-w-[120px] text-center">
-                    {milestone.name} Ppto
+                  <TableHead key={milestone.id} className="min-w-[124px] text-center text-base">
+                    <div>{milestone.name}</div>
+                    <div className="text-xs font-normal text-muted-foreground">Ppto / Justif.</div>
                   </TableHead>
                 ))}
-                {milestonesToRender.map((milestone) => (
-                  <TableHead key={`${milestone.id}-justified`} className="min-w-[120px] text-center">
-                    {milestone.name} Just.
-                  </TableHead>
-                ))}
-                <TableHead className="text-center">Aprobado</TableHead>
-                <TableHead className="text-center">Previsto</TableHead>
-                <TableHead className="text-center">% consumido</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="min-w-[104px] text-center text-base">Previsto</TableHead>
+                <TableHead className="min-w-[56px] text-center text-base">%</TableHead>
+                {budgetEditor.budgetsEditMode ? <TableHead className="min-w-[88px] text-right">Acciones</TableHead> : null}
               </TableRow>
             </TableHeader>
 
@@ -400,7 +388,7 @@ export function ErpBudgetManager({
 
                 return (
                   <TableRow key={row.id} className={isParentRow ? 'bg-slate-50 font-semibold' : ''}>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <div className="space-y-2">
                         {budgetEditor.budgetsEditMode ? (
                           <Input
@@ -413,7 +401,7 @@ export function ErpBudgetManager({
                             }}
                           />
                         ) : (
-                          <div>{row.concept}</div>
+                          <div className="break-words text-[15px] leading-snug">{row.concept}</div>
                         )}
 
                         {budgetEditor.budgetsEditMode && isGeneralExpensesRow ? (
@@ -432,7 +420,7 @@ export function ErpBudgetManager({
                               <option value="amount">Importe</option>
                             </select>
                             <Input
-                              className="h-8 w-[120px]"
+                              className="h-8 w-[100px]"
                               defaultValue={currentGeneralMode === 'percent' ? String(parsePercentFromConcept(row.concept) ?? DEFAULT_GENERAL_EXPENSES_PERCENT) : String(rowApproved)}
                               onBlur={(event) =>
                                 currentGeneralMode === 'percent'
@@ -445,107 +433,74 @@ export function ErpBudgetManager({
                       </div>
                     </TableCell>
 
-                    {milestonesToRender.map((milestone, index) => (
-                      <TableCell key={`${row.id}-${milestone.id}-amount`} className="text-center">
-                        <EditableMoneyCell
-                          value={
-                            parentMilestones
-                              ? parentMilestones.amount[index]
-                              : resolveMilestoneValue(row, milestone.id, index, 'amount')
-                          }
-                          editable={budgetEditor.budgetsEditMode && !isParentRow}
-                          onSubmit={(value) => {
-                            if (budgetEditor.budgetMilestones.length > 0 && row.id > 0) {
-                              budgetEditor.handleBudgetMilestoneChange(row, milestone.id, 'amount', value);
-                              return;
-                            }
-                            const field = index === 0 ? 'hito1_budget' : 'hito2_budget';
-                            budgetEditor.handleBudgetCellSave(row.id, field, value);
-                          }}
-                        />
-                      </TableCell>
-                    ))}
+                    {milestonesToRender.map((milestone, index) => {
+                      const amountVal = parentMilestones
+                        ? parentMilestones.amount[index]
+                        : resolveMilestoneValue(row, milestone.id, index, 'amount');
+                      const justifiedVal = parentMilestones
+                        ? parentMilestones.justified[index]
+                        : resolveMilestoneValue(row, milestone.id, index, 'justified');
+                      const canEdit = budgetEditor.budgetsEditMode && !isParentRow;
 
-                    {milestonesToRender.map((milestone, index) => (
-                      <TableCell key={`${row.id}-${milestone.id}-justified`} className="text-center">
-                        <EditableMoneyCell
-                          value={
-                            parentMilestones
-                              ? parentMilestones.justified[index]
-                              : resolveMilestoneValue(row, milestone.id, index, 'justified')
-                          }
-                          editable={budgetEditor.budgetsEditMode && !isParentRow}
-                          onSubmit={(value) => {
-                            if (budgetEditor.budgetMilestones.length > 0 && row.id > 0) {
-                              budgetEditor.handleBudgetMilestoneChange(row, milestone.id, 'justified', value);
-                              return;
-                            }
-                            const field = index === 0 ? 'justified_hito1' : 'justified_hito2';
-                            budgetEditor.handleBudgetCellSave(row.id, field, value);
-                          }}
-                        />
-                      </TableCell>
-                    ))}
+                      return (
+                        <TableCell key={`${row.id}-${milestone.id}`} className="text-center">
+                          <div className="space-y-1">
+                            <EditableMoneyCell
+                              value={amountVal}
+                              editable={canEdit}
+                              onSubmit={(value) => {
+                                if (budgetEditor.budgetMilestones.length > 0 && row.id > 0) {
+                                  budgetEditor.handleBudgetMilestoneChange(row, milestone.id, 'amount', value);
+                                  return;
+                                }
+                                budgetEditor.handleBudgetCellSave(row.id, index === 0 ? 'hito1_budget' : 'hito2_budget', value);
+                              }}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                              {canEdit ? (
+                                <EditableMoneyCell
+                                  value={justifiedVal}
+                                  editable={true}
+                                  onSubmit={(value) => {
+                                    if (budgetEditor.budgetMilestones.length > 0 && row.id > 0) {
+                                      budgetEditor.handleBudgetMilestoneChange(row, milestone.id, 'justified', value);
+                                      return;
+                                    }
+                                    budgetEditor.handleBudgetCellSave(row.id, index === 0 ? 'justified_hito1' : 'justified_hito2', value);
+                                  }}
+                                />
+                              ) : (
+                                <span>Just: {formatEuroValue(justifiedVal)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      );
+                    })}
 
                     <TableCell className="text-center">
                       <EditableMoneyCell
-                        value={rowApproved}
-                        editable={budgetEditor.budgetsEditMode}
-                        onSubmit={(value) => budgetEditor.handleBudgetCellSave(row.id, 'approved_budget', value)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <EditableMoneyCell
-                        value={toNumber(budgetEditor.budgetDrafts[row.id]?.forecasted_spent ?? row.forecasted_spent)}
+                        value={safeNumber(budgetEditor.budgetDrafts[row.id]?.forecasted_spent ?? row.forecasted_spent)}
                         editable={budgetEditor.budgetsEditMode}
                         onSubmit={(value) => budgetEditor.handleBudgetCellSave(row.id, 'forecasted_spent', value)}
                       />
                     </TableCell>
-                    <TableCell className="text-center font-mono text-sm">{rowPercent.toFixed(2)}%</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {budgetEditor.budgetsEditMode ? (
+                    <TableCell className="text-center font-mono text-base">{rowPercent.toFixed(1)}%</TableCell>
+                    {budgetEditor.budgetsEditMode ? (
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap justify-end gap-1">
                           <Button size="sm" variant="outline" onClick={() => budgetEditor.openBudgetModal('edit', row)} disabled={row.id <= 0}>
                             Editar
                           </Button>
-                        ) : null}
 
-                        {budgetEditor.budgetsEditMode && isExternalParent ? (
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            <select
-                              className="h-8 rounded-md border bg-background px-2 text-xs"
-                              value={budgetEditor.externalCollabSelections[row.id] ?? ''}
-                              onChange={(event) =>
-                                budgetEditor.setExternalCollabSelections((prev) => ({
-                                  ...prev,
-                                  [row.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Selecciona colaborador</option>
-                              {budgetEditor.externalCollaborations.map((collaboration) => (
-                                <option
-                                  key={collaboration.id}
-                                  value={`${collaboration.collaboration_type}::${collaboration.name}`}
-                                >
-                                  {collaboration.collaboration_type} - {collaboration.name}
-                                </option>
-                              ))}
-                            </select>
-                            <Button size="sm" variant="outline" onClick={() => budgetEditor.handleAddExternalCollaborationRow(row.id)}>
-                              Anadir fila
+                          {isExternalChild ? (
+                            <Button size="sm" variant="outline" onClick={() => budgetEditor.handleRemoveExternalCollaborationRow(row)}>
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                          </div>
-                        ) : null}
-
-                        {budgetEditor.budgetsEditMode && isExternalChild ? (
-                          <Button size="sm" variant="outline" onClick={() => budgetEditor.handleRemoveExternalCollaborationRow(row)}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 );
               })}
@@ -553,29 +508,39 @@ export function ErpBudgetManager({
 
             <TableFooter>
               <TableRow>
-                <TableCell>Total</TableCell>
+                <TableCell className="font-semibold">Total</TableCell>
                 {milestonesToRender.map((_, index) => (
-                  <TableCell key={`total-amount-${index}`} className="text-center font-mono">
-                    {formatEuroValue(budgetTableTotals.totalsByMilestone[index]?.amount ?? 0)}
+                  <TableCell key={`total-${index}`} className="text-center font-mono text-base">
+                    <div>{formatEuroValue(budgetTableTotals.totalsByMilestone[index]?.amount ?? 0)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Just: {formatEuroValue(budgetTableTotals.totalsByMilestone[index]?.justified ?? 0)}
+                    </div>
                   </TableCell>
                 ))}
-                {milestonesToRender.map((_, index) => (
-                  <TableCell key={`total-justified-${index}`} className="text-center font-mono">
-                    {formatEuroValue(budgetTableTotals.totalsByMilestone[index]?.justified ?? 0)}
-                  </TableCell>
-                ))}
-                <TableCell className="text-center font-mono">{formatEuroValue(budgetTableTotals.totalApproved)}</TableCell>
-                <TableCell className="text-center font-mono">{formatEuroValue(budgetTableTotals.totalForecasted)}</TableCell>
-                <TableCell className="text-center font-mono">
+                <TableCell className="text-center font-mono text-base">{formatEuroValue(budgetTableTotals.totalForecasted)}</TableCell>
+                <TableCell className="text-center font-mono text-base">
                   {budgetTableTotals.totalApproved > 0
-                    ? ((budgetTableTotals.totalJustified / budgetTableTotals.totalApproved) * 100).toFixed(2)
-                    : '0.00'}
+                    ? ((budgetTableTotals.totalJustified / budgetTableTotals.totalApproved) * 100).toFixed(1)
+                    : '0.0'}
                   %
                 </TableCell>
-                <TableCell />
+                {budgetEditor.budgetsEditMode ? <TableCell /> : null}
               </TableRow>
             </TableFooter>
           </Table>
+          {budgetEditor.budgetsEditMode ? (
+            <div className="flex justify-end border-t border-slate-200 pt-4">
+              <Button
+                className="app-btn-primary min-w-[180px]"
+                onClick={() => setSaveConfirmOpen(true)}
+                disabled={!budgetEditor.hasBudgetDrafts || budgetEditor.savingBudgets || !canManage}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {budgetEditor.savingBudgets ? 'Guardando...' : 'Guardar tabla'}
+              </Button>
+            </div>
+          ) : null}
+          </>
         )}
       </CardContent>
 
@@ -587,7 +552,47 @@ export function ErpBudgetManager({
         title={budgetEditor.budgetModalMode === 'edit' ? 'Editar presupuesto' : 'Agregar presupuesto'}
         submitLabel={budgetEditor.budgetModalMode === 'edit' ? 'Actualizar' : 'Guardar'}
         saving={budgetEditor.isBudgetModalSaving}
+        showExternalCollaborationSection={
+          budgetEditor.budgetModalMode === 'edit' &&
+          normalizeConceptKey(budgetEditor.activeBudgetLine?.concept ?? '') === normalizeConceptKey(EXTERNAL_COLLAB_LABEL)
+        }
+        externalCollaborationOptions={budgetEditor.externalCollaborations}
+        externalCollaborationSelection={
+          budgetEditor.activeBudgetLine ? budgetEditor.externalCollabSelections[budgetEditor.activeBudgetLine.id] ?? '' : ''
+        }
+        onExternalCollaborationSelectionChange={(value) => {
+          const activeId = budgetEditor.activeBudgetLine?.id;
+          if (!activeId) return;
+          budgetEditor.setExternalCollabSelections((prev) => ({
+            ...prev,
+            [activeId]: value,
+          }));
+        }}
+        onAddExternalCollaboration={() => {
+          const activeId = budgetEditor.activeBudgetLine?.id;
+          if (!activeId) return;
+          budgetEditor.handleAddExternalCollaborationRow(activeId);
+        }}
       />
+      <AlertDialog open={saveConfirmOpen} onOpenChange={setSaveConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Desea guardar los cambios de esta tabla?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se guardarán todas las modificaciones detectadas en los presupuestos y hitos de la tabla actual.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void budgetEditor.handleBudgetSaveAll()}
+              disabled={!budgetEditor.hasBudgetDrafts || budgetEditor.savingBudgets || !canManage}
+            >
+              {budgetEditor.savingBudgets ? 'Guardando...' : 'Aceptar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

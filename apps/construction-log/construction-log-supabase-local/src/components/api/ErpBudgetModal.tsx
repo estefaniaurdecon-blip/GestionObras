@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ApiProjectBudgetLinePayload } from '@/integrations/api/client';
+import type { ApiExternalCollaboration, ApiProjectBudgetLinePayload } from '@/integrations/api/client';
+import { parseEuroInput } from '@/utils/erpBudget';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -13,17 +14,14 @@ type ErpBudgetModalProps = {
   title: string;
   submitLabel: string;
   saving?: boolean;
+  showExternalCollaborationSection?: boolean;
+  externalCollaborationOptions?: ApiExternalCollaboration[];
+  externalCollaborationSelection?: string;
+  onExternalCollaborationSelectionChange?: (value: string) => void;
+  onAddExternalCollaboration?: () => void;
 };
 
 type FormState = Record<keyof ApiProjectBudgetLinePayload, string>;
-
-const parseNumber = (value: string) => {
-  const raw = value.trim().replace(/\s+/g, '');
-  if (!raw) return 0;
-  const normalized = raw.replace(/\./g, '').replace(',', '.');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 
 export function ErpBudgetModal({
   open,
@@ -33,6 +31,11 @@ export function ErpBudgetModal({
   title,
   submitLabel,
   saving = false,
+  showExternalCollaborationSection = false,
+  externalCollaborationOptions = [],
+  externalCollaborationSelection = '',
+  onExternalCollaborationSelectionChange,
+  onAddExternalCollaboration,
 }: ErpBudgetModalProps) {
   const [form, setForm] = useState<FormState>({
     concept: '',
@@ -63,20 +66,20 @@ export function ErpBudgetModal({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const hitoSum = parseNumber(form.hito1_budget) + parseNumber(form.hito2_budget);
-  const approvedValue = parseNumber(form.approved_budget);
+  const hitoSum = parseEuroInput(form.hito1_budget) + parseEuroInput(form.hito2_budget);
+  const approvedValue = parseEuroInput(form.approved_budget);
   const totalsValid = hitoSum <= approvedValue + 0.01;
 
   const handleSubmit = () => {
     onSave({
       concept: form.concept.trim(),
-      hito1_budget: parseNumber(form.hito1_budget),
-      justified_hito1: parseNumber(form.justified_hito1),
-      hito2_budget: parseNumber(form.hito2_budget),
-      justified_hito2: parseNumber(form.justified_hito2),
-      approved_budget: parseNumber(form.approved_budget),
-      percent_spent: parseNumber(form.percent_spent),
-      forecasted_spent: parseNumber(form.forecasted_spent),
+      hito1_budget: parseEuroInput(form.hito1_budget),
+      justified_hito1: parseEuroInput(form.justified_hito1),
+      hito2_budget: parseEuroInput(form.hito2_budget),
+      justified_hito2: parseEuroInput(form.justified_hito2),
+      approved_budget: parseEuroInput(form.approved_budget),
+      percent_spent: parseEuroInput(form.percent_spent),
+      forecasted_spent: parseEuroInput(form.forecasted_spent),
     });
   };
 
@@ -93,6 +96,45 @@ export function ErpBudgetModal({
             <Label htmlFor="budget-concept">Concepto</Label>
             <Input id="budget-concept" value={form.concept} onChange={(event) => updateField('concept', event.target.value)} />
           </div>
+
+          {showExternalCollaborationSection ? (
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900">Colaboraciones externas</p>
+                <p className="text-sm text-muted-foreground">Selecciona un colaborador y añádelo desde este formulario.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div className="grid gap-2">
+                  <Label htmlFor="budget-external-collaboration">Colaborador</Label>
+                  <select
+                    id="budget-external-collaboration"
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    value={externalCollaborationSelection}
+                    onChange={(event) => onExternalCollaborationSelectionChange?.(event.target.value)}
+                  >
+                    <option value="">Selecciona colaborador</option>
+                    {externalCollaborationOptions.map((collaboration) => (
+                      <option
+                        key={collaboration.id}
+                        value={`${collaboration.collaboration_type}::${collaboration.name}`}
+                      >
+                        {collaboration.collaboration_type} - {collaboration.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="app-btn-soft h-10 px-4 text-[15px]"
+                  onClick={onAddExternalCollaboration}
+                  disabled={!externalCollaborationSelection}
+                >
+                  Añadir
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">

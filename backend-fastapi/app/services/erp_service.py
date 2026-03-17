@@ -646,6 +646,10 @@ def update_project(
         project.subsidy_percent = Decimal(_clamp_percent(data.subsidy_percent) or 0)
     if data.is_active is not None:
         project.is_active = data.is_active
+    if "latitude" in data.__fields_set__:
+        project.latitude = data.latitude
+    if "longitude" in data.__fields_set__:
+        project.longitude = data.longitude
 
     if project.start_date and project.end_date:
         project.duration_months = _calculate_duration_months(

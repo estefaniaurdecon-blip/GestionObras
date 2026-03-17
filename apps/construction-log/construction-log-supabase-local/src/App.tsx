@@ -16,6 +16,7 @@ import { startupPerfEnd, startupPerfPoint, startupPerfStart } from "@/utils/star
 const Index = lazy(() => import("./pages/Index"));
 const Projects = lazy(() => import("./pages/Projects"));
 const WorkManagementWorkspace = lazy(() => import("./pages/WorkManagementWorkspace"));
+const Radar = lazy(() => import("./pages/Radar"));
 const Auth = lazy(() => import("./pages/Auth"));
 const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -79,6 +80,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <WorkManagementWorkspace />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/radar"
+                    element={
+                      <ProtectedRoute>
+                        <Radar />
                       </ProtectedRoute>
                     }
                   />

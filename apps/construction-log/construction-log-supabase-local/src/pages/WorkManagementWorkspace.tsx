@@ -83,18 +83,23 @@ const WorkManagementWorkspace = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="text-center">
-              <CardTitle className="text-2xl">Gestion de Obra</CardTitle>
-              <p className="text-sm text-muted-foreground">{workLabel}</p>
+              <CardTitle className="app-page-title">Gestión de obra</CardTitle>
+              <p className="app-page-subtitle mt-1">{workLabel}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Button variant={activeTab === 'inventory' ? 'default' : 'outline'} onClick={() => setTab('inventory')}>
+          <div className="flex flex-wrap justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 p-2">
+            <Button
+              variant={activeTab === 'inventory' ? 'default' : 'outline'}
+              className="app-btn-soft min-w-[148px]"
+              onClick={() => setTab('inventory')}
+            >
               <Package className="mr-2 h-4 w-4" />
               Inventario
             </Button>
             <Button
               variant={activeTab === 'rental' ? 'default' : 'outline'}
+              className="app-btn-soft min-w-[148px]"
               onClick={() => setTab('rental')}
               disabled={!canManageWorks}
             >
@@ -103,6 +108,7 @@ const WorkManagementWorkspace = () => {
             </Button>
             <Button
               variant={activeTab === 'repasos' ? 'default' : 'outline'}
+              className="app-btn-soft min-w-[148px]"
               onClick={() => setTab('repasos')}
               disabled={!canManageWorks}
             >
@@ -111,6 +117,7 @@ const WorkManagementWorkspace = () => {
             </Button>
             <Button
               variant={activeTab === 'postventa' ? 'default' : 'outline'}
+              className="app-btn-soft min-w-[148px]"
               onClick={() => setTab('postventa')}
               disabled={!canManageWorks}
             >

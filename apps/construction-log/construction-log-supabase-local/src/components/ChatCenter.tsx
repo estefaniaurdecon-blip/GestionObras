@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText } from "lucide-react";
+import { Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -162,26 +162,8 @@ export const ChatCenter = () => {
     }
   }, [selectedUserId, open, messages.length, sentFiles.length, receivedFiles.length]);
 
-  const unreadBadge = unreadCount > 0 ? (
-    <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
-      {unreadCount > 9 ? "9+" : unreadCount}
-    </Badge>
-  ) : null;
-
   return (
     <Drawer open={open} onOpenChange={setOpen}>
-      <Button
-        variant="ghost"
-        size="icon"
-        type="button"
-        onClick={() => setOpen(true)}
-        className="relative h-9 w-9 text-primary-foreground hover:bg-primary-foreground/20"
-        title="Chat"
-      >
-        <MessageSquare className="h-4 w-4" />
-        {unreadBadge}
-      </Button>
-
       <DrawerContent className="h-[80svh] md:h-[72vh] overflow-hidden">
         <DrawerHeader className="pb-2">
           <div className="flex items-center justify-between">

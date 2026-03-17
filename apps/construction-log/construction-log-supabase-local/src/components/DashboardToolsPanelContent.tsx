@@ -2259,31 +2259,31 @@ const ReportsAnalysisWindow = ({
       </div>
 
       <Tabs value={activeAnalysisTab} onValueChange={(value) => setActiveAnalysisTab(value as AnalysisTabValue)}>
-        <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
-          <TabsTrigger value="foreman" className="text-[15px] sm:text-[16px]">
+        <TabsList className="mb-4 h-auto w-full justify-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100 p-2 text-slate-600">
+          <TabsTrigger value="foreman" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Encargado
           </TabsTrigger>
-          <TabsTrigger value="workers" className="text-[15px] sm:text-[16px]">
+          <TabsTrigger value="workers" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Trabajadores
           </TabsTrigger>
-          <TabsTrigger value="machinery" className="text-[15px] sm:text-[16px]">
+          <TabsTrigger value="machinery" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Maquinaria
           </TabsTrigger>
-          <TabsTrigger value="rental" className="text-[15px] sm:text-[16px]">
+          <TabsTrigger value="rental" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Alquiler
           </TabsTrigger>
-          <TabsTrigger value="reports" className="text-[15px] sm:text-[16px]">
+          <TabsTrigger value="reports" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Partes/Obra
           </TabsTrigger>
-          <TabsTrigger value="economic" className="text-[15px] sm:text-[16px]">
+          <TabsTrigger value="economic" className="app-btn-soft min-w-[148px] rounded-lg border-transparent data-[state=active]:border-slate-200 data-[state=active]:bg-white data-[state=active]:text-slate-900">
             Economico
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="foreman">
           <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800 sm:text-4xl">Horas del Encargado por Periodo</CardTitle>
+            <CardHeader className="text-center">
+              <CardTitle className="app-page-title">Horas del encargado por período</CardTitle>
             </CardHeader>
             <CardContent className="space-y-8">
               <PeriodHoursChart
@@ -2297,9 +2297,9 @@ const ReportsAnalysisWindow = ({
 
         <TabsContent value="workers">
           <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800 sm:text-4xl">Trabajadores por Periodo</CardTitle>
-              <CardDescription className="text-[15px] sm:text-[16px]">
+            <CardHeader className="text-center">
+              <CardTitle className="app-page-title">Trabajadores por período</CardTitle>
+              <CardDescription className="app-page-subtitle">
                 Horas y detalle de trabajadores por empresa para los partes filtrados.
               </CardDescription>
             </CardHeader>
@@ -2390,9 +2390,9 @@ const ReportsAnalysisWindow = ({
         </TabsContent>
         <TabsContent value="machinery">
           <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800 sm:text-4xl">Maquinaria por Periodo</CardTitle>
-              <CardDescription className="text-[15px] sm:text-[16px]">
+            <CardHeader className="text-center">
+              <CardTitle className="app-page-title">Maquinaria por período</CardTitle>
+              <CardDescription className="app-page-subtitle">
                 Horas y detalle de maquinaria por empresa para los partes filtrados.
               </CardDescription>
             </CardHeader>
@@ -2459,9 +2459,9 @@ const ReportsAnalysisWindow = ({
         </TabsContent>
         <TabsContent value="reports">
           <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-2xl text-slate-800 sm:text-4xl">Partes por Obra</CardTitle>
-              <CardDescription className="text-[15px] sm:text-[16px]">
+            <CardHeader className="text-center">
+              <CardTitle className="app-page-title">Partes por obra</CardTitle>
+              <CardDescription className="app-page-subtitle">
                 {isAdvancedMode
                   ? 'Haz clic en un parte para abrirlo o exporta un Excel resumido por obra.'
                   : 'Selecciona una obra y genera su Excel resumido.'}

@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { UserWithAssignments, AppRole } from '@/types/user';
 import { useUsers } from '@/hooks/useUsers';
-import { Loader2, UserPlus, Settings2, Crown, Copy, Check, Building2, Mail, Phone } from 'lucide-react';
+import { Loader2, UserPlus, Settings2, Crown, Building2, Mail, Phone } from 'lucide-react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -50,7 +50,6 @@ export const UserManagement = () => {
   const isMobile = useIsMobile();
   const { users, loading, loadUsers, getUserRoles, getUserAssignments, approveUser, deleteUser } = useUsers();
   const { organization } = useOrganization();
-  const [copiedCode, setCopiedCode] = useState(false);
   const [usersWithData, setUsersWithData] = useState<UserWithAssignments[]>([]);
   const [pendingUsers, setPendingUsers] = useState<UserWithAssignments[]>([]);
   const [assignableWorks, setAssignableWorks] = useState<any[]>([]);
@@ -214,40 +213,6 @@ export const UserManagement = () => {
       </TabsList>
 
       <TabsContent value="users" className="space-y-4 mt-6">
-      {/* Invitation Code Section */}
-      {organization?.invitation_code && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-lg">{t('userManagement.invitationCodeTitle')}</CardTitle>
-            <CardDescription>
-              {t('userManagement.invitationCodeDesc', { orgName: organization?.name || organization?.commercial_name || '' })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 px-4 py-3 bg-background border rounded-lg text-lg font-mono font-bold tracking-wider">
-                {organization.invitation_code}
-              </code>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  navigator.clipboard.writeText(organization.invitation_code || '');
-                  setCopiedCode(true);
-                  setTimeout(() => setCopiedCode(false), 2000);
-                  toast({
-                    title: t('userManagement.codeCopied'),
-                    description: t('userManagement.codeCopiedDesc'),
-                  });
-                }}
-              >
-                {copiedCode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Pending Users Section */}
       {pendingUsers.length > 0 && (
         <Card className="border-yellow-200 bg-yellow-50">

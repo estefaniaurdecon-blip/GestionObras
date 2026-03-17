@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorks } from '@/hooks/useWorks';
@@ -31,10 +31,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Users, Loader2, Trash2, Package, Truck, ClipboardCheck, ShoppingBag, MapPin, Search, Settings, Pencil } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 
-export const WorkManagement = () => {
+export const WorkManagement = ({ initialWorkId }: { initialWorkId?: string }) => {
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+  const lightActionButtonClass = isAndroidPlatform
+    ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800'
+    : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 shadow-none hover:bg-cyan-50 hover:text-cyan-800';
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { works, loading, createWork, updateWork, deleteWork } = useWorks();
@@ -50,6 +55,12 @@ export const WorkManagement = () => {
   const { getCurrentPosition, loading: geoLoading } = useGeolocation();
   const canManageWorks = isAdmin || isSiteManager;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!initialWorkId || loading || works.length === 0) return;
+    const work = works.find(w => String(w.id) === String(initialWorkId));
+    if (work) handleOpenDialog(work);
+  }, [initialWorkId, loading, works]);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingWork, setEditingWork] = useState<any>(null);
@@ -363,10 +374,11 @@ export const WorkManagement = () => {
           <div className="flex justify-center">
             <Button
               onClick={() => handleOpenDialog()}
-              className="app-btn-primary"
+              variant="outline"
+              className={lightActionButtonClass}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Añadir obras
+              Nuevo registro
             </Button>
           </div>
         </CardHeader>
@@ -488,12 +500,12 @@ export const WorkManagement = () => {
 
       {/* Dialog para crear/editar obra */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-none w-full h-full max-h-screen overflow-y-auto rounded-none">
-          <DialogHeader className="text-center">
-            <DialogTitle className="app-dialog-title">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl px-4 sm:px-6">
+          <DialogHeader className="items-center text-center">
+            <DialogTitle className="app-page-title">
               {editingWork ? 'Editar obra' : 'Añadir obras'}
             </DialogTitle>
-            <DialogDescription className="app-page-subtitle">
+            <DialogDescription className="app-page-subtitle text-center">
               Sistema de Gestión de Obras
             </DialogDescription>
           </DialogHeader>
@@ -600,7 +612,10 @@ export const WorkManagement = () => {
               </div>
 
               <div className="space-y-3">
-                <Label className="app-field-label">Contacto</Label>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-slate-900">Contacto</p>
+                  <p className="app-section-subtitle">Datos principales para coordinar la obra.</p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="contactPerson" className="app-field-label-muted">Persona de Contacto</Label>
                   <Input
@@ -637,13 +652,16 @@ export const WorkManagement = () => {
 
             {/* === MÓDULO 3: UBICACIÓN === */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2 app-field-label-muted">
+              <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
                 <MapPin className="h-4 w-4" />
                 <span>Ubicación</span>
               </div>
               
               <div className="bg-muted/30 rounded-lg p-4 space-y-4">
-                <p className="app-field-label-muted">Dirección Postal</p>
+                <div className="space-y-1">
+                  <p className="text-base font-semibold text-slate-900">Dirección postal</p>
+                  <p className="app-section-subtitle">Usa estos datos para localizar la obra y autocompletar coordenadas.</p>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="streetAddress" className="app-field-label-muted">Dirección (Calle y número)</Label>
@@ -752,7 +770,7 @@ export const WorkManagement = () => {
                 variant="outline"
                 onClick={handleCaptureLocation}
                 disabled={geoLoading}
-                className="app-btn-soft w-full"
+                className="app-btn-soft mx-auto w-full sm:w-auto sm:min-w-[220px]"
               >
                 {geoLoading ? (
                   <>
@@ -770,17 +788,17 @@ export const WorkManagement = () => {
           </div>
           
           {/* Botones finales */}
-          <div className="space-y-2 pt-2">
-            <Button 
+          <div className="flex flex-col items-center gap-2 pt-2 sm:flex-row sm:justify-center">
+            <Button
               onClick={handleSubmit}
-              className="app-btn-primary w-full"
+              className="app-btn-primary w-full sm:w-auto sm:min-w-[180px]"
             >
-              {editingWork ? 'Guardar Cambios' : 'Añadir'}
+              {editingWork ? 'Guardar cambios' : 'Añadir'}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleCloseDialog}
-              className="app-btn-soft w-full"
+              className="app-btn-soft w-full sm:w-auto sm:min-w-[180px]"
             >
               Cancelar
             </Button>

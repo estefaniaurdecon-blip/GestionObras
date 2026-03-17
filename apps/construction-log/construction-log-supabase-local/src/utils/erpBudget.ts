@@ -9,6 +9,18 @@ const normalizeKey = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s]/g, '');
 
+export const safeNumber = (value: unknown, fallback = 0): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+export const parseEuroInput = (value: string): number => {
+  const raw = value.trim().replace(/\s+/g, '');
+  if (!raw) return 0;
+  const n = Number(raw.replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+
 export const GENERAL_EXPENSES_LABEL = 'GASTOS GENERALES';
 export const EXTERNAL_COLLAB_LABEL = 'COLABORACIONES EXTERNAS';
 export const DEFAULT_GENERAL_EXPENSES_PERCENT = 19;
@@ -59,6 +71,11 @@ export const formatPercentLabelValue = (value: number) => {
 
 export const normalizeConceptKey = (value?: string) => normalizeKey(value || '');
 
+export const isSummaryRow = (concept?: string): boolean => {
+  const key = normalizeConceptKey(concept ?? '');
+  return key === normalizeConceptKey('Total') || key === normalizeConceptKey('Diferencia por justificar');
+};
+
 export const isGeneralExpensesConcept = (value?: string) =>
   normalizeConceptKey(value).startsWith(normalizeConceptKey(GENERAL_EXPENSES_LABEL));
 
@@ -102,8 +119,6 @@ export const parseExternalCollaborationDetails = (value?: string) => {
 
 export const getBudgetGroupKey = (value?: string) =>
   isGeneralExpensesConcept(value) ? normalizeConceptKey(GENERAL_EXPENSES_LABEL) : normalizeConceptKey(value);
-
-export const getBudgetMatchKey = getBudgetGroupKey;
 
 export const getBudgetParentKey = (value?: string) => {
   if (isGeneralExpensesConcept(value)) return normalizeConceptKey(GENERAL_EXPENSES_LABEL);

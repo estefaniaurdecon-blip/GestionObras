@@ -26,30 +26,25 @@ import {
   EXTERNAL_COLLAB_LABEL,
   GENERAL_EXPENSES_AMOUNT_LABEL,
   buildParentChildMap,
-  calculateBudgetTotals,
   calculateParentTotals,
   formatExternalCollaborationConcept,
   formatGeneralExpensesConcept,
   getBudgetGroupKey,
-  getBudgetMatchKey,
   getBudgetParentKey,
   getDefaultBudgetTemplate,
   groupBudgetsByConcept,
   isAllCapsConcept,
   isGeneralExpensesConcept,
+  isSummaryRow,
   normalizeConceptKey,
   parseExternalCollaborationDetails,
+  safeNumber,
 } from '@/utils/erpBudget';
 
 type UseBudgetEditorArgs = {
   projectId: number | null;
   tenantId?: string | number | null;
   canManage?: boolean;
-};
-
-const safeNumber = (value: unknown, fallback = 0) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
 };
 
 export function useBudgetEditor({
@@ -72,9 +67,21 @@ export function useBudgetEditor({
   const [savingBudgets, setSavingBudgets] = useState(false);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [budgetModalMode, setBudgetModalMode] = useState<'create' | 'edit'>('create');
-  const [budgetModalInitial, setBudgetModalInitial] =
-    useState<ApiProjectBudgetLinePayload>(DEFAULT_BUDGET_PAYLOAD);
   const [activeBudgetLine, setActiveBudgetLine] = useState<ApiProjectBudgetLine | null>(null);
+
+  const budgetModalInitial = useMemo<ApiProjectBudgetLinePayload>(() => {
+    if (!activeBudgetLine) return DEFAULT_BUDGET_PAYLOAD;
+    return {
+      concept: activeBudgetLine.concept,
+      hito1_budget: safeNumber(activeBudgetLine.hito1_budget),
+      justified_hito1: safeNumber(activeBudgetLine.justified_hito1),
+      hito2_budget: safeNumber(activeBudgetLine.hito2_budget),
+      justified_hito2: safeNumber(activeBudgetLine.justified_hito2),
+      approved_budget: safeNumber(activeBudgetLine.approved_budget),
+      percent_spent: safeNumber(activeBudgetLine.percent_spent),
+      forecasted_spent: safeNumber(activeBudgetLine.forecasted_spent),
+    };
+  }, [activeBudgetLine]);
 
   const resolveWriteTenantId = async () => {
     if (tenantId !== undefined) return tenantId;
@@ -216,17 +223,18 @@ export function useBudgetEditor({
     },
   });
 
+  // Stable refs so the sync useEffect doesn't re-run on mutation state changes
+  const createMilestoneRef = useRef(createBudgetMilestoneMutation.mutateAsync);
+  const updateMilestoneRef = useRef(updateBudgetMilestoneMutation.mutateAsync);
+  createMilestoneRef.current = createBudgetMilestoneMutation.mutateAsync;
+  updateMilestoneRef.current = updateBudgetMilestoneMutation.mutateAsync;
+
   const budgetRows = budgetsQuery.data ?? [];
   const budgetMilestones = budgetMilestonesQuery.data ?? [];
   const projectMilestones = projectMilestonesQuery.data ?? [];
   const hasRealBudgets = budgetRows.length > 0;
 
   const displayBudgetRows = hasRealBudgets ? budgetRows : defaultBudgetTemplate;
-
-  const isSummaryRow = (concept?: string) => {
-    const key = normalizeConceptKey(concept ?? '');
-    return key === normalizeConceptKey('Total') || key === normalizeConceptKey('Diferencia por justificar');
-  };
 
   const filteredBudgetRows = useMemo(
     () => displayBudgetRows.filter((row) => !isSummaryRow(row.concept)),
@@ -294,9 +302,9 @@ export function useBudgetEditor({
     [budgetParentMap, groupedBudgetRows]
   );
 
-  const budgetsTabTotals = useMemo(
-    () => calculateBudgetTotals(groupedBudgetRows, budgetParentMap),
-    [budgetParentMap, groupedBudgetRows]
+  const budgetRowsById = useMemo(
+    () => new Map(groupedBudgetRows.map((row) => [row.id, row])),
+    [groupedBudgetRows]
   );
 
   const generalExpensesBaseTotals = useMemo(() => {
@@ -355,14 +363,11 @@ export function useBudgetEditor({
           const desiredName = milestone.title || `Hito ${orderIndex}`;
           const existing = budgetByOrder.get(orderIndex);
           if (!existing) {
-            await createBudgetMilestoneMutation.mutateAsync({
-              name: desiredName,
-              order_index: orderIndex,
-            });
+            await createMilestoneRef.current({ name: desiredName, order_index: orderIndex });
             continue;
           }
           if ((existing.name || '').trim() !== desiredName.trim() || existing.order_index !== orderIndex) {
-            await updateBudgetMilestoneMutation.mutateAsync({
+            await updateMilestoneRef.current({
               milestoneId: existing.id,
               payload: { name: desiredName, order_index: orderIndex },
             });
@@ -375,14 +380,7 @@ export function useBudgetEditor({
       }
     };
     void syncBudgetMilestones();
-  }, [
-    budgetMilestones,
-    budgetMilestonesQuery.isFetching,
-    createBudgetMilestoneMutation,
-    projectId,
-    projectMilestones,
-    updateBudgetMilestoneMutation,
-  ]);
+  }, [budgetMilestones, budgetMilestonesQuery.isFetching, projectId, projectMilestones]);
 
   const seedTemplateBudgetLines = async () => {
     if (!projectId || hasRealBudgets || seedingTemplate) return;
@@ -394,18 +392,20 @@ export function useBudgetEditor({
         const second = await createBudgetMilestoneMutation.mutateAsync({ name: 'HITO 2', order_index: 2 });
         currentMilestones = [first, second];
       }
-      for (const row of defaultBudgetTemplate) {
-        await createBudgetMutation.mutateAsync({
-          concept: row.concept,
-          hito1_budget: safeNumber(row.hito1_budget),
-          justified_hito1: safeNumber(row.justified_hito1),
-          hito2_budget: safeNumber(row.hito2_budget),
-          justified_hito2: safeNumber(row.justified_hito2),
-          approved_budget: safeNumber(row.hito1_budget) + safeNumber(row.hito2_budget),
-          percent_spent: 0,
-          forecasted_spent: 0,
-        });
-      }
+      await Promise.all(
+        defaultBudgetTemplate.map((row) =>
+          createBudgetMutation.mutateAsync({
+            concept: row.concept,
+            hito1_budget: safeNumber(row.hito1_budget),
+            justified_hito1: safeNumber(row.justified_hito1),
+            hito2_budget: safeNumber(row.hito2_budget),
+            justified_hito2: safeNumber(row.justified_hito2),
+            approved_budget: safeNumber(row.hito1_budget) + safeNumber(row.hito2_budget),
+            percent_spent: 0,
+            forecasted_spent: 0,
+          })
+        )
+      );
       toast.success('Plantilla creada en el proyecto');
     } catch (error: any) {
       toast.error(error?.message || error?.response?.data?.detail || 'No se pudo crear la plantilla');
@@ -524,10 +524,7 @@ export function useBudgetEditor({
     }
 
     const numericValue = safeNumber(value);
-    const currentRow =
-      budgetRows.find((budget) => budget.id === budgetId) ??
-      groupedBudgetRows.find((budget) => budget.id === budgetId) ??
-      defaultBudgetTemplate.find((budget) => budget.id === budgetId);
+    const currentRow = budgetRowsById.get(budgetId);
     if (!currentRow) return;
     const draft = budgetDrafts[budgetId] ?? {};
     const currentH1 = safeNumber(draft.hito1_budget ?? currentRow.hito1_budget);
@@ -603,8 +600,8 @@ export function useBudgetEditor({
         return latestBudgets;
       };
       const findBudgetByConcept = (concept: string) => {
-        const key = getBudgetMatchKey(concept);
-        return latestBudgets.find((row) => getBudgetMatchKey(row.concept ?? '') === key);
+        const key = getBudgetGroupKey(concept);
+        return latestBudgets.find((row) => getBudgetGroupKey(row.concept ?? '') === key);
       };
 
       const deriveMilestoneValues = (
@@ -728,22 +725,7 @@ export function useBudgetEditor({
 
   const openBudgetModal = (mode: 'create' | 'edit', line?: ApiProjectBudgetLine) => {
     setBudgetModalMode(mode);
-    if (line) {
-      setBudgetModalInitial({
-        concept: line.concept,
-        hito1_budget: safeNumber(line.hito1_budget),
-        justified_hito1: safeNumber(line.justified_hito1),
-        hito2_budget: safeNumber(line.hito2_budget),
-        justified_hito2: safeNumber(line.justified_hito2),
-        approved_budget: safeNumber(line.approved_budget),
-        percent_spent: safeNumber(line.percent_spent),
-        forecasted_spent: safeNumber(line.forecasted_spent),
-      });
-      setActiveBudgetLine(line);
-    } else {
-      setBudgetModalInitial(DEFAULT_BUDGET_PAYLOAD);
-      setActiveBudgetLine(null);
-    }
+    setActiveBudgetLine(line ?? null);
     setBudgetModalOpen(true);
   };
 
@@ -816,6 +798,7 @@ export function useBudgetEditor({
 
   return {
     project: projectQuery.data ?? null,
+    activeBudgetLine,
     budgetsQuery,
     budgetMilestonesQuery,
     externalCollaborations: externalCollaborationsQuery.data ?? [],
@@ -823,8 +806,6 @@ export function useBudgetEditor({
     budgetMilestones,
     groupedBudgetRows,
     budgetParentMap,
-    budgetParentTotals,
-    budgetsTabTotals,
     budgetsEditMode,
     setBudgetsEditMode,
     budgetDrafts,

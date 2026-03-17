@@ -340,10 +340,29 @@ def seed_budget_milestones() -> None:
 
 
 # ---------------------------------------------------------------------------
+# erp_project latitude/longitude columns
+# ---------------------------------------------------------------------------
+
+def add_project_geolocation_columns() -> None:
+    """Add latitude and longitude columns to erp_project if not present."""
+    inspector = inspect(engine)
+    if "erp_project" not in set(inspector.get_table_names()):
+        return
+    existing_cols = {c["name"] for c in inspector.get_columns("erp_project")}
+    with engine.begin() as conn:
+        if "latitude" not in existing_cols:
+            conn.execute(text("ALTER TABLE erp_project ADD COLUMN latitude DOUBLE PRECISION"))
+        if "longitude" not in existing_cols:
+            conn.execute(text("ALTER TABLE erp_project ADD COLUMN longitude DOUBLE PRECISION"))
+    print("  [OK] add_project_geolocation_columns")
+
+
+# ---------------------------------------------------------------------------
 # Public list for run_all
 # ---------------------------------------------------------------------------
 
 ALL_BACKFILLS = [
+    add_project_geolocation_columns,
     backfill_work_report_identifiers,
     backfill_task_status,
     backfill_project_duration_months,

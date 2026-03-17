@@ -457,23 +457,23 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Gestión Económica de Partes</CardTitle>
-          <CardDescription>
+        <CardHeader className="text-center">
+          <CardTitle className="app-page-title">Gestión económica de partes</CardTitle>
+          <CardDescription className="app-page-subtitle">
             Asigna precios a las horas de trabajo, maquinaria y subcontratas de los partes creados por tus encargados
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div>
-              <Label>Encargado</Label>
+              <Label className="app-field-label">Encargado</Label>
               <Popover open={foremanPopoverOpen} onOpenChange={setForemanPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={foremanPopoverOpen}
-                    className="w-full justify-between font-normal"
+                    className="app-btn-soft w-full justify-between font-normal"
                   >
                     <span className="truncate">
                       {selectedForeman === 'all' ? 'Todos los encargados' : selectedForeman}
@@ -532,7 +532,7 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
             </div>
 
             <div>
-              <Label>Seleccionar Parte</Label>
+              <Label className="app-field-label">Seleccionar parte</Label>
               <Select onValueChange={handleReportSelect}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un parte de trabajo" />
@@ -825,7 +825,7 @@ export const EconomicManagement = ({ reports, onReportUpdate, onSaveSuccess }: E
                   <div className="text-xl font-bold">
                     Total del Parte: {calculateTotal().toFixed(2)} €
                   </div>
-                  <Button onClick={handleSave}>
+                  <Button onClick={handleSave} className="app-btn-primary">
                     Guardar Precios
                   </Button>
                 </div>

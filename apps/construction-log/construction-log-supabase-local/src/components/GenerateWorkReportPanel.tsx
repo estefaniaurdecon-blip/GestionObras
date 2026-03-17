@@ -24,6 +24,7 @@ import {
 import type { WorkReport } from '@/types/workReport';
 import { AlbaranDocumentViewerModal } from '@/components/work-report/shared/AlbaranDocumentViewerModal';
 import { WorkReportHeaderCard } from '@/components/work-report/shared/WorkReportHeaderCard';
+import { ActiveRepasosSection } from '@/components/ActiveRepasosSection';
 import { ForemanResourcesCard } from '@/components/work-report/shared/ForemanResourcesCard';
 import { AutoCloneSettingsCard } from '@/components/work-report/shared/AutoCloneSettingsCard';
 import { SignaturesCard } from '@/components/work-report/shared/SignaturesCard';
@@ -2459,6 +2460,7 @@ export const GenerateWorkReportPanel = ({
         />
       </Accordion>
       </div>
+      <ActiveRepasosSection workId={selectedWorkId ? String(selectedWorkId) : null} />
       <ForemanResourcesCard
         readOnly={readOnly}
         totalForemanSectionHours={totalForemanSectionHours}
