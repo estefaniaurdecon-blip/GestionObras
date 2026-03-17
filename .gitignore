@@ -1,3 +1,7 @@
+# === Emulator diagnostics ===
+emulator-window-dump.xml
+emulator-current.png
+
 # === General ===
 .DS_Store
 Thumbs.db
