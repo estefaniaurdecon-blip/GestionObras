@@ -33,7 +33,10 @@ export const useRepasoImages = () => {
   };
 
   const isDataUrl = (str: string): boolean => str?.startsWith('data:image/') || false;
-  const isStorageUrl = (str: string): boolean => str?.includes('/static/work-report-images/') || false;
+  const isStorageUrl = (str: string): boolean =>
+    str?.includes('/static/work-report-images/') ||
+    str?.includes('/api/v1/work-reports/images/') ||
+    false;
 
   const uploadImage = useCallback(
     async (file: File | string, repasoId: string, type: 'before' | 'after'): Promise<string | null> => {

@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useRef } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { useTranslation } from 'react-i18next';
 import { useWorkRepasos, WorkRepaso, CreateRepasoData, UpdateRepasoData, RepasoSubcontractGroup, RepasoWorker, RepasoMachinery } from '@/hooks/useWorkRepasos';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
@@ -580,17 +581,17 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
                     {(repaso.before_image || repaso.after_image) && (
                       <div className="flex gap-2">
                         {repaso.before_image && (
-                          <img 
-                            src={repaso.before_image} 
-                            alt="Antes" 
+                          <AuthenticatedImage
+                            src={repaso.before_image}
+                            alt="Antes"
                             className="h-16 w-16 object-cover rounded cursor-pointer border-2 border-red-200"
                             onClick={() => setImagePreview({ url: repaso.before_image!, type: 'before' })}
                           />
                         )}
                         {repaso.after_image && (
-                          <img 
-                            src={repaso.after_image} 
-                            alt="Después" 
+                          <AuthenticatedImage
+                            src={repaso.after_image}
+                            alt="Después"
                             className="h-16 w-16 object-cover rounded cursor-pointer border-2 border-green-200"
                             onClick={() => setImagePreview({ url: repaso.after_image!, type: 'after' })}
                           />
@@ -643,9 +644,9 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
                       <TableCell>
                         <div className="flex gap-1">
                           {repaso.before_image ? (
-                            <img 
-                              src={repaso.before_image} 
-                              alt="Antes" 
+                            <AuthenticatedImage
+                              src={repaso.before_image}
+                              alt="Antes"
                               className="h-8 w-8 object-cover rounded cursor-pointer border border-red-300"
                               onClick={() => setImagePreview({ url: repaso.before_image!, type: 'before' })}
                             />
@@ -655,9 +656,9 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
                             </div>
                           )}
                           {repaso.after_image ? (
-                            <img 
-                              src={repaso.after_image} 
-                              alt="Después" 
+                            <AuthenticatedImage
+                              src={repaso.after_image}
+                              alt="Después"
                               className="h-8 w-8 object-cover rounded cursor-pointer border border-green-300"
                               onClick={() => setImagePreview({ url: repaso.after_image!, type: 'after' })}
                             />
@@ -723,9 +724,9 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
               <div className="flex items-center gap-4">
                 {formData.before_image ? (
                   <div className="relative">
-                    <img 
-                      src={formData.before_image} 
-                      alt="Antes" 
+                    <AuthenticatedImage
+                      src={formData.before_image}
+                      alt="Antes"
                       className="h-20 w-20 object-cover rounded border-2 border-destructive/30"
                     />
                     {uploading.before ? (
@@ -990,9 +991,9 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
                 <div className="flex items-center gap-4">
                   {formData.after_image ? (
                     <div className="relative">
-                      <img 
-                        src={formData.after_image} 
-                        alt="Después" 
+                      <AuthenticatedImage
+                        src={formData.after_image}
+                        alt="Después"
                         className="h-20 w-20 object-cover rounded border-2 border-green-500/30"
                       />
                       {uploading.after ? (
@@ -1078,8 +1079,8 @@ export const WorkRepasosSection: React.FC<WorkRepasosSectionProps> = ({
             </DialogTitle>
           </DialogHeader>
           {imagePreview && (
-            <img 
-              src={imagePreview.url} 
+            <AuthenticatedImage
+              src={imagePreview.url}
               alt={imagePreview.type === 'before' ? 'Antes' : 'Después'}
               className="w-full h-auto rounded-lg"
             />

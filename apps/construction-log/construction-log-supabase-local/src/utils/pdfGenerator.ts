@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getUserProfileFullName } from '@/services/workReportsSupabaseGateway';
 import { listRentalMachinery as listRentalMachineryApi } from '@/integrations/api/client';
+import { fetchImageWithAuth } from '@/integrations/api/imageAuth';
 import { sanitizePdfFilename } from './securePdfFilename';
 import { 
   calculateOptimalSpacing, 
@@ -803,8 +804,8 @@ export const generateWorkReportPDF = async (
       // Obtener URL válida primero
       const validUrl = await getValidImageUrl(url);
       
-      const response = await fetch(validUrl);
-      
+      const response = await fetchImageWithAuth(validUrl);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

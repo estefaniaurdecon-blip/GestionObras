@@ -93,7 +93,10 @@ export const usePostventaImages = () => {
   };
 
   const isDataUrl = (url: string): boolean => url?.startsWith('data:') || false;
-  const isStorageUrl = (url: string): boolean => url?.includes('/static/work-report-images/') || false;
+  const isStorageUrl = (url: string): boolean =>
+    url?.includes('/static/work-report-images/') ||
+    url?.includes('/api/v1/work-reports/images/') ||
+    false;
 
   return {
     uploading,

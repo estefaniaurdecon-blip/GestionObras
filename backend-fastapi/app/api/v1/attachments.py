@@ -109,6 +109,20 @@ def _ensure_in_dir(base_dir: Path, candidate: Path) -> Path:
     return candidate_resolved
 
 
+def _get_report_or_403(session: Session, work_report_id: int, tenant_id: int) -> "WorkReport":
+    """
+    Fase 1: valida existencia + pertenencia al tenant.
+    Devuelve 404 en ambos casos para no revelar existencia cross-tenant.
+    Fase 2d: añadir can_access_work_report_attachment() aquí sin cambiar firma.
+    """
+    from app.models.erp import WorkReport  # importación local para evitar circular
+
+    report = session.get(WorkReport, work_report_id)
+    if not report or report.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parte no encontrado.")
+    return report
+
+
 def _write_upload(upload: UploadFile, target_path: Path) -> int:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     upload.file.seek(0)
@@ -123,9 +137,24 @@ def _write_upload(upload: UploadFile, target_path: Path) -> int:
     return total_bytes
 
 
+_WORK_IMAGE_MARKERS = (
+    "/static/work-report-images/",
+    "/api/v1/work-reports/images/",
+)
+
+
+def _extract_relative_path_from_image_url(url: str) -> str | None:
+    parsed = urlparse(url.strip())
+    for marker in _WORK_IMAGE_MARKERS:
+        index = parsed.path.find(marker)
+        if index >= 0:
+            return parsed.path[index + len(marker):].lstrip("/")
+    return None
+
+
 def _work_image_public_url(request: Request, relative_path: str) -> str:
     base_url = str(request.base_url).rstrip("/")
-    return f"{base_url}/static/work-report-images/{relative_path}"
+    return f"{base_url}/api/v1/work-reports/images/{relative_path}"
 
 
 def _serialize_work_report_attachment(attachment: WorkReportAttachment) -> dict:
@@ -167,12 +196,13 @@ def _serialize_shared_file(session: Session, row: SharedFile) -> dict:
 
 @router.get("/work-reports/{work_report_id}/attachments")
 def list_work_report_attachments(
-    work_report_id: str,
+    work_report_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[dict]:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id)
     rows = session.exec(
         select(WorkReportAttachment)
         .where(
@@ -187,7 +217,7 @@ def list_work_report_attachments(
 @router.post("/work-reports/{work_report_id}/attachments", status_code=status.HTTP_201_CREATED)
 def create_work_report_attachment(
     request: Request,
-    work_report_id: str,
+    work_report_id: int,
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
     display_order: int | None = Form(default=None),
@@ -196,12 +226,13 @@ def create_work_report_attachment(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id)
     content_type = _safe_content_type(file)
     extension = _guess_extension(file)
     filename = _sanitize_filename(file.filename, "image")
     timestamp = int(datetime.utcnow().timestamp() * 1000)
     relative_path = (
-        f"tenant_{tenant_id}/work-reports/{_sanitize_filename(work_report_id, 'work-report')}/"
+        f"tenant_{tenant_id}/work-reports/{_sanitize_filename(str(work_report_id), 'work-report')}/"
         f"{timestamp}_{filename.rsplit('.', 1)[0]}.{extension}"
     )
 
@@ -242,7 +273,7 @@ def create_work_report_attachment(
 
 @router.patch("/work-reports/{work_report_id}/attachments/{attachment_id}")
 def update_work_report_attachment(
-    work_report_id: str,
+    work_report_id: int,
     attachment_id: str,
     payload: AttachmentDescriptionUpdate,
     session: Session = Depends(get_session),
@@ -250,6 +281,7 @@ def update_work_report_attachment(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id)
     row = session.exec(
         select(WorkReportAttachment).where(
             WorkReportAttachment.id == attachment_id,
@@ -274,13 +306,14 @@ def update_work_report_attachment(
     response_model=None,
 )
 def delete_work_report_attachment(
-    work_report_id: str,
+    work_report_id: int,
     attachment_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id)
     row = session.exec(
         select(WorkReportAttachment).where(
             WorkReportAttachment.id == attachment_id,
@@ -299,6 +332,29 @@ def delete_work_report_attachment(
     session.delete(row)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/work-reports/images/{file_path:path}")
+def serve_work_report_image(
+    file_path: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> FileResponse:
+    tenant_id = _tenant_scope(current_user, x_tenant_id)
+    tenant_prefix = f"tenant_{tenant_id}/"
+    if not file_path.startswith(tenant_prefix):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este archivo.")
+    base_dir = Path(settings.work_report_images_storage_path)
+    target = _ensure_in_dir(base_dir, base_dir / file_path)
+    if not target.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagen no encontrada.")
+    media_type, _ = mimetypes.guess_type(str(target))
+    return FileResponse(
+        path=target,
+        media_type=media_type or "application/octet-stream",
+        filename=target.name,
+    )
 
 
 @router.post("/attachments/images", status_code=status.HTTP_201_CREATED)
@@ -346,15 +402,12 @@ def delete_generic_image_by_url(
 ) -> dict:
     del session
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    parsed = urlparse(payload.url.strip())
-    marker = "/static/work-report-images/"
-    index = parsed.path.find(marker)
-    if index < 0:
+    relative_path = _extract_relative_path_from_image_url(payload.url)
+    if not relative_path:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="URL de imagen no valida.",
         )
-    relative_path = parsed.path[index + len(marker) :].lstrip("/")
     tenant_prefix = f"tenant_{tenant_id}/"
     if not relative_path.startswith(tenant_prefix):
         raise HTTPException(

@@ -23,7 +23,9 @@ export interface WorkReportImage {
 const isDataUrl = (str: string): boolean => str?.startsWith('data:image/') || false;
 
 const isStorageUrl = (str: string): boolean =>
-  str?.includes('/static/work-report-images/') || false;
+  str?.includes('/static/work-report-images/') ||
+  str?.includes('/api/v1/work-reports/images/') ||
+  false;
 
 const base64ToBlob = (base64: string): Blob => {
   const [header, data] = base64.split(',');

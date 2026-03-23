@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { fetchImageWithAuth } from '@/integrations/api/imageAuth';
 import autoTable from 'jspdf-autotable';
 import { WorkRepaso, RepasoSubcontractGroup } from '@/hooks/useWorkRepasos';
 import { sanitizePdfFilename } from '@/utils/securePdfFilename';
@@ -47,7 +48,7 @@ const estimateRepasosMetrics = (repasos: WorkRepaso[]): ContentMetrics => {
 // Función auxiliar para cargar imagen como base64
 const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   try {
-    const response = await fetch(url);
+    const response = await fetchImageWithAuth(url);
     const blob = await response.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();

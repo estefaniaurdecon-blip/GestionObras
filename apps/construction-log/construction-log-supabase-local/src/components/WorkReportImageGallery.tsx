@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { Camera, Upload, X, Edit2, Loader2, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -221,7 +222,7 @@ export const WorkReportImageGallery = ({ workReportId }: WorkReportImageGalleryP
           {images.map((image) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative aspect-video bg-muted">
-                <img
+                <AuthenticatedImage
                   src={image.image_url}
                   alt="Imagen del parte"
                   className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
@@ -312,7 +313,7 @@ export const WorkReportImageGallery = ({ workReportId }: WorkReportImageGalleryP
           </DialogHeader>
           {viewImageUrl && (
             <div className="flex-1 min-h-0 overflow-auto">
-              <img
+              <AuthenticatedImage
                 src={viewImageUrl}
                 alt="Vista completa"
                 className="w-full h-auto max-h-[70vh] object-contain"
@@ -335,7 +336,7 @@ export const WorkReportImageGallery = ({ workReportId }: WorkReportImageGalleryP
           {pendingImage && (
             <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
               <div className="relative bg-muted rounded-lg overflow-hidden">
-                <img
+                <AuthenticatedImage
                   src={pendingImage}
                   alt="Vista previa"
                   className="w-full h-auto max-h-[40vh] object-contain"
