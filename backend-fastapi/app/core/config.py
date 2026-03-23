@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     auth_cookie_samesite: str = "lax"
     mfa_trust_cookie_name: str = "mfa_trust_token"
     mfa_trust_hours: int = 24
+    superadmin_refresh_cookie_name: str = "superadmin_refresh_token"
+    superadmin_refresh_hours: int = 720
     allow_bootstrap_superadmin: bool = False
     superadmin_email: str
     superadmin_password: str
@@ -49,13 +51,22 @@ class Settings(BaseSettings):
     # Puede configurarse como lista JSON en FRONTEND_CORS_ORIGINS.
     frontend_cors_origins: List[str] = []
 
-    # Config SMTP para envío de correos (opcional)
+    # Config SMTP para envío de correos (opcional) — MFA, invitaciones, etc.
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_use_tls: bool = True
+
+    # SMTP alternativo exclusivo para emails de recuperación de contraseña (opcional)
+    # Si no se configura, se usa el SMTP principal.
+    reset_smtp_host: str | None = None
+    reset_smtp_port: int = 587
+    reset_smtp_username: str | None = None
+    reset_smtp_password: str | None = None
+    reset_smtp_from: str | None = None
+    reset_smtp_use_tls: bool = True
 
     # URL base del frontend para enlaces en correos
     frontend_base_url: str | None = None

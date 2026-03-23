@@ -6,9 +6,8 @@ import { NetworkStatusIcon } from '@/components/NetworkStatusIcon';
 import { NotificationsCenter } from '@/components/NotificationsCenter';
 import { MobileActionsMenu } from '@/components/MobileActionsMenu';
 import { Capacitor } from '@capacitor/core';
-import { Globe, LogOut, MessageSquare, Settings } from 'lucide-react';
+import { Globe, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useMessages } from '@/hooks/useMessages';
 
 type IndexHeaderProps = {
   roleLabel: string;
@@ -38,7 +37,6 @@ export const IndexHeader = ({
 }: IndexHeaderProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const navigate = useNavigate();
-  const { unreadCount } = useMessages();
 
   return (
     <>
@@ -74,21 +72,6 @@ export const IndexHeader = ({
               <NetworkStatusIcon />
 
               <NotificationsCenter />
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => document.dispatchEvent(new Event('open-chat-center'))}
-                className="relative h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
-                title="Mensajería"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {unreadCount > 0 ? (
-                  <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Badge>
-                ) : null}
-              </Button>
 
               <Button
                 variant="ghost"

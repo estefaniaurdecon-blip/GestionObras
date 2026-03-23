@@ -16,6 +16,7 @@ export interface AttachmentsApiDeps {
   apiFetchJson: ApiFetchJsonFn;
   apiFetch: ApiFetchFn;
   buildQueryParams: BuildQueryParamsFn;
+  tenantHeader?: (tenantId?: string | number | null) => Record<string, string> | undefined;
 }
 
 export interface WorkReportAttachmentApi {
@@ -67,6 +68,7 @@ export interface SharedFileCreatePayload {
   to_user_id: string;
   message?: string;
   work_report_id?: string;
+  tenantId?: string | number | null;
 }
 
 export function createAttachmentsApi(deps: AttachmentsApiDeps) {
@@ -160,10 +162,13 @@ export function createAttachmentsApi(deps: AttachmentsApiDeps) {
   };
 
   const listSharedFiles = async (
-    direction: SharedFilesDirection = 'all'
+    direction: SharedFilesDirection = 'all',
+    tenantId?: string | number | null
   ): Promise<SharedFileApi[]> => {
     const query = deps.buildQueryParams({ direction });
-    return deps.apiFetchJson<SharedFileApi[]>(`/api/v1/shared-files${query}`);
+    return deps.apiFetchJson<SharedFileApi[]>(`/api/v1/shared-files${query}`, {
+      headers: deps.tenantHeader?.(tenantId),
+    });
   };
 
   const createSharedFile = async (payload: SharedFileCreatePayload): Promise<SharedFileApi> => {
@@ -178,15 +183,20 @@ export function createAttachmentsApi(deps: AttachmentsApiDeps) {
     }
     return deps.apiFetchJson<SharedFileApi>('/api/v1/shared-files', {
       method: 'POST',
+      headers: deps.tenantHeader?.(payload.tenantId),
       body: formData,
     });
   };
 
-  const downloadSharedFile = async (sharedFileId: string): Promise<Blob> => {
+  const downloadSharedFile = async (
+    sharedFileId: string,
+    tenantId?: string | number | null
+  ): Promise<Blob> => {
     const response = await deps.apiFetch(
       `/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/download`,
       {
         method: 'GET',
+        headers: deps.tenantHeader?.(tenantId),
       }
     );
     if (!response.ok) {
@@ -199,18 +209,26 @@ export function createAttachmentsApi(deps: AttachmentsApiDeps) {
     return response.blob();
   };
 
-  const markSharedFileDownloaded = async (sharedFileId: string): Promise<void> => {
+  const markSharedFileDownloaded = async (
+    sharedFileId: string,
+    tenantId?: string | number | null
+  ): Promise<void> => {
     return deps.apiFetchJson<void>(
       `/api/v1/shared-files/${encodeURIComponent(sharedFileId)}/mark-downloaded`,
       {
         method: 'POST',
+        headers: deps.tenantHeader?.(tenantId),
       }
     );
   };
 
-  const deleteSharedFile = async (sharedFileId: string): Promise<void> => {
+  const deleteSharedFile = async (
+    sharedFileId: string,
+    tenantId?: string | number | null
+  ): Promise<void> => {
     return deps.apiFetchJson<void>(`/api/v1/shared-files/${encodeURIComponent(sharedFileId)}`, {
       method: 'DELETE',
+      headers: deps.tenantHeader?.(tenantId),
     });
   };
 

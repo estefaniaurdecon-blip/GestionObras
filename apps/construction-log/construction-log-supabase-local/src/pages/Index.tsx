@@ -49,9 +49,9 @@ const ChatCenter = lazy(() =>
   })),
 );
 
-const FileTransfer = lazy(() =>
-  import('@/components/FileTransfer').then((module) => ({
-    default: module.FileTransfer,
+const ChatBubble = lazy(() =>
+  import('@/components/ChatBubble').then((module) => ({
+    default: module.ChatBubble,
   })),
 );
 
@@ -154,9 +154,9 @@ const Index = () => {
     Boolean(user?.is_super_admin) || roles.includes('super_admin') || roles.includes('master');
   const isTenantAdmin = roles.some(isTenantAdminRole);
 
-  // Per requirement: hide user management for tenant admin and user.
-  // We keep it only for superadmin (system managers).
-  const showUserManagementTab = isSuperAdmin;
+  // Super admins and tenant admins can both manage users.
+  // Tenant admins stay scoped to their own tenant.
+  const showUserManagementTab = isSuperAdmin || isTenantAdmin;
   const showUpdatesTab = isSuperAdmin || isTenantAdmin;
   const canCreateTimeReports =
     isSuperAdmin ||
@@ -624,11 +624,12 @@ const Index = () => {
       {tenantResolved ? (
         <>
           <Suspense fallback={null}>
-            <ChatCenter />
+            <ChatBubble />
           </Suspense>
           <Suspense fallback={null}>
-            <FileTransfer />
+            <ChatCenter />
           </Suspense>
+
         </>
       ) : null}
     </div>

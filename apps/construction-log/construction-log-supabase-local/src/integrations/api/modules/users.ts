@@ -78,6 +78,13 @@ export function normalizeApiUser(user: ApiUser): ApiUser {
 }
 
 export function createUsersApi(deps: UsersApiDeps) {
+  const listContactUsersByTenant = async (tenantId: number): Promise<ApiUser[]> => {
+    const users = await deps.apiFetchJson<ApiUser[]>(
+      `/api/v1/users/contacts/by-tenant/${tenantId}`
+    );
+    return users.map(normalizeApiUser);
+  };
+
   const listUsersByTenant = async (
     tenantId: number,
     excludeAssigned = false
@@ -138,6 +145,7 @@ export function createUsersApi(deps: UsersApiDeps) {
   };
 
   return {
+    listContactUsersByTenant,
     listUsersByTenant,
     listTenants,
     createUser,

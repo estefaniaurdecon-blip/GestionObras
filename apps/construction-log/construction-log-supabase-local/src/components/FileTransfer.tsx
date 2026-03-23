@@ -60,7 +60,8 @@ export const FileTransfer = () => {
   const handleShare = async () => {
     if (!file || !selectedUser) return;
     setSending(true);
-    await shareFile(file, selectedUser, message || undefined);
+    const recipient = users.find((candidate) => candidate.id === selectedUser);
+    await shareFile(file, selectedUser, message || undefined, undefined, recipient?.full_name);
     setSending(false);
     setFile(null);
     setSelectedUser("");

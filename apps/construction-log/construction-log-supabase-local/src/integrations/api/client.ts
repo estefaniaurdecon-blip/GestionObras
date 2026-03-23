@@ -3,7 +3,7 @@
  * Replaces Supabase client with standard REST API calls
  */
 import { Capacitor } from '@capacitor/core';
-import { clearToken, getAuthHeader } from './storage';
+import { clearToken, getAuthHeader, setToken } from './storage';
 import { createNotificationsApi } from './modules/notifications';
 import { createMessagesApi } from './modules/messages';
 import { createAttachmentsApi } from './modules/attachments';
@@ -38,6 +38,8 @@ const RAW_NATIVE_API_BASE_URL = (import.meta.env.VITE_NATIVE_API_BASE_URL || '')
 const RAW_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 2000);
 const API_REQUEST_TIMEOUT_MS =
   Number.isFinite(RAW_API_TIMEOUT_MS) && RAW_API_TIMEOUT_MS > 0 ? RAW_API_TIMEOUT_MS : 2000;
+export const AUTH_SESSION_EXPIRED_EVENT = 'app-auth-session-expired';
+let authSessionExpiredNotified = false;
 
 function normalizeBaseUrl(url: string): string {
   if (url.length > 1 && url.endsWith('/')) return url.slice(0, -1);
@@ -148,6 +150,16 @@ function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
+function notifyAuthSessionExpired(): void {
+  if (typeof window === 'undefined' || authSessionExpiredNotified) return;
+  authSessionExpiredNotified = true;
+  window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
+}
+
+export function resetAuthSessionExpiredNotification(): void {
+  authSessionExpiredNotified = false;
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const timeoutMs = API_REQUEST_TIMEOUT_MS;
   const upstreamSignal = init.signal;
@@ -230,9 +242,66 @@ async function fetchWithNativeFallback(path: string, init: RequestInit): Promise
  * Main API fetch function
  * Handles authentication, headers, and error handling
  */
+type ApiFetchOptions = RequestInit & {
+  skipAuth?: boolean;
+  skipSessionRecovery?: boolean;
+};
+
+async function tryRefreshSession(): Promise<boolean> {
+  const response = await fetchWithNativeFallback('/api/v1/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      ...(TENANT_ID ? { 'X-Tenant-Id': TENANT_ID } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      return false;
+    }
+
+    const error: ApiError = new Error('No se pudo renovar la sesión');
+    error.status = response.status;
+
+    try {
+      const data = await response.json();
+      error.data = data;
+      if (data?.detail) {
+        error.message = data.detail;
+      }
+    } catch {
+      // Ignore parsing errors
+    }
+
+    throw error;
+  }
+
+  const refreshResponse = (await response.json()) as MFAVerifyResponse;
+  if (refreshResponse.access_token) {
+    await setToken({
+      access_token: refreshResponse.access_token,
+      token_type: refreshResponse.token_type || 'Bearer',
+    });
+  }
+  resetAuthSessionExpiredNotification();
+  return Boolean(refreshResponse.access_token);
+}
+
+export async function refreshSessionIfPossible(): Promise<boolean> {
+  try {
+    return await tryRefreshSession();
+  } catch (error) {
+    if (isNetworkError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 export async function apiFetch(
   path: string,
-  init?: RequestInit & { skipAuth?: boolean }
+  init?: ApiFetchOptions
 ): Promise<Response> {
   // Build headers
   const headers: Record<string, string> = {
@@ -254,7 +323,7 @@ export async function apiFetch(
     headers['X-Tenant-Id'] = TENANT_ID;
   }
   
-  const { skipAuth, ...restInit } = init ?? {};
+  const { skipAuth, skipSessionRecovery, ...restInit } = init ?? {};
 
   const fetchOptions: RequestInit = {
     ...restInit,
@@ -266,7 +335,17 @@ export async function apiFetch(
   
   // Handle 401 Unauthorized - clear token and throw error
   if (response.status === 401) {
+    if (!skipAuth && !skipSessionRecovery) {
+      const sessionRecovered = await refreshSessionIfPossible();
+      if (sessionRecovered) {
+        return apiFetch(path, {
+          ...init,
+          skipSessionRecovery: true,
+        });
+      }
+    }
     await clearToken();
+    notifyAuthSessionExpired();
     const error: ApiError = new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
     error.status = 401;
     throw error;
@@ -280,7 +359,7 @@ export async function apiFetch(
  */
 export async function apiFetchJson<T>(
   path: string,
-  init?: RequestInit & { skipAuth?: boolean }
+  init?: ApiFetchOptions
 ): Promise<T> {
   const response = await apiFetch(path, init);
   
@@ -472,6 +551,7 @@ async function performLoginRequest(request: LoginRequest): Promise<LoginResponse
     throw error;
   }
   
+  resetAuthSessionExpiredNotification();
   return response.json();
 }
 
@@ -479,7 +559,7 @@ async function performLoginRequest(request: LoginRequest): Promise<LoginResponse
  * Verify MFA code
  */
 export async function verifyMFA(request: MFAVerifyRequest): Promise<MFAVerifyResponse> {
-  return apiFetchJson<MFAVerifyResponse>('/api/v1/auth/mfa/verify', {
+  const result = await apiFetchJson<MFAVerifyResponse>('/api/v1/auth/mfa/verify', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -487,6 +567,8 @@ export async function verifyMFA(request: MFAVerifyRequest): Promise<MFAVerifyRes
     body: JSON.stringify(request),
     skipAuth: true,
   });
+  resetAuthSessionExpiredNotification();
+  return result;
 }
 
 /**
@@ -510,7 +592,32 @@ export async function logout(): Promise<void> {
     // Ignore errors during logout
   } finally {
     await clearToken();
+    resetAuthSessionExpiredNotification();
   }
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  await apiFetch('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    skipAuth: true,
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+  newPasswordConfirm: string,
+): Promise<{ email: string }> {
+  return apiFetchJson<{ email: string }>('/api/v1/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      token,
+      new_password: newPassword,
+      new_password_confirm: newPasswordConfirm,
+    }),
+    skipAuth: true,
+  });
 }
 
 // ============================================================
@@ -1110,6 +1217,7 @@ export type {
 const messagesApi = createMessagesApi({
   apiFetchJson,
   buildQueryParams,
+  tenantHeader,
 });
 
 export const listMessages = messagesApi.listMessages;
@@ -1138,6 +1246,7 @@ const usersApi = createUsersApi({
 });
 
 export const listUsersByTenant = usersApi.listUsersByTenant;
+export const listContactUsersByTenant = usersApi.listContactUsersByTenant;
 export const listTenants = usersApi.listTenants;
 export const createUser = usersApi.createUser;
 export const updateUser = usersApi.updateUser;
@@ -1879,6 +1988,7 @@ const attachmentsApi = createAttachmentsApi({
   apiFetchJson,
   apiFetch,
   buildQueryParams,
+  tenantHeader,
 });
 
 export const listWorkReportAttachments = attachmentsApi.listWorkReportAttachments;

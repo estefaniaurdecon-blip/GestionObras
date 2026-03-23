@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { forgotPassword } from '@/integrations/api/client';
 import {
   Dialog,
   DialogContent,
@@ -43,15 +43,11 @@ export default function Auth() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
-  const [forgotPasswordMessage, setForgotPasswordMessage] = useState('Necesito recuperar mi contrasena.');
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
-
-  const adminSupportEmail = (
-    import.meta.env.VITE_ADMIN_SUPPORT_EMAIL ||
-    'admin@pendiente-configurar.com'
-  ).trim();
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -286,35 +282,26 @@ export default function Auth() {
     event.preventDefault();
     event.stopPropagation();
     setForgotPasswordEmail(loginEmail.trim());
-    setForgotPasswordMessage('Necesito recuperar mi contrasena.');
+    setForgotPasswordSent(false);
     setIsForgotPasswordOpen(true);
   };
 
-  const handleSendForgotPasswordEmail = () => {
-    if (!adminSupportEmail) {
-      toast({
-        title: 'Sin correo de administrador',
-        description: 'Configura VITE_ADMIN_SUPPORT_EMAIL para enviar solicitudes.',
-        variant: 'destructive',
-      });
+  const handleSendForgotPasswordEmail = async () => {
+    const email = forgotPasswordEmail.trim();
+    if (!email) {
+      toast({ title: 'Email requerido', description: 'Introduce tu email.', variant: 'destructive' });
       return;
     }
-
-    const requesterEmail = forgotPasswordEmail.trim() || loginEmail.trim() || 'sin-email';
-    const requesterMessage = forgotPasswordMessage.trim() || 'Necesito recuperar mi contrasena.';
-    const timestamp = new Date().toLocaleString('es-ES');
-    const subject = encodeURIComponent('Solicitud de recuperacion de contrasena');
-    const body = encodeURIComponent(
-      `Hola,\n\n${requesterMessage}\n\nEmail de usuario: ${requesterEmail}\nFecha: ${timestamp}\n`
-    );
-
-    window.location.href = `mailto:${adminSupportEmail}?subject=${subject}&body=${body}`;
-    setIsForgotPasswordOpen(false);
-
-    toast({
-      title: 'Solicitud preparada',
-      description: `Se abrira tu correo para enviar la solicitud a ${adminSupportEmail}.`,
-    });
+    setForgotPasswordLoading(true);
+    try {
+      await forgotPassword(email);
+      setForgotPasswordSent(true);
+    } catch {
+      // Mostrar éxito igualmente para no revelar si el email existe
+      setForgotPasswordSent(true);
+    } finally {
+      setForgotPasswordLoading(false);
+    }
   };
 
   if (showMFA) {
@@ -494,50 +481,47 @@ export default function Auth() {
             Olvide mi contrasena
           </Button>
 
-          <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+          <Dialog open={isForgotPasswordOpen} onOpenChange={(open) => { setIsForgotPasswordOpen(open); if (!open) setForgotPasswordSent(false); }}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Recuperar contrasena</DialogTitle>
                 <DialogDescription>
-                  Se enviara un correo al administrador para gestionar el acceso.
+                  {forgotPasswordSent
+                    ? 'Si ese email existe en el sistema, recibirás un enlace en tu correo en breve.'
+                    : 'Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.'}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="forgot-password-email">Tu email</Label>
-                  <Input
-                    id="forgot-password-email"
-                    type="email"
-                    value={forgotPasswordEmail}
-                    onChange={(event) => setForgotPasswordEmail(event.target.value)}
-                    placeholder="tu@email.com"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="forgot-password-message">Mensaje</Label>
-                  <Textarea
-                    id="forgot-password-message"
-                    value={forgotPasswordMessage}
-                    onChange={(event) => setForgotPasswordMessage(event.target.value)}
-                    rows={4}
-                  />
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Destino: {adminSupportEmail}
-                </p>
-              </div>
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsForgotPasswordOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="button" onClick={handleSendForgotPasswordEmail}>
-                  Enviar email
-                </Button>
-              </DialogFooter>
+              {!forgotPasswordSent ? (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor="forgot-password-email">Tu email</Label>
+                    <Input
+                      id="forgot-password-email"
+                      type="email"
+                      value={forgotPasswordEmail}
+                      onChange={(event) => setForgotPasswordEmail(event.target.value)}
+                      placeholder="tu@email.com"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter') void handleSendForgotPasswordEmail(); }}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsForgotPasswordOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="button" onClick={() => void handleSendForgotPasswordEmail()} disabled={forgotPasswordLoading}>
+                      {forgotPasswordLoading ? 'Enviando...' : 'Enviar enlace'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <DialogFooter>
+                  <Button type="button" onClick={() => setIsForgotPasswordOpen(false)}>
+                    Cerrar
+                  </Button>
+                </DialogFooter>
+              )}
             </DialogContent>
           </Dialog>
         </CardContent>

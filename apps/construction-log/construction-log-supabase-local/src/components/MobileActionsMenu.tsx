@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Languages, MessageSquare, Calendar, Share2 } from 'lucide-react';
+import { MoreVertical, Languages, MessageSquare, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -47,15 +47,6 @@ export const MobileActionsMenu = ({ onOpenCalendar }: MobileActionsMenuProps) =>
             <span>Chat</span>
           </button>
           
-          {/* File Transfer */}
-          <button
-            className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-md text-left"
-            onClick={() => { document.dispatchEvent(new Event('open-file-transfer')); setOpen(false); }}
-          >
-            <Share2 className="h-4 w-4 text-muted-foreground" />
-            <span>Compartir archivos</span>
-          </button>
-
           {/* Calendar Tasks */}
           {onOpenCalendar && (
             <button

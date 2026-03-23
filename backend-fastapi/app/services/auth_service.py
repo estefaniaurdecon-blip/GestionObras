@@ -3,13 +3,18 @@ import secrets
 
 from sqlmodel import Session, select
 
+import logging
+
 from app.core.audit import log_action
 from app.core.config import settings
-from app.core.email import send_mfa_email_code
+from app.core.email import send_mfa_email_code, send_password_reset_email
+
+logger = logging.getLogger("app.auth_service")
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.models.mfa_email_code import MFAEmailCode
+from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
-from app.schemas.auth import LoginResponse, MFAVerifyResponse
+from app.schemas.auth import LoginResponse, MFAVerifyResponse, ResetPasswordRequest
 from app.schemas.password import ChangePasswordRequest
 
 
@@ -34,6 +39,14 @@ def _build_mfa_trust_token(user: User) -> str:
         subject=str(user.id),
         expires_delta=timedelta(hours=settings.mfa_trust_hours),
         token_type="mfa_trust",
+    )
+
+
+def _build_superadmin_refresh_token(user: User) -> str:
+    return create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(hours=settings.superadmin_refresh_hours),
+        token_type="superadmin_refresh",
     )
 
 
@@ -231,6 +244,50 @@ def login_step2_verify_mfa(
     )
 
 
+def refresh_super_admin_session(
+    session: Session,
+    refresh_token: str | None,
+) -> tuple[User, str]:
+    """
+    Renueva la sesión de un SUPER_ADMIN usando una cookie de refresco
+    separada del JWT de acceso.
+    """
+
+    if not refresh_token:
+        raise ValueError("No hay una sesión renovable activa")
+
+    try:
+        payload = decode_token(refresh_token)
+    except Exception as exc:
+        raise ValueError("La sesión renovable ha expirado. Inicia sesión de nuevo.") from exc
+
+    if payload.get("typ") != "superadmin_refresh":
+        raise ValueError("Token de renovación no permitido")
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise ValueError("Token de renovación inválido")
+
+    user = session.get(User, int(user_id))
+    if not user or not user.is_active or not user.is_super_admin:
+        raise ValueError("La sesión renovable ya no es válida")
+
+    access_token = create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
+    )
+
+    log_action(
+        session,
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        action="login.refresh",
+        details="Renovación automática de sesión SUPER_ADMIN",
+    )
+
+    return user, access_token
+
+
 def change_password(
     session: Session,
     user: User,
@@ -264,3 +321,97 @@ def change_password(
         action="user.change_password",
         details="Cambio de contraseña del propio usuario",
     )
+
+
+def request_password_reset(session: Session, email: str) -> tuple[str, str] | None:
+    """
+    Genera un token de reset, lo persiste en BD y devuelve (to_email, reset_url).
+
+    Si el email no existe devuelve None sin revelar ese dato.
+    El envío del correo queda en manos del llamador (background task).
+    """
+
+    user = session.exec(select(User).where(User.email == email)).one_or_none()
+    if not user:
+        return None  # No revelar si el email existe o no
+
+    # Token en claro (se envía por email) y su hash (se guarda en BD)
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hash_password(raw_token)
+    expires_at = datetime.utcnow() + timedelta(hours=1)
+
+    # Reemplazar token anterior si existía
+    existing = session.exec(
+        select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    ).one_or_none()
+    if existing:
+        session.delete(existing)
+        session.flush()
+
+    session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+    )
+    session.commit()
+
+    frontend_url = (settings.frontend_base_url or "http://localhost:8000").rstrip("/")
+    reset_url = f"{frontend_url}/#/update-password?token={raw_token}"
+
+    log_action(
+        session,
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        action="auth.password_reset_request",
+        details="Solicitud de recuperación de contraseña",
+    )
+
+    return user.email, reset_url
+
+
+def confirm_password_reset(session: Session, data: ResetPasswordRequest) -> str:
+    """
+    Valida el token de reset, actualiza la contraseña y devuelve el email del usuario.
+    """
+
+    if data.new_password != data.new_password_confirm:
+        raise ValueError("Las contraseñas no coinciden")
+
+    # Buscar todos los tokens válidos (no expirados) y verificar
+    now = datetime.utcnow()
+    records = session.exec(
+        select(PasswordResetToken).where(PasswordResetToken.expires_at > now)
+    ).all()
+
+    matched: PasswordResetToken | None = None
+    for record in records:
+        if verify_password(data.token, record.token_hash):
+            matched = record
+            break
+
+    if not matched:
+        raise ValueError("El enlace no es válido o ha caducado. Solicita uno nuevo.")
+
+    user = session.get(User, matched.user_id)
+    if not user:
+        raise ValueError("Usuario no encontrado")
+
+    user.hashed_password = hash_password(data.new_password)
+    if not user.is_active:
+        user.is_active = True
+    session.add(user)
+
+    session.delete(matched)
+    session.commit()
+
+    log_action(
+        session,
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        action="auth.password_reset_confirm",
+        details="Contraseña restablecida mediante enlace de recuperación",
+    )
+
+    return user.email

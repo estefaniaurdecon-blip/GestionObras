@@ -24,10 +24,7 @@ type SinglePeriodZipFilenameParams = {
   now?: Date;
 };
 
-const safeText = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
-const safeNumber = (value: unknown, fallback = 0) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-const safeArray = (value: unknown) => (Array.isArray(value) ? value : []);
+import { safeArray, safeNumber, safeText } from '@/utils/valueNormalization';
 const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
 
 const sanitizeFilenameSegment = (value: string) =>

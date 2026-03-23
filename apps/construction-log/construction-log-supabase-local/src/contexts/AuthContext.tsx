@@ -1,18 +1,21 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
+  AUTH_SESSION_EXPIRED_EVENT,
   login as apiLogin, 
   verifyMFA as apiVerifyMFA, 
   getCurrentUser, 
   logout as apiLogout,
   getToken,
   isTokenExpired,
+  resetAuthSessionExpiredNotification,
   setToken,
   clearToken,
   ApiUser 
 } from '@/integrations/api/client';
 import { cleanOrphanSession } from '@/utils/cleanOrphanSession';
 import { clearActiveTenantId } from '@/offline-db/tenantScope';
+import { toast } from '@/hooks/use-toast';
 import { storage } from '@/utils/storage';
 import {
   normalizeCredentialEmail,
@@ -49,6 +52,8 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef<ApiUser | null>(null);
+  const offlineWarningRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const LEGACY_CACHED_USER_KEY = 'api_cached_user_v1';
   const CACHED_USERS_KEY = 'api_cached_users_v1';
@@ -158,6 +163,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const warnOfflineSessionLimited = (reason: 'offline-login' | 'expired-session') => {
+    if (offlineWarningRef.current === reason) return;
+    offlineWarningRef.current = reason;
+    toast({
+      title: 'Modo offline activo',
+      description:
+        reason === 'expired-session'
+          ? 'La sesión ha caducado. Puedes seguir trabajando en local, pero no se sincronizará nada hasta volver a validarla online.'
+          : 'Has entrado en modo offline. Puedes trabajar en local, pero no se sincronizará nada hasta recuperar conexión y validar la sesión.',
+      duration: 5000,
+    });
+  };
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let handlingSessionExpiry = false;
+
+    const handleSessionExpired = () => {
+      if (handlingSessionExpiry) return;
+      handlingSessionExpiry = true;
+
+      void (async () => {
+        let keepOfflineSession = false;
+        try {
+          const currentUser = userRef.current;
+          await clearToken();
+          if (isBrowserOffline() && currentUser) {
+            keepOfflineSession = true;
+            setUser(currentUser);
+            setLoading(false);
+            warnOfflineSessionLimited('expired-session');
+            return;
+          }
+          await clearActiveTenantId(currentUser);
+        } finally {
+          if (!keepOfflineSession) {
+            setUser(null);
+            setLoading(false);
+            redirectToAuth();
+          }
+          resetAuthSessionExpiredNotification();
+          handlingSessionExpiry = false;
+        }
+      })();
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired as EventListener);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired as EventListener);
+    };
+  }, [navigate]);
+
   // Load user on mount if token exists
   useEffect(() => {
     let isMounted = true;
@@ -181,17 +243,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const expiredToken = isTokenExpired(token);
         if (hadStoredToken && expiredToken) {
           await clearToken();
-          if (isMounted) {
-            setUser(null);
-            setLoading(false);
-          }
-          return;
         }
 
         // Try to resolve current user from token OR cookie session.
         try {
           const userData = await getCurrentUser();
           await writeCachedUser(userData);
+          offlineWarningRef.current = null;
           if (isMounted) {
             setUser(userData);
             setLoading(false);
@@ -210,13 +268,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
           }
 
-          if (hadStoredToken && !expiredToken) {
+          if (
+            (hadStoredToken || expiredToken) &&
+            (isBrowserOffline() || isNetworkError(error))
+          ) {
             const cachedUser = await readCachedUser();
             if (cachedUser) {
               console.log('[Auth] Offline session restored from cached user');
               if (isMounted) {
                 setUser(cachedUser);
                 setLoading(false);
+              }
+              if (expiredToken) {
+                warnOfflineSessionLimited('expired-session');
               }
               return;
             }
@@ -265,6 +329,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       await clearToken();
       setUser(cachedUser);
+      warnOfflineSessionLimited('offline-login');
       return { success: true };
     };
 
@@ -310,6 +375,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } catch (offlineCredentialError) {
           console.warn('[Auth] No se pudo guardar credencial offline tras login:', offlineCredentialError);
         }
+        offlineWarningRef.current = null;
         setUser(userData);
         return { success: true };
       } catch (refreshError: any) {
@@ -361,6 +427,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             console.warn('[Auth] No se pudo guardar credencial offline tras MFA:', offlineCredentialError);
           }
         }
+        offlineWarningRef.current = null;
         setUser(userData);
         return true;
       } catch (refreshError: any) {
@@ -400,6 +467,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshUser = async () => {
     try {
       const userData = await getCurrentUser();
+      offlineWarningRef.current = null;
       setUser(userData);
     } catch (error: any) {
       console.error('Error refreshing user:', error);
@@ -409,7 +477,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         redirectToAuth();
         return;
       }
-      setUser(null);
       throw error;
     }
   };

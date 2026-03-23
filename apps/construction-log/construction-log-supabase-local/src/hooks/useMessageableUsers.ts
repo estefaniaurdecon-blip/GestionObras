@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { listUsersByTenant, type ApiUser } from '@/integrations/api/client';
+import { listContactUsersByTenant, type ApiUser } from '@/integrations/api/client';
+import { ACTIVE_TENANT_CHANGED_EVENT, getActiveTenantId } from '@/offline-db/tenantScope';
 import { AppRole } from '@/types/user';
 import { toast } from './use-toast';
 
@@ -30,7 +31,7 @@ export const useMessageableUsers = () => {
         if (role === 'admin' || role === 'tenant_admin') return 'admin';
         if (role === 'site_manager') return 'site_manager';
         if (role === 'foreman') return 'foreman';
-        if (role === 'reader' || role === 'user') return 'reader';
+        if (role === 'reader' || role === 'user' || role === 'usuario') return 'reader';
         if (role === 'ofi' || role === 'office') return 'ofi';
         return null;
       })
@@ -40,16 +41,23 @@ export const useMessageableUsers = () => {
   };
 
   const loadUsers = async () => {
-    if (!user?.tenant_id) {
+    if (!user) {
       setUsers([]);
       setLoading(false);
       return;
     }
 
     try {
-      const apiUsers = await listUsersByTenant(user.tenant_id, false);
+      const activeTenantId = await getActiveTenantId(user);
+      if (!activeTenantId) {
+        setUsers([]);
+        return;
+      }
+
+      const apiUsers = await listContactUsersByTenant(Number(activeTenantId));
       const mappedUsers: MessageableUser[] = apiUsers
         .filter((candidate) => candidate.is_active)
+        .filter((candidate) => String(candidate.id) !== String(user.id))
         .map((candidate) => ({
           id: String(candidate.id),
           full_name: candidate.full_name?.trim() || candidate.email,
@@ -73,7 +81,20 @@ export const useMessageableUsers = () => {
 
   useEffect(() => {
     void loadUsers();
-  }, [user?.tenant_id]);
+  }, [user?.id, user?.tenant_id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleActiveTenantChange = () => {
+      void loadUsers();
+    };
+
+    window.addEventListener(ACTIVE_TENANT_CHANGED_EVENT, handleActiveTenantChange as EventListener);
+    return () => {
+      window.removeEventListener(ACTIVE_TENANT_CHANGED_EVENT, handleActiveTenantChange as EventListener);
+    };
+  }, [loadUsers]);
 
   return {
     users,

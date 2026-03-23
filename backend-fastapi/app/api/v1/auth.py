@@ -1,18 +1,30 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.db.session import get_session
-from app.schemas.auth import LoginResponse, MFAVerifyRequest, MFAVerifyResponse
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginResponse,
+    MFAVerifyRequest,
+    MFAVerifyResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+)
 from app.schemas.password import ChangePasswordRequest
+from app.core.email import send_password_reset_email
 from app.services.auth_service import (
     _build_mfa_trust_token,
+    _build_superadmin_refresh_token,
     change_password,
+    confirm_password_reset,
     login_step1,
     login_step2_verify_mfa,
+    refresh_super_admin_session,
+    request_password_reset,
 )
 from app.api.deps import get_current_active_user
 from app.models.user import User
@@ -55,6 +67,7 @@ def login(
             mfa_trust_token=trust_cookie,
         )
         if result.access_token:
+            user = _get_user_by_email(session, form_data.username)
             response.set_cookie(
                 settings.auth_cookie_name,
                 result.access_token,
@@ -63,8 +76,28 @@ def login(
                 samesite=settings.auth_cookie_samesite,
                 max_age=settings.access_token_expire_minutes * 60,
             )
-            user = _get_user_by_email(session, form_data.username)
-            if user and not user.is_super_admin:
+            if user and user.is_super_admin:
+                response.delete_cookie(
+                    settings.mfa_trust_cookie_name,
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite=settings.auth_cookie_samesite,
+                )
+                response.set_cookie(
+                    settings.superadmin_refresh_cookie_name,
+                    _build_superadmin_refresh_token(user),
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite=settings.auth_cookie_samesite,
+                    max_age=settings.superadmin_refresh_hours * 3600,
+                )
+            elif user:
+                response.delete_cookie(
+                    settings.superadmin_refresh_cookie_name,
+                    httponly=True,
+                    secure=settings.auth_cookie_secure,
+                    samesite=settings.auth_cookie_samesite,
+                )
                 response.set_cookie(
                     settings.mfa_trust_cookie_name,
                     _build_mfa_trust_token(user),
@@ -117,6 +150,12 @@ def verify_mfa(
         )
         user = _get_user_by_email(session, body.username)
         if user and not user.is_super_admin:
+            response.delete_cookie(
+                settings.superadmin_refresh_cookie_name,
+                httponly=True,
+                secure=settings.auth_cookie_secure,
+                samesite=settings.auth_cookie_samesite,
+            )
             response.set_cookie(
                 settings.mfa_trust_cookie_name,
                 _build_mfa_trust_token(user),
@@ -129,6 +168,47 @@ def verify_mfa(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/refresh",
+    summary="Renovar sesión automática de SUPER_ADMIN",
+    response_model=MFAVerifyResponse,
+)
+def refresh_session(
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> MFAVerifyResponse:
+    try:
+        refresh_cookie = request.cookies.get(settings.superadmin_refresh_cookie_name)
+        user, access_token = refresh_super_admin_session(session, refresh_cookie)
+        response.set_cookie(
+            settings.auth_cookie_name,
+            access_token,
+            httponly=True,
+            secure=settings.auth_cookie_secure,
+            samesite=settings.auth_cookie_samesite,
+            max_age=settings.access_token_expire_minutes * 60,
+        )
+        response.set_cookie(
+            settings.superadmin_refresh_cookie_name,
+            _build_superadmin_refresh_token(user),
+            httponly=True,
+            secure=settings.auth_cookie_secure,
+            samesite=settings.auth_cookie_samesite,
+            max_age=settings.superadmin_refresh_hours * 3600,
+        )
+        return MFAVerifyResponse(
+            access_token=access_token,
+            token_type="bearer",
+            mfa_required=False,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
         ) from exc
 
@@ -157,6 +237,51 @@ def change_my_password(
 
 
 @router.post(
+    "/forgot-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Solicitar enlace de recuperación de contraseña",
+)
+def forgot_password(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    body: ForgotPasswordRequest,
+    session: Session = Depends(get_session),
+) -> None:
+    """
+    Genera un token de reset y programa el envío del email en background.
+    Siempre responde 204 inmediatamente para no revelar si el email existe.
+    """
+    enforce_rate_limit(request, key="auth_forgot_password", limit=5, window_seconds=300)
+    result = request_password_reset(session=session, email=body.email)
+    if result is not None:
+        to_email, reset_url = result
+        background_tasks.add_task(send_password_reset_email, to_email, reset_url)
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordResponse,
+    summary="Confirmar nueva contraseña con el token recibido",
+)
+def reset_password(
+    body: ResetPasswordRequest,
+    session: Session = Depends(get_session),
+) -> ResetPasswordResponse:
+    """
+    Valida el token de reset, actualiza la contraseña y devuelve el email del usuario
+    para que el cliente pueda actualizar las credenciales offline.
+    """
+    try:
+        email = confirm_password_reset(session=session, data=body)
+        return ResetPasswordResponse(email=email)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Cerrar sesion y limpiar cookie",
@@ -170,6 +295,12 @@ def logout(response: Response) -> None:
     )
     response.delete_cookie(
         settings.mfa_trust_cookie_name,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite,
+    )
+    response.delete_cookie(
+        settings.superadmin_refresh_cookie_name,
         httponly=True,
         secure=settings.auth_cookie_secure,
         samesite=settings.auth_cookie_samesite,

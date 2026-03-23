@@ -340,6 +340,14 @@ def init_db() -> None:
     if "user" in table_names:
         user_columns = {col["name"] for col in inspector.get_columns("user")}
         with engine.begin() as conn:
+            if "created_by_user_id" not in user_columns:
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN created_by_user_id INTEGER NULL')
+                )
+            if "creator_group_id" not in user_columns:
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN creator_group_id INTEGER NULL')
+                )
             if "avatar_url" not in user_columns:
                 conn.execute(
                     text('ALTER TABLE "user" ADD COLUMN avatar_url VARCHAR(512) NULL')
@@ -352,6 +360,14 @@ def init_db() -> None:
     if "users" in table_names:
         user_columns = {col["name"] for col in inspector.get_columns("users")}
         with engine.begin() as conn:
+            if "created_by_user_id" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN created_by_user_id INTEGER NULL")
+                )
+            if "creator_group_id" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN creator_group_id INTEGER NULL")
+                )
             if "avatar_url" not in user_columns:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(512) NULL")

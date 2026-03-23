@@ -10,6 +10,7 @@ from app.api.deps import (
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.user import (
+    UserContactRead,
     UserCreate,
     UserRead,
     UserUpdateAdmin,
@@ -19,6 +20,7 @@ from app.schemas.user import (
 from app.services.user_service import (
     create_user as svc_create_user,
     get_user_me as svc_get_user_me,
+    list_contact_users_by_tenant as svc_list_contact_users_by_tenant,
     list_users_by_tenant as svc_list_users_by_tenant,
     delete_user as svc_delete_user,
     update_user_status as svc_update_user_status,
@@ -91,6 +93,39 @@ def upload_my_avatar(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/contacts/by-tenant/{tenant_id}",
+    response_model=List[UserContactRead],
+    summary="Listar contactos activos de un tenant",
+)
+def list_contact_users_by_tenant(
+    tenant_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+) -> list[UserContactRead]:
+    """
+    Lista contactos activos del tenant para mensajeria y ayuda,
+    sin abrir permisos de administracion de usuarios.
+    """
+
+    try:
+        return svc_list_contact_users_by_tenant(
+            session=session,
+            current_user=current_user,
+            tenant_id=tenant_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 

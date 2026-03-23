@@ -36,6 +36,22 @@ class User(SQLModel, table=True):
         description="Rol principal del usuario dentro del tenant",
     )
 
+    # Usuario que creó este usuario.
+    # Se mantiene como entero simple para no bloquear eliminaciones históricas.
+    created_by_user_id: Optional[int] = Field(
+        default=None,
+        index=True,
+        description="ID del usuario creador directo",
+    )
+
+    # Grupo lógico de visibilidad basado en la cadena de creación.
+    # Todos los usuarios del mismo grupo pueden verse entre sí.
+    creator_group_id: Optional[int] = Field(
+        default=None,
+        index=True,
+        description="ID del grupo de creación/visibilidad",
+    )
+
     # Campos para MFA
     mfa_enabled: bool = Field(default=False)
     mfa_secret: Optional[str] = Field(
@@ -66,6 +82,8 @@ class UserRead(SQLModel):
     is_super_admin: bool
     tenant_id: Optional[int]
     role_id: Optional[int]
+    created_by_user_id: Optional[int]
+    creator_group_id: Optional[int]
     language: str
     avatar_url: Optional[str]
     avatar_data: Optional[str]

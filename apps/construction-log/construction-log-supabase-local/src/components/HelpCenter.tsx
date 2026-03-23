@@ -15,9 +15,10 @@ import {
   deleteConversationMessages,
   deleteMessage,
   listMessages,
-  listUsersByTenant,
+  listContactUsersByTenant,
   type ApiUser,
 } from '@/integrations/api/client';
+import { getActiveTenantId } from '@/offline-db/tenantScope';
 import { toast } from '@/hooks/use-toast';
 import { 
   Send, 
@@ -128,12 +129,8 @@ export const HelpCenter = () => {
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user?.tenant_id && currentUserId) {
-      loadAdmin();
-    } else {
-      setAdminId(null);
-    }
-  }, [user?.tenant_id, currentUserId]);
+    void loadAdmin();
+  }, [user?.id, user?.tenant_id, currentUserId]);
 
   useEffect(() => {
     if (adminId && currentUserId) {
@@ -146,9 +143,19 @@ export const HelpCenter = () => {
   }, [adminId, currentUserId]);
 
   const loadAdmin = async () => {
-    if (!user?.tenant_id || !currentUserId) return;
+    if (!user || !currentUserId) {
+      setAdminId(null);
+      return;
+    }
+
     try {
-      const users = await listUsersByTenant(user.tenant_id, false);
+      const activeTenantId = await getActiveTenantId(user);
+      if (!activeTenantId) {
+        setAdminId(null);
+        return;
+      }
+
+      const users = await listContactUsersByTenant(Number(activeTenantId));
       const adminUser = users.find(
         (candidate) =>
           candidate.is_active &&

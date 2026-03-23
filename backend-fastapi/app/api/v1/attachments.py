@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.db.session import get_session
 from app.models.attachments import SharedFile, WorkReportAttachment
 from app.models.user import User
+from app.services.user_service import users_share_creation_group
 
 
 router = APIRouter()
@@ -59,6 +60,23 @@ def _sanitize_filename(name: str | None, fallback: str = "file") -> str:
     value = Path(value).name
     value = re.sub(r"[^a-zA-Z0-9._-]+", "_", value)
     return value or fallback
+
+
+def _load_numeric_user(session: Session, user_id: str) -> User | None:
+    if not user_id.isdigit():
+        return None
+    return session.get(User, int(user_id))
+
+
+def _is_shared_file_visible_to_user_group(
+    session: Session,
+    current_user: User,
+    row: SharedFile,
+) -> bool:
+    current_user_id = str(current_user.id)
+    other_user_id = row.to_user_id if row.from_user_id == current_user_id else row.from_user_id
+    other_user = _load_numeric_user(session, other_user_id)
+    return users_share_creation_group(session, current_user, other_user)
 
 
 def _safe_content_type(upload: UploadFile) -> str:
@@ -376,7 +394,8 @@ def list_shared_files(
             )
         )
     rows = session.exec(statement.order_by(SharedFile.created_at.desc())).all()
-    return [_serialize_shared_file(session, row) for row in rows]
+    visible_rows = [row for row in rows if _is_shared_file_visible_to_user_group(session, current_user, row)]
+    return [_serialize_shared_file(session, row) for row in visible_rows]
 
 
 @router.post("/shared-files", status_code=status.HTTP_201_CREATED)
@@ -394,6 +413,19 @@ def create_shared_file(
     normalized_to_user_id = (to_user_id or "").strip()
     if not normalized_to_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="to_user_id es obligatorio.")
+    if not normalized_to_user_id.isdigit():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="to_user_id no valido.")
+
+    target_user = session.get(User, int(normalized_to_user_id))
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destinatario no encontrado.")
+    if target_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destinatario fuera del tenant.")
+    if target_user.is_super_admin or not users_share_creation_group(session, current_user, target_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Destinatario fuera de tu grupo de creacion.",
+        )
 
     filename = _sanitize_filename(file.filename, "file")
     extension = _guess_extension(file)
@@ -437,9 +469,15 @@ def _load_shared_file_or_404(session: Session, shared_file_id: str, tenant_id: i
     return row
 
 
-def _ensure_shared_file_access(row: SharedFile, user_id: str) -> None:
+def _ensure_shared_file_access(session: Session, row: SharedFile, current_user: User) -> None:
+    user_id = str(current_user.id)
     if row.from_user_id != user_id and row.to_user_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para este archivo.")
+    if not _is_shared_file_visible_to_user_group(session, current_user, row):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Archivo fuera de tu grupo de creacion.",
+        )
 
 
 @router.get("/shared-files/{shared_file_id}/download")
@@ -451,8 +489,7 @@ def download_shared_file(
 ) -> FileResponse:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     row = _load_shared_file_or_404(session, shared_file_id, tenant_id)
-    current_user_id = str(current_user.id)
-    _ensure_shared_file_access(row, current_user_id)
+    _ensure_shared_file_access(session, row, current_user)
 
     base_dir = Path(settings.shared_files_storage_path)
     target = _ensure_in_dir(base_dir, base_dir / row.file_path)
@@ -475,6 +512,7 @@ def mark_shared_file_downloaded(
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     row = _load_shared_file_or_404(session, shared_file_id, tenant_id)
     current_user_id = str(current_user.id)
+    _ensure_shared_file_access(session, row, current_user)
     if row.to_user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -500,8 +538,7 @@ def delete_shared_file(
 ) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     row = _load_shared_file_or_404(session, shared_file_id, tenant_id)
-    current_user_id = str(current_user.id)
-    _ensure_shared_file_access(row, current_user_id)
+    _ensure_shared_file_access(session, row, current_user)
 
     base_dir = Path(settings.shared_files_storage_path)
     target = _ensure_in_dir(base_dir, base_dir / row.file_path)

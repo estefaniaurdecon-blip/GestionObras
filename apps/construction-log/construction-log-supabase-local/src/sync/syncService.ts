@@ -1,6 +1,8 @@
 ﻿import { offlineDb } from '@/offline-db/db';
 import type { OutboxRow } from '@/offline-db/types';
+import { changePassword, refreshSessionIfPossible } from '@/integrations/api/client';
 import { getToken, isTokenExpired } from '@/integrations/api/storage';
+import { saveOfflineCredential } from '@/integrations/api/offlineCredentials';
 import {
   API_WORK_REPORT_STATUSES,
   type WorkReportSyncOperation,
@@ -472,16 +474,84 @@ async function buildSyncPlan(
   };
 }
 
+async function syncCredentialChanges(): Promise<void> {
+  const entries = await offlineDb.query<OutboxRow>(
+    `SELECT id, entity, entity_id, op, payload_json, created_at, attempts, last_error, status
+     FROM outbox
+     WHERE entity = 'credential_change' AND status = 'pending'
+     ORDER BY created_at ASC;`,
+  );
+
+  for (const entry of entries) {
+    let payload: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(entry.payload_json);
+      payload = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      await offlineDb.transaction(async (tx) => {
+        await tx.run(
+          `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?;`,
+          ['Payload JSON inválido en credential_change', entry.id],
+        );
+      });
+      continue;
+    }
+
+    try {
+      await changePassword({
+        current_password: String(payload.current_password ?? ''),
+        new_password: String(payload.new_password ?? ''),
+        new_password_confirm: String(payload.new_password_confirm ?? ''),
+      });
+      // Actualizar credencial offline con la contraseña confirmada por el servidor
+      const email = asString(payload.email) ?? entry.entity_id;
+      if (email) {
+        try {
+          await saveOfflineCredential(email, String(payload.new_password ?? ''));
+        } catch {
+          // no crítico
+        }
+      }
+      await offlineDb.transaction(async (tx) => {
+        await tx.run(`DELETE FROM outbox WHERE id = ?;`, [entry.id]);
+      });
+    } catch (error) {
+      if (isAuthApiError(error)) {
+        throw new SyncAuthRequiredError('session_invalid');
+      }
+      const errorMessage = toSyncErrorMessage(error);
+      await offlineDb.transaction(async (tx) => {
+        await tx.run(
+          `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?;`,
+          [errorMessage, entry.id],
+        );
+      });
+    }
+  }
+}
+
 export async function syncNow(options: SyncOptions = {}): Promise<SyncResult> {
   await offlineDb.init();
 
-  const tokenData = await getToken();
+  let tokenData = await getToken();
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if ((!tokenData?.access_token || isTokenExpired(tokenData)) && !isOffline) {
+    const sessionRecovered = await refreshSessionIfPossible();
+    if (sessionRecovered) {
+      tokenData = await getToken();
+    }
+  }
+
   if (!tokenData?.access_token) {
     throw new SyncAuthRequiredError('no_token');
   }
   if (isTokenExpired(tokenData)) {
     throw new SyncAuthRequiredError('token_expired');
   }
+
+  // Sincronizar cambios de contraseña pendientes antes que cualquier otra cosa
+  await syncCredentialChanges();
 
   const limit = Math.max(1, Math.min(options.limit ?? 50, 500));
   const batch = await offlineDb.query<OutboxRow>(

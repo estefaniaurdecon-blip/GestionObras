@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText } from "lucide-react";
+import { Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText, ImageIcon, Mic, Square } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +30,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSharedFiles } from "@/hooks/useSharedFiles";
 import { toast } from "sonner";
 
+const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp)$/i;
+const AUDIO_EXTS = /\.(webm|mp3|m4a|ogg|wav|aac)$/i;
+const isImageFile = (name: string) => IMAGE_EXTS.test(name);
+const isAudioFile = (name: string) => AUDIO_EXTS.test(name);
+const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
 interface ConversationItem {
   userId: string;
   userName: string;
@@ -44,7 +50,7 @@ export const ChatCenter = () => {
   const { messages, unreadCount, sendMessage, markAsRead, deleteConversation, clearAllMessages, reloadMessages } = useMessages();
   const { users: contacts, loading: loadingContacts } = useMessageableUsers();
   const { isUserOnline } = useUserPresence();
-  const { shareFile, sentFiles, receivedFiles, downloadFile, reloadFiles } = useSharedFiles();
+  const { shareFile, sentFiles, receivedFiles, downloadFile, getFileBlob, reloadFiles } = useSharedFiles();
 
   const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -53,13 +59,86 @@ export const ChatCenter = () => {
   const [isSharingFile, setIsSharingFile] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreviews, setImagePreviews] = useState<Record<string, string>>({});
+  const imagePreviewUrls = useRef<Record<string, string>>({});
+  const [audioPreviews, setAudioPreviews] = useState<Record<string, string>>({});
+  const audioPreviewUrls = useRef<Record<string, string>>({});
 
-  // Allow external triggers to open the drawer (e.g., from MobileActionsMenu)
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
+
+  // Cleanup blob URLs on unmount
   useEffect(() => {
-    const openHandler = () => setOpen(true);
-    document.addEventListener('open-chat-center', openHandler as EventListener);
-    return () => document.removeEventListener('open-chat-center', openHandler as EventListener);
+    return () => {
+      Object.values(imagePreviewUrls.current).forEach(URL.revokeObjectURL);
+      Object.values(audioPreviewUrls.current).forEach(URL.revokeObjectURL);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current?.stop();
+    };
   }, []);
+
+  // Load image previews for files in the active conversation
+  useEffect(() => {
+    if (!selectedUserId || !currentUserId) return;
+    const allFiles = [...sentFiles, ...receivedFiles].filter(
+      (f) =>
+        isImageFile(f.file_name) &&
+        ((f.from_user_id === currentUserId && f.to_user_id === selectedUserId) ||
+          (f.to_user_id === currentUserId && f.from_user_id === selectedUserId))
+    );
+    for (const f of allFiles) {
+      if (imagePreviewUrls.current[f.id]) continue;
+      getFileBlob(f)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          imagePreviewUrls.current[f.id] = url;
+          setImagePreviews((prev) => ({ ...prev, [f.id]: url }));
+        })
+        .catch(() => {});
+    }
+  }, [selectedUserId, currentUserId, getFileBlob, sentFiles, receivedFiles]);
+
+  // Load audio previews for files in the active conversation
+  useEffect(() => {
+    if (!selectedUserId || !currentUserId) return;
+    const allFiles = [...sentFiles, ...receivedFiles].filter(
+      (f) =>
+        isAudioFile(f.file_name) &&
+        ((f.from_user_id === currentUserId && f.to_user_id === selectedUserId) ||
+          (f.to_user_id === currentUserId && f.from_user_id === selectedUserId))
+    );
+    for (const f of allFiles) {
+      if (audioPreviewUrls.current[f.id]) continue;
+      getFileBlob(f)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          audioPreviewUrls.current[f.id] = url;
+          setAudioPreviews((prev) => ({ ...prev, [f.id]: url }));
+        })
+        .catch(() => {});
+    }
+  }, [selectedUserId, currentUserId, getFileBlob, sentFiles, receivedFiles]);
+
+  // Allow external triggers to open/close the drawer
+  useEffect(() => {
+    const openHandler  = () => setOpen(true);
+    const closeHandler = () => setOpen(false);
+    document.addEventListener('open-chat-center',  openHandler  as EventListener);
+    document.addEventListener('close-chat-center', closeHandler as EventListener);
+    return () => {
+      document.removeEventListener('open-chat-center',  openHandler  as EventListener);
+      document.removeEventListener('close-chat-center', closeHandler as EventListener);
+    };
+  }, []);
+
+  // Notify bubble about open/close state changes
+  useEffect(() => {
+    document.dispatchEvent(new CustomEvent('chat-center-state', { detail: { open } }));
+  }, [open]);
 
   // Build conversations grouped by the counterpart
   const conversations = useMemo<ConversationItem[]>(() => {
@@ -99,7 +178,15 @@ export const ChatCenter = () => {
     );
   }, [messages, currentUserId, search]);
 
-  const selectedUser = useMemo(() => contacts.find((c) => c.id === selectedUserId), [contacts, selectedUserId]);
+  const selectedUser = useMemo(() => {
+    if (!selectedUserId) return undefined;
+    const fromContacts = contacts.find((c) => c.id === selectedUserId);
+    if (fromContacts) return fromContacts;
+    // Fallback: build from conversation data in case contacts API failed or hasn't loaded yet
+    const conv = conversations.find((c) => c.userId === selectedUserId);
+    if (conv) return { id: conv.userId, full_name: conv.userName, roles: [], approved: true };
+    return undefined;
+  }, [contacts, selectedUserId, conversations]);
 
   useEffect(() => {
     if (open) {
@@ -127,11 +214,67 @@ export const ChatCenter = () => {
     }, 100);
   };
 
+  const startRecording = async () => {
+    if (!selectedUserId) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : '';
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      setRecordingDuration(0);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (audioChunksRef.current.length === 0) return;
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const ext = (mediaRecorder.mimeType || '').includes('webm') ? 'webm' : 'ogg';
+        const audioFile = new File([blob], `nota_${Date.now()}.${ext}`, { type: blob.type });
+        setIsSharingFile(true);
+        try {
+          await shareFile(audioFile, selectedUserId, undefined, undefined, selectedUser?.full_name);
+          scrollToBottom();
+        } finally {
+          setIsSharingFile(false);
+        }
+      };
+
+      mediaRecorder.start(200);
+      setIsRecording(true);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration((d) => d + 1);
+      }, 1000);
+    } catch {
+      toast.error('No se pudo acceder al micrófono');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
   const handleSend = async () => {
     if (!user || !selectedUserId || !text.trim()) return;
     const msg = text.trim();
     setText("");
-    await sendMessage(selectedUserId, msg);
+    await sendMessage(selectedUserId, msg, undefined, selectedUser?.full_name);
     scrollToBottom();
   };
 
@@ -141,7 +284,7 @@ export const ChatCenter = () => {
     
     setIsSharingFile(true);
     try {
-      await shareFile(file, selectedUserId);
+      await shareFile(file, selectedUserId, undefined, undefined, selectedUser?.full_name);
       toast.success("Archivo compartido exitosamente");
       scrollToBottom(); // Scroll to show the new file
       // Reset file input
@@ -163,8 +306,12 @@ export const ChatCenter = () => {
   }, [selectedUserId, open, messages.length, sentFiles.length, receivedFiles.length]);
 
   return (
-    <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerContent className="h-[80svh] md:h-[72vh] overflow-hidden">
+    <Drawer open={open} onOpenChange={setOpen} dismissible>
+      <DrawerContent
+        className="h-[100svh] overflow-hidden"
+        onPointerDownOutside={() => setOpen(false)}
+        onInteractOutside={() => setOpen(false)}
+      >
         <DrawerHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div>
@@ -246,7 +393,7 @@ export const ChatCenter = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <X className="h-4 w-4" />
@@ -346,49 +493,89 @@ export const ChatCenter = () => {
                     if (item.type === 'message') {
                       const m = item.data;
                       const isMine = m.from_user_id === currentUserId;
+                      const senderName = isMine
+                        ? (user?.full_name || "Tú")
+                        : ((m.from_user as any)?.full_name || selectedUser?.full_name || "Usuario");
                       return (
-                        <div key={`msg-${m.id}`} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isMine ? "ml-auto bg-primary/10" : "bg-muted"}`}>
-                          <div className="whitespace-pre-wrap break-words">{m.message}</div>
-                          <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                            <span>{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isMine && (
-                              m.read ? (
-                                <CheckCheck className="h-3 w-3 text-blue-500" />
-                              ) : (
-                                <CheckCheck className="h-3 w-3" />
-                              )
-                            )}
+                        <div key={`msg-${m.id}`} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                          <span className="text-[11px] font-medium text-muted-foreground mb-0.5 px-1">{senderName}</span>
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${isMine ? "bg-primary/15 rounded-br-none" : "bg-sky-100 dark:bg-sky-900/30 rounded-bl-none"}`}>
+                            <div className="whitespace-pre-wrap break-words">{m.message}</div>
+                            <div className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-1 ${isMine ? "justify-end" : ""}`}>
+                              <span>{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {isMine && (
+                                m.read ? (
+                                  <CheckCheck className="h-3 w-3 text-blue-500" />
+                                ) : (
+                                  <CheckCheck className="h-3 w-3" />
+                                )
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
                     } else {
                       const f = item.data;
                       const isMine = f.from_user_id === currentUserId;
+                      const isImg = isImageFile(f.file_name);
+                      const isAudio = isAudioFile(f.file_name);
+                      const previewUrl = imagePreviews[f.id];
+                      const audioUrl = audioPreviews[f.id];
+                      const fileSender = isMine
+                        ? (user?.full_name || "Tú")
+                        : ((f.from_user as any)?.full_name || selectedUser?.full_name || "Usuario");
                       return (
-                        <div key={`file-${f.id}`} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isMine ? "ml-auto bg-primary/10" : "bg-muted"}`}>
+                        <div key={`file-${f.id}`} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                          <span className="text-[11px] font-medium text-muted-foreground mb-0.5 px-1">{fileSender}</span>
+                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${isMine ? "bg-primary/15 rounded-br-none" : "bg-sky-100 dark:bg-sky-900/30 rounded-bl-none"}`}>
+                          {isImg && previewUrl && (
+                            <img
+                              src={previewUrl}
+                              alt={f.file_name}
+                              className="rounded-md mb-2 max-h-48 max-w-full object-contain"
+                            />
+                          )}
+                          {isImg && !previewUrl && (
+                            <div className="mb-2 h-12 flex items-center justify-center text-muted-foreground">
+                              <ImageIcon className="h-6 w-6 animate-pulse" />
+                            </div>
+                          )}
+                          {isAudio && audioUrl && (
+                            <audio
+                              controls
+                              src={audioUrl}
+                              className="mb-2 w-full"
+                              style={{ maxWidth: 260, height: 36 }}
+                            />
+                          )}
+                          {isAudio && !audioUrl && (
+                            <div className="mb-2 flex items-center gap-1 text-muted-foreground text-xs">
+                              <Mic className="h-4 w-4 animate-pulse" />
+                              <span>Cargando audio...</span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 shrink-0" />
+                            {isImg ? <ImageIcon className="h-4 w-4 shrink-0" /> : isAudio ? <Mic className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate">{f.file_name}</div>
                               <div className="text-xs text-muted-foreground">
                                 {(f.file_size / 1024).toFixed(1)} KB
                               </div>
                             </div>
-                            {!isMine && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7 shrink-0"
-                                onClick={() => downloadFile(f)}
-                                title="Descargar"
-                              >
-                                <Download className="h-3 w-3" />
-                              </Button>
-                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 shrink-0"
+                              onClick={() => downloadFile(f)}
+                              title="Descargar"
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-1">
                             {new Date(f.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
+                        </div>
                         </div>
                       );
                     }
@@ -408,33 +595,63 @@ export const ChatCenter = () => {
                   id="chat-file-input"
                   disabled={!selectedUser || isSharingFile}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!selectedUser || isSharingFile}
-                  title="Adjuntar archivo"
-                  className="shrink-0"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder={selectedUser ? "Escribe un mensaje..." : "Selecciona un contacto"}
-                  disabled={!selectedUser}
-                  className="min-h-[44px] h-[44px] resize-none"
-                  rows={2}
-                />
-                <Button onClick={handleSend} disabled={!selectedUser || !text.trim()} size="icon" title="Enviar" className="shrink-0">
-                  <Send className="h-4 w-4" />
-                </Button>
+                {isRecording ? (
+                  <>
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-red-500">
+                      Grabando {fmtDuration(recordingDuration)}
+                    </span>
+                    <Button
+                      onClick={stopRecording}
+                      variant="destructive"
+                      size="icon"
+                      title="Detener y enviar"
+                      className="shrink-0"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!selectedUser || isSharingFile}
+                      title="Adjuntar archivo"
+                      className="shrink-0"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={startRecording}
+                      disabled={!selectedUser || isSharingFile}
+                      title="Nota de voz"
+                      className="shrink-0"
+                    >
+                      <Mic className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder={selectedUser ? "Escribe un mensaje..." : "Selecciona un contacto"}
+                      disabled={!selectedUser}
+                      className="min-h-[44px] h-[44px] resize-none"
+                      rows={2}
+                    />
+                    <Button onClick={handleSend} disabled={!selectedUser || !text.trim()} size="icon" title="Enviar" className="shrink-0">
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>

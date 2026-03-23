@@ -95,34 +95,7 @@ export type PartsTabContentProps = BaseToolsProps & {
   onDeleteReport: (report: WorkReport) => void;
 };
 
-const parseDateKey = (value: string): Date | null => {
-  const normalized = value.trim();
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
-  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
-    return null;
-  }
-  return parsed;
-};
-
-const parseReportDateValue = (value: string): Date | null => {
-  const fromDateKey = parseDateKey(value);
-  if (fromDateKey) return fromDateKey;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  parsed.setHours(0, 0, 0, 0);
-  return parsed;
-};
-
-const safeText = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
-const safeNumber = (value: unknown, fallback = 0) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-const safeArray = (value: unknown) => (Array.isArray(value) ? value : []);
+import { parseReportDateValue, safeArray, safeNumber, safeText } from '@/utils/valueNormalization';
 const firstFiniteNumber = (...values: unknown[]) => {
   for (const value of values) {
     if (typeof value === 'number' && Number.isFinite(value)) {

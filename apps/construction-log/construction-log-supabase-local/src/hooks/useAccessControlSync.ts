@@ -9,6 +9,7 @@ import {
   updateAccessControlReport,
   type ApiAccessControlReport,
 } from '@/integrations/api/client';
+import { toAccessEntries } from '@/utils/accessControlHelpers';
 
 interface UseAccessControlSyncProps {
   workReport: WorkReport | undefined;
@@ -30,40 +31,6 @@ const toExternalId = (report: WorkReport): string => {
   return `work:${workId}:${report.date}`;
 };
 
-const toStringValue = (value: unknown, fallback = ''): string => {
-  return typeof value === 'string' ? value : fallback;
-};
-
-const toOptionalString = (value: unknown): string | undefined => {
-  const normalized = typeof value === 'string' ? value.trim() : '';
-  return normalized ? normalized : undefined;
-};
-
-const toAccessEntries = (value: unknown, fallbackType: AccessEntry['type']): AccessEntry[] => {
-  if (!Array.isArray(value)) return [];
-
-  return value.map((rawEntry) => {
-    const record = rawEntry && typeof rawEntry === 'object' ? (rawEntry as Record<string, unknown>) : {};
-    const sourceRaw = toStringValue(record.source);
-    const source = sourceRaw === 'subcontract' || sourceRaw === 'rental' ? sourceRaw : undefined;
-    const typeRaw = toStringValue(record.type);
-    const type: AccessEntry['type'] = typeRaw === 'machinery' ? 'machinery' : fallbackType;
-
-    return {
-      id: toStringValue(record.id, crypto.randomUUID()),
-      type,
-      name: toStringValue(record.name),
-      identifier: toStringValue(record.identifier),
-      company: toStringValue(record.company),
-      entryTime: toStringValue(record.entryTime, '08:00'),
-      exitTime: toOptionalString(record.exitTime),
-      activity: toStringValue(record.activity),
-      operator: toOptionalString(record.operator),
-      signature: toOptionalString(record.signature),
-      source,
-    };
-  });
-};
 
 export const useAccessControlSync = ({ workReport, enabled }: UseAccessControlSyncProps) => {
   const { user } = useAuth();

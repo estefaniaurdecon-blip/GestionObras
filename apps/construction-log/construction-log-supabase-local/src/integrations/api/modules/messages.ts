@@ -10,6 +10,7 @@ type BuildQueryParamsFn = (
 export interface MessagesApiDeps {
   apiFetchJson: ApiFetchJsonFn;
   buildQueryParams: BuildQueryParamsFn;
+  tenantHeader?: (tenantId?: string | number | null) => Record<string, string> | undefined;
 }
 
 export interface ApiMessageUserRead {
@@ -37,12 +38,14 @@ export interface ApiMessageListResponse {
 export interface ListMessagesParams {
   limit?: number;
   offset?: number;
+  tenantId?: string | number | null;
 }
 
 export interface MessageCreatePayload {
   to_user_id: string;
   message: string;
   work_report_id?: string;
+  tenantId?: string | number | null;
 }
 
 export function createMessagesApi(deps: MessagesApiDeps) {
@@ -51,37 +54,51 @@ export function createMessagesApi(deps: MessagesApiDeps) {
       limit: params.limit,
       offset: params.offset,
     });
-    return deps.apiFetchJson<ApiMessageListResponse>(`/api/v1/messages${query}`);
+    return deps.apiFetchJson<ApiMessageListResponse>(`/api/v1/messages${query}`, {
+      headers: deps.tenantHeader?.(params.tenantId),
+    });
   };
 
   const createMessage = async (payload: MessageCreatePayload): Promise<ApiMessageRead> => {
+    const { tenantId, ...body } = payload;
     return deps.apiFetchJson<ApiMessageRead>('/api/v1/messages', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      headers: deps.tenantHeader?.(tenantId),
+      body: JSON.stringify(body),
     });
   };
 
-  const markMessageAsRead = async (messageId: number): Promise<ApiMessageRead> => {
+  const markMessageAsRead = async (
+    messageId: number,
+    tenantId?: string | number | null
+  ): Promise<ApiMessageRead> => {
     return deps.apiFetchJson<ApiMessageRead>(`/api/v1/messages/${messageId}/read`, {
       method: 'POST',
+      headers: deps.tenantHeader?.(tenantId),
     });
   };
 
-  const deleteMessage = async (messageId: number): Promise<void> => {
+  const deleteMessage = async (messageId: number, tenantId?: string | number | null): Promise<void> => {
     return deps.apiFetchJson<void>(`/api/v1/messages/${messageId}`, {
       method: 'DELETE',
+      headers: deps.tenantHeader?.(tenantId),
     });
   };
 
-  const deleteConversationMessages = async (otherUserId: string): Promise<void> => {
+  const deleteConversationMessages = async (
+    otherUserId: string,
+    tenantId?: string | number | null
+  ): Promise<void> => {
     return deps.apiFetchJson<void>(`/api/v1/messages/conversation/${encodeURIComponent(otherUserId)}`, {
       method: 'DELETE',
+      headers: deps.tenantHeader?.(tenantId),
     });
   };
 
-  const clearAllMessages = async (): Promise<void> => {
+  const clearAllMessages = async (tenantId?: string | number | null): Promise<void> => {
     return deps.apiFetchJson<void>('/api/v1/messages/clear-all', {
       method: 'DELETE',
+      headers: deps.tenantHeader?.(tenantId),
     });
   };
 

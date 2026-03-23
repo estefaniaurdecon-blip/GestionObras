@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.models.message import Message
 from app.models.user import User
 from app.schemas.message import MessageCreate, MessageListResponse, MessageRead, MessageUserRead
+from app.services.user_service import users_share_creation_group
 
 
 class MessageValidationError(ValueError):
@@ -45,6 +46,19 @@ def _current_user_id(user: User) -> str:
     return str(user.id)
 
 
+def _load_numeric_user(session: Session, user_id: str) -> User | None:
+    if not user_id.isdigit():
+        return None
+    return session.get(User, int(user_id))
+
+
+def _is_message_visible_to_user_group(session: Session, user: User, row: Message) -> bool:
+    current_user_id = _current_user_id(user)
+    other_user_id = row.to_user_id if row.from_user_id == current_user_id else row.from_user_id
+    other_user = _load_numeric_user(session, other_user_id)
+    return users_share_creation_group(session, user, other_user)
+
+
 def list_messages_for_user(
     session: Session,
     *,
@@ -63,22 +77,14 @@ def list_messages_for_user(
         select(Message)
         .where(Message.tenant_id == tenant_id, visibility_filter)
         .order_by(Message.created_at.desc())
-        .offset(offset)
-        .limit(limit)
     ).all()
 
-    total = len(
-        session.exec(
-            select(Message).where(
-                Message.tenant_id == tenant_id,
-                visibility_filter,
-            )
-        ).all()
-    )
+    visible_rows = [row for row in rows if _is_message_visible_to_user_group(session, user, row)]
+    paged_rows = visible_rows[offset : offset + limit]
 
     return MessageListResponse(
-        items=[_serialize_message(session, row) for row in rows],
-        total=total,
+        items=[_serialize_message(session, row) for row in paged_rows],
+        total=len(visible_rows),
     )
 
 
@@ -96,12 +102,16 @@ def create_message(
     if not body:
         raise MessageValidationError("message es obligatorio.")
 
-    if to_user_id.isdigit():
-        target_user = session.get(User, int(to_user_id))
-        if not target_user:
-            raise MessageValidationError("Destinatario no encontrado.")
-        if target_user.tenant_id != tenant_id:
-            raise MessageValidationError("Destinatario fuera del tenant.")
+    if not to_user_id.isdigit():
+        raise MessageValidationError("Destinatario no válido.")
+
+    target_user = session.get(User, int(to_user_id))
+    if not target_user:
+        raise MessageValidationError("Destinatario no encontrado.")
+    if target_user.tenant_id != tenant_id:
+        raise MessageValidationError("Destinatario fuera del tenant.")
+    if target_user.is_super_admin or not users_share_creation_group(session, user, target_user):
+        raise MessageValidationError("Destinatario fuera de tu grupo de creación.")
 
     row = Message(
         tenant_id=tenant_id,

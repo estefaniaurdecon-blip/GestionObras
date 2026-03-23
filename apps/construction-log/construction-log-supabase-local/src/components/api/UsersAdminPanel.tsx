@@ -12,6 +12,8 @@ import {
   updateUserStatus,
   type ApiUser,
 } from '@/integrations/api/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { getActiveTenantId, setActiveTenantId as persistActiveTenantId } from '@/offline-db/tenantScope';
 import { toast } from '@/hooks/use-toast';
 
 interface UsersAdminPanelProps {
@@ -30,10 +32,11 @@ const INITIAL_FORM: UserFormState = {
   email: '',
   fullName: '',
   password: '',
-  roleName: 'user',
+  roleName: 'usuario',
 };
 
 export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPanelProps) {
+  const { user } = useAuth();
   const envTenantId = useMemo(() => {
     const fromEnv = Number(import.meta.env.VITE_TENANT_ID);
     return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 1;
@@ -51,6 +54,39 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
       setSelectedTenantId(tenantId);
     }
   }, [tenantId, selectedTenantId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveSelectedTenant = async () => {
+      if (!user || !isSuperAdmin) return;
+
+      const activeTenantId = await getActiveTenantId(user);
+      const normalizedTenantId = Number(activeTenantId);
+      if (!cancelled && Number.isFinite(normalizedTenantId) && normalizedTenantId > 0) {
+        setSelectedTenantId(normalizedTenantId);
+      }
+    };
+
+    void resolveSelectedTenant();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdmin, user]);
+
+  const handleSelectedTenantChange = useCallback(
+    async (nextTenantId: number) => {
+      setSelectedTenantId(nextTenantId);
+      if (isSuperAdmin && user) {
+        try {
+          await persistActiveTenantId(user, String(nextTenantId));
+        } catch (error) {
+          console.warn('No se pudo persistir el tenant activo para el chat:', error);
+        }
+      }
+    },
+    [isSuperAdmin, user]
+  );
 
   const loadUsers = useCallback(async () => {
     if (!selectedTenantId) {
@@ -162,7 +198,7 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
                 min={1}
                 className="w-24 h-8"
                 value={selectedTenantId}
-                onChange={(event) => setSelectedTenantId(Number(event.target.value || 1))}
+                onChange={(event) => void handleSelectedTenantChange(Number(event.target.value || 1))}
               />
             ) : null}
             <Button variant="outline" size="sm" onClick={() => void loadUsers()} disabled={loading}>
@@ -264,7 +300,7 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
                 id="api-user-role"
                 value={form.roleName}
                 onChange={(event) => setForm((prev) => ({ ...prev, roleName: event.target.value }))}
-                placeholder="user | admin | site_manager"
+                placeholder="tenant_admin | usuario"
               />
             </div>
 

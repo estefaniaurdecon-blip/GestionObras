@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.role import Role
 from app.models.audit_log import AuditLog
 from app.schemas.user import (
+    UserContactRead,
     UserCreate,
     UserRead,
     UserUpdateAdmin,
@@ -25,6 +26,7 @@ from app.schemas.user import (
 )
 
 OFFICIAL_NON_SUPERADMIN_ROLES = {"tenant_admin", "usuario"}
+_CREATION_SCOPE_UNSET = object()
 
 
 def _resolve_avatar_url(avatar_url: str | None) -> str | None:
@@ -61,21 +63,206 @@ def _user_to_read(
     )
 
 
+def _user_to_contact(
+    user: User,
+    role_name: str | None = None,
+) -> UserContactRead:
+    return UserContactRead(
+        id=user.id,
+        email=user.email,
+        full_name=(user.full_name or user.email).strip(),
+        is_active=user.is_active,
+        is_super_admin=user.is_super_admin,
+        tenant_id=user.tenant_id,
+        role_name=role_name,
+        avatar_url=_resolve_avatar_url(user.avatar_url),
+    )
+
+
+def _get_role_names_by_user_id(session: Session, users: list[User]) -> dict[int, str]:
+    role_ids = {u.role_id for u in users if u.role_id}
+    if not role_ids:
+        return {}
+
+    roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
+    roles_by_id = {role.id: role.name for role in roles if role.id is not None}
+    return {
+        u.id: roles_by_id.get(u.role_id)  # type: ignore[index]
+        for u in users
+        if u.id is not None
+    }
+
+
+def _get_user_role_name(session: Session, user: User | None) -> str | None:
+    if not user or user.is_super_admin:
+        return "super_admin" if user and user.is_super_admin else None
+    role = session.get(Role, user.role_id) if user.role_id else None
+    return role.name if role else None
+
+
+def _persist_user_creation_scope(
+    session: Session,
+    user: User,
+    *,
+    created_by_user_id: int | None | object = _CREATION_SCOPE_UNSET,
+    creator_group_id: int | None | object = _CREATION_SCOPE_UNSET,
+) -> None:
+    if user.id is None:
+        return
+
+    changed = False
+    if (
+        created_by_user_id is not _CREATION_SCOPE_UNSET
+        and user.created_by_user_id != created_by_user_id
+    ):
+        user.created_by_user_id = created_by_user_id  # type: ignore[assignment]
+        changed = True
+    if (
+        creator_group_id is not _CREATION_SCOPE_UNSET
+        and user.creator_group_id != creator_group_id
+    ):
+        user.creator_group_id = creator_group_id  # type: ignore[assignment]
+        changed = True
+
+    if not changed:
+        return
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+
+def _infer_created_by_user_id(session: Session, user: User) -> int | None:
+    if user.id is None or user.tenant_id is None:
+        return None
+
+    normalized_email = (user.email or "").strip().lower()
+    if not normalized_email:
+        return None
+
+    audit_rows = session.exec(
+        select(AuditLog)
+        .where(
+            AuditLog.action == "user.create",
+            AuditLog.tenant_id == user.tenant_id,
+        )
+        .order_by(AuditLog.created_at.desc())
+    ).all()
+
+    for audit_row in audit_rows:
+        details = (audit_row.details or "").strip().lower()
+        if normalized_email in details and audit_row.user_id and audit_row.user_id != user.id:
+            return int(audit_row.user_id)
+
+    return None
+
+
+def resolve_creator_group_id(
+    session: Session,
+    user: User | None,
+    *,
+    persist: bool = False,
+    _visited: set[int] | None = None,
+) -> int | None:
+    if not user or user.id is None or user.is_super_admin:
+        return None
+
+    if user.creator_group_id:
+        return int(user.creator_group_id)
+
+    visited = _visited or set()
+    if user.id in visited:
+        return int(user.id)
+    visited.add(user.id)
+
+    created_by_user_id = user.created_by_user_id
+    if created_by_user_id is None:
+        inferred_created_by_user_id = _infer_created_by_user_id(session, user)
+        if inferred_created_by_user_id is not None:
+            created_by_user_id = inferred_created_by_user_id
+            if persist:
+                _persist_user_creation_scope(
+                    session,
+                    user,
+                    created_by_user_id=inferred_created_by_user_id,
+                )
+
+    if created_by_user_id is not None:
+        creator = session.get(User, int(created_by_user_id))
+        if (
+            creator
+            and not creator.is_super_admin
+            and creator.tenant_id is not None
+            and creator.tenant_id == user.tenant_id
+        ):
+            creator_group_id = resolve_creator_group_id(
+                session,
+                creator,
+                persist=persist,
+                _visited=visited,
+            )
+            if creator_group_id is not None:
+                if persist:
+                    _persist_user_creation_scope(
+                        session,
+                        user,
+                        created_by_user_id=int(created_by_user_id),
+                        creator_group_id=int(creator_group_id),
+                    )
+                return int(creator_group_id)
+
+    fallback_group_id = int(user.id)
+    if persist:
+        _persist_user_creation_scope(
+            session,
+            user,
+            created_by_user_id=created_by_user_id,
+            creator_group_id=fallback_group_id,
+        )
+    return fallback_group_id
+
+
+def users_share_creation_group(
+    session: Session,
+    current_user: User,
+    candidate: User | None,
+) -> bool:
+    if not candidate or current_user.id is None or candidate.id is None:
+        return False
+
+    if current_user.id == candidate.id:
+        return True
+
+    if current_user.is_super_admin or candidate.is_super_admin:
+        return False
+
+    if (
+        current_user.tenant_id is None
+        or candidate.tenant_id is None
+        or int(current_user.tenant_id) != int(candidate.tenant_id)
+    ):
+        return False
+
+    current_group_id = resolve_creator_group_id(session, current_user, persist=True)
+    candidate_group_id = resolve_creator_group_id(session, candidate, persist=False)
+
+    return (
+        current_group_id is not None
+        and candidate_group_id is not None
+        and int(current_group_id) == int(candidate_group_id)
+    )
+
+
 def get_user_me(session: Session, current_user: User) -> UserRead:
     """
     Devuelve la representación de lectura del usuario actual.
     """
 
-    role_name: str | None = None
-    role = session.get(Role, current_user.role_id) if current_user.role_id else None
-    if role:
-        role_name = role.name
-
     permissions = sorted(_collect_user_permission_codes(session, current_user))
 
     return _user_to_read(
         current_user,
-        role_name=role_name,
+        role_name=_get_user_role_name(session, current_user),
         permissions=permissions,
     )
 
@@ -119,17 +306,57 @@ def list_users_by_tenant(
         details=f"Listado de {len(users)} usuarios para tenant_id={tenant_id}",
     )
 
-    role_ids = {u.role_id for u in users if u.role_id}
-    roles_by_id: dict[int, str] = {}
-    if role_ids:
-        roles = session.exec(select(Role).where(Role.id.in_(role_ids))).all()
-        roles_by_id = {role.id: role.name for role in roles if role.id is not None}
+    roles_by_user_id = _get_role_names_by_user_id(session, users)
 
     result: List[UserRead] = []
     for u in users:
-        result.append(_user_to_read(u, role_name=roles_by_id.get(u.role_id)))
+        result.append(_user_to_read(u, role_name=roles_by_user_id.get(u.id or 0)))
 
     return result
+
+
+def list_contact_users_by_tenant(
+    session: Session,
+    current_user: User,
+    tenant_id: int,
+) -> List[UserContactRead]:
+    """
+    Lista contactos activos del tenant para mensajeria y ayuda.
+    """
+
+    if current_user.is_super_admin:
+        return []
+
+    if current_user.tenant_id != tenant_id:
+        raise PermissionError("No tienes permisos para ver este tenant")
+
+    tenant_exists = session.get(Tenant, tenant_id)
+    if not tenant_exists:
+        raise LookupError("Tenant no encontrado")
+
+    users = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.is_active.is_(True),
+            User.is_super_admin.is_(False),
+        )
+        .order_by(User.full_name, User.email)
+    ).all()
+
+    roles_by_user_id = _get_role_names_by_user_id(session, users)
+    current_user_id = current_user.id
+    current_group_id = resolve_creator_group_id(session, current_user, persist=True)
+    if current_user_id is None or current_group_id is None:
+        return []
+
+    return [
+        _user_to_contact(u, role_name=roles_by_user_id.get(u.id or 0))
+        for u in users
+        if u.id is not None
+        and u.id != current_user_id
+        and users_share_creation_group(session, current_user, u)
+    ]
 
 
 def update_user_me(
@@ -313,6 +540,11 @@ def create_user(
     # Los usuarios no Super Admin se crean inactivos hasta que completen MFA.
     # Super Admin (solo el usuario semilla) se crea activo.
     is_active = True if user_in.is_super_admin else False
+    creator_group_id: int | None = None
+    if not current_user.is_super_admin:
+        creator_group_id = resolve_creator_group_id(session, current_user, persist=True)
+        if creator_group_id is None and current_user.id is not None:
+            creator_group_id = int(current_user.id)
 
     user = User(
         email=user_in.email,
@@ -322,11 +554,20 @@ def create_user(
         is_super_admin=user_in.is_super_admin,
         role_id=role_id,
         is_active=is_active,
+        created_by_user_id=current_user.id,
+        creator_group_id=creator_group_id,
     )
 
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    if not user.is_super_admin and user.creator_group_id is None and user.id is not None:
+        _persist_user_creation_scope(
+            session,
+            user,
+            creator_group_id=int(user.id),
+        )
 
     # Si es un admin de tenant, intentamos enviar correo de bienvenida.
     if user.tenant_id and user_in.role_name == "tenant_admin":
@@ -350,7 +591,7 @@ def create_user(
         details=f"Usuario creado con email '{user.email}'",
     )
 
-    return _user_to_read(user, role_name=user_in.role_name)
+    return _user_to_read(user, role_name=_get_user_role_name(session, user))
 
 
 def delete_user(

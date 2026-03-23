@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessEntry, AccessReport } from '@/types/accessControl';
+import { AccessReport } from '@/types/accessControl';
 import { toast } from '@/hooks/use-toast';
 import { storage } from '@/utils/storage';
 import { startupPerfEnd, startupPerfStart } from '@/utils/startupPerf';
@@ -10,6 +10,8 @@ import {
   listAccessControlReports,
   updateAccessControlReport,
 } from '@/integrations/api/client';
+import { asRecord, toIsoDate, toOptionalString, toStringValue } from '@/pages/indexHelpers';
+import { toAccessEntries } from '@/utils/accessControlHelpers';
 
 type SyncStatus = 'synced' | 'pending' | 'error';
 
@@ -26,51 +28,6 @@ interface UseAccessControlReportsOptions {
 
 const STORAGE_KEY_PREFIX = 'access_control_reports_local::v1::';
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function toStringValue(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function toOptionalString(value: unknown): string | undefined {
-  const normalized = typeof value === 'string' ? value.trim() : '';
-  return normalized ? normalized : undefined;
-}
-
-function toIsoDate(date: Date): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function toAccessEntries(value: unknown, fallbackType: AccessEntry['type']): AccessEntry[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((rawEntry) => {
-    const record = asRecord(rawEntry) ?? {};
-    const sourceRaw = toStringValue(record.source);
-    const source = sourceRaw === 'subcontract' || sourceRaw === 'rental' ? sourceRaw : undefined;
-    const typeRaw = toStringValue(record.type);
-    const type: AccessEntry['type'] = typeRaw === 'machinery' ? 'machinery' : fallbackType;
-
-    return {
-      id: toStringValue(record.id, crypto.randomUUID()),
-      type,
-      name: toStringValue(record.name),
-      identifier: toStringValue(record.identifier),
-      company: toStringValue(record.company),
-      entryTime: toStringValue(record.entryTime, '08:00'),
-      exitTime: toOptionalString(record.exitTime),
-      activity: toStringValue(record.activity),
-      operator: toOptionalString(record.operator),
-      signature: toOptionalString(record.signature),
-      source,
-    };
-  });
-}
 
 function normalizeStoredReport(raw: unknown): StoredAccessReport | null {
   const record = asRecord(raw);

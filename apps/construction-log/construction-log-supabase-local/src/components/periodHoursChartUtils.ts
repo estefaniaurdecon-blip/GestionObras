@@ -39,20 +39,7 @@ const WINDOW_SIZE_BY_MODE: Record<PeriodMode, number> = {
 
 const safeHours = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
-const parseDateKey = (value: string): Date | null => {
-  const normalized = value.trim();
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-  const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
-  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
-    return null;
-  }
-  return parsed;
-};
+import { parseDateKey } from '@/utils/valueNormalization';
 
 const readRowDate = (row: PeriodHoursRawRow) => {
   const source = row.date ?? parseDateKey(row.dateKey);

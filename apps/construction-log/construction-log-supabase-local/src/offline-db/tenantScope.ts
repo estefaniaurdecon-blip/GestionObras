@@ -17,6 +17,7 @@ export const TENANT_REQUIRED_MESSAGE = 'No se pudo resolver tenant. Reintenta o 
 
 const MIGRATION_FLAG_PREFIX = 'offline_migrated_v2::';
 const ACTIVE_TENANT_KEY_PREFIX = 'activeTenant::';
+export const ACTIVE_TENANT_CHANGED_EVENT = 'app-active-tenant-changed';
 
 type ActiveTenantSource = 'session' | 'persisted' | 'configured' | 'dev_override' | 'none';
 
@@ -225,6 +226,18 @@ function getActiveTenantStorageKey(user: ApiUser): string {
   return `${ACTIVE_TENANT_KEY_PREFIX}${normalizedUserId}::${normalizedApiBase}`;
 }
 
+function notifyActiveTenantChanged(user: ApiUser | null | undefined, tenantId: string | null): void {
+  if (typeof window === 'undefined' || !user) return;
+  window.dispatchEvent(
+    new CustomEvent(ACTIVE_TENANT_CHANGED_EVENT, {
+      detail: {
+        userId: String(user.id),
+        tenantId,
+      },
+    })
+  );
+}
+
 function getDevTenantOverride(): string | null {
   if (!import.meta.env.DEV) return null;
   const override = normalizeTenantId(import.meta.env.VITE_DEV_TENANT_ID);
@@ -424,12 +437,14 @@ export async function setActiveTenantId(
   }
 
   await storage.setItem(getActiveTenantStorageKey(user), normalizedTenantId);
+  notifyActiveTenantChanged(user, normalizedTenantId);
   return normalizedTenantId;
 }
 
 export async function clearActiveTenantId(user: ApiUser | null | undefined): Promise<void> {
   if (!user) return;
   await storage.removeItem(getActiveTenantStorageKey(user));
+  notifyActiveTenantChanged(user, null);
 }
 
 export async function requireTenantId(

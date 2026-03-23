@@ -40,6 +40,21 @@ class UserRead(UserBase):
     created_at: datetime
 
 
+class UserContactRead(BaseModel):
+    """
+    Esquema de lectura reducido para contactos del tenant.
+    """
+
+    id: int
+    email: EmailStr
+    full_name: str
+    is_active: bool = True
+    is_super_admin: bool = False
+    tenant_id: int | None = None
+    role_name: str | None = None
+    avatar_url: str | None = None
+
+
 class UserUpdateMe(BaseModel):
     """
     Esquema de actualización del propio usuario.

@@ -2,14 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Accordion } from '@/components/ui/accordion';
 import { normalizeNoteCategory, type NoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
-import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
-import {
-  normalizeDocType,
-  type ParsedAlbaranItem,
-  type ParsedAlbaranResult,
-  type ParsedFieldConfidence,
-  type ParsedFieldWarnings,
-} from '@/plugins/albaranScanner';
+import { useWorkReportScanOrchestrator } from '@/hooks/useWorkReportScanOrchestrator';
 import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -44,18 +37,16 @@ import { RescanConfirmDialog } from '@/components/work-report/dialogs/RescanConf
 import { DuplicateDialog } from '@/components/work-report/dialogs/DuplicateDialog';
 import { CostDifferenceDialog } from '@/components/work-report/dialogs/CostDifferenceDialog';
 import { SaveStatusDialog } from '@/components/work-report/dialogs/SaveStatusDialog';
+import { buildWorkReportForExport } from '@/components/work-report/buildWorkReportForExport';
 import {
   ALL_SECTION_IDS,
-  COST_DIFF_THRESHOLD,
   MATERIAL_UNIT_OPTIONS,
   SUBCONTRACT_UNIT_OPTIONS,
-  buildDeliveryNoteKey,
   computeGroupTotals,
   computeRowTotals,
   createForemanResource,
   createMaterialGroup,
   createMaterialRow,
-  createParsedAlbaranReviewItem,
   createServiceLine,
   createRow,
   createSubcontractAssignedWorker,
@@ -66,28 +57,19 @@ import {
   createWorkforceGroup,
   createWorkforceRow,
   editableNumericValue,
-  extractNoPriceDescription,
-  hasMaterialGroupSignificantData,
-  hasNoPriceColumnsWarning,
-  isMaterialRowBlank,
-  mapForemanRoleForReport,
   mapRentalMachinesToLegacyRows,
   mapSubcontractGroupsToLegacyRows,
-  mapSubcontractUnitToReportUnit,
   migrateLegacyMaterialRows,
   migrateLegacySubcontractRows,
   migrateLegacySubcontractedMachineryRows,
   nonNegative,
   nonNegativeInt,
   normalizeMaterialGroups,
-  normalizeMaterialUnitFromScan,
-  normalizeServiceUnitFromScan,
   normalizeSubcontractGroups,
   normalizeSubcontractUnit,
   normalizeSubcontractedMachineryGroups,
   parseDateInputValue,
   parseNumeric,
-  resolveScanImageUris,
   sanitizeText,
   todayDate,
   unitLabel,
@@ -97,13 +79,10 @@ import type {
   ForemanResource,
   GalleryImage,
   GenerateWorkReportDraft,
-  MaterialCostDifference,
   MaterialGroup,
   MaterialRow,
-  NoPriceScanResolution,
   SaveStatusOption,
   ServiceLine,
-  ServiceScanResolution,
   SubcontractAssignedWorker,
   SubcontractGroup,
   SubcontractGroupTotals,
@@ -114,7 +93,6 @@ import type {
   SubcontractedMachineryRow,
   WorkforceGroup,
   WorkforceRow,
-  DuplicateScanResolution,
 } from '@/components/work-report/types';
 
 export type { GenerateWorkReportDraft } from '@/components/work-report/types';
@@ -204,49 +182,82 @@ export const GenerateWorkReportPanel = ({
   }, [observacionesDictationActive, readOnly, stopObservacionesDictation]);
 
   const {
-    startScan: startAlbaranScan,
-    isProcessing: isAlbaranProcessing,
-    error: albaranScanError,
-    clearError: clearAlbaranScanError,
-  } = useAlbaranScanController();
-
-  const [scanReviewDialogOpen, setScanReviewDialogOpen] = useState(false);
-  const [scanReviewReason, setScanReviewReason] = useState<string | null>(null);
-  const [scanReviewSupplier, setScanReviewSupplier] = useState('');
-  const [scanReviewInvoiceNumber, setScanReviewInvoiceNumber] = useState('');
-  const [scanReviewDocumentDate, setScanReviewDocumentDate] = useState('');
-  const [scanReviewDocType, setScanReviewDocType] = useState<ParsedAlbaranResult['docType']>('UNKNOWN');
-  const [scanReviewDocSubtype, setScanReviewDocSubtype] = useState<ParsedAlbaranResult['docSubtype']>(null);
-  const [scanReviewServiceDescription, setScanReviewServiceDescription] = useState('');
-  const [scanReviewConfidence, setScanReviewConfidence] = useState<ParsedAlbaranResult['confidence']>('medium');
-  const [scanReviewWarnings, setScanReviewWarnings] = useState<string[]>([]);
-  const [scanReviewFieldConfidence, setScanReviewFieldConfidence] = useState<ParsedFieldConfidence | null>(null);
-  const [scanReviewFieldWarnings, setScanReviewFieldWarnings] = useState<ParsedFieldWarnings | null>(null);
-  const [scanReviewFieldMeta, setScanReviewFieldMeta] = useState<ParsedAlbaranResult['fieldMeta']>(null);
-  const [scanReviewTemplateData, setScanReviewTemplateData] = useState<ParsedAlbaranResult['templateData']>(null);
-  const [scanReviewProfileUsed, setScanReviewProfileUsed] = useState<ParsedAlbaranResult['profileUsed']>('ORIGINAL');
-  const [scanReviewScore, setScanReviewScore] = useState(0);
-  const [scanReviewItems, setScanReviewItems] = useState<ParsedAlbaranItem[]>([]);
-  const [scanReviewServiceLines, setScanReviewServiceLines] = useState<ServiceLine[]>([]);
-  const [scanReviewImageUris, setScanReviewImageUris] = useState<string[]>([]);
-  const [scanReviewRawText, setScanReviewRawText] = useState('');
-  const [scanReviewTargetGroupId, setScanReviewTargetGroupId] = useState<string | null>(null);
-  const [scanInFlightTargetGroupId, setScanInFlightTargetGroupId] = useState<string | null>(null);
-  const [rescanConfirmDialogOpen, setRescanConfirmDialogOpen] = useState(false);
-  const [pendingRescanTargetGroupId, setPendingRescanTargetGroupId] = useState<string | null>(null);
-  const [serviceScanDialogOpen, setServiceScanDialogOpen] = useState(false);
-  const [pendingServiceScanResolution, setPendingServiceScanResolution] = useState<ServiceScanResolution | null>(null);
-  const [noPriceScanDialogOpen, setNoPriceScanDialogOpen] = useState(false);
-  const [pendingNoPriceScanResolution, setPendingNoPriceScanResolution] = useState<NoPriceScanResolution | null>(null);
-  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
-  const [pendingDuplicateResolution, setPendingDuplicateResolution] = useState<DuplicateScanResolution | null>(null);
-  const [albaranViewerOpen, setAlbaranViewerOpen] = useState(false);
-  const [albaranViewerImageUris, setAlbaranViewerImageUris] = useState<string[]>([]);
-  const [albaranViewerInitialIndex, setAlbaranViewerInitialIndex] = useState(0);
-  const [albaranViewerTitle, setAlbaranViewerTitle] = useState('Adjuntos del albaran');
-
-  const [costDifferenceDialogOpen, setCostDifferenceDialogOpen] = useState(false);
-  const [pendingCostDifferences, setPendingCostDifferences] = useState<MaterialCostDifference[]>([]);
+    isAlbaranProcessing,
+    albaranScanError,
+    scanReviewDialogOpen,
+    scanReviewReason,
+    scanReviewSupplier,
+    setScanReviewSupplier,
+    scanReviewInvoiceNumber,
+    setScanReviewInvoiceNumber,
+    scanReviewDocumentDate,
+    setScanReviewDocumentDate,
+    scanReviewDocType,
+    scanReviewDocSubtype,
+    scanReviewServiceDescription,
+    setScanReviewServiceDescription,
+    scanReviewConfidence,
+    scanReviewWarnings,
+    scanReviewFieldConfidence,
+    scanReviewFieldWarnings,
+    scanReviewFieldMeta,
+    scanReviewTemplateData,
+    scanReviewProfileUsed,
+    scanReviewScore,
+    scanReviewItems,
+    scanReviewServiceLines,
+    scanReviewImageUris,
+    scanInFlightTargetGroupId,
+    serviceScanDialogOpen,
+    pendingServiceScanResolution,
+    noPriceScanDialogOpen,
+    pendingNoPriceScanResolution,
+    pendingNoPriceDescription,
+    rescanConfirmDialogOpen,
+    duplicateDialogOpen,
+    pendingDuplicateResolution,
+    albaranViewerOpen,
+    albaranViewerImageUris,
+    albaranViewerInitialIndex,
+    albaranViewerTitle,
+    costDifferenceDialogOpen,
+    pendingCostDifferences,
+    openAlbaranViewer,
+    closeAlbaranViewer,
+    handleScanMaterialsForGroup,
+    updateScanReviewItem,
+    addScanReviewItem,
+    updateScanReviewServiceLine,
+    addScanReviewServiceLine,
+    removeScanReviewServiceLine,
+    createOtrosLineInScanReview,
+    applyScanReview,
+    handleScanReviewDialogOpenChange,
+    cancelScanReview,
+    handleServiceScanDialogOpenChange,
+    cancelServiceScanResolution,
+    confirmServiceScanResolution,
+    handleNoPriceScanDialogOpenChange,
+    cancelNoPriceScanResolution,
+    confirmNoPriceScanResolution,
+    handleRescanConfirmDialogOpenChange,
+    cancelRescanForMaterialGroup,
+    continueRescanForMaterialGroup,
+    handleDuplicateDialogOpenChange,
+    applyDuplicateToTargetGroup,
+    overwriteExistingDuplicateGroup,
+    cancelDuplicateResolution,
+    openCostDifferenceDialogForRow,
+    handleCostDifferenceDialogOpenChange,
+    keepDocumentCostDifferences,
+    overwriteCostDifferencesWithCalculated,
+  } = useWorkReportScanOrchestrator({
+    readOnly,
+    materialGroups,
+    setMaterialGroups,
+    setOpenMaterialGroups,
+    setActiveMaterialGroupId,
+  });
 
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
 
@@ -785,901 +796,6 @@ export const GenerateWorkReportPanel = ({
     }, 90);
   }, []);
 
-  const openAlbaranViewer = useCallback((imageUris: string[], title = 'Adjuntos del albaran', initialIndex = 0) => {
-    if (!Array.isArray(imageUris) || imageUris.length === 0) return;
-    const sanitized = imageUris.filter((uri) => typeof uri === 'string' && uri.trim().length > 0);
-    if (sanitized.length === 0) return;
-    const safeIndex = Math.max(0, Math.min(initialIndex, sanitized.length - 1));
-    setAlbaranViewerImageUris(sanitized);
-    setAlbaranViewerTitle(title);
-    setAlbaranViewerInitialIndex(safeIndex);
-    setAlbaranViewerOpen(true);
-  }, []);
-
-  const closeAlbaranViewer = useCallback(() => {
-    setAlbaranViewerOpen(false);
-  }, []);
-
-  const buildMaterialRowFromParsedItem = useCallback((item: ParsedAlbaranItem): MaterialRow => {
-    const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : 0;
-    const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? nonNegative(item.unitPrice) : 0;
-    const costCalc = quantity * unitPrice;
-    const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? nonNegative(item.costDoc) : null;
-    const difference = costDoc !== null ? Math.abs(costDoc - costCalc) : null;
-
-    return {
-      ...createMaterialRow(),
-      name: sanitizeText(item.material),
-      quantity,
-      unit: normalizeMaterialUnitFromScan(item.unit),
-      unitPrice,
-      total: costDoc ?? costCalc,
-      costDocValue: costDoc,
-      costWarningDelta: difference !== null && difference > COST_DIFF_THRESHOLD ? difference : null,
-    };
-  }, []);
-
-  const buildServiceLinesFromParsedResult = useCallback((parsed: ParsedAlbaranResult): ServiceLine[] => {
-    const grouped = new Map<string, ServiceLine>();
-
-    parsed.items.forEach((item, index) => {
-      const description = sanitizeText(item.material);
-      const quantity =
-        typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? nonNegative(item.quantity) : null;
-      const hintedText = sanitizeText(`${item.unit ?? ''} ${item.rowText ?? ''} ${description}`).toLowerCase();
-      let unit = normalizeServiceUnitFromScan(item.unit);
-      if (!unit) {
-        if (hintedText.includes('hora') || /\bh\b/.test(hintedText)) unit = 'h';
-        else if (hintedText.includes('viaj')) unit = 'viaje';
-        else if (hintedText.includes('tonel') || /\btn\b/.test(hintedText) || /\bt\b/.test(hintedText)) unit = 't';
-        else if (hintedText.includes('m3') || hintedText.includes('m³')) unit = 'm3';
-      }
-
-      if (!description && quantity === null && !unit) return;
-
-      const key = description ? description.toLowerCase() : `__empty_${index}`;
-      const current = grouped.get(key) ?? {
-        ...createServiceLine(),
-        description,
-      };
-
-      if (quantity !== null && unit) {
-        if (unit === 'h') current.hours = nonNegative(current.hours ?? 0) + quantity;
-        if (unit === 'viaje') current.trips = nonNegative(current.trips ?? 0) + quantity;
-        if (unit === 't') current.tons = nonNegative(current.tons ?? 0) + quantity;
-        if (unit === 'm3') current.m3 = nonNegative(current.m3 ?? 0) + quantity;
-      }
-
-      grouped.set(key, current);
-    });
-
-    const lines = Array.from(grouped.values()).filter((line) => {
-      const hasDescription = sanitizeText(line.description).length > 0;
-      const hasValues =
-        nonNegative(line.hours ?? 0) > 0 ||
-        nonNegative(line.trips ?? 0) > 0 ||
-        nonNegative(line.tons ?? 0) > 0 ||
-        nonNegative(line.m3 ?? 0) > 0;
-      return hasDescription || hasValues;
-    });
-
-    if (lines.length > 0) return lines;
-
-    const fallbackDescription = sanitizeText(parsed.serviceDescription);
-    if (!fallbackDescription) return [];
-
-    return [
-      {
-        ...createServiceLine(),
-        description: fallbackDescription,
-      },
-    ];
-  }, []);
-
-  const buildParsedItemsFromServiceLines = useCallback((lines: ServiceLine[]): ParsedAlbaranItem[] => {
-    const items: ParsedAlbaranItem[] = [];
-
-    lines.forEach((line) => {
-      const description = sanitizeText(line.description);
-      const quantities: Array<{ unit: 'h' | 'viaje' | 't' | 'm3'; value: number | null | undefined }> = [
-        { unit: 'h', value: line.hours },
-        { unit: 'viaje', value: line.trips },
-        { unit: 't', value: line.tons },
-        { unit: 'm3', value: line.m3 },
-      ];
-
-      let hasMetric = false;
-      quantities.forEach(({ unit, value }) => {
-        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return;
-        hasMetric = true;
-        items.push({
-          ...createParsedAlbaranReviewItem(),
-          material: description,
-          quantity: nonNegative(value),
-          unit,
-          unitPrice: null,
-          costDoc: null,
-          costCalc: null,
-          difference: null,
-          rowText: 'SERVICE_LINE',
-          missingCritical: false,
-        });
-      });
-
-      if (!hasMetric && description) {
-        items.push({
-          ...createParsedAlbaranReviewItem(),
-          material: description,
-          quantity: null,
-          unit: null,
-          unitPrice: null,
-          costDoc: null,
-          costCalc: null,
-          difference: null,
-          rowText: 'SERVICE_LINE',
-          missingCritical: false,
-        });
-      }
-    });
-
-    return items;
-  }, []);
-
-  const isServiceLikeParsedResult = useCallback((parsed: ParsedAlbaranResult): boolean => {
-    if (parsed.docType === 'SERVICE_MACHINERY') return true;
-
-    const serviceSubtypes = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
-      'BOMBEOS_GILGIL_ALBARAN_BOMBA',
-      'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
-      'CONSTRUCCIONES_PARTE_TRABAJO',
-    ]);
-    if (parsed.docSubtype && serviceSubtypes.has(parsed.docSubtype)) return true;
-
-    const warningSet = new Set(parsed.warnings || []);
-    if (
-      warningSet.has('SERVICE_LAYOUT_HEADER') ||
-      warningSet.has('SERVICE_MARKERS_DETECTED') ||
-      warningSet.has('SERVICE_TABLE_DETECTED')
-    ) {
-      return true;
-    }
-
-    const hasServiceUnit = parsed.items.some((item) => {
-      const normalized = normalizeServiceUnitFromScan(item.unit);
-      return normalized === 'h' || normalized === 'viaje' || normalized === 't' || normalized === 'm3';
-    });
-    if (hasServiceUnit) return true;
-
-    const hasServiceDescription = sanitizeText(parsed.serviceDescription).length > 0;
-    if (hasServiceDescription && (warningSet.has('NO_PRICE_COLUMNS') || warningSet.has('NO_ECONOMIC_COLUMNS'))) {
-      return true;
-    }
-
-    return false;
-  }, []);
-
-  const buildOthersRowFromParsedResult = useCallback((parsed: ParsedAlbaranResult): MaterialRow => {
-    const description = extractNoPriceDescription(parsed);
-    const materialName = description ? `OTROS - ${description}` : 'OTROS';
-
-    return {
-      ...createMaterialRow(),
-      name: materialName,
-      quantity: 1,
-      unit: 'ud',
-      unitPrice: 0,
-      total: 0,
-      costDocValue: null,
-      costWarningDelta: null,
-    };
-  }, []);
-
-  const applyParsedScanMetadataOnly = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
-      if (!targetGroup) {
-        toast({
-          title: 'Albaran no encontrado',
-          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const supplier = sanitizeText(parsed.supplier);
-      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
-      const docType = parsed.docType === 'MATERIALS_TABLE' || parsed.docType === 'SERVICE_MACHINERY' ? parsed.docType : 'UNKNOWN';
-
-      setMaterialGroups((current) =>
-        current.map((group) =>
-          group.id === targetGroupId
-            ? {
-                ...group,
-                supplier: supplier || group.supplier,
-                invoiceNumber: invoiceNumber || group.invoiceNumber,
-                docType,
-                isScanned: true,
-                imageUris: resolveScanImageUris(group, parsed),
-              }
-            : group,
-        ),
-      );
-
-      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
-      setActiveMaterialGroupId(targetGroupId);
-      setPendingCostDifferences([]);
-      setCostDifferenceDialogOpen(false);
-
-      toast({
-        title: 'Documento aplicado sin líneas automáticas',
-        description: 'Se guardaron cabecera y adjuntos. Añade filas manuales si las necesitas.',
-      });
-    },
-    [materialGroups],
-  );
-
-  const applyParsedServiceToGroup = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
-      if (!targetGroup) {
-        toast({
-          title: 'Albaran no encontrado',
-          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const supplier = sanitizeText(parsed.supplier);
-      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
-      const serviceLines = buildServiceLinesFromParsedResult(parsed);
-
-      setMaterialGroups((current) =>
-        current.map((group) =>
-          group.id === targetGroupId
-            ? {
-                ...group,
-                supplier: supplier || group.supplier,
-                invoiceNumber: invoiceNumber || group.invoiceNumber,
-                docType: 'SERVICE_MACHINERY',
-                isScanned: true,
-                imageUris: resolveScanImageUris(group, parsed),
-                rows: [createMaterialRow()],
-                serviceLines,
-              }
-            : group,
-        ),
-      );
-
-      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
-      setActiveMaterialGroupId(targetGroupId);
-      setPendingCostDifferences([]);
-      setCostDifferenceDialogOpen(false);
-
-      const lineLabel = serviceLines.length === 1 ? 'fila' : 'filas';
-      toast({
-        title: 'Albaran de servicio procesado',
-        description:
-          serviceLines.length > 0
-            ? `Se han cargado ${serviceLines.length} ${lineLabel} en el detalle de servicio.`
-            : 'Se guardaron cabecera y adjuntos. Añade filas de servicio manualmente si las necesitas.',
-      });
-    },
-    [buildServiceLinesFromParsedResult, materialGroups],
-  );
-
-  const applyNoPriceScanToMaterials = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
-      if (!targetGroup) {
-        toast({
-          title: 'Albaran no encontrado',
-          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const supplier = sanitizeText(parsed.supplier);
-      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
-      const otherRow = buildOthersRowFromParsedResult(parsed);
-
-      setMaterialGroups((current) =>
-        current.map((group) =>
-          group.id === targetGroupId
-            ? {
-                ...group,
-                supplier: supplier || group.supplier,
-                invoiceNumber: invoiceNumber || group.invoiceNumber,
-                docType: 'MATERIALS_TABLE',
-                isScanned: true,
-                imageUris: resolveScanImageUris(group, parsed),
-                rows: [otherRow],
-                serviceLines: [],
-              }
-            : group,
-        ),
-      );
-
-      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
-      setActiveMaterialGroupId(targetGroupId);
-      setPendingCostDifferences([]);
-      setCostDifferenceDialogOpen(false);
-
-      toast({
-        title: 'Albaran sin precios/importes',
-        description: 'Se creó una línea OTROS para mantener el adjunto sin imputación económica automática.',
-      });
-    },
-    [buildOthersRowFromParsedResult, materialGroups],
-  );
-
-  const applyParsedAlbaranToMaterials = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
-      if (!targetGroup) {
-        toast({
-          title: 'Albaran no encontrado',
-          description: 'No se pudo aplicar el resultado del escaneo al albaran seleccionado.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const parsedRows = parsed.items
-        .map(buildMaterialRowFromParsedItem)
-        .filter((row) => !isMaterialRowBlank(row));
-
-      if (!parsedRows.length) {
-        toast({
-          title: 'Sin lineas detectadas',
-          description: 'No se han detectado materiales utiles en el albaran.',
-        });
-        return;
-      }
-
-      const supplier = sanitizeText(parsed.supplier);
-      const invoiceNumber = sanitizeText(parsed.invoiceNumber);
-
-      setMaterialGroups((current) =>
-        current.map((group) =>
-          group.id === targetGroupId
-            ? {
-                ...group,
-                supplier: supplier || group.supplier,
-                invoiceNumber: invoiceNumber || group.invoiceNumber,
-                docType:
-                  parsed.docType === 'SERVICE_MACHINERY'
-                    ? 'SERVICE_MACHINERY'
-                    : parsed.docType === 'MATERIALS_TABLE'
-                      ? 'MATERIALS_TABLE'
-                      : group.docType ?? 'MATERIALS_TABLE',
-                isScanned: true,
-                imageUris: resolveScanImageUris(group, parsed),
-                rows: parsedRows,
-                serviceLines: [],
-              }
-            : group,
-        ),
-      );
-
-      const differences: MaterialCostDifference[] = parsedRows.flatMap((row) => {
-        if (row.costWarningDelta === null || row.costWarningDelta === undefined || row.costDocValue === null || row.costDocValue === undefined) {
-          return [];
-        }
-        return [
-          {
-            groupId: targetGroupId,
-            rowId: row.id,
-            material: row.name || 'Material',
-            costDoc: row.costDocValue,
-            costCalc: nonNegative(row.quantity) * nonNegative(row.unitPrice),
-            difference: row.costWarningDelta,
-          },
-        ];
-      });
-
-      setOpenMaterialGroups((current) => ({ ...current, [targetGroupId]: true }));
-      setActiveMaterialGroupId(targetGroupId);
-      setPendingCostDifferences(differences);
-      setCostDifferenceDialogOpen(differences.length > 0);
-
-      const rowLabel = parsedRows.length === 1 ? 'fila' : 'filas';
-      toast({
-        title: 'Albaran procesado',
-        description: `Se han cargado ${parsedRows.length} ${rowLabel} en el albaran seleccionado.`,
-      });
-    },
-    [buildMaterialRowFromParsedItem, materialGroups],
-  );
-
-  const openScanReview = useCallback((parsed: ParsedAlbaranResult, targetGroupId: string) => {
-    const serviceLike = isServiceLikeParsedResult(parsed);
-    const normalizedDocType = normalizeDocType(parsed.docType);
-    setScanReviewReason(parsed.reviewReason || 'No se detecto la tabla con suficiente precision.');
-    setScanReviewSupplier(sanitizeText(parsed.supplier));
-    setScanReviewInvoiceNumber(sanitizeText(parsed.invoiceNumber));
-    setScanReviewDocumentDate(sanitizeText(parsed.documentDate));
-    setScanReviewDocType(serviceLike ? 'SERVICE_MACHINERY' : normalizedDocType);
-    setScanReviewDocSubtype(parsed.docSubtype ?? null);
-    setScanReviewServiceDescription(sanitizeText(parsed.serviceDescription));
-    setScanReviewConfidence(parsed.confidence || 'medium');
-    setScanReviewWarnings(parsed.warnings || []);
-    setScanReviewFieldConfidence(parsed.fieldConfidence ?? null);
-    setScanReviewFieldWarnings(parsed.fieldWarnings ?? null);
-    setScanReviewFieldMeta(parsed.fieldMeta ?? null);
-    setScanReviewTemplateData(parsed.templateData ?? null);
-    setScanReviewProfileUsed(parsed.profileUsed || 'ORIGINAL');
-    setScanReviewScore(typeof parsed.score === 'number' && Number.isFinite(parsed.score) ? parsed.score : 0);
-    setScanReviewItems(
-      parsed.items.map((item) => ({
-        ...item,
-        material: sanitizeText(item.material),
-        unit: item.unit ? sanitizeText(item.unit) : item.unit,
-        rowText: sanitizeText(item.rowText),
-      })),
-    );
-    setScanReviewServiceLines(buildServiceLinesFromParsedResult(parsed));
-    setScanReviewImageUris(parsed.imageUris || []);
-    setScanReviewRawText(sanitizeText(parsed.rawText));
-    setScanReviewTargetGroupId(targetGroupId);
-    setScanReviewDialogOpen(true);
-  }, [buildServiceLinesFromParsedResult, isServiceLikeParsedResult]);
-
-  const applyParsedScanResultToGroup = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      if (isServiceLikeParsedResult(parsed)) {
-        if (parsed.requiresReview || parsed.confidence === 'low') {
-          openScanReview(parsed, targetGroupId);
-          return;
-        }
-        applyParsedServiceToGroup(targetGroupId, parsed);
-        return;
-      }
-      if (hasNoPriceColumnsWarning(parsed)) {
-        if (parsed.items.length > 0) {
-          applyParsedAlbaranToMaterials(targetGroupId, parsed);
-          return;
-        }
-        applyParsedScanMetadataOnly(targetGroupId, parsed);
-        return;
-      }
-      applyParsedAlbaranToMaterials(targetGroupId, parsed);
-    },
-    [applyParsedAlbaranToMaterials, applyParsedScanMetadataOnly, applyParsedServiceToGroup, isServiceLikeParsedResult, openScanReview],
-  );
-
-  const resolveDuplicateForScan = useCallback(
-    (targetGroupId: string, parsed: ParsedAlbaranResult) => {
-      const parsedKey = buildDeliveryNoteKey(parsed.supplier, parsed.invoiceNumber);
-      if (parsedKey) {
-        const duplicateGroup = materialGroups.find((group) => {
-          if (group.id === targetGroupId) return false;
-          return buildDeliveryNoteKey(group.supplier, group.invoiceNumber) === parsedKey;
-        });
-
-        if (duplicateGroup) {
-          setPendingDuplicateResolution({
-            parsed,
-            targetGroupId,
-            duplicateGroupId: duplicateGroup.id,
-            duplicateLabel: `${duplicateGroup.supplier || 'Sin proveedor'} - ${duplicateGroup.invoiceNumber || 'Sin nº albarán'}`,
-          });
-          setDuplicateDialogOpen(true);
-          return;
-        }
-      }
-
-      applyParsedScanResultToGroup(targetGroupId, parsed);
-    },
-    [applyParsedScanResultToGroup, materialGroups],
-  );
-
-  const executeScanForMaterialGroup = useCallback(
-    async (targetGroupId: string) => {
-      if (readOnly || isAlbaranProcessing) return;
-
-      clearAlbaranScanError();
-      setScanInFlightTargetGroupId(targetGroupId);
-
-      try {
-        const parsed = await startAlbaranScan();
-        if (!parsed) return;
-
-        if (isServiceLikeParsedResult(parsed)) {
-          setPendingServiceScanResolution({ parsed, targetGroupId });
-          setServiceScanDialogOpen(true);
-          return;
-        }
-
-        if (parsed.requiresReview || parsed.confidence === 'low') {
-          openScanReview(parsed, targetGroupId);
-          return;
-        }
-
-        if (hasNoPriceColumnsWarning(parsed)) {
-          setPendingNoPriceScanResolution({ parsed, targetGroupId });
-          setNoPriceScanDialogOpen(true);
-          return;
-        }
-
-        if (!parsed.items.length) {
-          toast({
-            title: 'Sin resultados',
-            description: 'No se detectaron materiales en el albaran escaneado.',
-          });
-          return;
-        }
-
-        resolveDuplicateForScan(targetGroupId, parsed);
-      } finally {
-        setScanInFlightTargetGroupId(null);
-      }
-    },
-    [
-      clearAlbaranScanError,
-      isAlbaranProcessing,
-      isServiceLikeParsedResult,
-      openScanReview,
-      readOnly,
-      resolveDuplicateForScan,
-      startAlbaranScan,
-    ],
-  );
-
-  const handleScanMaterialsForGroup = useCallback(
-    (targetGroupId: string) => {
-      if (readOnly || isAlbaranProcessing) return;
-
-      const targetGroup = materialGroups.find((group) => group.id === targetGroupId);
-      if (!targetGroup) return;
-
-      setActiveMaterialGroupId(targetGroupId);
-
-      if (hasMaterialGroupSignificantData(targetGroup)) {
-        setPendingRescanTargetGroupId(targetGroupId);
-        setRescanConfirmDialogOpen(true);
-        return;
-      }
-
-      void executeScanForMaterialGroup(targetGroupId);
-    },
-    [executeScanForMaterialGroup, isAlbaranProcessing, materialGroups, readOnly],
-  );
-
-  const continueRescanForMaterialGroup = useCallback(() => {
-    const targetGroupId = pendingRescanTargetGroupId;
-    setRescanConfirmDialogOpen(false);
-    setPendingRescanTargetGroupId(null);
-    if (!targetGroupId) return;
-    void executeScanForMaterialGroup(targetGroupId);
-  }, [executeScanForMaterialGroup, pendingRescanTargetGroupId]);
-
-  const cancelServiceScanResolution = useCallback(() => {
-    setServiceScanDialogOpen(false);
-    setPendingServiceScanResolution(null);
-  }, []);
-
-  const confirmServiceScanResolution = useCallback(() => {
-    const pending = pendingServiceScanResolution;
-    if (!pending) return;
-    setServiceScanDialogOpen(false);
-    setPendingServiceScanResolution(null);
-    resolveDuplicateForScan(pending.targetGroupId, pending.parsed);
-  }, [pendingServiceScanResolution, resolveDuplicateForScan]);
-
-  const cancelNoPriceScanResolution = useCallback(() => {
-    setNoPriceScanDialogOpen(false);
-    setPendingNoPriceScanResolution(null);
-  }, []);
-
-  const confirmNoPriceScanResolution = useCallback(() => {
-    const pending = pendingNoPriceScanResolution;
-    if (!pending) return;
-    setNoPriceScanDialogOpen(false);
-    setPendingNoPriceScanResolution(null);
-    resolveDuplicateForScan(pending.targetGroupId, pending.parsed);
-  }, [pendingNoPriceScanResolution, resolveDuplicateForScan]);
-
-  const updateScanReviewItem = useCallback((index: number, patch: Partial<ParsedAlbaranItem>) => {
-    const normalizedPatch: Partial<ParsedAlbaranItem> = {
-      ...patch,
-      material: patch.material === undefined ? undefined : sanitizeText(patch.material),
-      unit: patch.unit === undefined ? undefined : patch.unit ? sanitizeText(patch.unit) : null,
-    };
-    setScanReviewItems((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              ...normalizedPatch,
-            }
-          : item,
-      ),
-    );
-  }, []);
-
-  const addScanReviewItem = useCallback(() => {
-    setScanReviewItems((current) => [...current, createParsedAlbaranReviewItem()]);
-  }, []);
-
-  const updateScanReviewServiceLine = useCallback((lineId: string, patch: Partial<ServiceLine>) => {
-    setScanReviewServiceLines((current) =>
-      current.map((line) => {
-        if (line.id !== lineId) return line;
-        return {
-          ...line,
-          ...patch,
-          description:
-            patch.description === undefined ? line.description : sanitizeText(patch.description),
-          hours:
-            patch.hours === undefined
-              ? line.hours
-              : typeof patch.hours === 'number' && Number.isFinite(patch.hours)
-                ? nonNegative(patch.hours)
-                : null,
-          trips:
-            patch.trips === undefined
-              ? line.trips
-              : typeof patch.trips === 'number' && Number.isFinite(patch.trips)
-                ? nonNegative(patch.trips)
-                : null,
-          tons:
-            patch.tons === undefined
-              ? line.tons
-              : typeof patch.tons === 'number' && Number.isFinite(patch.tons)
-                ? nonNegative(patch.tons)
-                : null,
-          m3:
-            patch.m3 === undefined
-              ? line.m3
-              : typeof patch.m3 === 'number' && Number.isFinite(patch.m3)
-                ? nonNegative(patch.m3)
-                : null,
-        };
-      }),
-    );
-  }, []);
-
-  const addScanReviewServiceLine = useCallback(() => {
-    setScanReviewServiceLines((current) => [...current, createServiceLine()]);
-  }, []);
-
-  const removeScanReviewServiceLine = useCallback((lineId: string) => {
-    setScanReviewServiceLines((current) => {
-      if (current.length <= 1) return current;
-      return current.filter((line) => line.id !== lineId);
-    });
-  }, []);
-
-  const createOtrosLineInScanReview = useCallback(() => {
-    setScanReviewItems((current) => {
-      const alreadyExists = current.some((item) => item.material.trim().toUpperCase().startsWith('OTROS'));
-      if (alreadyExists) return current;
-      const description = scanReviewServiceDescription.trim();
-      const material = description ? `OTROS - ${description}` : 'OTROS';
-      return [
-        ...current,
-        {
-          ...createParsedAlbaranReviewItem(),
-          material,
-          quantity: 1,
-          unit: 'ud',
-          rowText: material,
-          missingCritical: false,
-        },
-      ];
-    });
-  }, [scanReviewServiceDescription]);
-
-  const applyScanReview = useCallback(() => {
-    const normalizedServiceLines = scanReviewServiceLines
-      .map((line) => ({
-        ...line,
-        description: sanitizeText(line.description),
-        hours:
-          typeof line.hours === 'number' && Number.isFinite(line.hours) ? nonNegative(line.hours) : null,
-        trips:
-          typeof line.trips === 'number' && Number.isFinite(line.trips) ? nonNegative(line.trips) : null,
-        tons:
-          typeof line.tons === 'number' && Number.isFinite(line.tons) ? nonNegative(line.tons) : null,
-        m3: typeof line.m3 === 'number' && Number.isFinite(line.m3) ? nonNegative(line.m3) : null,
-      }))
-      .filter((line) => {
-        const hasDescription = line.description.length > 0;
-        const hasValues =
-          nonNegative(line.hours ?? 0) > 0 ||
-          nonNegative(line.trips ?? 0) > 0 ||
-          nonNegative(line.tons ?? 0) > 0 ||
-          nonNegative(line.m3 ?? 0) > 0;
-        return hasDescription || hasValues;
-      });
-
-    const warningSet = new Set(scanReviewWarnings);
-    const hasServiceWarning =
-      warningSet.has('SERVICE_LAYOUT_HEADER') ||
-      warningSet.has('SERVICE_MARKERS_DETECTED') ||
-      warningSet.has('SERVICE_TABLE_DETECTED');
-    const serviceSubtypes = new Set<NonNullable<ParsedAlbaranResult['docSubtype']>>([
-      'BOMBEOS_GILGIL_ALBARAN_BOMBA',
-      'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
-      'CONSTRUCCIONES_PARTE_TRABAJO',
-    ]);
-    const hasServiceSubtype = scanReviewDocSubtype ? serviceSubtypes.has(scanReviewDocSubtype) : false;
-    const hasServiceUnitInReviewItems = scanReviewItems.some((item) => {
-      const normalized = normalizeServiceUnitFromScan(item.unit);
-      return normalized === 'h' || normalized === 'viaje' || normalized === 't' || normalized === 'm3';
-    });
-    const isServiceReview =
-      scanReviewDocType === 'SERVICE_MACHINERY' ||
-      hasServiceWarning ||
-      hasServiceSubtype ||
-      hasServiceUnitInReviewItems ||
-      normalizedServiceLines.length > 0 ||
-      (sanitizeText(scanReviewServiceDescription).length > 0 && scanReviewDocType !== 'MATERIALS_TABLE');
-
-    const reviewedItems =
-      isServiceReview
-        ? buildParsedItemsFromServiceLines(normalizedServiceLines)
-        : scanReviewItems.map((item) => {
-            const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : null;
-            const unitPrice = typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) ? item.unitPrice : null;
-            const costDoc = typeof item.costDoc === 'number' && Number.isFinite(item.costDoc) ? item.costDoc : null;
-            const costCalc = quantity !== null && unitPrice !== null ? quantity * unitPrice : null;
-            const difference = costDoc !== null && costCalc !== null ? Math.abs(costDoc - costCalc) : null;
-            const normalizedUnit = item.unit ? normalizeMaterialUnitFromScan(item.unit) : '';
-
-            return {
-              ...item,
-              material: sanitizeText(item.material),
-              quantity,
-              unitPrice,
-              costDoc,
-              costCalc,
-              difference,
-              unit: normalizedUnit || null,
-              missingCritical: !sanitizeText(item.material) || quantity === null || !normalizedUnit,
-            };
-          });
-
-    const reviewedResult: ParsedAlbaranResult = {
-      supplier: sanitizeText(scanReviewSupplier) || null,
-      invoiceNumber: sanitizeText(scanReviewInvoiceNumber) || null,
-      documentDate: sanitizeText(scanReviewDocumentDate) || null,
-      docType: isServiceReview ? 'SERVICE_MACHINERY' : normalizeDocType(scanReviewDocType),
-      docSubtype: scanReviewDocSubtype ?? null,
-      serviceDescription:
-        sanitizeText(scanReviewServiceDescription) ||
-        (isServiceReview ? normalizedServiceLines[0]?.description ?? null : null),
-      confidence: 'medium',
-      warnings: scanReviewWarnings,
-      score: scanReviewScore,
-      profileUsed: scanReviewProfileUsed,
-      fieldConfidence: scanReviewFieldConfidence ?? undefined,
-      fieldWarnings: scanReviewFieldWarnings ?? undefined,
-      fieldMeta: scanReviewFieldMeta ?? null,
-      templateData: scanReviewTemplateData ?? null,
-      requiresReview: false,
-      reviewReason: null,
-      headerDetected: true,
-      items: reviewedItems,
-      imageUris: scanReviewImageUris,
-      rawText: scanReviewRawText,
-    };
-
-    if (!scanReviewTargetGroupId) {
-      setScanReviewDialogOpen(false);
-      setScanReviewServiceLines([]);
-      return;
-    }
-
-    const targetGroupId = scanReviewTargetGroupId;
-    setScanReviewTargetGroupId(null);
-    setScanReviewDialogOpen(false);
-    setScanReviewServiceLines([]);
-    resolveDuplicateForScan(targetGroupId, reviewedResult);
-  }, [
-    buildParsedItemsFromServiceLines,
-    resolveDuplicateForScan,
-    scanReviewDocumentDate,
-    scanReviewDocType,
-    scanReviewDocSubtype,
-    scanReviewFieldConfidence,
-    scanReviewFieldMeta,
-    scanReviewFieldWarnings,
-    scanReviewInvoiceNumber,
-    scanReviewItems,
-    scanReviewImageUris,
-    scanReviewProfileUsed,
-    scanReviewRawText,
-    scanReviewScore,
-    scanReviewServiceLines,
-    scanReviewServiceDescription,
-    scanReviewSupplier,
-    scanReviewTemplateData,
-    scanReviewTargetGroupId,
-    scanReviewWarnings,
-  ]);
-
-  const applyDuplicateToTargetGroup = useCallback(() => {
-    if (!pendingDuplicateResolution) return;
-    const resolution = pendingDuplicateResolution;
-    setDuplicateDialogOpen(false);
-    setPendingDuplicateResolution(null);
-    applyParsedScanResultToGroup(resolution.targetGroupId, resolution.parsed);
-  }, [applyParsedScanResultToGroup, pendingDuplicateResolution]);
-
-  const overwriteExistingDuplicateGroup = useCallback(() => {
-    if (!pendingDuplicateResolution) return;
-    const resolution = pendingDuplicateResolution;
-    setDuplicateDialogOpen(false);
-    setPendingDuplicateResolution(null);
-    applyParsedScanResultToGroup(resolution.duplicateGroupId, resolution.parsed);
-  }, [applyParsedScanResultToGroup, pendingDuplicateResolution]);
-
-  const cancelDuplicateResolution = useCallback(() => {
-    setDuplicateDialogOpen(false);
-    setPendingDuplicateResolution(null);
-  }, []);
-
-  const openCostDifferenceDialogForRow = useCallback((groupId: string, row: MaterialRow) => {
-    if (row.costDocValue === null || row.costDocValue === undefined) return;
-    if (row.costWarningDelta === null || row.costWarningDelta === undefined) return;
-
-    setPendingCostDifferences([
-      {
-        groupId,
-        rowId: row.id,
-        material: row.name || 'Material',
-        costDoc: row.costDocValue,
-        costCalc: nonNegative(row.quantity) * nonNegative(row.unitPrice),
-        difference: row.costWarningDelta,
-      },
-    ]);
-    setCostDifferenceDialogOpen(true);
-  }, []);
-
-  const keepDocumentCostDifferences = useCallback(() => {
-    setCostDifferenceDialogOpen(false);
-    setPendingCostDifferences([]);
-  }, []);
-
-  const overwriteCostDifferencesWithCalculated = useCallback(() => {
-    if (pendingCostDifferences.length === 0) {
-      setCostDifferenceDialogOpen(false);
-      return;
-    }
-
-    const rowsByGroup = pendingCostDifferences.reduce<Record<string, Set<string>>>((acc, diff) => {
-      if (!acc[diff.groupId]) acc[diff.groupId] = new Set<string>();
-      acc[diff.groupId].add(diff.rowId);
-      return acc;
-    }, {});
-
-    setMaterialGroups((current) =>
-      current.map((group) => {
-        const rowIds = rowsByGroup[group.id];
-        if (!rowIds) return group;
-
-        return {
-          ...group,
-          rows: group.rows.map((row) => {
-            if (!rowIds.has(row.id)) return row;
-            const recalculated = nonNegative(row.quantity) * nonNegative(row.unitPrice);
-            return {
-              ...row,
-              total: recalculated,
-              costWarningDelta: null,
-            };
-          }),
-        };
-      }),
-    );
-
-    setCostDifferenceDialogOpen(false);
-    setPendingCostDifferences([]);
-  }, [pendingCostDifferences]);
-
   const updateMaterialGroup = (groupId: string, patch: Partial<MaterialGroup>) => {
     const normalizedPatch: Partial<MaterialGroup> = {
       ...patch,
@@ -2100,178 +1216,34 @@ export const GenerateWorkReportPanel = ({
     setSaveStatusDialogOpen(true);
   };
 
-  const buildWorkReportForExport = (): WorkReport => {
-    const nowIso = new Date().toISOString();
-
-    const reportForemanEntries = foremanResources
-      .map((resource) => ({
-        id: resource.id || crypto.randomUUID(),
-        name: resource.name.trim(),
-        role: mapForemanRoleForReport(resource.role),
-        hours: nonNegative(resource.hours),
-      }))
-      .filter((resource) => resource.name.length > 0 || resource.hours > 0);
-
-    const reportWorkGroups = workforceGroups
-      .map((group) => ({
-        id: group.id,
-        company: group.companyName.trim(),
-        items: group.rows
-          .filter((row) => row.workerName.trim().length > 0 || row.activity.trim().length > 0 || nonNegative(row.hours) > 0)
-          .map((row) => ({
-            id: row.id,
-            name: row.workerName.trim(),
-            activity: row.activity.trim(),
-            hours: nonNegative(row.hours),
-            total: nonNegative(row.total || row.hours),
-          })),
-      }))
-      .filter((group) => group.company.length > 0 || group.items.length > 0);
-
-    const reportMachineryGroups = subcontractedMachineryGroups
-      .map((group) => ({
-        id: group.id,
-        company: group.companyName.trim(),
-        items: group.rows
-          .filter((row) => row.machineType.trim().length > 0 || row.activity.trim().length > 0 || nonNegative(row.hours) > 0)
-          .map((row) => ({
-            id: row.id,
-            type: row.machineType.trim(),
-            activity: row.activity.trim(),
-            hours: nonNegative(row.hours),
-            total: nonNegative(row.total || row.hours),
-          })),
-        documentImage: group.documentImage,
-      }))
-      .filter((group) => group.company.length > 0 || group.items.length > 0);
-
-    const reportMaterialGroups = materialGroups
-      .map((group) => ({
-        id: group.id,
-        supplier: sanitizeText(group.supplier),
-        invoiceNumber: sanitizeText(group.invoiceNumber),
-        docType: group.docType ?? null,
-        serviceLines: (group.serviceLines || [])
-          .map((line) => ({
-            id: line.id,
-            description: sanitizeText(line.description),
-            hours: typeof line.hours === 'number' && Number.isFinite(line.hours) ? nonNegative(line.hours) : null,
-            trips: typeof line.trips === 'number' && Number.isFinite(line.trips) ? nonNegative(line.trips) : null,
-            tons: typeof line.tons === 'number' && Number.isFinite(line.tons) ? nonNegative(line.tons) : null,
-            m3: typeof line.m3 === 'number' && Number.isFinite(line.m3) ? nonNegative(line.m3) : null,
-          }))
-          .filter((line) => {
-            const hasDescription = line.description.length > 0;
-            const hasValues =
-              nonNegative(line.hours ?? 0) > 0 ||
-              nonNegative(line.trips ?? 0) > 0 ||
-              nonNegative(line.tons ?? 0) > 0 ||
-              nonNegative(line.m3 ?? 0) > 0;
-            return hasDescription || hasValues;
-          }),
-        items: group.rows
-          .filter(
-            (row) =>
-              row.name.trim().length > 0 ||
-              row.unit.trim().length > 0 ||
-              nonNegative(row.quantity) > 0 ||
-              nonNegative(row.unitPrice) > 0,
-          )
-          .map((row) => ({
-            id: row.id,
-            name: row.name.trim(),
-            quantity: nonNegative(row.quantity),
-            unit: row.unit.trim(),
-            unitPrice: nonNegative(row.unitPrice),
-            total: nonNegative(row.total ?? row.quantity * row.unitPrice),
-          })),
-      }))
-      .filter(
-        (group) =>
-          group.supplier.length > 0 ||
-          group.invoiceNumber.length > 0 ||
-          group.items.length > 0 ||
-          (group.serviceLines?.length ?? 0) > 0,
-      );
-
-    const reportSubcontractGroups = subcontractGroups
-      .map((group) => {
-        const totals = subcontractTotalsByGroupId[group.id];
-        const items = group.rows
-          .filter(
-            (row) =>
-              row.partida.trim().length > 0 ||
-              row.activity.trim().length > 0 ||
-              nonNegative(row.cantPerWorker) > 0 ||
-              nonNegative(row.hours) > 0 ||
-              row.workersAssigned.length > 0,
-          )
-          .map((row) => {
-            const rowTotals = totals?.rowTotalsById[row.id];
-            const assignedWorkersWithHours = row.workersAssigned.filter((worker) => nonNegative(worker.hours) > 0);
-            const workersCount =
-              rowTotals?.numTrabEfectivo ??
-              (assignedWorkersWithHours.length > 0 ? assignedWorkersWithHours.length : nonNegativeInt(group.numWorkersManual));
-            return {
-              id: row.id,
-              contractedPart: row.partida.trim(),
-              company: group.companyName.trim(),
-              activity: row.activity.trim(),
-              workers: workersCount,
-              hours: rowTotals?.horasHombre ?? nonNegative(row.hours),
-              unitType: mapSubcontractUnitToReportUnit(row.unit),
-              quantity: rowTotals?.produccion ?? nonNegative(row.cantPerWorker),
-              unitPrice: typeof row.unitPrice === 'number' ? nonNegative(row.unitPrice) : 0,
-              total: rowTotals?.importe ?? 0,
-              workerDetails: row.workersAssigned.map((worker) => ({
-                id: worker.id,
-                name: worker.name.trim(),
-                dni: '',
-                category: '',
-                hours: nonNegative(worker.hours),
-              })),
-            };
-          });
-
-        return {
-          id: group.id,
-          company: group.companyName.trim(),
-          items,
-          documentImage: group.documentImage,
-          totalWorkers: totals?.numWorkersEffective ?? nonNegativeInt(group.numWorkersManual),
-        };
-      })
-      .filter((group) => group.company.length > 0 || group.items.length > 0);
-
-    return {
-      id: reportIdentifier || crypto.randomUUID(),
-      workNumber: workNumber.trim(),
-      date: date || todayDate(),
-      workName: workName.trim(),
-      workId: selectedWorkId || undefined,
-      foreman: mainForeman.trim(),
-      foremanHours: nonNegative(mainForemanHours),
-      foremanEntries: reportForemanEntries,
-      foremanSignature: foremanSignature || undefined,
-      siteManager: siteManager.trim(),
-      siteManagerSignature: siteManagerSignature || undefined,
-      observations: observationsText || '',
-      workGroups: reportWorkGroups,
-      machineryGroups: reportMachineryGroups,
-      materialGroups: reportMaterialGroups,
-      subcontractGroups: reportSubcontractGroups,
-      createdAt: nowIso,
-      updatedAt: nowIso,
+  const createExportReport = (): WorkReport =>
+    buildWorkReportForExport({
+      reportIdentifier,
+      workNumber,
+      date,
+      workName,
+      workId: selectedWorkId,
+      mainForeman,
+      mainForemanHours,
+      foremanResources,
+      foremanSignature,
+      siteManager,
+      siteManagerSignature,
+      observationsText,
+      workforceGroups,
+      subcontractedMachineryGroups,
+      materialGroups,
+      subcontractGroups,
+      subcontractTotalsByGroupId,
       autoCloneNextDay,
       status: resolveSelectedSaveStatus().status,
-    };
-  };
+    });
 
   const handleDownloadPdf = async () => {
     if (exportingPdf || exportingExcel) return;
     try {
       setExportingPdf(true);
-      const report = buildWorkReportForExport();
+      const report = createExportReport();
       const { generateWorkReportPDF } = await import('@/utils/pdfGenerator');
       await generateWorkReportPDF(report, true);
       toast({
@@ -2294,7 +1266,7 @@ export const GenerateWorkReportPanel = ({
     if (exportingPdf || exportingExcel) return;
     try {
       setExportingExcel(true);
-      const report = buildWorkReportForExport();
+      const report = createExportReport();
       const { exportSingleReportToExcel } = await import('@/utils/exportUtils');
       await exportSingleReportToExcel(report);
       toast({
@@ -2513,13 +1485,7 @@ export const GenerateWorkReportPanel = ({
       />
       <ScanReviewDialog
         open={scanReviewDialogOpen}
-        onOpenChange={(open) => {
-          setScanReviewDialogOpen(open);
-          if (!open) {
-            setScanReviewTargetGroupId(null);
-            setScanReviewServiceLines([]);
-          }
-        }}
+        onOpenChange={handleScanReviewDialogOpenChange}
         reason={scanReviewReason}
         docType={scanReviewDocType}
         docSubtype={scanReviewDocSubtype ?? null}
@@ -2549,23 +1515,14 @@ export const GenerateWorkReportPanel = ({
         onAddServiceLine={addScanReviewServiceLine}
         onRemoveServiceLine={removeScanReviewServiceLine}
         onCreateOtrosLine={createOtrosLineInScanReview}
-        onCancel={() => {
-          setScanReviewDialogOpen(false);
-          setScanReviewTargetGroupId(null);
-          setScanReviewServiceLines([]);
-        }}
+        onCancel={cancelScanReview}
         onApply={applyScanReview}
         parseNumeric={parseNumeric}
       />
 
       <ServiceScanDialog
         open={serviceScanDialogOpen}
-        onOpenChange={(open) => {
-          setServiceScanDialogOpen(open);
-          if (!open) {
-            setPendingServiceScanResolution(null);
-          }
-        }}
+        onOpenChange={handleServiceScanDialogOpenChange}
         supplier={pendingServiceScanResolution?.parsed.supplier}
         invoiceNumber={pendingServiceScanResolution?.parsed.invoiceNumber}
         serviceDescription={pendingServiceScanResolution?.parsed.serviceDescription}
@@ -2575,42 +1532,24 @@ export const GenerateWorkReportPanel = ({
 
       <NoPriceScanDialog
         open={noPriceScanDialogOpen}
-        onOpenChange={(open) => {
-          setNoPriceScanDialogOpen(open);
-          if (!open) {
-            setPendingNoPriceScanResolution(null);
-          }
-        }}
+        onOpenChange={handleNoPriceScanDialogOpenChange}
         supplier={pendingNoPriceScanResolution?.parsed.supplier}
         invoiceNumber={pendingNoPriceScanResolution?.parsed.invoiceNumber}
-        description={pendingNoPriceScanResolution ? extractNoPriceDescription(pendingNoPriceScanResolution.parsed) || 'OTROS' : 'OTROS'}
+        description={pendingNoPriceDescription}
         onCancel={cancelNoPriceScanResolution}
         onConfirm={confirmNoPriceScanResolution}
       />
 
       <RescanConfirmDialog
         open={rescanConfirmDialogOpen}
-        onOpenChange={(open) => {
-          setRescanConfirmDialogOpen(open);
-          if (!open) {
-            setPendingRescanTargetGroupId(null);
-          }
-        }}
-        onCancel={() => {
-          setRescanConfirmDialogOpen(false);
-          setPendingRescanTargetGroupId(null);
-        }}
+        onOpenChange={handleRescanConfirmDialogOpenChange}
+        onCancel={cancelRescanForMaterialGroup}
         onContinue={continueRescanForMaterialGroup}
       />
 
       <DuplicateDialog
         open={duplicateDialogOpen}
-        onOpenChange={(open) => {
-          setDuplicateDialogOpen(open);
-          if (!open) {
-            setPendingDuplicateResolution(null);
-          }
-        }}
+        onOpenChange={handleDuplicateDialogOpenChange}
         duplicateLabel={pendingDuplicateResolution?.duplicateLabel}
         onApplyToTarget={applyDuplicateToTargetGroup}
         onOverwriteExisting={overwriteExistingDuplicateGroup}
@@ -2619,12 +1558,7 @@ export const GenerateWorkReportPanel = ({
 
       <CostDifferenceDialog
         open={costDifferenceDialogOpen}
-        onOpenChange={(open) => {
-          setCostDifferenceDialogOpen(open);
-          if (!open) {
-            setPendingCostDifferences([]);
-          }
-        }}
+        onOpenChange={handleCostDifferenceDialogOpenChange}
         differences={pendingCostDifferences}
         onKeep={keepDocumentCostDifferences}
         onOverwrite={overwriteCostDifferencesWithCalculated}
@@ -2650,5 +1584,6 @@ export const GenerateWorkReportPanel = ({
     </div>
   );
 };
+
 
 

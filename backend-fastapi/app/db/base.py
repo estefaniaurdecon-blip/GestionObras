@@ -16,6 +16,7 @@ from app.models.tenant_profile import TenantProfile  # noqa: F401
 from app.models.job_run_lock import JobRunLock  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.mfa_email_code import MFAEmailCode  # noqa: F401
+from app.models.password_reset_token import PasswordResetToken  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401
 from app.models.ticket_message import TicketMessage  # noqa: F401
 from app.models.ticket_participant import TicketParticipant  # noqa: F401

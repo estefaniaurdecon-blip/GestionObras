@@ -10,7 +10,8 @@ import {
   updateCurrentUserProfile,
   type ApiUser,
 } from '@/integrations/api/client';
-import { saveOfflineCredential } from '@/integrations/api/offlineCredentials';
+import { saveOfflineCredential, verifyOfflineCredential } from '@/integrations/api/offlineCredentials';
+import { offlineDb } from '@/offline-db/db';
 import { toast } from '@/hooks/use-toast';
 
 interface ProfileSettingsPanelProps {
@@ -91,15 +92,6 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
   const handlePasswordSave = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      toast({
-        title: 'Conexion requerida',
-        description: 'Para cambiar la contraseña debes estar online y sincronizar con el servidor.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     if (newPassword !== newPasswordConfirm) {
       toast({
         title: 'Contraseñas diferentes',
@@ -109,18 +101,58 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
       return;
     }
 
-    const apiReachable = await canReachApi();
-    if (!apiReachable) {
-      toast({
-        title: 'Conexion requerida',
-        description: 'La password solo puede modificarse cuando el dispositivo este online.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isReachable = isOnline && (await canReachApi());
 
     setSavingPassword(true);
     try {
+      if (!isReachable) {
+        // Offline: verificar contra credenciales locales, guardar nuevo hash y encolar en outbox
+        const valid = await verifyOfflineCredential(user.email, currentPassword);
+        if (!valid) {
+          toast({
+            title: 'Contraseña actual incorrecta',
+            description: 'La contraseña actual introducida no es correcta.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        await saveOfflineCredential(user.email, newPassword);
+
+        await offlineDb.transaction(async (tx) => {
+          // Deduplicar: eliminar cualquier cambio pendiente anterior para este usuario
+          await tx.run(
+            `DELETE FROM outbox WHERE entity = 'credential_change' AND entity_id = ? AND status = 'pending';`,
+            [user.email],
+          );
+          await tx.run(
+            `INSERT INTO outbox (id, entity, entity_id, op, payload_json, created_at, attempts, last_error, status)
+             VALUES (?, 'credential_change', ?, 'update', ?, ?, 0, NULL, 'pending');`,
+            [
+              crypto.randomUUID(),
+              user.email,
+              JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword,
+                new_password_confirm: newPasswordConfirm,
+              }),
+              Date.now(),
+            ],
+          );
+        });
+
+        setCurrentPassword('');
+        setNewPassword('');
+        setNewPasswordConfirm('');
+        toast({
+          title: 'Contraseña actualizada localmente',
+          description: 'El cambio se enviará al servidor la próxima vez que te conectes.',
+        });
+        return;
+      }
+
+      // Online: llamar a la API directamente
       await changePassword({
         current_password: currentPassword,
         new_password: newPassword,
@@ -135,48 +167,16 @@ export function ProfileSettingsPanel({ user, onProfileUpdated }: ProfileSettings
         console.warn('[Profile] No se pudo actualizar credencial offline tras cambiar contraseña:', offlineCredentialError);
       }
       toast({
-        title: 'contraseña actualizada',
+        title: 'Contraseña actualizada',
         description: 'La contraseña se ha cambiado correctamente',
       });
     } catch (passwordError: any) {
-      const rawMessage = [
-        String(passwordError?.message || ''),
-        String(passwordError?.detail || ''),
-        String(passwordError?.data?.detail || ''),
-        String(passwordError?.cause?.message || ''),
-        String(passwordError),
-      ]
-        .join(' ')
-        .toLowerCase();
-      const hasHttpStatus =
-        typeof passwordError?.status === 'number' ||
-        typeof passwordError?.data?.status === 'number';
-      const hasZeroStatus =
-        passwordError?.status === 0 || passwordError?.data?.status === 0;
-      const isOfflineFailure =
-        (typeof navigator !== 'undefined' && !navigator.onLine) ||
-        hasZeroStatus ||
-        !hasHttpStatus ||
-        passwordError instanceof TypeError ||
-        rawMessage.includes('failed to fetch') ||
-        rawMessage.includes('network request failed') ||
-        rawMessage.includes('fetch failed') ||
-        rawMessage.includes('networkerror') ||
-        rawMessage.includes('load failed') ||
-        rawMessage.includes('err_internet_disconnected');
-
-      if (isOfflineFailure) {
-        toast({
-          title: 'Conexion requerida',
-          description: 'La contraseña solo puede modificarse cuando el dispositivo este online.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       toast({
         title: 'No se pudo cambiar la contraseña',
-        description: (typeof passwordError?.data?.detail === 'string' && passwordError.data.detail) || 'No se pudo cambiar la contrase\u00f1a. Intenta de nuevo.',
+        description:
+          (typeof passwordError?.data?.detail === 'string' && passwordError.data.detail) ||
+          passwordError?.message ||
+          'Intenta de nuevo.',
         variant: 'destructive',
       });
     } finally {

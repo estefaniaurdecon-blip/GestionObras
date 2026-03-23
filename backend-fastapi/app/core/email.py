@@ -147,6 +147,74 @@ def send_mfa_email_code(to_email: str, code: str) -> None:
             )
 
 
+def _get_reset_smtp_params() -> tuple[str | None, int, str | None, str | None, str | None, bool]:
+    """Devuelve parámetros SMTP para reset de contraseña.
+
+    Si están configurados los vars RESET_SMTP_*, los usa; si no, cae al SMTP principal.
+    """
+    host = getattr(settings, "reset_smtp_host", None)
+    if host:
+        port = getattr(settings, "reset_smtp_port", 587)
+        username = getattr(settings, "reset_smtp_username", None)
+        password = getattr(settings, "reset_smtp_password", None)
+        from_email = getattr(settings, "reset_smtp_from", None) or username
+        use_tls = getattr(settings, "reset_smtp_use_tls", True)
+        return host, port, username, password, from_email, use_tls
+    return _get_smtp_params()
+
+
+def send_password_reset_email(to_email: str, reset_url: str) -> None:
+    """
+    Envía un enlace de recuperación de contraseña al usuario.
+    Usa RESET_SMTP_* si está configurado, si no el SMTP principal.
+    """
+
+    host, port, username, password, from_email, use_tls = _get_reset_smtp_params()
+    if not host or not username or not password or not from_email:
+        if getattr(settings, "debug", False):
+            logger.warning(
+                "DEBUG RESET: enlace de recuperación para %s = %s",
+                to_email,
+                reset_url,
+            )
+        return
+
+    subject = "Recuperación de contraseña"
+    body = (
+        f"Hola,\n\n"
+        f"Hemos recibido una solicitud para restablecer la contraseña de tu cuenta.\n\n"
+        f"Haz clic en el siguiente enlace para crear una nueva contraseña:\n"
+        f"{reset_url}\n\n"
+        f"Este enlace caduca en 1 hora. Si no solicitaste el cambio, ignora este mensaje.\n\n"
+        f"Un saludo.\n"
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    try:
+        if use_tls:
+            with smtplib.SMTP(host, port) as server:
+                server.starttls()
+                server.login(username, password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port) as server:
+                server.login(username, password)
+                server.send_message(msg)
+    except Exception as exc:
+        logger.exception("Error enviando email de reset a %s: %s", to_email, exc)
+        if getattr(settings, "debug", False):
+            logger.warning(
+                "DEBUG RESET (fallo SMTP): enlace para %s = %s",
+                to_email,
+                reset_url,
+            )
+
+
 def send_user_invitation_email(
     to_email: str,
     tenant_name: str,
