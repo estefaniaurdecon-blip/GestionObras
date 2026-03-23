@@ -285,6 +285,10 @@ def list_users_by_tenant(
         raise LookupError("Tenant no encontrado")
 
     stmt = select(User).where(User.tenant_id == tenant_id)
+    if not current_user.is_super_admin:
+        group_id = resolve_creator_group_id(session, current_user, persist=True)
+        if group_id is not None:
+            stmt = stmt.where(User.creator_group_id == group_id)
     if exclude_assigned:
         assigned_user_ids = session.exec(
             select(EmployeeProfile.user_id).where(

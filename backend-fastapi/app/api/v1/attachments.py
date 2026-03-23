@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.session import get_session
 from app.models.attachments import SharedFile, WorkReportAttachment
 from app.models.user import User
-from app.services.user_service import users_share_creation_group
+from app.services.user_service import resolve_creator_group_id, users_share_creation_group
 
 
 router = APIRouter()
@@ -109,18 +109,49 @@ def _ensure_in_dir(base_dir: Path, candidate: Path) -> Path:
     return candidate_resolved
 
 
-def _get_report_or_403(session: Session, work_report_id: int, tenant_id: int) -> "WorkReport":
+def _get_report_or_403(
+    session: Session,
+    work_report_id: int,
+    tenant_id: int,
+    current_user: User,
+) -> "WorkReport":
     """
     Fase 1: valida existencia + pertenencia al tenant.
-    Devuelve 404 en ambos casos para no revelar existencia cross-tenant.
-    Fase 2d: añadir can_access_work_report_attachment() aquí sin cambiar firma.
+    Fase 2d: valida acceso por grupo (Opción B).
+    Devuelve 404 para errores de existencia/tenant (no revela existencia cross-tenant).
+    Devuelve 403 para errores de acceso de grupo.
+    Partes legacy con creator_group_id=NULL son solo accesibles por super_admin.
     """
     from app.models.erp import WorkReport  # importación local para evitar circular
 
     report = session.get(WorkReport, work_report_id)
     if not report or report.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parte no encontrado.")
+    # Fase 2d: filtro de grupo
+    if not current_user.is_super_admin:
+        if report.creator_group_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este parte.")
+        user_group = resolve_creator_group_id(session, current_user, persist=True)
+        if user_group != report.creator_group_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este parte.")
     return report
+
+
+def _ensure_work_report_image_access(
+    session: Session,
+    tenant_id: int,
+    current_user: User,
+    file_path: str,
+) -> None:
+    attachment = session.exec(
+        select(WorkReportAttachment).where(
+            WorkReportAttachment.tenant_id == tenant_id,
+            WorkReportAttachment.file_path == file_path,
+        )
+    ).first()
+    if attachment is None:
+        return
+    _get_report_or_403(session, attachment.work_report_id, tenant_id, current_user)
 
 
 def _write_upload(upload: UploadFile, target_path: Path) -> int:
@@ -202,7 +233,7 @@ def list_work_report_attachments(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[dict]:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    _get_report_or_403(session, work_report_id, tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id, current_user)
     rows = session.exec(
         select(WorkReportAttachment)
         .where(
@@ -226,7 +257,7 @@ def create_work_report_attachment(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    _get_report_or_403(session, work_report_id, tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id, current_user)
     content_type = _safe_content_type(file)
     extension = _guess_extension(file)
     filename = _sanitize_filename(file.filename, "image")
@@ -281,7 +312,7 @@ def update_work_report_attachment(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    _get_report_or_403(session, work_report_id, tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id, current_user)
     row = session.exec(
         select(WorkReportAttachment).where(
             WorkReportAttachment.id == attachment_id,
@@ -313,7 +344,7 @@ def delete_work_report_attachment(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> Response:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    _get_report_or_403(session, work_report_id, tenant_id)
+    _get_report_or_403(session, work_report_id, tenant_id, current_user)
     row = session.exec(
         select(WorkReportAttachment).where(
             WorkReportAttachment.id == attachment_id,
@@ -345,6 +376,7 @@ def serve_work_report_image(
     tenant_prefix = f"tenant_{tenant_id}/"
     if not file_path.startswith(tenant_prefix):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este archivo.")
+    _ensure_work_report_image_access(session, tenant_id, current_user, file_path)
     base_dir = Path(settings.work_report_images_storage_path)
     target = _ensure_in_dir(base_dir, base_dir / file_path)
     if not target.exists():
@@ -400,7 +432,6 @@ def delete_generic_image_by_url(
     current_user: User = Depends(get_current_active_user),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict:
-    del session
     tenant_id = _tenant_scope(current_user, x_tenant_id)
     relative_path = _extract_relative_path_from_image_url(payload.url)
     if not relative_path:
@@ -414,6 +445,7 @@ def delete_generic_image_by_url(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No autorizado para eliminar este archivo.",
         )
+    _ensure_work_report_image_access(session, tenant_id, current_user, relative_path)
 
     base_dir = Path(settings.work_report_images_storage_path)
     target = _ensure_in_dir(base_dir, base_dir / relative_path)

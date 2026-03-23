@@ -65,7 +65,7 @@ def api_list_user_profiles(
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> list[UserProfileRead]:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    return list_user_profiles(session, tenant_id=tenant_id, app_role=app_role)
+    return list_user_profiles(session, tenant_id=tenant_id, current_user=current_user, app_role=app_role)
 
 
 @router.get("/users/{user_id}/roles", response_model=UserRolesRead, summary="Listar roles de app de un usuario")
@@ -95,7 +95,7 @@ def api_add_user_role(
         return add_user_role(
             session,
             tenant_id=tenant_id,
-            current_user_id=current_user.id,
+            current_user=current_user,
             user_id=user_id,
             role=payload.role,
         )
@@ -120,6 +120,7 @@ def api_remove_user_role(
         return remove_user_role(
             session,
             tenant_id=tenant_id,
+            current_user=current_user,
             user_id=user_id,
             role=role,
         )
@@ -140,7 +141,7 @@ def api_approve_user(
         return approve_user(
             session,
             tenant_id=tenant_id,
-            current_user_id=current_user.id,
+            current_user=current_user,
             user_id=user_id,
             role=payload.role,
         )
@@ -178,7 +179,7 @@ def api_assign_user_to_work(
         return assign_user_to_work(
             session,
             tenant_id=tenant_id,
-            current_user_id=current_user.id,
+            current_user=current_user,
             user_id=payload.user_id,
             work_id=payload.work_id,
         )
@@ -199,6 +200,7 @@ def api_remove_user_from_work(
         return remove_user_from_work(
             session,
             tenant_id=tenant_id,
+            current_user=current_user,
             user_id=user_id,
             work_id=work_id,
         )

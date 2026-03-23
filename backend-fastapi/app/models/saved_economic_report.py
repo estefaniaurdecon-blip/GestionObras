@@ -5,7 +5,8 @@ from typing import Any, Optional
 
 from sqlalchemy import Column, Index
 from sqlmodel import Field, SQLModel
-from sqlalchemy.dialects.postgresql import JSONB
+
+from app.db.types import JSONB_COMPAT
 
 
 class SavedEconomicReport(SQLModel, table=True):
@@ -23,11 +24,11 @@ class SavedEconomicReport(SQLModel, table=True):
     foreman: str = Field(default="", max_length=256)
     site_manager: str = Field(default="", max_length=256)
 
-    work_groups: Any = Field(default=[], sa_column=Column(JSONB, nullable=False, server_default="[]"))
-    machinery_groups: Any = Field(default=[], sa_column=Column(JSONB, nullable=False, server_default="[]"))
-    material_groups: Any = Field(default=[], sa_column=Column(JSONB, nullable=False, server_default="[]"))
-    subcontract_groups: Any = Field(default=[], sa_column=Column(JSONB, nullable=False, server_default="[]"))
-    rental_machinery_groups: Any = Field(default=[], sa_column=Column(JSONB, nullable=False, server_default="[]"))
+    work_groups: Any = Field(default=[], sa_column=Column(JSONB_COMPAT, nullable=False, server_default="[]"))
+    machinery_groups: Any = Field(default=[], sa_column=Column(JSONB_COMPAT, nullable=False, server_default="[]"))
+    material_groups: Any = Field(default=[], sa_column=Column(JSONB_COMPAT, nullable=False, server_default="[]"))
+    subcontract_groups: Any = Field(default=[], sa_column=Column(JSONB_COMPAT, nullable=False, server_default="[]"))
+    rental_machinery_groups: Any = Field(default=[], sa_column=Column(JSONB_COMPAT, nullable=False, server_default="[]"))
 
     total_amount: float = Field(default=0.0)
 

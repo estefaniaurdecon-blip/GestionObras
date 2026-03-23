@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
 from app.models.erp import Project
@@ -16,6 +17,7 @@ from app.schemas.user_management import (
     UserProfileRead,
     UserRolesRead,
 )
+from app.services.user_service import resolve_creator_group_id, users_share_creation_group
 
 
 CORE_ROLE_TO_APP_ROLE: dict[str, AppRole] = {
@@ -67,6 +69,7 @@ def list_user_profiles(
     session: Session,
     *,
     tenant_id: int,
+    current_user: User,
     app_role: Optional[str] = None,
 ) -> list[UserProfileRead]:
     if app_role is not None:
@@ -87,6 +90,10 @@ def list_user_profiles(
             .where(User.tenant_id == tenant_id, User.is_super_admin.is_(False))
             .order_by(User.full_name.asc())
         )
+    if not current_user.is_super_admin:
+        group_id = resolve_creator_group_id(session, current_user, persist=True)
+        if group_id is not None:
+            stmt = stmt.where(User.creator_group_id == group_id)
     users = session.exec(stmt).all()
 
     return [
@@ -134,11 +141,18 @@ def add_user_role(
     session: Session,
     *,
     tenant_id: int,
-    current_user_id: Optional[int],
+    current_user: User,
     user_id: int,
     role: AppRole,
 ) -> UserRolesRead:
-    _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+    user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+
+    if not current_user.is_super_admin:
+        if not users_share_creation_group(session, current_user, user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para gestionar este usuario.",
+            )
 
     exists = session.exec(
         select(UserAppRole).where(
@@ -153,7 +167,7 @@ def add_user_role(
                 tenant_id=tenant_id,
                 user_id=user_id,
                 role=role,
-                created_by_id=current_user_id,
+                created_by_id=current_user.id,
             )
         )
         session.commit()
@@ -165,10 +179,19 @@ def remove_user_role(
     session: Session,
     *,
     tenant_id: int,
+    current_user: User,
     user_id: int,
     role: AppRole,
 ) -> UserRolesRead:
-    _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+    user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+
+    if not current_user.is_super_admin:
+        if not users_share_creation_group(session, current_user, user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para gestionar este usuario.",
+            )
+
     row = session.exec(
         select(UserAppRole).where(
             UserAppRole.tenant_id == tenant_id,
@@ -186,18 +209,26 @@ def approve_user(
     session: Session,
     *,
     tenant_id: int,
-    current_user_id: Optional[int],
+    current_user: User,
     user_id: int,
     role: AppRole,
 ) -> UserProfileRead:
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+
+    if not current_user.is_super_admin:
+        if not users_share_creation_group(session, current_user, user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para gestionar este usuario.",
+            )
+
     user.is_active = True
     session.add(user)
     session.commit()
     add_user_role(
         session,
         tenant_id=tenant_id,
-        current_user_id=current_user_id,
+        current_user=current_user,
         user_id=user_id,
         role=role,
     )
@@ -236,12 +267,19 @@ def assign_user_to_work(
     session: Session,
     *,
     tenant_id: int,
-    current_user_id: Optional[int],
+    current_user: User,
     user_id: int,
     work_id: int,
 ) -> UserAssignmentsRead:
-    _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+    user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
     _project_or_404(session, tenant_id=tenant_id, project_id=work_id)
+
+    if not current_user.is_super_admin:
+        if not users_share_creation_group(session, current_user, user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para gestionar este usuario.",
+            )
 
     row = session.exec(
         select(UserWorkAssignment).where(
@@ -256,7 +294,7 @@ def assign_user_to_work(
                 tenant_id=tenant_id,
                 user_id=user_id,
                 project_id=work_id,
-                created_by_id=current_user_id,
+                created_by_id=current_user.id,
             )
         )
         session.commit()
@@ -267,10 +305,19 @@ def remove_user_from_work(
     session: Session,
     *,
     tenant_id: int,
+    current_user: User,
     user_id: int,
     work_id: int,
 ) -> UserAssignmentsRead:
-    _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+    user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
+
+    if not current_user.is_super_admin:
+        if not users_share_creation_group(session, current_user, user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para gestionar este usuario.",
+            )
+
     row = session.exec(
         select(UserWorkAssignment).where(
             UserWorkAssignment.tenant_id == tenant_id,

@@ -410,6 +410,7 @@ class WorkReportRead(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+    creator_group_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None

@@ -1,10 +1,10 @@
 # Revisión técnica: política de visibilidad por creator_group_id
 
 **Fecha:** 2026-03-23 (actualizado 2026-03-23)
-**Estado:** Fase 1 completa (Etapas A + B + C implementadas y migradas en local). Pendiente: desplegar en producción y ejecutar checklist TC01–TC09 con backend levantado.
+**Estado:** Fase 1 completa + Fase 2a completa + Fase 2b completa + Fase 2c completa y verificada en local (2026-03-23). TC01–TC04 + TC07–TC09 + T2a-1 a T2a-5 + T05–T09 + T2c-1 a T2c-6 verificados. Pendiente: TC05/TC06 (manual) + despliegue en producción + Fase 2d.
 **Rama activa:** `wip/resume-claude-cutoff`
 **Propósito:** Documento de referencia para continuar la implementación en contextos futuros.
-**Implementación en curso.** Fase 1 Etapas A+B completadas en `wip/resume-claude-cutoff`. Ver §11 para estado detallado.
+**Implementación en curso.** Fase 1 Etapas A+B+C y Fase 2a completadas en `wip/resume-claude-cutoff`. Ver §11 para estado detallado.
 
 ---
 
@@ -798,43 +798,115 @@ Migración `a1b2c3d4e5f6` aplicada en local (`alembic upgrade head` ejecutado 20
 | C3 | Pre-flight SQL incluido en cabecera de la migración C1 y verificación en `upgrade()` | `alembic/versions/c3d4e5f6a7b8` | ✅ |
 | C4 | T7: grep frontend — 0 construcciones hardcodeadas de `/static/work-report-images/` | `src/**/*.{ts,tsx}` | ✅ |
 
-**Estado local (2026-03-23):** `alembic upgrade head` aplicado — BD en `c3d4e5f6a7b8` (head).
+**Estado local + Docker (2026-03-23):** `alembic upgrade head` aplicado — BD en `c3d4e5f6a7b8` (head).
 Pre-flight: A=0 IDs no numéricos · B=0 huérfanos · C=0 URLs legacy · 0 filas afectadas en backfill (tabla vacía).
-`work_report_id` confirmado `INTEGER` + FK CASCADE en BD local.
+`work_report_id` confirmado `INTEGER` + FK CASCADE. Imagen Docker reconstruida y contenedor reiniciado.
 
-**Pendiente operacional (producción):**
-- Aplicar `alembic upgrade head` en producción
-- Ejecutar checklist TC01–TC09 con backend levantado (ver §13)
+**TC01–TC04, TC07–TC09 verificados contra Docker (puerto 8000) — todos OK.**
 
-### Fase 2a — Preparar campo en WorkReport (sin activar filtro)
+**Pendiente operacional:**
+- TC05/TC06: verificación manual en navegador (frontend + PDF con imágenes reales)
+- Despliegue en servidor de producción remoto (cuando proceda)
 
-| # | Tarea | Archivos |
-|---|-------|----------|
-| 5 | Migración Alembic: añadir `creator_group_id` nullable a `erp_work_report` | Alembic |
-| 6 | Actualizar modelo `WorkReport` | `app/models/erp.py` |
-| 7 | Persistir `creator_group_id` al crear nuevos partes | `app/services/erp_service.py` |
+### Fase 2a — Preparar campo en WorkReport (sin activar filtro) — ✅ COMPLETADO 2026-03-23
 
-*Desde aquí todos los partes nuevos tienen el campo. Los legacy siguen en NULL.*
+Migración `d4e5f6a7b8c9` creada. Pendiente: `alembic upgrade head` en servidor.
 
-### Fase 2b — Administración de usuarios (puede ir en paralelo con 2a)
+| # | Tarea | Archivos | Estado |
+|---|-------|----------|--------|
+| 5 | Migración Alembic: añadir `creator_group_id` nullable a `erp_work_report` + índice `ix_erp_work_report_tenant_group` | `alembic/versions/d4e5f6a7b8c9_add_creator_group_id_to_work_report.py` | ✅ |
+| 6 | Actualizar modelo `WorkReport`: campo + índice en `__table_args__` | `app/models/erp.py` | ✅ |
+| 7 | Persistir `creator_group_id` al crear nuevos partes — `resolve_creator_group_id()` via PK lookup interno; sin cambio de firma en callers | `app/services/erp_service.py` | ✅ |
+| 7b | `creator_group_id: Optional[int] = None` añadido a `WorkReportRead` | `app/schemas/erp.py` | ✅ |
 
-| # | Tarea | Archivos |
-|---|-------|----------|
-| 8 | Filtro de grupo en `list_user_profiles()` | `app/services/user_management_service.py` |
-| 9 | Filtro de grupo en `list_users_by_tenant()` | `app/services/user_service.py` |
-| 10 | Pasar `current_user` al service desde endpoint | `app/api/v1/user_management.py` |
-| 11 | Validación de grupo en `approve_user()`, `add_user_role()`, `remove_user_role()`, `assign_user_to_work()`, `remove_user_from_work()` | `app/services/user_management_service.py` |
+**Verificaciones ejecutadas (2026-03-23):**
+- `tsc --noEmit` ✅ (sin errores nuevos)
+- imports Python limpios: modelo, schema, service ✅
+- `ix_erp_work_report_tenant_group` presente en `__table_args__` ✅
+- `alembic upgrade head`: c3d4e5f6a7b8 → d4e5f6a7b8c9 (head) ✅
+- columna `INTEGER nullable` + índice confirmados en Postgres (`\d erp_work_report`) ✅
+- imagen Docker reconstruida (`docker compose build backend-fastapi`) ✅
+- T2a-1 a T2a-5 verificados con script Python contra BD real ✅
+- respuesta API REST incluye campo `creator_group_id` en JSON ✅
+- pytest: fallo pre-existente JSONB/SQLite en conftest (no relacionado con Fase 2a) ⚠️
 
-### Fase 2c — Backfill de usuarios y partes legacy
+**Comportamiento post-Fase 2a:**
+- Usuario normal crea parte → `creator_group_id` resuelto y persistido.
+- super_admin crea parte → `creator_group_id = NULL` (correcto por diseño).
+- `current_user_id = None` → `creator_group_id = NULL`.
+- Partes legacy: intactos, `creator_group_id = NULL` hasta Fase 2c (backfill).
+- `list_work_reports()` sin cambios — no filtra por grupo todavía.
 
-| # | Tarea |
-|---|-------|
-| 12 | Ejecutar script auditoría en `dry_run=True` — obtener informe clasificado |
-| 13 | Aplicar Categoría 1 (automático seguro) para usuarios |
-| 14 | Revisar lista Categoría 2, aprobar manualmente, aplicar |
-| 15 | Resolver Categoría 3 caso a caso |
-| 16 | Backfill de work_reports: copiar `creator.creator_group_id` donde sea seguro |
-| 17 | Documentar partes que no pudieron resolverse (quedan con `creator_group_id=NULL`) |
+*Desde aquí todos los partes nuevos tienen el campo. Los legacy siguen en NULL hasta Fase 2c.*
+
+### Fase 2b — Administración de usuarios — ✅ IMPLEMENTADO 2026-03-23
+
+| # | Tarea | Archivos | Estado |
+|---|-------|----------|--------|
+| 8 | Filtro de grupo en `list_user_profiles()` | `app/services/user_management_service.py` | ✅ |
+| 9 | Filtro de grupo en `list_users_by_tenant()` | `app/services/user_service.py` | ✅ |
+| 10 | Pasar `current_user` al service desde endpoint | `app/api/v1/user_management.py` | ✅ |
+| 11 | Validación de grupo en `approve_user()`, `add_user_role()`, `remove_user_role()`, `assign_user_to_work()`, `remove_user_from_work()` | `app/services/user_management_service.py` | ✅ |
+
+**Cambios implementados (2026-03-23):**
+- `user_management_service.py`: añadidos imports `HTTPException, status` (fastapi) + `resolve_creator_group_id, users_share_creation_group` (user_service). `list_user_profiles()` recibe `current_user: User` y aplica filtro `WHERE creator_group_id = group_id`. `add_user_role()`, `remove_user_role()`, `approve_user()`, `assign_user_to_work()`, `remove_user_from_work()`: firmas cambiadas de `current_user_id: Optional[int]` a `current_user: User`; guard 403 antes de cualquier write; `_user_or_404()` capturado en `user` para pasar a `users_share_creation_group()`.
+- `user_service.py`: `list_users_by_tenant()` aplica filtro `WHERE creator_group_id = group_id` si no es super_admin.
+- `user_management.py`: todas las llamadas actualizadas a la nueva firma (`current_user=current_user` en lugar de `current_user_id=current_user.id`).
+- Sintaxis verificada (AST parse) ✅.
+- **Verificado contra Docker local (2026-03-23):** T05–T09 todos OK. Ver §13 para detalle.
+- **Pendiente:** despliegue en servidor de producción remoto (cuando proceda).
+
+### Fase 2c — Backfill de usuarios y partes legacy — ✅ COMPLETADA 2026-03-23
+
+Script: `backend-fastapi/scripts/backfill_creator_groups.py`
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 12 | Ejecutar script auditoría en `dry_run=True` | ✅ Ejecutado — 1 usuario semi_auto, 14 partes pending |
+| 13 | Aplicar Categoría 1 (automático seguro) para usuarios | ✅ Ejecutado — 0 casos Category 1 en este entorno |
+| 14 | Revisar Categoría 2 (semi_auto) | ✅ Revisado — 1 caso: `user_id=5`, creado por super_admin → auto-grupo aplicado manualmente |
+| 15 | Resolver Categoría 3 (manual) | ✅ Sin casos Category 3 en este entorno |
+| 16 | Backfill de work_reports | ✅ Ejecutado — 1 parte resuelto (`report_id=3`, `creator_group_id=3`) |
+| 17 | Documentar irresolubles | ✅ Ver tabla de casos cerrados más abajo |
+
+**Comandos ejecutados (2026-03-23, BD local `localhost:5433/saas`):**
+```bash
+python -m scripts.backfill_creator_groups --dry-run --verbose       # auditoria
+python -m scripts.backfill_creator_groups --apply-auto --verbose     # Paso 1 (0 aplicados)
+python -m scripts.backfill_creator_groups --apply-work-reports --verbose  # Paso 2 (1 aplicado)
+# Paso 3 (last_resort): no necesario — 0 casos clasificados como last_resort
+# user_id=5: UPDATE manual directo (ver regla documental más abajo)
+```
+
+**Resultados reales (Q5/Q6 post-backfill):**
+
+| Métrica | con_grupo | sin_grupo | total | cobertura |
+|---------|-----------|-----------|-------|-----------|
+| Usuarios (Q5) | 3 | 0 | 3 | **100%** |
+| Partes activos (Q6) | 2 | 12 | 14 | 14.3% |
+
+**Nota sobre Q6 (14.3%):** el porcentaje bajo es correcto por diseño. Los 12 partes con NULL fueron todos creados por `dios@cortecelestial.god` (super_admin, `user_id=1`). Son irresolubles por diseño y quedarán visibles solo para super_admin en Fase 2d. Ningún parte de usuario normal tiene NULL.
+
+**Casos cerrados y documentados:**
+
+| Entidad | ID | Estado final | Razón |
+|---------|----|-------------|-------|
+| Usuario | 5 (`master.urdecon@hotmail.com`) | `creator_group_id=5` (auto-grupo) | Creado por super_admin sin evidencia de pertenencia a rama existente → regla documental aplicada |
+| Parte | 3 | `creator_group_id=3` | Backfill seguro desde `creator_id=3` |
+| Partes | 1,2,4,5,6,7,8,9,10,11,12,13,15 | NULL permanente | Todos creados por super_admin — correcto por diseño |
+
+**Regla documental (para casos futuros similares):**
+> **Usuario activo creado por super_admin sin evidencia fiable de pertenencia a una rama existente → asignar auto-grupo propio (`creator_group_id = user.id`).**
+> Justificación: mantiene la lógica de ramas independientes. No visibiliza datos hacia otros grupos. Es reversible si posteriormente se decide mover al usuario a una rama.
+
+**Criterios de cierre verificados:**
+- [x] Q5: 0 usuarios activos con NULL — 100% cobertura
+- [x] Q6: todos los NULL identificados (super_admin por diseño) — ningún parte de usuario normal con NULL
+- [x] 0 errores en `report["errors"]` en todos los pasos
+- [x] Casos pendientes documentados en esta tabla
+- [x] Nuevos partes/usuarios (post-Fase-2a) heredan `creator_group_id` correctamente (T2a-1, T2a-2)
+
+**Fase 2c CERRADA. Siguiente: Fase 2d.**
 
 ### Fase 2d — Activar filtro de grupo en work reports (solo cuando backfill ≥95%)
 
@@ -872,14 +944,14 @@ Pre-flight: A=0 IDs no numéricos · B=0 huérfanos · C=0 URLs legacy · 0 fila
 | `app/main.py` | mount `/static/work-report-images` | Eliminado (mkdir conservado) | 1 (Etapa C) ✅ |
 | `alembic/versions/c3d4e5f6a7b8` | backfill `image_url` `/static/` → `/api/v1/` | Migración + pre-flight check en upgrade() | 1 (Etapa C) ✅ |
 | `app/models/attachments.py` | `WorkReportAttachment.work_report_id` | `str` → `int` + FK CASCADE | 1 (Etapa A) ✅ |
-| `app/models/erp.py` | `WorkReport` | Añadir `creator_group_id` | 2a |
+| `app/models/erp.py` | `WorkReport` | Añadir `creator_group_id` + índice compuesto | 2a ✅ |
 | `app/api/v1/attachments.py` | handlers adjuntos de partes | `_get_report_or_403()` + `work_report_id: int` | 1 (Etapa A) ✅ |
 | `app/api/v1/attachments.py` | `serve_work_report_image` | Nuevo endpoint autenticado | 1 (Etapa A) ✅ |
 | `app/api/v1/attachments.py` | `_work_image_public_url()` | URL → `/api/v1/work-reports/images/...` | 1 (Etapa A) ✅ |
 | `app/api/v1/attachments.py` | `_extract_relative_path_from_image_url()` | Nuevo helper — acepta URLs antiguas y nuevas | 1 (Etapa A) ✅ |
 | `alembic/versions/a1b2c3d4e5f6` | migración FK en WorkReportAttachment | `VARCHAR→INTEGER` + FK CASCADE | 1 (Etapa A) ✅ |
 | `app/api/v1/user_management.py` | `api_list_user_profiles()` | Pasar `current_user` al service | 2b |
-| `app/services/erp_service.py` | `create_work_report()` | Persistir `creator_group_id` | 2a |
+| `app/services/erp_service.py` | `create_work_report()` | Persistir `creator_group_id` (PK lookup interno, sin cambio de firma) | 2a ✅ |
 | `app/services/erp_service.py` | `list_work_reports()` | Filtro de grupo | 2d |
 | `app/services/user_service.py` | `list_users_by_tenant()` | Filtro de grupo | 2b |
 | `app/services/user_service.py` | `_infer_created_by_user_id()` | JSON + fallback | 3 |
@@ -891,7 +963,7 @@ Pre-flight: A=0 IDs no numéricos · B=0 huérfanos · C=0 URLs legacy · 0 fila
 | `app/services/ticket_service.py` | `_get_ticket_agent_user_ids()` | Filtro de grupo | 3 |
 | `app/policies/access_policies.py` | (nuevo módulo) | Crear | 3 |
 | `alembic/versions/` | nueva migración | FK en WorkReportAttachment | 1 |
-| `alembic/versions/` | nueva migración | `creator_group_id` en WorkReport | 2a |
+| `alembic/versions/d4e5f6a7b8c9` | migración `creator_group_id` en WorkReport | columna nullable + índice compuesto | 2a ✅ |
 | `scripts/backfill_creator_groups.py` | (nuevo) | Auditoría + backfill | 2c |
 
 ### Endpoints a tocar
@@ -931,12 +1003,25 @@ T04: resolve_creator_group_id() en user sin created_by_user_id
 ### Administración de usuarios (post Fase 2b)
 
 ```
-T05: tenant_admin_A lista usuarios → solo ve usuarios de su creator_group_id ✓
-T06: tenant_admin_A intenta aprobar user creado por tenant_admin_B → HTTP 403 ✓
-T07: tenant_admin_A intenta añadir rol a user de otro grupo → HTTP 403 ✓
-T08: super_admin puede ver y gestionar todos los usuarios del tenant ✓
-T09: tenant_admin_A lista usuarios → super_admin NO aparece en la lista ✓
+-- Verificados contra Docker local (2026-03-23) — Fase 2b completa --
+T05: user4 (tenant_admin, creator_group_id=4) lista usuarios
+     → solo devuelve [id=4] — OK ✅
+T05b: user4 → super_admin NO aparece en la lista — OK ✅
+T06: user4 POST /users/3/approve (user3 en grupo 3, distinto) → HTTP 403
+     → {"detail":"No tienes permiso para gestionar este usuario."} ✅
+T07a: user4 POST /users/3/roles {"role":"foreman"} → HTTP 403 ✅
+T07b: user4 DELETE /users/3/roles/foreman → HTTP 403 ✅
+T07c: user4 POST /assignments {"user_id":3,"work_id":1} → HTTP 403 ✅
+T07d: user4 DELETE /assignments?user_id=3&work_id=1 → HTTP 403 ✅
+T08: super_admin lista usuarios → [3,4,5] (todos), sin restricción → HTTP 200 ✅
+T08b: super_admin POST /users/3/approve → HTTP 200, approved=true ✅
+T08c: super_admin POST /users/3/roles → HTTP 200, roles incluidos ✅
+T09: super_admin lista usuarios → cortecelestial.god NO aparece — OK ✅
 ```
+
+**Efectos secundarios verificados:**
+- `creator_group_id` de user4 auto-resuelto a 4 y persistido en BD en primera llamada (`persist=True`) ✅
+- user5 (no consultado) permanece con `creator_group_id=NULL` hasta su primera llamada — comportamiento esperado ✅
 
 ### Mensajería
 
@@ -971,6 +1056,16 @@ TC07: SELECT COUNT(*) FROM erp_work_report_attachment WHERE image_url LIKE '%/st
 TC08: Subir imagen → image_url = http://.../api/v1/work-reports/images/tenant_1/work-reports/12/... ✅ sin /static/
 TC09: DELETE /attachments/images/by-url con URL /api/v1/... → HTTP 200 {success:true, deleted:true} ✅
 
+-- Activos desde Fase 2a — verificados en Docker local 2026-03-23 --
+T2a-1: usuario normal (user_id=3) crea parte → parte id=14 creator_group_id=3 ✅
+T2a-2: super_admin (user_id=1) crea parte → parte id=13 creator_group_id=NULL ✅
+T2a-3: POST /api/v1/erp/work-reports via API (SA) → JSON incluye "creator_group_id": null ✅
+T2a-4: 5 partes legacy leídos → creator_group_id=NULL sin error ni rotura ✅
+T2a-5: list_work_reports devuelve 12 partes — grupos: {None, 3} (sin filtro activo) ✅
+  · alembic upgrade head aplicado: c3d4e5f6a7b8 → d4e5f6a7b8c9 (head) ✅
+  · columna INTEGER nullable + ix_erp_work_report_tenant_group en Postgres ✅
+  · imagen Docker reconstruida y container reiniciado ✅
+
 -- Activos post Fase 2d (pendiente) --
 T20: user del grupo A accede a parte del grupo B → HTTP 403 ✓
 T21: super_admin accede a parte legacy sin creator_group_id → 200 ✓
@@ -996,11 +1091,25 @@ T26: usuario activo sin rastro → clasificado como 'manual', no modificado ✓
 - **Fase 1 Etapa B completada** (2026-03-23). Build ✅. Pendiente: verificación manual TC01–TC09 con backend levantado.
   - Nuevos archivos: `src/integrations/api/imageAuth.ts`, `src/components/AuthenticatedImage.tsx`
   - Modificados: `useWorkReportImages.ts`, `useRepasoImages.ts`, `usePostventaImages.ts`, `WorkReportImageGallery.tsx`, `WorkRepasosSection.tsx`, `pdfGenerator.ts`, `repasosExportUtils.ts`
-- **Fase 1 Etapa C completada** (2026-03-23). Migraciones `a1b2c3d4e5f6` + `c3d4e5f6a7b8` aplicadas en local. BD en `head`. Pendiente: desplegar en producción + verificar TC01–TC06, TC08–TC09.
+- **Fase 1 Etapa C completada y verificada** (2026-03-23). Migraciones aplicadas, imagen Docker reconstruida, TC01–TC04 + TC07–TC09 verificados contra Docker. Pendiente: TC05/TC06 (navegador) + despliegue remoto.
   - Mount `/static/work-report-images/` eliminado de `app/main.py` (mkdir conservado)
-  - Migración `c3d4e5f6a7b8`: backfill `image_url` + pre-flight automático en `upgrade()` — 0 filas afectadas (tabla vacía en local)
-  - TC07 verificado en local: 0 URLs legacy
-- Fases 2a, 2b, 2c, 2d, 3, 4: sin implementar.
+  - Migración `c3d4e5f6a7b8`: backfill `image_url` + pre-flight automático — 0 filas afectadas (tabla vacía)
+  - TC01 /static/ 404 · TC02 sin token 401 · TC03 propio 404 · TC04 cross-tenant 403 · TC07 0 legacy · TC08 201+URL /api/v1/ · TC09 200+deleted=true
+- **Fase 2a completada y verificada en Docker local** (2026-03-23).
+  - `WorkReport.creator_group_id: Optional[int]` + índice `ix_erp_work_report_tenant_group` en modelo y `__table_args__`
+  - `WorkReportRead.creator_group_id: Optional[int] = None` en schema
+  - `create_work_report()`: PK lookup interno → `resolve_creator_group_id()` → persiste campo; sin cambio de firma en callers
+  - Import `resolve_creator_group_id` añadido a `erp_service.py`
+  - Migración `d4e5f6a7b8c9` aplicada: columna + índice en Postgres ✅
+  - Docker image reconstruida y container reiniciado ✅
+  - T2a-1 a T2a-5: todos OK (ver §13) ✅
+  - Pendiente: despliegue en servidor de producción remoto (cuando proceda)
+- **Fase 2b completada y verificada** (2026-03-23).
+  - `user_management_service.py`: imports `HTTPException, status` + `resolve_creator_group_id, users_share_creation_group`. `list_user_profiles()` recibe `current_user: User`, filtro `WHERE creator_group_id = group_id`. `add_user_role()`, `remove_user_role()`, `approve_user()`, `assign_user_to_work()`, `remove_user_from_work()`: guard 403 antes de cualquier write.
+  - `user_service.py`: `list_users_by_tenant()` aplica filtro de grupo.
+  - `user_management.py`: 6 llamadas actualizadas a nueva firma.
+  - T05–T09: todos verificados contra Docker ✅
+- Fases 2c, 2d, 3, 4: sin implementar.
 
 ### Decisiones y orden crítico
 

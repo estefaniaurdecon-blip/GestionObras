@@ -67,6 +67,7 @@ from app.schemas.erp import (
     WorkReportUpdate,
 )
 from app.services.notification_service import create_notification
+from app.services.user_service import resolve_creator_group_id
 
 TASK_STATUSES = {"pending", "in_progress", "done"}
 WORK_REPORT_ALLOWED_STATUSES = {
@@ -1671,6 +1672,7 @@ def list_work_reports(
     include_deleted: bool = False,
     limit: int = 100,
     offset: int = 0,
+    current_user: Optional[User] = None,
 ) -> list[WorkReport]:
     resolved_tenant_id = _require_tenant(tenant_id)
     if project_id is not None:
@@ -1679,6 +1681,12 @@ def list_work_reports(
     stmt = select(WorkReport).where(WorkReport.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(WorkReport.deleted_at.is_(None))
+    # Fase 2d: filtro de grupo (Opción B). Solo partes del mismo creator_group_id.
+    # Partes legacy con creator_group_id=NULL quedan visibles solo para super_admin.
+    if current_user is not None and not current_user.is_super_admin:
+        group_id = resolve_creator_group_id(session, current_user, persist=True)
+        if group_id is not None:
+            stmt = stmt.where(WorkReport.creator_group_id == group_id)
     if project_id is not None:
         stmt = stmt.where(WorkReport.project_id == project_id)
     if external_id is not None:
@@ -1751,6 +1759,14 @@ def create_work_report(
     if is_closed:
         status = "closed"
 
+    # Fase 2a: resolver creator_group_id del usuario que crea el parte.
+    # No activa ningún filtro de visibilidad; solo persiste el campo para Fase 2c.
+    creator_group_id: Optional[int] = None
+    if current_user_id is not None:
+        creator_user = session.get(User, current_user_id)
+        if creator_user is not None and not creator_user.is_super_admin:
+            creator_group_id = resolve_creator_group_id(session, creator_user, persist=True)
+
     now = datetime.now(UTC).replace(tzinfo=None)
     report = WorkReport(
         tenant_id=resolved_tenant_id,
@@ -1765,6 +1781,7 @@ def create_work_report(
         payload=dict(payload.payload or {}),
         created_by_id=current_user_id,
         updated_by_id=current_user_id,
+        creator_group_id=creator_group_id,
         created_at=now,
         updated_at=now,
     )
@@ -1999,6 +2016,7 @@ def sync_work_reports(
     payload: WorkReportSyncRequest,
     *,
     current_user_id: Optional[int],
+    current_user: Optional[User] = None,
 ) -> WorkReportSyncResponse:
     resolved_tenant_id = _require_tenant(tenant_id)
     acknowledgements: list[WorkReportSyncAck] = []
@@ -2185,6 +2203,7 @@ def sync_work_reports(
             include_deleted=True,
             limit=payload.limit,
             offset=0,
+            current_user=current_user,
         )
 
     return WorkReportSyncResponse(

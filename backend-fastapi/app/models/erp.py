@@ -275,6 +275,9 @@ class WorkReport(SQLModel, table=True):
 
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    # Fase 2a: grupo del creador; nullable para preservar partes legacy.
+    # Activar filtro en list_work_reports() solo tras completar backfill (Fase 2c).
+    creator_group_id: Optional[int] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
@@ -284,6 +287,7 @@ class WorkReport(SQLModel, table=True):
         Index("ix_erp_work_report_tenant_updated", "tenant_id", "updated_at"),
         Index("ix_erp_work_report_tenant_external", "tenant_id", "external_id", unique=True),
         Index("ix_erp_work_report_tenant_idem", "tenant_id", "idempotency_key", unique=True),
+        Index("ix_erp_work_report_tenant_group", "tenant_id", "creator_group_id"),
     )
 
 
