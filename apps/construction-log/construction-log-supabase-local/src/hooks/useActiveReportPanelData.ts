@@ -36,6 +36,15 @@ export const useActiveReportPanelData = (
       const value = payload[key];
       return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
     };
+    const valuePositiveInteger = (key: string): number | null => {
+      const value = payload[key];
+      if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+      if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+        const parsed = Number.parseInt(value.trim(), 10);
+        return parsed > 0 ? parsed : null;
+      }
+      return null;
+    };
     const valueBoolean = (key: string, fallback = false) => {
       const value = payload[key];
       return typeof value === 'boolean' ? value : fallback;
@@ -76,8 +85,12 @@ export const useActiveReportPanelData = (
       galleryImages: valueArray('galleryImages') as GenerateWorkReportDraft['galleryImages'],
       foremanResources: valueArray('foremanResources') as GenerateWorkReportDraft['foremanResources'],
       mainForeman: valueString('mainForeman'),
+      mainForemanUserId:
+        valuePositiveInteger('mainForemanUserId') ?? valuePositiveInteger('main_foreman_user_id'),
       mainForemanHours: valueNumber('mainForemanHours'),
       siteManager: valueString('siteManager'),
+      siteManagerUserId:
+        valuePositiveInteger('siteManagerUserId') ?? valuePositiveInteger('site_manager_user_id'),
       autoCloneNextDay: valueBoolean('autoCloneNextDay'),
       foremanSignature: valueString('foremanSignature'),
       siteManagerSignature: valueString('siteManagerSignature'),

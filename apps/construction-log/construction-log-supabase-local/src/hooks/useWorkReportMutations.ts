@@ -246,8 +246,12 @@ export const useWorkReportMutations = ({
           : [],
         foremanResources: valueArray('foremanResources') as GenerateWorkReportDraft['foremanResources'],
         mainForeman: valueString('mainForeman'),
+        mainForemanUserId:
+          payloadNumber(payload, 'mainForemanUserId') ?? payloadNumber(payload, 'main_foreman_user_id'),
         mainForemanHours: valueNumber('mainForemanHours'),
         siteManager: valueString('siteManager'),
+        siteManagerUserId:
+          payloadNumber(payload, 'siteManagerUserId') ?? payloadNumber(payload, 'site_manager_user_id'),
         autoCloneNextDay: false,
         foremanSignature: options.includeSignatures ? valueString('foremanSignature') : '',
         siteManagerSignature: options.includeSignatures ? valueString('siteManagerSignature') : '',
@@ -261,8 +265,8 @@ export const useWorkReportMutations = ({
         cloneIncludedImages: options.includeImages,
         cloneIncludedSignatures: options.includeSignatures,
         cloneIncludedMaterials: options.includeMaterials,
-        cloneIncludedWaste: options.includeWaste,
-      };
+          cloneIncludedWaste: options.includeWaste,
+        };
 
       setCloneDialogOpen(false);
       setCloneSourceReport(null);
@@ -382,6 +386,8 @@ export const useWorkReportMutations = ({
           isClosed: isClosedToStore,
           workReportStatus: statusToStore,
           missingDeliveryNotes,
+          mainForemanUserId: draft.mainForemanUserId ?? null,
+          siteManagerUserId: draft.siteManagerUserId ?? null,
           lastModifiedAt: new Date().toISOString(),
         };
 

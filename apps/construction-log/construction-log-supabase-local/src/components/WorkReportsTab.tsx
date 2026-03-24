@@ -85,6 +85,7 @@ type WorkReportsPanelConfig = {
   readOnly: boolean;
   reportIdentifier: string | null;
   saving: boolean;
+  tenantId?: string | number | null;
   sortedWorks: WorkItem[];
   setGeneratePanelOpen: Dispatch<SetStateAction<boolean>>;
   setActiveReport: Dispatch<SetStateAction<WorkReport | null>>;
@@ -430,6 +431,7 @@ export const WorkReportsTab = ({
             onNavigatePrevious={canNavigatePrevious ? () => navigateToReportByIndex(navigationIndex - 1) : undefined}
             onNavigateNext={canNavigateNext ? () => navigateToReportByIndex(navigationIndex + 1) : undefined}
             saving={generatePanelSaving}
+            tenantId={panel.tenantId}
             works={sortedWorks.map((work) => ({ id: String(work.id), number: work.number, name: work.name }))}
             onBack={() => {
               setGeneratePanelOpen(false);

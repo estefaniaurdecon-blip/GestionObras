@@ -391,6 +391,7 @@ const Index = () => {
               readOnly: panelReadOnly,
               reportIdentifier: panelReportIdentifier,
               saving: generatePanelSaving,
+              tenantId: resolvedTenantId,
               sortedWorks,
               setGeneratePanelOpen,
               setActiveReport,

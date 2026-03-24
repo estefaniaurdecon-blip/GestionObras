@@ -7,6 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { foremanCatalogRepo } from '@/offline-db/repositories/foremanCatalogRepo';
+import { searchContactUsersByTenant, type ApiUserAutocomplete } from '@/integrations/api/client';
 import {
   filterActiveMachines,
   getRentalMachinesByWorksite,
@@ -18,7 +19,7 @@ import type { WorkReport } from '@/types/workReport';
 import { AlbaranDocumentViewerModal } from '@/components/work-report/shared/AlbaranDocumentViewerModal';
 import { WorkReportHeaderCard } from '@/components/work-report/shared/WorkReportHeaderCard';
 import { ActiveRepasosSection } from '@/components/ActiveRepasosSection';
-import { ForemanResourcesCard } from '@/components/work-report/shared/ForemanResourcesCard';
+import { ForemanResourcesCard, type MainForemanSuggestion } from '@/components/work-report/shared/ForemanResourcesCard';
 import { AutoCloneSettingsCard } from '@/components/work-report/shared/AutoCloneSettingsCard';
 import { SignaturesCard } from '@/components/work-report/shared/SignaturesCard';
 import { SaveActionsBar } from '@/components/work-report/shared/SaveActionsBar';
@@ -38,6 +39,7 @@ import { DuplicateDialog } from '@/components/work-report/dialogs/DuplicateDialo
 import { CostDifferenceDialog } from '@/components/work-report/dialogs/CostDifferenceDialog';
 import { SaveStatusDialog } from '@/components/work-report/dialogs/SaveStatusDialog';
 import { buildWorkReportForExport } from '@/components/work-report/buildWorkReportForExport';
+import { keepLinkedWorkReportUserForText, type LinkedWorkReportUser } from '@/components/work-report/mainForemanAutocomplete';
 import {
   ALL_SECTION_IDS,
   MATERIAL_UNIT_OPTIONS,
@@ -110,6 +112,7 @@ interface GenerateWorkReportPanelProps {
   onNavigateNext?: () => void;
   saving?: boolean;
   works?: Array<{ id: string; number?: string | null; name?: string | null }>;
+  tenantId?: string | number | null;
 }
 
 export const GenerateWorkReportPanel = ({
@@ -125,6 +128,7 @@ export const GenerateWorkReportPanel = ({
   onNavigateNext,
   saving = false,
   works = [],
+  tenantId,
 }: GenerateWorkReportPanelProps) => {
   const panelTopRef = useRef<HTMLDivElement | null>(null);
   const [workNumber, setWorkNumber] = useState('');
@@ -263,9 +267,17 @@ export const GenerateWorkReportPanel = ({
 
   const [foremanResources, setForemanResources] = useState<ForemanResource[]>([createForemanResource()]);
   const [mainForeman, setMainForeman] = useState('');
+  const [mainForemanUserId, setMainForemanUserId] = useState<number | null>(null);
+  const [linkedMainForemanUser, setLinkedMainForemanUser] = useState<LinkedWorkReportUser | null>(null);
   const [catalogForemanNames, setCatalogForemanNames] = useState<string[]>([]);
+  const [mainForemanAutocompleteUsers, setMainForemanAutocompleteUsers] = useState<ApiUserAutocomplete[]>([]);
+  const [mainForemanAutocompleteLoading, setMainForemanAutocompleteLoading] = useState(false);
   const [mainForemanHours, setMainForemanHours] = useState(0);
   const [siteManager, setSiteManager] = useState('');
+  const [siteManagerUserId, setSiteManagerUserId] = useState<number | null>(null);
+  const [linkedSiteManagerUser, setLinkedSiteManagerUser] = useState<LinkedWorkReportUser | null>(null);
+  const [siteManagerAutocompleteUsers, setSiteManagerAutocompleteUsers] = useState<ApiUserAutocomplete[]>([]);
+  const [siteManagerAutocompleteLoading, setSiteManagerAutocompleteLoading] = useState(false);
 
   const [autoCloneNextDay, setAutoCloneNextDay] = useState(false);
   const [foremanSignature, setForemanSignature] = useState('');
@@ -328,6 +340,60 @@ export const GenerateWorkReportPanel = ({
 
     return Array.from(names);
   }, [catalogForemanNames, foremanResources, mainForeman]);
+
+  const mainForemanSuggestions = useMemo<MainForemanSuggestion[]>(() => {
+    const suggestions: MainForemanSuggestion[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const user of mainForemanAutocompleteUsers) {
+      const key = `user:${user.id}`;
+      if (seenKeys.has(key)) continue;
+      suggestions.push({
+        key,
+        label: user.full_name,
+        email: user.email,
+        userId: user.id,
+      });
+      seenKeys.add(key);
+    }
+
+    for (const suggestion of foremanNameSuggestions) {
+      const normalized = suggestion.trim();
+      if (!normalized) continue;
+      const key = `text:${normalized.toLowerCase()}`;
+      const alreadyPresentAsUser = mainForemanAutocompleteUsers.some(
+        (user) => user.full_name.trim().toLowerCase() === normalized.toLowerCase(),
+      );
+      if (alreadyPresentAsUser || seenKeys.has(key)) continue;
+      suggestions.push({
+        key,
+        label: normalized,
+        userId: null,
+      });
+      seenKeys.add(key);
+    }
+
+    return suggestions;
+  }, [foremanNameSuggestions, mainForemanAutocompleteUsers]);
+
+  const siteManagerSuggestions = useMemo<MainForemanSuggestion[]>(() => {
+    const suggestions: MainForemanSuggestion[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const user of siteManagerAutocompleteUsers) {
+      const key = `user:${user.id}`;
+      if (seenKeys.has(key)) continue;
+      suggestions.push({
+        key,
+        label: user.full_name,
+        email: user.email,
+        userId: user.id,
+      });
+      seenKeys.add(key);
+    }
+
+    return suggestions;
+  }, [siteManagerAutocompleteUsers]);
 
   const subcontractComputedGroups = useMemo(
     () =>
@@ -463,8 +529,30 @@ export const GenerateWorkReportPanel = ({
       setGalleryImages(initialDraft.galleryImages ?? []);
       setForemanResources(initialDraft.foremanResources?.length ? initialDraft.foremanResources : [createForemanResource()]);
       setMainForeman(initialDraft.mainForeman || '');
+      setMainForemanUserId(initialDraft.mainForemanUserId ?? null);
+      setLinkedMainForemanUser(
+        initialDraft.mainForemanUserId && initialDraft.mainForeman
+          ? {
+              id: initialDraft.mainForemanUserId,
+              full_name: initialDraft.mainForeman,
+              email: '',
+            }
+          : null,
+      );
+      setMainForemanAutocompleteUsers([]);
       setMainForemanHours(initialDraft.mainForemanHours ?? 0);
       setSiteManager(initialDraft.siteManager || '');
+      setSiteManagerUserId(initialDraft.siteManagerUserId ?? null);
+      setLinkedSiteManagerUser(
+        initialDraft.siteManagerUserId && initialDraft.siteManager
+          ? {
+              id: initialDraft.siteManagerUserId,
+              full_name: initialDraft.siteManager,
+              email: '',
+            }
+          : null,
+      );
+      setSiteManagerAutocompleteUsers([]);
       setAutoCloneNextDay(Boolean(initialDraft.autoCloneNextDay));
       setForemanSignature(initialDraft.foremanSignature || '');
       setSiteManagerSignature(initialDraft.siteManagerSignature || '');
@@ -508,8 +596,14 @@ export const GenerateWorkReportPanel = ({
     setGalleryImages([]);
     setForemanResources([createForemanResource()]);
     setMainForeman('');
+    setMainForemanUserId(null);
+    setLinkedMainForemanUser(null);
+    setMainForemanAutocompleteUsers([]);
     setMainForemanHours(0);
     setSiteManager('');
+    setSiteManagerUserId(null);
+    setLinkedSiteManagerUser(null);
+    setSiteManagerAutocompleteUsers([]);
     setAutoCloneNextDay(false);
     setForemanSignature('');
     setSiteManagerSignature('');
@@ -536,6 +630,80 @@ export const GenerateWorkReportPanel = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const normalizedQuery = mainForeman.trim();
+    const normalizedTenantId = Number(tenantId);
+
+    if (readOnly || !normalizedQuery || !Number.isFinite(normalizedTenantId) || normalizedTenantId <= 0) {
+      setMainForemanAutocompleteUsers([]);
+      setMainForemanAutocompleteLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setMainForemanAutocompleteLoading(true);
+    const timeoutId = window.setTimeout(() => {
+      void searchContactUsersByTenant(normalizedTenantId, normalizedQuery, 8)
+        .then((users) => {
+          if (cancelled) return;
+          setMainForemanAutocompleteUsers(users);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.warn('[work-report] No se pudo cargar autocomplete de encargado principal', error);
+          setMainForemanAutocompleteUsers([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setMainForemanAutocompleteLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [mainForeman, readOnly, tenantId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const normalizedQuery = siteManager.trim();
+    const normalizedTenantId = Number(tenantId);
+
+    if (readOnly || !normalizedQuery || !Number.isFinite(normalizedTenantId) || normalizedTenantId <= 0) {
+      setSiteManagerAutocompleteUsers([]);
+      setSiteManagerAutocompleteLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setSiteManagerAutocompleteLoading(true);
+    const timeoutId = window.setTimeout(() => {
+      void searchContactUsersByTenant(normalizedTenantId, normalizedQuery, 8)
+        .then((users) => {
+          if (cancelled) return;
+          setSiteManagerAutocompleteUsers(users);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.warn('[work-report] No se pudo cargar autocomplete de jefe de obra', error);
+          setSiteManagerAutocompleteUsers([]);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setSiteManagerAutocompleteLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [readOnly, siteManager, tenantId]);
 
   useEffect(() => {
     setActiveMaterialGroupId((current) => {
@@ -1109,6 +1277,66 @@ export const GenerateWorkReportPanel = ({
     });
   };
 
+  const handleMainForemanChange = useCallback((value: string) => {
+    setMainForeman(value);
+    setLinkedMainForemanUser((currentLinkedUser) => {
+      const nextLinkedUser = keepLinkedWorkReportUserForText(value, currentLinkedUser);
+      setMainForemanUserId(nextLinkedUser?.id ?? null);
+      return nextLinkedUser;
+    });
+  }, []);
+
+  const handleMainForemanSuggestionSelect = useCallback((suggestion: MainForemanSuggestion) => {
+    setMainForeman(suggestion.label);
+
+    if (suggestion.userId) {
+      const matchedUser = mainForemanAutocompleteUsers.find((user) => user.id === suggestion.userId);
+      const linkedUser: LinkedWorkReportUser = matchedUser
+        ? matchedUser
+        : {
+            id: suggestion.userId,
+            full_name: suggestion.label,
+            email: suggestion.email ?? '',
+          };
+      setLinkedMainForemanUser(linkedUser);
+      setMainForemanUserId(linkedUser.id);
+      return;
+    }
+
+    setLinkedMainForemanUser(null);
+    setMainForemanUserId(null);
+  }, [mainForemanAutocompleteUsers]);
+
+  const handleSiteManagerChange = useCallback((value: string) => {
+    setSiteManager(value);
+    setLinkedSiteManagerUser((currentLinkedUser) => {
+      const nextLinkedUser = keepLinkedWorkReportUserForText(value, currentLinkedUser);
+      setSiteManagerUserId(nextLinkedUser?.id ?? null);
+      return nextLinkedUser;
+    });
+  }, []);
+
+  const handleSiteManagerSuggestionSelect = useCallback((suggestion: MainForemanSuggestion) => {
+    setSiteManager(suggestion.label);
+
+    if (suggestion.userId) {
+      const matchedUser = siteManagerAutocompleteUsers.find((user) => user.id === suggestion.userId);
+      const linkedUser: LinkedWorkReportUser = matchedUser
+        ? matchedUser
+        : {
+            id: suggestion.userId,
+            full_name: suggestion.label,
+            email: suggestion.email ?? '',
+          };
+      setLinkedSiteManagerUser(linkedUser);
+      setSiteManagerUserId(linkedUser.id);
+      return;
+    }
+
+    setLinkedSiteManagerUser(null);
+    setSiteManagerUserId(null);
+  }, [siteManagerAutocompleteUsers]);
+
   const hasValidSaveInputs = () => {
     if (readOnly) {
       return false;
@@ -1188,8 +1416,10 @@ export const GenerateWorkReportPanel = ({
       galleryImages,
       foremanResources: normalizedForemanResources,
       mainForeman,
+      mainForemanUserId,
       mainForemanHours,
       siteManager,
+      siteManagerUserId,
       autoCloneNextDay,
       foremanSignature,
       siteManagerSignature,
@@ -1445,12 +1675,19 @@ export const GenerateWorkReportPanel = ({
           setForemanResources((current) => current.filter((item) => item.id !== id))
         }
         mainForeman={mainForeman}
-        onMainForemanChange={setMainForeman}
+        onMainForemanChange={handleMainForemanChange}
+        onMainForemanSuggestionSelect={handleMainForemanSuggestionSelect}
         mainForemanHours={mainForemanHours}
         onMainForemanHoursChange={setMainForemanHours}
         siteManager={siteManager}
-        onSiteManagerChange={setSiteManager}
-        foremanNameSuggestions={foremanNameSuggestions}
+        onSiteManagerChange={handleSiteManagerChange}
+        onSiteManagerSuggestionSelect={handleSiteManagerSuggestionSelect}
+        mainForemanSuggestions={mainForemanSuggestions}
+        mainForemanSuggestionsLoading={mainForemanAutocompleteLoading}
+        linkedMainForemanEmail={linkedMainForemanUser?.email || null}
+        siteManagerSuggestions={siteManagerSuggestions}
+        siteManagerSuggestionsLoading={siteManagerAutocompleteLoading}
+        linkedSiteManagerEmail={linkedSiteManagerUser?.email || null}
         editableNumericValue={editableNumericValue}
         parseNumeric={parseNumeric}
         nonNegative={nonNegative}

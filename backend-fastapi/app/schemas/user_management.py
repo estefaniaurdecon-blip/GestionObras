@@ -45,3 +45,14 @@ class WorkAssignmentCreatePayload(BaseModel):
     user_id: int
     work_id: int
 
+
+class WorkMemberRead(BaseModel):
+    id: int
+    full_name: str
+    email: Optional[str] = None
+
+
+class WorkMessageDirectoryRead(BaseModel):
+    id: int
+    name: str
+    visible_member_count: int

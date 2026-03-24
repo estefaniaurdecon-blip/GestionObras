@@ -198,8 +198,10 @@ export type GenerateWorkReportDraft = {
   galleryImages: GalleryImage[];
   foremanResources: ForemanResource[];
   mainForeman: string;
+  mainForemanUserId?: number | null;
   mainForemanHours: number;
   siteManager: string;
+  siteManagerUserId?: number | null;
   autoCloneNextDay: boolean;
   foremanSignature: string;
   siteManagerSignature: string;

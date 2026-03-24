@@ -1,10 +1,13 @@
 # Revisión técnica: política de visibilidad por creator_group_id
 
-**Fecha:** 2026-03-23 (actualizado 2026-03-23)
-**Estado:** Fase 1 completa + Fase 2a completa + Fase 2b completa + Fase 2c completa y verificada en local (2026-03-23). TC01–TC04 + TC07–TC09 + T2a-1 a T2a-5 + T05–T09 + T2c-1 a T2c-6 verificados. Pendiente: TC05/TC06 (manual) + despliegue en producción + Fase 2d.
+**Fecha:** 2026-03-23 (actualizado 2026-03-24)
+**Estado:** Fase 1 completa + Fase 2a completa + Fase 2b completa + Fase 2c completa y verificada en local (2026-03-23) + Fase 2d implementada en código (2026-03-23) + Fase 3 implementada en código y verificada con pytest dirigido (2026-03-23) + Fase 4.1 cerrada (miembros de obra read-only) + Fase 4.2 cerrada (explorador de obras en conversaciones + DM 1:1 desde obra) + Fase 4.3 cerrada (contexto visible de obra al abrir DM) + Fase 4.4 cerrada (escribir a la obra como broadcast controlado a DMs 1:1). Verificaciones dirigidas recientes: `python -m compileall backend-fastapi/app backend-fastapi/tests/test_phase4_work_members_api.py backend-fastapi/tests/test_phase4_work_dm_directory_api.py backend-fastapi/tests/test_phase4_work_broadcast_api.py` OK + `python -m pytest backend-fastapi/tests/test_phase4_work_members_api.py backend-fastapi/tests/test_phase4_work_dm_directory_api.py backend-fastapi/tests/test_phase4_work_broadcast_api.py -q` OK + `npm run build` en `apps/construction-log/construction-log-supabase-local` OK. Pendiente: TC05/TC06 (manual) + despliegue en producción + comprobación manual corta de UX de conversaciones si se quiere cierre funcional completo de Fase 4 antes de abrir Fase 5.
 **Rama activa:** `wip/resume-claude-cutoff`
 **Propósito:** Documento de referencia para continuar la implementación en contextos futuros.
-**Implementación en curso.** Fase 1 Etapas A+B+C y Fase 2a completadas en `wip/resume-claude-cutoff`. Ver §11 para estado detallado.
+**Implementación en curso.** Fase 1, Fase 2a, Fase 2b, Fase 2c y Fase 2d completadas; Fase 3 ya implementada en código en `wip/resume-claude-cutoff`; Fase 4.1, 4.2, 4.3 y 4.4 cerradas en código. Ver §11 para estado detallado.
+
+> **Nota de continuidad:** Fase 2d y Fase 3 se consideran cerradas técnicamente bajo el modelo vigente de aislamiento por `creator_group_id`.
+> A partir de este punto se abre una nueva línea funcional, que pasa a ser la **Fase 4**: mensajería contextual por obra, que no invalida lo anterior pero extiende el sistema de mensajería con una segunda dimensión.
 
 ---
 
@@ -42,11 +45,11 @@ Los problemas son de **aplicación inconsistente** de esa lógica en partes del 
 - `list_user_profiles()` y `list_users_by_tenant()` devuelven todos los usuarios del tenant sin filtro de grupo
 - `approve_user()`, `add_user_role()`, `assign_user_to_work()` no validan `creator_group_id`
 
-### Medio (deuda técnica)
+### Medio (deuda técnica ya corregida en Fase 3)
 
-- `_infer_created_by_user_id()` usa substring matching sobre audit_log: frágil
-- `delete_conversation()` no re-verifica grupo antes del DELETE bulk
-- `_get_ticket_agent_user_ids()` ignora grupos al asignar tickets
+- `_infer_created_by_user_id()` ya soporta JSON estructurado + fallback legacy
+- `delete_conversation()` ya re-verifica grupo antes del DELETE bulk
+- `_get_ticket_agent_user_ids()` ya aplica filtro de grupo al circuito operativo
 
 ---
 
@@ -171,11 +174,11 @@ if not current_user.is_super_admin:
 | `list_contact_users_by_tenant()` | `app/services/user_service.py` | ✓ Filtra por grupo |
 | Shared files list/upload/download | `app/api/v1/attachments.py` | ✓ `_is_shared_file_visible_to_user_group()` |
 
-### Gap menor a corregir
+### Gap menor corregido en Fase 3
 
 **Función:** `delete_conversation()` en `app/services/message_service.py`
 
-El DELETE bulk no verifica grupo antes de ejecutar.
+El DELETE bulk ya re-verifica grupo antes de ejecutar y ahora falla antes del borrado masivo si el usuario objetivo no pertenece al mismo circuito operativo.
 
 ```python
 # AÑADIR al inicio de delete_conversation()
@@ -187,11 +190,11 @@ if not current_user.is_super_admin:
         raise ValueError("No puedes eliminar esta conversación.")
 ```
 
-### Preparación para evolución futura
+### Preparación para evolución futura — implementada en Fase 3
 
-Reemplazar las llamadas directas a `users_share_creation_group()` en message_service y
-attachments.py por `can_users_message_each_other()` de la capa de políticas (ver §9).
-Así cuando la política cambie, solo se toca un punto.
+Las llamadas directas a `users_share_creation_group()` ya se han encapsulado en la capa de políticas
+en `message_service.py`, y `attachments.py` ya consume `can_share_file_with_user()` /
+`can_access_work_report_attachment()` para dejar el comportamiento centralizado.
 
 ---
 
@@ -199,7 +202,7 @@ Así cuando la política cambie, solo se toca un punto.
 
 ### Estado actual: BIEN
 
-`_is_shared_file_visible_to_user_group()` usa correctamente `users_share_creation_group()`.
+`_is_shared_file_visible_to_user_group()` ya delega en la capa de políticas y mantiene la misma regla funcional.
 Los endpoints de upload, download, list y delete tienen validación de grupo.
 No hay gaps críticos.
 
@@ -557,6 +560,8 @@ def backfill_work_reports(session: Session, dry_run: bool = True) -> dict:
 
 ### 8.4 Mejora de `_infer_created_by_user_id()`
 
+**Estado:** implementado en Fase 3 (2026-03-23) sin romper compatibilidad con registros legacy.
+
 **Cambio en `create_user()`** — pasar a JSON estructurado en audit_log:
 
 ```python
@@ -600,9 +605,9 @@ def _infer_created_by_user_id(session: Session, user: User) -> int | None:
 
 ---
 
-## 9. Refactor recomendado: capa de políticas de acceso
+## 9. Refactor recomendado: capa de políticas de acceso — IMPLEMENTADO EN FASE 3
 
-Crear `backend-fastapi/app/policies/access_policies.py`:
+Creado `backend-fastapi/app/policies/access_policies.py` y conectado en los puntos activos del sistema dentro del alcance de Fase 3:
 
 ```python
 """
@@ -828,14 +833,14 @@ Migración `d4e5f6a7b8c9` creada. Pendiente: `alembic upgrade head` en servidor.
 - imagen Docker reconstruida (`docker compose build backend-fastapi`) ✅
 - T2a-1 a T2a-5 verificados con script Python contra BD real ✅
 - respuesta API REST incluye campo `creator_group_id` en JSON ✅
-- pytest: fallo pre-existente JSONB/SQLite en conftest (no relacionado con Fase 2a) ⚠️
+- pytest: bloqueo JSONB/SQLite resuelto posteriormente con `JSONB_COMPAT` en `SavedEconomicReport`; smoke tests de work reports vuelven a correr ✅
 
 **Comportamiento post-Fase 2a:**
 - Usuario normal crea parte → `creator_group_id` resuelto y persistido.
 - super_admin crea parte → `creator_group_id = NULL` (correcto por diseño).
 - `current_user_id = None` → `creator_group_id = NULL`.
 - Partes legacy: intactos, `creator_group_id = NULL` hasta Fase 2c (backfill).
-- `list_work_reports()` sin cambios — no filtra por grupo todavía.
+- `list_work_reports()` sin cambios en Fase 2a; el filtro se activa en Fase 2d.
 
 *Desde aquí todos los partes nuevos tienen el campo. Los legacy siguen en NULL hasta Fase 2c.*
 
@@ -906,34 +911,86 @@ python -m scripts.backfill_creator_groups --apply-work-reports --verbose  # Paso
 - [x] Casos pendientes documentados en esta tabla
 - [x] Nuevos partes/usuarios (post-Fase-2a) heredan `creator_group_id` correctamente (T2a-1, T2a-2)
 
-**Fase 2c CERRADA. Siguiente: Fase 2d.**
+**Fase 2c CERRADA. Fase 2d implementada después; ver bloque siguiente.**
 
-### Fase 2d — Activar filtro de grupo en work reports (solo cuando backfill ≥95%)
+### Fase 2d — Activar filtro de grupo en work reports (solo cuando backfill ≥95%) — ✅ IMPLEMENTADO 2026-03-23
 
-| # | Tarea |
-|---|-------|
-| 18 | Actualizar `can_access_work_report()` con lógica Opción B |
-| 19 | Activar filtro en `list_work_reports()` |
-| 20 | Activar validación de grupo en `_get_report_or_403()` de adjuntos |
-| 21 | Partes con `creator_group_id=NULL` → visibles solo para super_admin |
+| # | Tarea | Estado |
+|---|-------|--------|
+| 18 | Actualizar `can_access_work_report()` con lógica Opción B | ✅ Equivalente implementado inline en los puntos activos de Fase 2d; la centralización queda para Fase 3 |
+| 19 | Activar filtro en `list_work_reports()` | ✅ |
+| 20 | Activar validación de grupo en `_get_report_or_403()` de adjuntos | ✅ |
+| 21 | Partes con `creator_group_id=NULL` → visibles solo para super_admin | ✅ |
+
+**Cambios implementados (2026-03-23):**
+- `app/services/erp_service.py`: `list_work_reports()` recibe `current_user` y filtra por `creator_group_id` para usuarios no `super_admin`; los partes legacy con `creator_group_id=NULL` quedan fuera para usuarios normales.
+- `app/api/v1/erp.py`: `api_list_work_reports()` pasa `current_user` a `list_work_reports()`.
+- `app/services/erp_service.py`: `sync_work_reports()` recibe `current_user` y lo propaga al `pull` de `server_changes`, para mantener el mismo filtro de grupo en sincronización.
+- `app/api/v1/attachments.py`: `_get_report_or_403()` valida acceso por grupo; 404 para existencia/tenant, 403 para acceso de grupo; partes legacy con `creator_group_id=NULL` solo accesibles por `super_admin`.
+- `app/api/v1/attachments.py`: actualizados los 4 callers de `_get_report_or_403()` en handlers de adjuntos para pasar `current_user`.
+- `app/api/v1/attachments.py`: `serve_work_report_image()` y `DELETE /attachments/images/by-url` revalidan acceso por grupo cuando el `file_path` pertenece a un `WorkReportAttachment`, evitando bypass intra-tenant por URL directa.
+
+**Comprobaciones básicas ejecutadas tras Fase 2d:**
+- `python -m compileall backend-fastapi/app` ✅
+- `python -m pytest tests/test_erp_work_reports_and_rental.py -k "test_work_report_tenant_isolation_and_listing or test_work_report_sync_is_idempotent_by_client_op_id" -q` ✅
+
+**Estado de verificación de Fase 2d:**
+- Implementación en código: completa.
+- Validación funcional dirigida T20–T22 contra backend real: pendiente.
 
 ### Fase 3 — Centralización y deuda técnica
 
-| # | Tarea | Archivos |
-|---|-------|----------|
-| 22 | Crear `app/policies/access_policies.py` | nuevo |
-| 23 | Reemplazar llamadas directas en message_service y attachments.py | varios |
-| 24 | Fix `delete_conversation()` con verificación de grupo | `app/services/message_service.py` |
-| 25 | Migrar `log_action` en `create_user` a JSON estructurado | `app/services/user_service.py` |
-| 26 | Actualizar `_infer_created_by_user_id()` con fallback legacy | `app/services/user_service.py` |
-| 27 | Filtro de grupo en `_get_ticket_agent_user_ids()` | `app/services/ticket_service.py` |
+| # | Tarea | Archivos | Estado |
+|---|-------|----------|--------|
+| 22 | Crear `app/policies/access_policies.py` | nuevo | ✅ |
+| 23 | Reemplazar llamadas directas en message_service y attachments.py | varios | ✅ |
+| 24 | Fix `delete_conversation()` con verificación de grupo | `app/services/message_service.py` | ✅ |
+| 25 | Migrar `log_action` en `create_user` a JSON estructurado | `app/services/user_service.py` | ✅ |
+| 26 | Actualizar `_infer_created_by_user_id()` con fallback legacy | `app/services/user_service.py` | ✅ |
+| 27 | Filtro de grupo en `_get_ticket_agent_user_ids()` | `app/services/ticket_service.py` | ✅ |
 
-### Fase 4 — Rendimiento
+**Cambios implementados (2026-03-23):**
+- `app/policies/access_policies.py`: creadas `can_users_message_each_other()`, `can_user_manage_target_user()`, `can_access_work_report()`, `can_access_work_report_attachment()` y `can_share_file_with_user()`.
+- `app/services/message_service.py`: centralizadas las validaciones de mensajería y corregido `delete_conversation()` para revalidar grupo antes del DELETE bulk.
+- `app/api/v1/attachments.py`: centralizada la validación de acceso a partes y shared files sobre la capa de políticas, sin cambio de comportamiento funcional.
+- `app/services/user_service.py`: `create_user()` ya escribe `AuditLog.details` en JSON estructurado; `_infer_created_by_user_id()` prioriza JSON y mantiene fallback legacy por substring.
+- `app/services/ticket_service.py`: `_get_ticket_agent_user_ids()` ya filtra agentes por grupo operativo; `super_admin` se conserva como supervisión global.
+- `app/services/user_management_service.py`: uso de `can_user_manage_target_user()` para reducir duplicidad en guards ya existentes.
+
+**Verificación dirigida ejecutada (2026-03-23):**
+- `python -m compileall backend-fastapi/app backend-fastapi/tests/test_phase3_policies_and_debt.py` ✅
+- `python -m pytest tests/test_phase3_policies_and_debt.py -q` ✅ (`4 passed`)
+- `python -m pytest tests/test_erp_work_reports_and_rental.py -k "test_work_report_tenant_isolation_and_listing or test_work_report_sync_is_idempotent_by_client_op_id" -q` ✅
+
+**Pendiente operativo fuera del cierre técnico de Fase 3:**
+- Si se desea cierre funcional completo antes de Fase 4, conviene una pasada manual/API corta sobre mensajería cruzada, shared files y notificación/asignación de tickets por grupo.
+
+### Fase 4 — Mensajería contextual por obra
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 28 | Fase 4.1 - Miembros de obra read-only desde `UserWorkAssignment` | Cerrada |
+| 29 | Fase 4.2 - Explorador de obras en conversaciones + apertura de DM 1:1 desde obra | Cerrada |
+| 30 | Fase 4.3 - Contexto visible de obra al abrir DM, solo en UI | Cerrada |
+| 31 | Fase 4.4 - “Escribir a la obra” como broadcast controlado a DMs 1:1 | Cerrada |
+
+**Objetivo funcional de la fase:**
+- Añadir una segunda dimensión a la mensajería: contexto por obra.
+- Mantener `creator_group_id` como base operativa por defecto.
+- Evitar que compartir obra abra puertas traseras accidentales entre grupos.
+
+**Estado funcional actual de Fase 4:**
+- Fase 4.1 cerrada: listado read-only de miembros de obra con fuente autoritativa en `UserWorkAssignment`, filtrado por tenant y por visibilidad operativa conservadora.
+- Fase 4.2 cerrada: la ventana de conversaciones muestra un explorador de obras; cada obra se puede desplegar y permite abrir/iniciar el DM 1:1 existente con personas visibles de esa obra.
+- Fase 4.3 cerrada: al abrir un DM desde una obra, la UI muestra un contexto visual de obra activo; este contexto vive solo en frontend y no cambia la identidad de la conversación.
+- Fase 4.4 cerrada: existe la acción `Escribir a la obra` como fan-out a múltiples DMs 1:1, excluyendo al actor, deduplicando destinatarios y sin crear chat grupal persistente.
+
+### Fase 5 — Rendimiento
 
 | # | Tarea |
 |---|-------|
-| 28 | Mover filtro de grupos en mensajería de Python a SQL (join con User) |
-| 29 | Formalizar startup DDL como migraciones Alembic |
+| 32 | Mover filtro de grupos en mensajería de Python a SQL (join con User) |
+| 33 | Formalizar startup DDL como migraciones Alembic |
 
 ---
 
@@ -946,6 +1003,7 @@ python -m scripts.backfill_creator_groups --apply-work-reports --verbose  # Paso
 | `app/models/attachments.py` | `WorkReportAttachment.work_report_id` | `str` → `int` + FK CASCADE | 1 (Etapa A) ✅ |
 | `app/models/erp.py` | `WorkReport` | Añadir `creator_group_id` + índice compuesto | 2a ✅ |
 | `app/api/v1/attachments.py` | handlers adjuntos de partes | `_get_report_or_403()` + `work_report_id: int` | 1 (Etapa A) ✅ |
+| `app/api/v1/attachments.py` | shared files + acceso a adjuntos de partes | Consumo de `can_share_file_with_user()` y `can_access_work_report_attachment()` | 3 ✅ |
 | `app/api/v1/attachments.py` | `serve_work_report_image` | Nuevo endpoint autenticado | 1 (Etapa A) ✅ |
 | `app/api/v1/attachments.py` | `_work_image_public_url()` | URL → `/api/v1/work-reports/images/...` | 1 (Etapa A) ✅ |
 | `app/api/v1/attachments.py` | `_extract_relative_path_from_image_url()` | Nuevo helper — acepta URLs antiguas y nuevas | 1 (Etapa A) ✅ |
@@ -954,14 +1012,31 @@ python -m scripts.backfill_creator_groups --apply-work-reports --verbose  # Paso
 | `app/services/erp_service.py` | `create_work_report()` | Persistir `creator_group_id` (PK lookup interno, sin cambio de firma) | 2a ✅ |
 | `app/services/erp_service.py` | `list_work_reports()` | Filtro de grupo | 2d |
 | `app/services/user_service.py` | `list_users_by_tenant()` | Filtro de grupo | 2b |
-| `app/services/user_service.py` | `_infer_created_by_user_id()` | JSON + fallback | 3 |
+| `app/services/user_service.py` | `create_user()` | `log_action()` con JSON estructurado | 3 ✅ |
+| `app/services/user_service.py` | `_infer_created_by_user_id()` | JSON + fallback legacy | 3 ✅ |
 | `app/services/user_management_service.py` | `list_user_profiles()` | Filtro de grupo + `current_user` | 2b |
 | `app/services/user_management_service.py` | `approve_user()` | Verificar grupo | 2b |
 | `app/services/user_management_service.py` | `add_user_role()` / `remove_user_role()` | Verificar grupo | 2b |
 | `app/services/user_management_service.py` | `assign_user_to_work()` / `remove_user_from_work()` | Verificar grupo | 2b |
-| `app/services/message_service.py` | `delete_conversation()` | Verificar grupo antes de DELETE | 3 |
-| `app/services/ticket_service.py` | `_get_ticket_agent_user_ids()` | Filtro de grupo | 3 |
-| `app/policies/access_policies.py` | (nuevo módulo) | Crear | 3 |
+| `app/services/user_management_service.py` | guards de gestión de usuarios | Reutilizar `can_user_manage_target_user()` | 3 ✅ |
+| `app/services/user_management_service.py` | `list_work_members()` / `list_work_message_directory()` | Consulta inversa obra → miembros visibles + directorio de obras para conversaciones | 4.1 / 4.2 ✅ |
+| `app/services/message_service.py` | validaciones de mensajería | Centralizar sobre `can_users_message_each_other()` | 3 ✅ |
+| `app/services/message_service.py` | `delete_conversation()` | Verificar grupo antes de DELETE | 3 ✅ |
+| `app/services/message_service.py` | `broadcast_message_to_work()` | Fan-out controlado a DMs 1:1 por obra | 4.4 ✅ |
+| `app/services/ticket_service.py` | `_get_ticket_agent_user_ids()` | Filtro de grupo | 3 ✅ |
+| `app/policies/access_policies.py` | (nuevo módulo) | Crear y conectar | 3 ✅ |
+| `app/policies/access_policies.py` | `can_user_view_target_user()` | Helper conservador de visibilidad operativa reutilizado en obra → miembros | 4.1 ✅ |
+| `app/schemas/user_management.py` | `WorkMemberRead` / `WorkMessageDirectoryRead` | Schemas mínimos para frontend de conversaciones por obra | 4.1 / 4.2 ✅ |
+| `app/schemas/message.py` | `WorkBroadcastMessageCreate` / `WorkBroadcastMessageResult` | Entrada/salida del broadcast controlado por obra | 4.4 ✅ |
+| `app/api/v1/erp.py` | endpoints de miembros/directorio/broadcast por obra | Exponer Fase 4.1, 4.2 y 4.4 | 4.1 / 4.2 / 4.4 ✅ |
+| `apps/construction-log/.../src/hooks/useWorkMessageDirectory.ts` | (nuevo hook) | Carga del explorador de obras y miembros visibles | 4.2 ✅ |
+| `apps/construction-log/.../src/components/chatCenterContext.ts` | (nuevo helper) | Estado UI para DM desde obra y contexto activo | 4.3 ✅ |
+| `apps/construction-log/.../src/components/ChatCenter.tsx` | explorador de obras + contexto visible + escribir a la obra | UI de Fase 4.2, 4.3 y 4.4 | 4.2 / 4.3 / 4.4 ✅ |
+| `apps/construction-log/.../src/integrations/api/client.ts` | cliente API de directorio y broadcast por obra | Integración frontend con backend Fase 4 | 4.2 / 4.4 ✅ |
+| `tests/test_phase3_policies_and_debt.py` | (nuevo) | Verificación dirigida de Fase 3 | 3 ✅ |
+| `tests/test_phase4_work_members_api.py` | (nuevo) | Verificación dirigida de Fase 4.1 | 4.1 ✅ |
+| `tests/test_phase4_work_dm_directory_api.py` | (nuevo) | Verificación dirigida de Fase 4.2 | 4.2 ✅ |
+| `tests/test_phase4_work_broadcast_api.py` | (nuevo) | Verificación dirigida de Fase 4.4 | 4.4 ✅ |
 | `alembic/versions/` | nueva migración | FK en WorkReportAttachment | 1 |
 | `alembic/versions/d4e5f6a7b8c9` | migración `creator_group_id` en WorkReport | columna nullable + índice compuesto | 2a ✅ |
 | `scripts/backfill_creator_groups.py` | (nuevo) | Auditoría + backfill | 2c |
@@ -979,6 +1054,9 @@ python -m scripts.backfill_creator_groups --apply-work-reports --verbose  # Paso
 | POST | `/erp/user-management/users/{id}/approve` | Verificar grupo | 2b |
 | POST/DELETE | `/erp/user-management/users/{id}/roles` | Verificar grupo | 2b |
 | POST/DELETE | `/erp/user-management/assignments` | Verificar grupo | 2b |
+| GET | `/api/v1/erp/projects/{project_id}/members` | Miembros visibles de obra desde `UserWorkAssignment` | 4.1 ✅ |
+| GET | `/api/v1/erp/projects/member-directory` | Directorio de obras disponible en conversaciones | 4.2 ✅ |
+| POST | `/api/v1/erp/projects/{project_id}/broadcast-message` | Broadcast controlado a DMs 1:1 por obra | 4.4 ✅ |
 
 ---
 
@@ -1033,6 +1111,15 @@ T13: GET /contacts → solo devuelve usuarios del mismo creator_group_id ✓
 T14: delete_conversation con other_user_id de otro grupo → HTTP 403 ✓ (post Fase 3)
 ```
 
+### Centralización y deuda técnica (Fase 3)
+
+```
+T27: can_access_work_report() respeta grupo y bloquea legacy NULL para usuario normal → pytest dirigido OK ✓
+T28: delete_conversation() revalida grupo antes del DELETE bulk → pytest dirigido OK ✓
+T29: _infer_created_by_user_id() soporta JSON estructurado + fallback legacy → pytest dirigido OK ✓
+T30: _get_ticket_agent_user_ids() excluye agentes de otros grupos y conserva super_admin → pytest dirigido OK ✓
+```
+
 ### Partes de obra y adjuntos
 
 ```
@@ -1066,10 +1153,10 @@ T2a-5: list_work_reports devuelve 12 partes — grupos: {None, 3} (sin filtro ac
   · columna INTEGER nullable + ix_erp_work_report_tenant_group en Postgres ✅
   · imagen Docker reconstruida y container reiniciado ✅
 
--- Activos post Fase 2d (pendiente) --
-T20: user del grupo A accede a parte del grupo B → HTTP 403 ✓
-T21: super_admin accede a parte legacy sin creator_group_id → 200 ✓
-T22: usuario normal accede a parte legacy sin creator_group_id → HTTP 403 ✓
+-- Activos post Fase 2d — implementación en código 2026-03-23; validación funcional dirigida pendiente --
+T20: user del grupo A accede a parte del grupo B → HTTP 403 ⏳
+T21: super_admin accede a parte legacy sin creator_group_id → 200 ⏳
+T22: usuario normal accede a parte legacy sin creator_group_id → HTTP 403 ⏳
 ```
 
 ### Backfill legacy (post Fase 2c)
@@ -1109,7 +1196,29 @@ T26: usuario activo sin rastro → clasificado como 'manual', no modificado ✓
   - `user_service.py`: `list_users_by_tenant()` aplica filtro de grupo.
   - `user_management.py`: 6 llamadas actualizadas a nueva firma.
   - T05–T09: todos verificados contra Docker ✅
-- Fases 2c, 2d, 3, 4: sin implementar.
+- **Fase 2c completada y verificada** (2026-03-23).
+  - `scripts/backfill_creator_groups.py`: auditoría + backfill ejecutados; Q5=100% y Q6 documentado.
+  - Usuarios activos non-super-admin sin `creator_group_id=NULL`: 0 ✅
+  - Partes legacy con `creator_group_id=NULL`: todos identificados; corresponden a creaciones de `super_admin` y quedan documentados para Fase 2d ✅
+- **Fase 2d implementada en código** (2026-03-23).
+  - `erp_service.py`: `list_work_reports()` filtra por `tenant + creator_group_id`; `sync_work_reports()` propaga `current_user` al pull de `server_changes`.
+  - `erp.py`: `api_list_work_reports()` pasa `current_user`; `api_sync_work_reports()` pasa `current_user`.
+  - `attachments.py`: `_get_report_or_403()` ya valida acceso por grupo; callers actualizados; imágenes de partes por URL directa revalidan acceso al parte padre.
+  - Comprobaciones básicas: `compileall` OK + pytest smoke de work reports OK.
+  - Pendiente: validación funcional dirigida T20–T22 contra backend real.
+- **Fase 3 implementada en código** (2026-03-23).
+  - `app/policies/access_policies.py` creada y conectada en mensajería, shared files, acceso a partes y gestión de usuarios dentro del alcance previsto.
+  - `message_service.py`: `delete_conversation()` ya revalida grupo antes del DELETE bulk.
+  - `user_service.py`: `AuditLog.details` estructurado en JSON al crear usuarios; `_infer_created_by_user_id()` con soporte JSON + fallback legacy.
+  - `ticket_service.py`: `_get_ticket_agent_user_ids()` filtra por grupo operativo.
+  - Verificación dirigida: `tests/test_phase3_policies_and_debt.py` verde (`4 passed`) + smoke de work reports sigue verde.
+  - Pendiente opcional: validación funcional/manual corta antes de abrir Fase 4.
+- **Fase 4 — Mensajería contextual por obra**: Fase 4.1, 4.2, 4.3 y 4.4 cerradas en código.
+  - `GET /api/v1/erp/projects/{project_id}/members`: listado read-only de miembros visibles de obra.
+  - `GET /api/v1/erp/projects/member-directory`: explorador de obras para la UI de conversaciones.
+  - `ChatCenter.tsx`: apertura de DM 1:1 desde obra + contexto visual `Desde obra: X`.
+  - `POST /api/v1/erp/projects/{project_id}/broadcast-message`: fan-out controlado a DMs 1:1 sin chat grupal persistente.
+- **Fase 5 — Rendimiento**: sin implementar.
 
 ### Decisiones y orden crítico
 
@@ -1121,7 +1230,7 @@ T26: usuario activo sin rastro → clasificado como 'manual', no modificado ✓
 ### Notas técnicas
 
 - El campo `creator_group_id` en `WorkReport` tiene uso funcional real (no es metadato): es la base para el filtrado de Fase 2d y para la validación de adjuntos.
-- `_get_report_or_403()` ya está implementado con firma preparada para Fase 2d: añadir `can_access_work_report_attachment()` allí sin cambiar la firma ni los callers.
-- La capa de políticas (`app/policies/access_policies.py`) se crea en Fase 3, pero sus firmas están definidas en §9 para que los cambios de Fase 2 ya usen las firmas correctas cuando se creen.
+- `_get_report_or_403()` ya aplica la validación de grupo de Fase 2d y en Fase 3 quedó centralizado sobre `can_access_work_report_attachment()` sin cambiar el comportamiento funcional.
+- La capa de políticas (`app/policies/access_policies.py`) ya existe y actúa como punto único de centralización para mensajería, gestión de usuarios, work reports/adjuntos y shared files dentro del alcance de Fase 3.
 - Los archivos de referencia del código están en `backend-fastapi/app/`.
 - Branch activo: `wip/resume-claude-cutoff`.

@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText, ImageIcon, Mic, Square } from "lucide-react";
+import { Send, Search, UserCircle2, ArrowLeft, Check, CheckCheck, Paperclip, Trash2, X, Download, FileText, ImageIcon, Mic, Building2, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +25,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useMessages } from "@/hooks/useMessages";
 import { useMessageableUsers } from "@/hooks/useMessageableUsers";
+import { useProjectConversation } from "@/hooks/useProjectConversation";
+import { useWorkMessageDirectory } from "@/hooks/useWorkMessageDirectory";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSharedFiles } from "@/hooks/useSharedFiles";
+import { broadcastMessageToProject } from "@/integrations/api/client";
+import {
+  clearConversationSelection,
+  selectConversationDirect,
+  selectConversationFromWork,
+  selectWorkConversation,
+  type ActiveWorkConversationContext,
+} from "@/components/chatCenterContext";
 import { toast } from "sonner";
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp)$/i;
@@ -49,13 +59,20 @@ export const ChatCenter = () => {
   const currentUserId = user ? String(user.id) : null;
   const { messages, unreadCount, sendMessage, markAsRead, deleteConversation, clearAllMessages, reloadMessages } = useMessages();
   const { users: contacts, loading: loadingContacts } = useMessageableUsers();
+  const { works, membersByWorkId, loadingWorks, loadingMembersByWorkId, loadMembersForWork } = useWorkMessageDirectory();
   const { isUserOnline } = useUserPresence();
   const { shareFile, sentFiles, receivedFiles, downloadFile, getFileBlob, reloadFiles } = useSharedFiles();
 
   const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [activeWorkContext, setActiveWorkContext] = useState<ActiveWorkConversationContext | null>(null);
+  const [selectedWorkConversation, setSelectedWorkConversation] = useState<ActiveWorkConversationContext | null>(null);
   const [search, setSearch] = useState("");
   const [text, setText] = useState("");
+  const [expandedWorkIds, setExpandedWorkIds] = useState<number[]>([]);
+  const [broadcastComposerWorkId, setBroadcastComposerWorkId] = useState<number | null>(null);
+  const [broadcastText, setBroadcastText] = useState("");
+  const [isBroadcastSending, setIsBroadcastSending] = useState(false);
   const [isSharingFile, setIsSharingFile] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +80,15 @@ export const ChatCenter = () => {
   const imagePreviewUrls = useRef<Record<string, string>>({});
   const [audioPreviews, setAudioPreviews] = useState<Record<string, string>>({});
   const audioPreviewUrls = useRef<Record<string, string>>({});
+  const {
+    participantCount: projectConversationParticipantCount,
+    messages: projectConversationMessages,
+    loading: loadingProjectConversation,
+    sending: sendingProjectConversation,
+    error: projectConversationError,
+    reload: reloadProjectConversation,
+    sendMessage: sendProjectConversationMessage,
+  } = useProjectConversation(selectedWorkConversation, open && selectedWorkConversation !== null);
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -182,18 +208,45 @@ export const ChatCenter = () => {
     if (!selectedUserId) return undefined;
     const fromContacts = contacts.find((c) => c.id === selectedUserId);
     if (fromContacts) return fromContacts;
+    const fromWorkMembers = Object.values(membersByWorkId)
+      .flat()
+      .find((member) => member.id === selectedUserId);
+    if (fromWorkMembers) {
+      return {
+        id: fromWorkMembers.id,
+        full_name: fromWorkMembers.full_name,
+        roles: [],
+        approved: true,
+      };
+    }
     // Fallback: build from conversation data in case contacts API failed or hasn't loaded yet
     const conv = conversations.find((c) => c.userId === selectedUserId);
     if (conv) return { id: conv.userId, full_name: conv.userName, roles: [], approved: true };
     return undefined;
-  }, [contacts, selectedUserId, conversations]);
+  }, [contacts, conversations, membersByWorkId, selectedUserId]);
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const isWorkConversationSelected = selectedWorkConversation !== null;
+  const hasActiveConversation = Boolean(selectedUserId || selectedWorkConversation);
+
+  const filteredWorks = useMemo(() => {
+    if (!normalizedSearch) return works;
+    return works.filter((work) => {
+      if (work.name.toLowerCase().includes(normalizedSearch)) return true;
+      const members = membersByWorkId[work.id] || [];
+      return members.some((member) => member.full_name.toLowerCase().includes(normalizedSearch));
+    });
+  }, [membersByWorkId, normalizedSearch, works]);
 
   useEffect(() => {
     if (open) {
       reloadMessages();
       reloadFiles();
+      if (selectedWorkConversation) {
+        void reloadProjectConversation();
+      }
     }
-  }, [open, reloadMessages, reloadFiles]);
+  }, [open, reloadFiles, reloadMessages, reloadProjectConversation, selectedWorkConversation]);
 
   useEffect(() => {
     if (!open || !currentUserId || !selectedUserId) return;
@@ -271,10 +324,25 @@ export const ChatCenter = () => {
   };
 
   const handleSend = async () => {
-    if (!user || !selectedUserId || !text.trim()) return;
+    if (!user || !text.trim()) return;
     const msg = text.trim();
     setText("");
-    await sendMessage(selectedUserId, msg, undefined, selectedUser?.full_name);
+    try {
+      if (selectedWorkConversation) {
+        await sendProjectConversationMessage(msg);
+      } else if (selectedUserId) {
+        await sendMessage(selectedUserId, msg, undefined, selectedUser?.full_name);
+      } else {
+        return;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error inesperado";
+      toast.error("Error al enviar mensaje", {
+        description: message,
+      });
+      setText(msg);
+      return;
+    }
     scrollToBottom();
   };
 
@@ -300,10 +368,97 @@ export const ChatCenter = () => {
 
   // Scroll to bottom when opening a conversation or receiving new messages
   useEffect(() => {
-    if (selectedUserId && open) {
+    if (hasActiveConversation && open) {
       scrollToBottom();
     }
-  }, [selectedUserId, open, messages.length, sentFiles.length, receivedFiles.length]);
+  }, [
+    hasActiveConversation,
+    open,
+    messages.length,
+    sentFiles.length,
+    receivedFiles.length,
+    projectConversationMessages.length,
+  ]);
+
+  const toggleWork = async (workId: number) => {
+    const isExpanded = expandedWorkIds.includes(workId);
+    if (isExpanded) {
+      setExpandedWorkIds((prev) => prev.filter((id) => id !== workId));
+      return;
+    }
+
+    setExpandedWorkIds((prev) => prev.concat(workId));
+    await loadMembersForWork(workId);
+  };
+
+  const openConversationDirect = (userId: string) => {
+    const next = selectConversationDirect(userId);
+    setSelectedUserId(next.selectedUserId);
+    setActiveWorkContext(next.activeWorkContext);
+    setSelectedWorkConversation(next.selectedWorkConversation);
+    setText("");
+  };
+
+  const openConversationFromWork = (
+    userId: string,
+    workContext: ActiveWorkConversationContext,
+  ) => {
+    const next = selectConversationFromWork(userId, workContext);
+    setSelectedUserId(next.selectedUserId);
+    setActiveWorkContext(next.activeWorkContext);
+    setSelectedWorkConversation(next.selectedWorkConversation);
+    setText("");
+  };
+
+  const openProjectConversation = (workContext: ActiveWorkConversationContext) => {
+    const next = selectWorkConversation(workContext);
+    setSelectedUserId(next.selectedUserId);
+    setActiveWorkContext(next.activeWorkContext);
+    setSelectedWorkConversation(next.selectedWorkConversation);
+    setText("");
+  };
+
+  const resetConversationSelection = () => {
+    const next = clearConversationSelection();
+    setSelectedUserId(next.selectedUserId);
+    setActiveWorkContext(next.activeWorkContext);
+    setSelectedWorkConversation(next.selectedWorkConversation);
+    setText("");
+  };
+
+  const handleBroadcastToWork = async (workId: number, workName: string) => {
+    const body = broadcastText.trim();
+    if (!body) {
+      toast.error("Escribe un mensaje para la obra");
+      return;
+    }
+
+    setIsBroadcastSending(true);
+    try {
+      const result = await broadcastMessageToProject(workId, { message: body });
+      await reloadMessages();
+
+      if (result.sent_count === 0) {
+        toast("La obra no tiene destinatarios válidos visibles", {
+          description: `${workName}: 0 envíos, ${result.skipped_count} descartados.`,
+        });
+      } else {
+        toast.success("Mensaje enviado a la obra", {
+          description: `${workName}: ${result.sent_count} envío(s), ${result.skipped_count} descartado(s).`,
+        });
+      }
+
+      setBroadcastComposerWorkId(null);
+      setBroadcastText("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error inesperado";
+      toast.error("Error al escribir a la obra", {
+        description: message,
+      });
+    } finally {
+      setIsBroadcastSending(false);
+    }
+  };
 
   return (
     <Drawer open={open} onOpenChange={setOpen} dismissible>
@@ -342,7 +497,7 @@ export const ChatCenter = () => {
                   <AlertDialogAction
                     onClick={() => {
                       clearAllMessages();
-                      setSelectedUserId("");
+                      resetConversationSelection();
                     }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
@@ -356,7 +511,7 @@ export const ChatCenter = () => {
 
         <div className="px-4 pb-2 grid grid-cols-1 md:grid-cols-3 gap-4 min-h-0 h-full">
           {/* Conversations list */}
-          <div className={`${selectedUserId ? 'hidden md:flex' : 'flex'} md:col-span-1 border rounded-lg overflow-hidden flex-col min-h-0`}>
+          <div className={`${hasActiveConversation ? 'hidden md:flex' : 'flex'} md:col-span-1 border rounded-lg overflow-hidden flex-col min-h-0`}>
             <div className="p-3 border-b flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
@@ -373,7 +528,7 @@ export const ChatCenter = () => {
                 )}
                 {conversations.map((c) => (
                   <div key={c.userId} className="relative group">
-                    <button onClick={() => setSelectedUserId(c.userId)} className={`w-full text-left rounded-md px-3 py-2 hover:bg-accent ${selectedUserId === c.userId ? "bg-accent" : ""}`}>
+                    <button onClick={() => openConversationDirect(c.userId)} className={`w-full text-left rounded-md px-3 py-2 hover:bg-accent ${selectedUserId === c.userId ? "bg-accent" : ""}`}>
                       <div className="flex items-center gap-2">
                         <div className="relative">
                           <UserCircle2 className="h-6 w-6" />
@@ -412,7 +567,7 @@ export const ChatCenter = () => {
                             onClick={() => {
                               deleteConversation(c.userId);
                               if (selectedUserId === c.userId) {
-                                setSelectedUserId("");
+                                resetConversationSelection();
                               }
                             }}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -425,11 +580,27 @@ export const ChatCenter = () => {
                   </div>
                 ))}
 
-                <div className="pt-2 pb-1 px-2 text-[11px] text-muted-foreground font-medium">Contactos</div>
+                <div className="pt-2 pb-1 px-2 text-[11px] text-muted-foreground font-medium">
+                  Directorio general
+                </div>
+                {loadingContacts && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Cargando usuarios...</span>
+                  </div>
+                )}
+                {!loadingContacts &&
+                  contacts.filter(
+                    (u) => u.id !== currentUserId && u.full_name.toLowerCase().includes(search.toLowerCase())
+                  ).length === 0 && (
+                    <div className="text-sm text-muted-foreground px-3 py-2">
+                      No hay usuarios disponibles en el directorio general.
+                    </div>
+                  )}
                 {contacts
                   .filter((u) => u.id !== currentUserId && u.full_name.toLowerCase().includes(search.toLowerCase()))
                   .map((u) => (
-                    <button key={`contact-${u.id}`} onClick={() => setSelectedUserId(u.id)} className={`w-full text-left rounded-md px-3 py-2 hover:bg-accent ${selectedUserId === u.id ? "bg-accent" : ""}`}>
+                    <button key={`contact-${u.id}`} onClick={() => openConversationDirect(u.id)} className={`w-full text-left rounded-md px-3 py-2 hover:bg-accent ${selectedUserId === u.id ? "bg-accent" : ""}`}>
                       <div className="flex items-center gap-2">
                         <div className="relative">
                           <UserCircle2 className="h-6 w-6" />
@@ -441,37 +612,261 @@ export const ChatCenter = () => {
                       </div>
                     </button>
                 ))}
+
+                <div className="pt-3 pb-1 px-2 text-[11px] text-muted-foreground font-medium">Obras</div>
+                {loadingWorks && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Cargando obras...</span>
+                  </div>
+                )}
+                {!loadingWorks && filteredWorks.length === 0 && (
+                  <div className="text-sm text-muted-foreground px-3 py-2">
+                    No hay obras disponibles para conversar.
+                  </div>
+                )}
+                {filteredWorks.map((work) => {
+                  const isExpanded = expandedWorkIds.includes(work.id);
+                  const members = membersByWorkId[work.id] || [];
+                  const filteredMembers = members.filter((member) =>
+                    member.full_name.toLowerCase().includes(normalizedSearch)
+                  );
+                  const visibleMembers = normalizedSearch ? filteredMembers : members;
+                  const workContext = {
+                    workId: work.id,
+                    workName: work.name,
+                  } satisfies ActiveWorkConversationContext;
+
+                  return (
+                    <div key={`work-${work.id}`} className="rounded-md border border-border/60">
+                      <button
+                        type="button"
+                        onClick={() => void toggleWork(work.id)}
+                        className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-accent/50"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{work.name}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {work.visible_member_count} contacto{work.visible_member_count === 1 ? "" : "s"} visible{work.visible_member_count === 1 ? "" : "s"}
+                          </div>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-border/60 px-2 py-2 space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => openProjectConversation(workContext)}
+                            className={`w-full text-left rounded-md px-2 py-2 hover:bg-accent ${
+                              isWorkConversationSelected && selectedWorkConversation?.workId === work.id
+                                ? "bg-accent"
+                                : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-5 w-5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium truncate">Conversación de obra</div>
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  Hilo persistente del equipo visible de esta obra
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                          <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                            <div className="text-[11px] text-muted-foreground">
+                              Enviar el mismo mensaje a los DMs visibles de esta obra
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={work.visible_member_count <= 0}
+                              onClick={() => {
+                                setBroadcastComposerWorkId((current) =>
+                                  current === work.id ? null : work.id
+                                );
+                                setBroadcastText("");
+                              }}
+                            >
+                              Escribir a la obra
+                            </Button>
+                          </div>
+                          {broadcastComposerWorkId === work.id && (
+                            <div className="rounded-md border border-border/70 bg-background p-2 space-y-2">
+                              <Textarea
+                                value={broadcastText}
+                                onChange={(event) => setBroadcastText(event.target.value)}
+                                placeholder="Escribe un mensaje para los destinatarios válidos de esta obra"
+                                className="min-h-[88px] resize-none"
+                                rows={4}
+                              />
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-[11px] text-muted-foreground">
+                                  Se enviará por DM 1:1. No se crea chat grupal.
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setBroadcastComposerWorkId(null);
+                                      setBroadcastText("");
+                                    }}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={isBroadcastSending || !broadcastText.trim()}
+                                    onClick={() => void handleBroadcastToWork(work.id, work.name)}
+                                  >
+                                    {isBroadcastSending ? "Enviando..." : "Enviar"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {loadingMembersByWorkId[work.id] && (
+                            <div className="px-2 py-1 text-xs text-muted-foreground flex items-center gap-2">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              <span>Cargando personas...</span>
+                            </div>
+                          )}
+                          {!loadingMembersByWorkId[work.id] && visibleMembers.length === 0 && (
+                            <div className="px-2 py-1 text-xs text-muted-foreground">
+                              No hay personas visibles en esta obra.
+                            </div>
+                          )}
+                          {visibleMembers.map((member) => (
+                            <button
+                              key={`work-${work.id}-member-${member.id}`}
+                              type="button"
+                              onClick={() => openConversationFromWork(member.id, workContext)}
+                              className={`w-full text-left rounded-md px-2 py-2 hover:bg-accent ${selectedUserId === member.id ? "bg-accent" : ""}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <UserCircle2 className="h-5 w-5 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium truncate">{member.full_name}</div>
+                                  <div className="text-[11px] text-muted-foreground truncate">
+                                    DM 1:1 desde contexto de obra
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
               </div>
             </ScrollArea>
           </div>
 
           {/* Conversation */}
-          <div className={`${selectedUserId ? 'flex' : 'hidden md:flex'} md:col-span-2 border rounded-lg overflow-hidden flex-col min-h-0`}>
+          <div className={`${hasActiveConversation ? 'flex' : 'hidden md:flex'} md:col-span-2 border rounded-lg overflow-hidden flex-col min-h-0`}>
             <div className="p-3 border-b flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
                 className="md:hidden"
-                onClick={() => setSelectedUserId("")}
+                onClick={resetConversationSelection}
                 title="Volver"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="flex items-center gap-2 min-w-0">
-                <UserCircle2 className="h-5 w-5" />
+                {isWorkConversationSelected ? (
+                  <Building2 className="h-5 w-5" />
+                ) : (
+                  <UserCircle2 className="h-5 w-5" />
+                )}
                 <span className="font-medium truncate">
-                  {selectedUser ? selectedUser.full_name : "Selecciona un contacto"}
+                  {selectedWorkConversation
+                    ? selectedWorkConversation.workName
+                    : selectedUser
+                    ? selectedUser.full_name
+                    : "Selecciona una conversación"}
                 </span>
-                {selectedUser && (
+                {selectedUser && !isWorkConversationSelected && (
                   <span className={`ml-2 h-2 w-2 rounded-full ${isUserOnline(selectedUser.id) ? "bg-green-500" : "bg-muted-foreground"}`} />
                 )}
               </div>
             </div>
+            {selectedWorkConversation && (
+              <div className="px-3 py-2 border-b bg-muted/30">
+                <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>
+                    Conversación de obra
+                    {projectConversationParticipantCount > 0
+                      ? ` · ${projectConversationParticipantCount} participante${projectConversationParticipantCount === 1 ? "" : "s"}`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            )}
+            {selectedUser && activeWorkContext && (
+              <div className="px-3 py-2 border-b bg-muted/30">
+                <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1 text-xs text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>Desde obra: {activeWorkContext.workName}</span>
+                </div>
+              </div>
+            )}
 
             <ScrollArea className="flex-1 min-h-0" ref={listRef as any}>
               <div className="p-4 space-y-2">
-                {!selectedUser && (
-                  <div className="text-sm text-muted-foreground">Elige una conversación o un contacto para empezar.</div>
+                {!selectedUser && !selectedWorkConversation && (
+                  <div className="text-sm text-muted-foreground">Elige una conversación, una obra o un contacto para empezar.</div>
+                )}
+                {selectedWorkConversation && (
+                  <>
+                    {loadingProjectConversation && (
+                      <div className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Cargando conversación de obra...</span>
+                      </div>
+                    )}
+                    {!loadingProjectConversation && projectConversationError && (
+                      <div className="text-sm text-destructive">
+                        {projectConversationError}
+                      </div>
+                    )}
+                    {!loadingProjectConversation && !projectConversationError && projectConversationMessages.length === 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        No hay mensajes todavía en esta conversación de obra.
+                      </div>
+                    )}
+                    {!loadingProjectConversation && !projectConversationError &&
+                      projectConversationMessages.map((message) => {
+                        const isMine = currentUserId === String(message.from_user_id);
+                        const senderName = isMine
+                          ? (user?.full_name || "Tú")
+                          : (message.from_user?.full_name || "Usuario");
+                        return (
+                          <div key={`project-message-${message.id}`} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                            <span className="text-[11px] font-medium text-muted-foreground mb-0.5 px-1">{senderName}</span>
+                            <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${isMine ? "bg-primary/15 rounded-br-none" : "bg-sky-100 dark:bg-sky-900/30 rounded-bl-none"}`}>
+                              <div className="whitespace-pre-wrap break-words">{message.message}</div>
+                              <div className={`text-[10px] text-muted-foreground mt-1 ${isMine ? "text-right" : ""}`}>
+                                {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </>
                 )}
                 {selectedUser && (() => {
                   // Combine messages and files
@@ -586,33 +981,65 @@ export const ChatCenter = () => {
 
             <div className="p-3 border-t">
               <div className="flex items-end gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileShare}
-                  className="hidden"
-                  id="chat-file-input"
-                  disabled={!selectedUser || isSharingFile}
-                />
-                {isRecording ? (
+                {isWorkConversationSelected ? (
                   <>
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                    <span className="flex-1 text-sm font-medium text-red-500">
-                      Grabando {fmtDuration(recordingDuration)}
-                    </span>
+                    <Textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder={selectedWorkConversation ? "Escribe en la conversación de obra..." : "Selecciona una obra"}
+                      disabled={!selectedWorkConversation || sendingProjectConversation}
+                      className="min-h-[44px] h-[44px] resize-none"
+                      rows={2}
+                    />
                     <Button
-                      onClick={stopRecording}
-                      variant="destructive"
+                      onClick={handleSend}
+                      disabled={!selectedWorkConversation || !text.trim() || sendingProjectConversation}
                       size="icon"
-                      title="Detener y enviar"
+                      title="Enviar"
                       className="shrink-0"
                     >
-                      <Send className="h-4 w-4" />
+                      {sendingProjectConversation ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </>
                 ) : (
                   <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={handleFileShare}
+                      className="hidden"
+                      id="chat-file-input"
+                      disabled={!selectedUser || isSharingFile}
+                    />
+                    {isRecording ? (
+                      <>
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <span className="flex-1 text-sm font-medium text-red-500">
+                          Grabando {fmtDuration(recordingDuration)}
+                        </span>
+                        <Button
+                          onClick={stopRecording}
+                          variant="destructive"
+                          size="icon"
+                          title="Detener y enviar"
+                          className="shrink-0"
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -650,8 +1077,10 @@ export const ChatCenter = () => {
                     <Button onClick={handleSend} disabled={!selectedUser || !text.trim()} size="icon" title="Enviar" className="shrink-0">
                       <Send className="h-4 w-4" />
                     </Button>
+                      </>
+                    )}
                   </>
-                )}
+                )}  
               </div>
             </div>
           </div>

@@ -11,6 +11,7 @@ from app.models.notification import NotificationType
 from app.models.ticket_message import TicketMessage
 from app.models.ticket_participant import TicketParticipant
 from app.models.user import User
+from app.policies.access_policies import can_user_manage_target_user
 from app.schemas.ticket import (
     TicketCreate,
     TicketMessageCreate,
@@ -43,18 +44,31 @@ def _user_has_permission(session: Session, user: User, code: str) -> bool:
     return code in permissions
 
 
-def _get_ticket_agent_user_ids(session: Session, tenant_id: int) -> set[int]:
+def _get_ticket_agent_user_ids(
+    session: Session,
+    tenant_id: int,
+    actor: User | None = None,
+) -> set[int]:
     tenant_users = session.exec(
         select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True))
     ).all()
     superadmins = session.exec(
         select(User).where(User.is_super_admin.is_(True), User.is_active.is_(True))
     ).all()
-    return {
-        user.id
-        for user in [*tenant_users, *superadmins]
-        if user.is_super_admin or _user_has_permission(session, user, "tickets:manage")
-    }
+    agent_ids = {user.id for user in superadmins if user.id is not None}
+    for user in tenant_users:
+        if user.id is None or not _user_has_permission(session, user, "tickets:manage"):
+            continue
+        if actor is not None and not actor.is_super_admin:
+            if not can_user_manage_target_user(
+                session,
+                actor,
+                user,
+                operation="ticket_assignment",
+            ):
+                continue
+        agent_ids.add(user.id)
+    return agent_ids
 
 
 def _get_ticket_participant_ids(session: Session, ticket_id: int) -> set[int]:
@@ -277,7 +291,7 @@ def create_ticket(
         details=f"ticket_id={ticket.id}, subject={ticket.subject}",
     )
 
-    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id)
+    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id, actor=current_user)
     _notify_ticket_users(
         session,
         ticket=ticket,
@@ -462,7 +476,7 @@ def add_message(
     session.refresh(message)
     session.refresh(ticket)
 
-    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id)
+    agent_ids = _get_ticket_agent_user_ids(session, ticket.tenant_id, actor=current_user)
     _notify_ticket_users(
         session,
         ticket=ticket,

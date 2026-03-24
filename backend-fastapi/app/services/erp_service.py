@@ -33,6 +33,7 @@ from app.models.inventory import WorkInventorySyncLog
 from app.models.hr import Department, EmployeeProfile
 from app.models.notification import NotificationType
 from app.models.user import User
+from app.models.user_work_assignment import UserWorkAssignment
 from app.schemas.erp import (
     ActivityCreate,
     AccessControlReportCreate,
@@ -1710,6 +1711,87 @@ def get_work_report(session: Session, report_id: int, tenant_id: Optional[int]) 
     return _get_work_report_or_404(session, report_id, resolved_tenant_id)
 
 
+def _ensure_work_assignment(
+    session: Session,
+    *,
+    tenant_id: int,
+    user_id: Optional[int],
+    project_id: int,
+    created_by_id: Optional[int] = None,
+) -> bool:
+    if user_id is None:
+        return False
+
+    linked_user = session.get(User, user_id)
+    if linked_user is None or linked_user.tenant_id != tenant_id or linked_user.is_super_admin:
+        return False
+
+    existing = session.exec(
+        select(UserWorkAssignment).where(
+            UserWorkAssignment.tenant_id == tenant_id,
+            UserWorkAssignment.user_id == user_id,
+            UserWorkAssignment.project_id == project_id,
+        )
+    ).first()
+    if existing is not None:
+        return False
+
+    session.add(
+        UserWorkAssignment(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            project_id=project_id,
+            created_by_id=created_by_id or user_id,
+        )
+    )
+    return True
+
+
+def backfill_user_work_assignments_from_work_reports(
+    session: Session,
+    *,
+    tenant_id: Optional[int] = None,
+) -> dict[str, int]:
+    stmt = select(WorkReport).where(WorkReport.deleted_at.is_(None)).order_by(
+        WorkReport.created_at.asc(),
+        WorkReport.id.asc(),
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(WorkReport.tenant_id == tenant_id)
+
+    reports = session.exec(stmt).all()
+
+    created_count = 0
+    considered_reports = 0
+    for report in reports:
+        considered_reports += 1
+        candidate_user_ids: list[int] = []
+        for candidate in (report.created_by_id, report.updated_by_id):
+            if candidate is None:
+                continue
+            if candidate in candidate_user_ids:
+                continue
+            candidate_user_ids.append(candidate)
+
+        for candidate_user_id in candidate_user_ids:
+            if _ensure_work_assignment(
+                session,
+                tenant_id=report.tenant_id,
+                user_id=candidate_user_id,
+                project_id=report.project_id,
+                created_by_id=report.created_by_id,
+            ):
+                created_count += 1
+
+    if created_count > 0:
+        session.commit()
+
+    return {
+        "reports_scanned": considered_reports,
+        "assignments_created": created_count,
+    }
+
+
 def create_work_report(
     session: Session,
     payload: WorkReportCreate,
@@ -1758,6 +1840,11 @@ def create_work_report(
     is_closed = bool(payload.is_closed or status in WORK_REPORT_CLOSED_STATUSES)
     if is_closed:
         status = "closed"
+    normalized_payload = _normalize_work_report_person_links_v2(
+        session,
+        payload.payload,
+        resolved_tenant_id,
+    )
 
     # Fase 2a: resolver creator_group_id del usuario que crea el parte.
     # No activa ningún filtro de visibilidad; solo persiste el campo para Fase 2c.
@@ -1778,7 +1865,7 @@ def create_work_report(
         date=payload.date,
         status=status,
         is_closed=is_closed,
-        payload=dict(payload.payload or {}),
+        payload=normalized_payload,
         created_by_id=current_user_id,
         updated_by_id=current_user_id,
         creator_group_id=creator_group_id,
@@ -1786,6 +1873,13 @@ def create_work_report(
         updated_at=now,
     )
     session.add(report)
+    _ensure_work_assignment(
+        session,
+        tenant_id=resolved_tenant_id,
+        user_id=current_user_id,
+        project_id=payload.project_id,
+        created_by_id=current_user_id,
+    )
     try:
         session.commit()
     except IntegrityError as exc:
@@ -1856,11 +1950,22 @@ def update_work_report(
     if payload.is_closed is False and report.is_closed:
         raise ValueError("No se permite reabrir un parte cerrado.")
     if payload.payload is not None:
-        report.payload = dict(payload.payload)
+        report.payload = _normalize_work_report_person_links_v2(
+            session,
+            payload.payload,
+            resolved_tenant_id,
+        )
 
     report.updated_by_id = current_user_id
     report.updated_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(report)
+    _ensure_work_assignment(
+        session,
+        tenant_id=resolved_tenant_id,
+        user_id=current_user_id,
+        project_id=report.project_id,
+        created_by_id=report.created_by_id or current_user_id,
+    )
     try:
         session.commit()
     except IntegrityError as exc:
@@ -2616,6 +2721,83 @@ def _sanitize_required_text(value: str, field_name: str) -> str:
     if not cleaned:
         raise ValueError(f"{field_name} es obligatorio.")
     return cleaned
+
+
+def _to_positive_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        parsed = int(value.strip())
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _normalize_work_report_person_links(
+    session: Session,
+    payload_data: dict[str, Any] | None,
+    tenant_id: int,
+) -> dict[str, Any]:
+    normalized_payload = dict(payload_data or {})
+
+    raw_main_foreman_user_id = normalized_payload.get(
+        "mainForemanUserId",
+        normalized_payload.get("main_foreman_user_id"),
+    )
+    if raw_main_foreman_user_id is None or raw_main_foreman_user_id == "":
+        normalized_payload.pop("mainForemanUserId", None)
+        normalized_payload.pop("main_foreman_user_id", None)
+        return normalized_payload
+
+    main_foreman_user_id = _to_positive_int(raw_main_foreman_user_id)
+    if main_foreman_user_id is None:
+        raise ValueError("El usuario seleccionado para el encargado principal no es válido.")
+
+    linked_user = session.get(User, main_foreman_user_id)
+    if not linked_user or linked_user.tenant_id != tenant_id:
+        raise ValueError("El usuario seleccionado para el encargado principal no pertenece al tenant.")
+    if linked_user.is_super_admin:
+        raise ValueError("No se permite vincular al super_admin como encargado principal.")
+
+    normalized_payload["mainForemanUserId"] = int(main_foreman_user_id)
+    normalized_payload.pop("main_foreman_user_id", None)
+    return normalized_payload
+
+
+def _normalize_work_report_person_links_v2(
+    session: Session,
+    payload_data: dict[str, Any] | None,
+    tenant_id: int,
+) -> dict[str, Any]:
+    normalized_payload = dict(payload_data or {})
+
+    person_link_specs = [
+        ("mainForemanUserId", "main_foreman_user_id", "encargado principal"),
+        ("siteManagerUserId", "site_manager_user_id", "jefe de obra"),
+    ]
+
+    for canonical_key, legacy_key, label in person_link_specs:
+        raw_user_id = normalized_payload.get(canonical_key, normalized_payload.get(legacy_key))
+        if raw_user_id is None or raw_user_id == "":
+            normalized_payload.pop(canonical_key, None)
+            normalized_payload.pop(legacy_key, None)
+            continue
+
+        resolved_user_id = _to_positive_int(raw_user_id)
+        if resolved_user_id is None:
+            raise ValueError(f"El usuario seleccionado para el {label} no es válido.")
+
+        linked_user = session.get(User, resolved_user_id)
+        if not linked_user or linked_user.tenant_id != tenant_id:
+            raise ValueError(f"El usuario seleccionado para el {label} no pertenece al tenant.")
+        if linked_user.is_super_admin:
+            raise ValueError(f"No se permite vincular al super_admin como {label}.")
+
+        normalized_payload[canonical_key] = int(resolved_user_id)
+        normalized_payload.pop(legacy_key, None)
+
+    return normalized_payload
 
 
 def _get_repaso_or_404(

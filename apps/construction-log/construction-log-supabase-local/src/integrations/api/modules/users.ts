@@ -23,6 +23,12 @@ export interface ApiUser {
   created_at?: string;
 }
 
+export interface ApiUserAutocomplete {
+  id: number;
+  email: string;
+  full_name: string;
+}
+
 export interface UserCreateRequest {
   email: string;
   full_name: string;
@@ -95,6 +101,17 @@ export function createUsersApi(deps: UsersApiDeps) {
     return users.map(normalizeApiUser);
   };
 
+  const searchContactUsersByTenant = async (
+    tenantId: number,
+    query: string,
+    limit = 8
+  ): Promise<ApiUserAutocomplete[]> => {
+    const encodedQuery = encodeURIComponent(query);
+    return deps.apiFetchJson<ApiUserAutocomplete[]>(
+      `/api/v1/users/contacts/autocomplete/by-tenant/${tenantId}?q=${encodedQuery}&limit=${limit}`
+    );
+  };
+
   const listTenants = async (): Promise<ApiTenant[]> => {
     return deps.apiFetchJson<ApiTenant[]>('/api/v1/tenants/');
   };
@@ -147,6 +164,7 @@ export function createUsersApi(deps: UsersApiDeps) {
   return {
     listContactUsersByTenant,
     listUsersByTenant,
+    searchContactUsersByTenant,
     listTenants,
     createUser,
     updateUser,

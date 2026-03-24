@@ -10,6 +10,7 @@ type BuildQueryParamsFn = (
 export interface UserManagementApiDeps {
   apiFetchJson: ApiFetchJsonFn;
   buildQueryParams: BuildQueryParamsFn;
+  tenantHeader: (tenantId?: string | number | null) => Record<string, string> | undefined;
 }
 
 export type ApiAppRole = 'master' | 'admin' | 'site_manager' | 'foreman' | 'reader' | 'ofi';
@@ -32,6 +33,18 @@ export interface ApiUserRoles {
 export interface ApiUserAssignments {
   user_id: number;
   work_ids: number[];
+}
+
+export interface ApiWorkMember {
+  id: number;
+  full_name: string;
+  email?: string | null;
+}
+
+export interface ApiWorkMessageDirectoryItem {
+  id: number;
+  name: string;
+  visible_member_count: number;
 }
 
 export function createUserManagementApi(deps: UserManagementApiDeps) {
@@ -121,6 +134,23 @@ export function createUserManagementApi(deps: UserManagementApiDeps) {
     return deps.apiFetchJson<ApiManagedUser[]>(`/api/v1/erp/user-management/assignable-foremen${query}`);
   };
 
+  const listWorkMessageDirectory = async (
+    tenantId?: string | number | null
+  ): Promise<ApiWorkMessageDirectoryItem[]> => {
+    return deps.apiFetchJson<ApiWorkMessageDirectoryItem[]>('/api/v1/erp/projects/member-directory', {
+      headers: deps.tenantHeader(tenantId),
+    });
+  };
+
+  const listWorkMembers = async (
+    workId: number,
+    tenantId?: string | number | null
+  ): Promise<ApiWorkMember[]> => {
+    return deps.apiFetchJson<ApiWorkMember[]>(`/api/v1/erp/projects/${workId}/members`, {
+      headers: deps.tenantHeader(tenantId),
+    });
+  };
+
   const deleteUserAndData = async (userId: number): Promise<void> => {
     return deps.apiFetchJson<void>(`/api/v1/erp/user-management/users/${userId}`, {
       method: 'DELETE',
@@ -138,6 +168,8 @@ export function createUserManagementApi(deps: UserManagementApiDeps) {
     assignUserToWork,
     removeUserFromWork,
     listAssignableForemen,
+    listWorkMessageDirectory,
+    listWorkMembers,
     deleteUserAndData,
   };
 }

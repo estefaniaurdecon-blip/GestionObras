@@ -1,8 +1,10 @@
+import json
 from pathlib import Path
 from typing import List
 
 import base64
 from fastapi import UploadFile
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
@@ -17,6 +19,7 @@ from app.models.user import User
 from app.models.role import Role
 from app.models.audit_log import AuditLog
 from app.schemas.user import (
+    UserAutocompleteRead,
     UserContactRead,
     UserCreate,
     UserRead,
@@ -79,6 +82,14 @@ def _user_to_contact(
     )
 
 
+def _user_to_autocomplete(user: User) -> UserAutocompleteRead:
+    return UserAutocompleteRead(
+        id=user.id,
+        email=user.email,
+        full_name=(user.full_name or user.email).strip(),
+    )
+
+
 def _get_role_names_by_user_id(session: Session, users: list[User]) -> dict[int, str]:
     role_ids = {u.role_id for u in users if u.role_id}
     if not role_ids:
@@ -137,8 +148,6 @@ def _infer_created_by_user_id(session: Session, user: User) -> int | None:
         return None
 
     normalized_email = (user.email or "").strip().lower()
-    if not normalized_email:
-        return None
 
     audit_rows = session.exec(
         select(AuditLog)
@@ -150,8 +159,31 @@ def _infer_created_by_user_id(session: Session, user: User) -> int | None:
     ).all()
 
     for audit_row in audit_rows:
+        try:
+            details_data = json.loads((audit_row.details or "").strip() or "{}")
+        except (json.JSONDecodeError, TypeError):
+            details_data = None
+
+        if isinstance(details_data, dict):
+            created_user_id = details_data.get("created_user_id")
+            try:
+                if (
+                    created_user_id is not None
+                    and int(created_user_id) == int(user.id)
+                    and audit_row.user_id
+                    and audit_row.user_id != user.id
+                ):
+                    return int(audit_row.user_id)
+            except (TypeError, ValueError):
+                pass
+
         details = (audit_row.details or "").strip().lower()
-        if normalized_email in details and audit_row.user_id and audit_row.user_id != user.id:
+        if (
+            normalized_email
+            and normalized_email in details
+            and audit_row.user_id
+            and audit_row.user_id != user.id
+        ):
             return int(audit_row.user_id)
 
     return None
@@ -350,8 +382,7 @@ def list_contact_users_by_tenant(
 
     roles_by_user_id = _get_role_names_by_user_id(session, users)
     current_user_id = current_user.id
-    current_group_id = resolve_creator_group_id(session, current_user, persist=True)
-    if current_user_id is None or current_group_id is None:
+    if current_user_id is None:
         return []
 
     return [
@@ -359,7 +390,58 @@ def list_contact_users_by_tenant(
         for u in users
         if u.id is not None
         and u.id != current_user_id
-        and users_share_creation_group(session, current_user, u)
+    ]
+
+
+def search_contact_users_by_tenant(
+    session: Session,
+    current_user: User,
+    tenant_id: int,
+    *,
+    query: str,
+    limit: int = 8,
+) -> List[UserAutocompleteRead]:
+    """
+    Busca usuarios normales del tenant para autocomplete.
+    No filtra por creator_group_id.
+    """
+
+    if current_user.is_super_admin:
+        return []
+
+    if current_user.tenant_id != tenant_id:
+        raise PermissionError("No tienes permisos para ver este tenant")
+
+    tenant_exists = session.get(Tenant, tenant_id)
+    if not tenant_exists:
+        raise LookupError("Tenant no encontrado")
+
+    normalized_query = (query or "").strip()
+    if not normalized_query:
+        return []
+
+    normalized_limit = max(1, min(limit, 20))
+    like_pattern = f"%{normalized_query.lower()}%"
+
+    users = session.exec(
+        select(User)
+        .where(
+            User.tenant_id == tenant_id,
+            User.is_active.is_(True),
+            User.is_super_admin.is_(False),
+            or_(
+                func.lower(User.full_name).like(like_pattern),
+                func.lower(User.email).like(like_pattern),
+            ),
+        )
+        .order_by(User.full_name, User.email)
+        .limit(normalized_limit)
+    ).all()
+
+    return [
+        _user_to_autocomplete(user)
+        for user in users
+        if user.id is not None
     ]
 
 
@@ -592,7 +674,14 @@ def create_user(
         user_id=current_user.id,
         tenant_id=user.tenant_id,
         action="user.create",
-        details=f"Usuario creado con email '{user.email}'",
+        details=json.dumps(
+            {
+                "created_user_id": user.id,
+                "email": user.email,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
     )
 
     return _user_to_read(user, role_name=_get_user_role_name(session, user))

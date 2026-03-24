@@ -18,7 +18,10 @@ from app.core.config import settings
 from app.db.session import get_session
 from app.models.attachments import SharedFile, WorkReportAttachment
 from app.models.user import User
-from app.services.user_service import resolve_creator_group_id, users_share_creation_group
+from app.policies.access_policies import (
+    can_access_work_report_attachment,
+    can_share_file_with_user,
+)
 
 
 router = APIRouter()
@@ -76,7 +79,7 @@ def _is_shared_file_visible_to_user_group(
     current_user_id = str(current_user.id)
     other_user_id = row.to_user_id if row.from_user_id == current_user_id else row.from_user_id
     other_user = _load_numeric_user(session, other_user_id)
-    return users_share_creation_group(session, current_user, other_user)
+    return can_share_file_with_user(session, current_user, other_user)
 
 
 def _safe_content_type(upload: UploadFile) -> str:
@@ -127,13 +130,8 @@ def _get_report_or_403(
     report = session.get(WorkReport, work_report_id)
     if not report or report.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parte no encontrado.")
-    # Fase 2d: filtro de grupo
-    if not current_user.is_super_admin:
-        if report.creator_group_id is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este parte.")
-        user_group = resolve_creator_group_id(session, current_user, persist=True)
-        if user_group != report.creator_group_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este parte.")
+    if not can_access_work_report_attachment(session, current_user, report):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este parte.")
     return report
 
 
@@ -506,7 +504,7 @@ def create_shared_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Destinatario no encontrado.")
     if target_user.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Destinatario fuera del tenant.")
-    if target_user.is_super_admin or not users_share_creation_group(session, current_user, target_user):
+    if not can_share_file_with_user(session, current_user, target_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Destinatario fuera de tu grupo de creacion.",

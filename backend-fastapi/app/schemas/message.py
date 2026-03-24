@@ -29,3 +29,14 @@ class MessageCreate(BaseModel):
 class MessageListResponse(BaseModel):
     items: list[MessageRead]
     total: int
+
+
+class WorkBroadcastMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class WorkBroadcastMessageResult(BaseModel):
+    project_id: int
+    eligible_recipient_count: int
+    sent_count: int
+    skipped_count: int

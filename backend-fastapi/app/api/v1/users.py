@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlmodel import Session
 
 from app.api.deps import (
@@ -10,6 +10,7 @@ from app.api.deps import (
 from app.db.session import get_session
 from app.models.user import User
 from app.schemas.user import (
+    UserAutocompleteRead,
     UserContactRead,
     UserCreate,
     UserRead,
@@ -22,6 +23,7 @@ from app.services.user_service import (
     get_user_me as svc_get_user_me,
     list_contact_users_by_tenant as svc_list_contact_users_by_tenant,
     list_users_by_tenant as svc_list_users_by_tenant,
+    search_contact_users_by_tenant as svc_search_contact_users_by_tenant,
     delete_user as svc_delete_user,
     update_user_status as svc_update_user_status,
     update_user_me as svc_update_user_me,
@@ -117,6 +119,42 @@ def list_contact_users_by_tenant(
             session=session,
             current_user=current_user,
             tenant_id=tenant_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/contacts/autocomplete/by-tenant/{tenant_id}",
+    response_model=List[UserAutocompleteRead],
+    summary="Autocomplete de usuarios normales de un tenant",
+)
+def autocomplete_contact_users_by_tenant(
+    tenant_id: int,
+    q: str = Query(default="", min_length=0, max_length=120),
+    limit: int = Query(default=8, ge=1, le=20),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+) -> list[UserAutocompleteRead]:
+    """
+    Busca usuarios normales del tenant por nombre o email para autocomplete.
+    """
+
+    try:
+        return svc_search_contact_users_by_tenant(
+            session=session,
+            current_user=current_user,
+            tenant_id=tenant_id,
+            query=q,
+            limit=limit,
         )
     except PermissionError as exc:
         raise HTTPException(

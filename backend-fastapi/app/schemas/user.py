@@ -55,6 +55,16 @@ class UserContactRead(BaseModel):
     avatar_url: str | None = None
 
 
+class UserAutocompleteRead(BaseModel):
+    """
+    Esquema reducido para autocomplete de usuarios normales del tenant.
+    """
+
+    id: int
+    email: EmailStr
+    full_name: str
+
+
 class UserUpdateMe(BaseModel):
     """
     Esquema de actualización del propio usuario.

@@ -27,7 +27,7 @@ import type {
   ListErpWorkReportsParams,
   UpdateErpWorkReportPayload,
 } from '@/services/workReportContract';
-import type { ApiUser } from './modules/users';
+import type { ApiUser, ApiUserAutocomplete } from './modules/users';
 
 // Re-export storage functions for convenience
 export { clearToken, getAuthHeader, getToken, setToken, TokenData } from './storage';
@@ -88,6 +88,42 @@ function normalizeApiPath(path: string, baseUrl = activeApiBaseUrl): string {
   }
 
   return normalizedPath;
+}
+
+function formatApiDetail(detail: unknown): string | null {
+  if (typeof detail === 'string') {
+    return detail.trim() || null;
+  }
+
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => formatApiDetail(item))
+      .filter((item): item is string => Boolean(item));
+    return parts.length > 0 ? parts.join(' | ') : null;
+  }
+
+  if (detail && typeof detail === 'object') {
+    if ('message' in detail) {
+      const nested = formatApiDetail((detail as { message?: unknown }).message);
+      if (nested) return nested;
+    }
+    if ('msg' in detail) {
+      const nested = formatApiDetail((detail as { msg?: unknown }).msg);
+      if (nested) return nested;
+    }
+    if ('detail' in detail) {
+      const nested = formatApiDetail((detail as { detail?: unknown }).detail);
+      if (nested) return nested;
+    }
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return null;
+    }
+  }
+
+  if (detail === null || detail === undefined) return null;
+  return String(detail);
 }
 
 function buildApiUrl(path: string, baseUrl = activeApiBaseUrl): string {
@@ -373,10 +409,9 @@ export async function apiFetchJson<T>(
       error.data = parsedErrorData;
       if (typeof parsedErrorData === 'object' && parsedErrorData !== null && 'detail' in parsedErrorData) {
         const detail = (parsedErrorData as { detail?: unknown }).detail;
-        if (typeof detail === 'string' && detail.trim()) {
-          error.message = detail;
-        } else if (detail !== undefined && detail !== null) {
-          error.message = String(detail);
+        const formattedDetail = formatApiDetail(detail);
+        if (formattedDetail) {
+          error.message = formattedDetail;
         }
       }
     } catch {
@@ -648,6 +683,67 @@ export interface ApiProject {
   updated_at?: string;
 }
 
+export interface WorkBroadcastMessagePayload {
+  message: string;
+}
+
+export interface WorkBroadcastMessageResult {
+  project_id: number;
+  eligible_recipient_count: number;
+  sent_count: number;
+  skipped_count: number;
+}
+
+export interface ProjectConversationParticipantApi {
+  user_id: number;
+  full_name: string;
+  email?: string | null;
+  joined_at: string;
+  is_active: boolean;
+}
+
+export interface ProjectConversationApi {
+  id: number;
+  tenant_id: number;
+  project_id: number;
+  creator_group_id: number;
+  created_by_id: number;
+  created_at: string;
+  updated_at: string;
+  last_message_at?: string | null;
+}
+
+export interface ProjectConversationShellApi {
+  conversation: ProjectConversationApi;
+  participants: ProjectConversationParticipantApi[];
+  created_now: boolean;
+}
+
+export interface ProjectConversationMessageUserApi {
+  full_name: string;
+}
+
+export interface ProjectConversationMessageApi {
+  id: number;
+  conversation_id: number;
+  tenant_id: number;
+  project_id: number;
+  creator_group_id: number;
+  from_user_id: number;
+  message: string;
+  created_at: string;
+  from_user?: ProjectConversationMessageUserApi | null;
+}
+
+export interface ProjectConversationMessageListApi {
+  conversation: ProjectConversationApi;
+  items: ProjectConversationMessageApi[];
+}
+
+export interface ProjectConversationMessageCreatePayload {
+  message: string;
+}
+
 export interface ProjectCreate {
   name: string;
   code?: string;
@@ -817,6 +913,48 @@ export async function deleteProject(
   return apiFetchJson<void>(`/api/v1/erp/projects/${projectId}`, {
     method: 'DELETE',
     headers: tenantHeader(tenantId),
+  });
+}
+
+export async function broadcastMessageToProject(
+  projectId: number,
+  payload: WorkBroadcastMessagePayload,
+  tenantId?: string | number | null
+): Promise<WorkBroadcastMessageResult> {
+  return apiFetchJson<WorkBroadcastMessageResult>(`/api/v1/erp/projects/${projectId}/broadcast-message`, {
+    method: 'POST',
+    headers: tenantHeader(tenantId),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getProjectConversationShell(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<ProjectConversationShellApi> {
+  return apiFetchJson<ProjectConversationShellApi>(`/api/v1/erp/projects/${projectId}/conversation`, {
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function listProjectConversationMessages(
+  projectId: number,
+  tenantId?: string | number | null
+): Promise<ProjectConversationMessageListApi> {
+  return apiFetchJson<ProjectConversationMessageListApi>(`/api/v1/erp/projects/${projectId}/conversation/messages`, {
+    headers: tenantHeader(tenantId),
+  });
+}
+
+export async function createProjectConversationMessage(
+  projectId: number,
+  payload: ProjectConversationMessageCreatePayload,
+  tenantId?: string | number | null
+): Promise<ProjectConversationMessageApi> {
+  return apiFetchJson<ProjectConversationMessageApi>(`/api/v1/erp/projects/${projectId}/conversation/messages`, {
+    method: 'POST',
+    headers: tenantHeader(tenantId),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1247,6 +1385,7 @@ const usersApi = createUsersApi({
 
 export const listUsersByTenant = usersApi.listUsersByTenant;
 export const listContactUsersByTenant = usersApi.listContactUsersByTenant;
+export const searchContactUsersByTenant = usersApi.searchContactUsersByTenant;
 export const listTenants = usersApi.listTenants;
 export const createUser = usersApi.createUser;
 export const updateUser = usersApi.updateUser;
@@ -1254,6 +1393,7 @@ export const updateUserStatus = usersApi.updateUserStatus;
 export const deleteUser = usersApi.deleteUser;
 export const updateCurrentUserProfile = usersApi.updateCurrentUserProfile;
 export const changePassword = usersApi.changePassword;
+export type { ApiUserAutocomplete };
 
 // ============================================================
 // USER MANAGEMENT API (construction-log compatibility)
@@ -1264,11 +1404,14 @@ export type {
   ApiManagedUser,
   ApiUserAssignments,
   ApiUserRoles,
+  ApiWorkMember,
+  ApiWorkMessageDirectoryItem,
 } from './modules/userManagement';
 
 const userManagementApi = createUserManagementApi({
   apiFetchJson,
   buildQueryParams,
+  tenantHeader,
 });
 
 export const listManagedUsers = userManagementApi.listManagedUsers;
@@ -1281,6 +1424,8 @@ export const listManagedUserAssignments = userManagementApi.listUserAssignments;
 export const assignManagedUserToWork = userManagementApi.assignUserToWork;
 export const removeManagedUserFromWork = userManagementApi.removeUserFromWork;
 export const listAssignableForemen = userManagementApi.listAssignableForemen;
+export const listWorkMessageDirectory = userManagementApi.listWorkMessageDirectory;
+export const listWorkMembers = userManagementApi.listWorkMembers;
 export const deleteUserAndData = userManagementApi.deleteUserAndData;
 
 export type {

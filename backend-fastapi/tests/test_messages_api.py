@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.security import create_access_token, hash_password
+from app.models.role import Role
 from app.models.tenant import Tenant
 from app.models.user import User
 
@@ -35,13 +36,19 @@ def _create_user(
     tenant_id: int,
     email: str,
     full_name: str,
+    creator_group_id: int | None = None,
+    role_name: str = "tenant_admin",
 ) -> User:
+    role = session.exec(select(Role).where(Role.name == role_name)).first()
+    assert role is not None
     user = User(
         email=email,
         full_name=full_name,
         hashed_password=hash_password("temporal"),
         is_active=True,
         tenant_id=tenant_id,
+        role_id=int(role.id or 0),
+        creator_group_id=creator_group_id,
     )
     session.add(user)
     session.commit()
@@ -50,11 +57,6 @@ def _create_user(
 
 
 def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> None:
-    superadmin_token = _login_superadmin(client)
-    superadmin = db_session_fixture.exec(
-        select(User).where(User.email == "dios@cortecelestial.god")
-    ).one()
-
     tenant = Tenant(
         name="Tenant Messages",
         subdomain=f"messages-{int(datetime.utcnow().timestamp())}",
@@ -64,23 +66,27 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
     db_session_fixture.commit()
     db_session_fixture.refresh(tenant)
 
+    sender = _create_user(
+        db_session_fixture,
+        tenant_id=int(tenant.id or 0),
+        email=f"sender-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        full_name="Sender User",
+        creator_group_id=777,
+    )
     receiver = _create_user(
         db_session_fixture,
         tenant_id=int(tenant.id or 0),
         email=f"receiver-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
         full_name="Receiver User",
+        creator_group_id=777,
     )
 
-    superadmin_headers = _auth_headers_for_user(
-        superadmin,
-        int(tenant.id or 0),
-        superadmin_token,
-    )
+    sender_headers = _auth_headers_for_user(sender, int(tenant.id or 0))
     receiver_headers = _auth_headers_for_user(receiver, int(tenant.id or 0))
 
     send_response = client.post(
         "/api/v1/messages",
-        headers=superadmin_headers,
+        headers=sender_headers,
         json={
             "to_user_id": str(receiver.id),
             "message": "Hola equipo",
@@ -89,7 +95,7 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
     )
     assert send_response.status_code == status.HTTP_201_CREATED
     payload = send_response.json()
-    assert payload["from_user_id"] == str(superadmin.id)
+    assert payload["from_user_id"] == str(sender.id)
     assert payload["to_user_id"] == str(receiver.id)
     assert payload["read"] is False
     message_id = int(payload["id"])
@@ -99,7 +105,7 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
     listed_items = list_response.json()["items"]
     listed_message = next(item for item in listed_items if int(item["id"]) == message_id)
     assert listed_message["read"] is False
-    assert listed_message["from_user"]["full_name"] == superadmin.full_name
+    assert listed_message["from_user"]["full_name"] == sender.full_name
 
     mark_response = client.post(
         f"/api/v1/messages/{message_id}/read",
@@ -110,12 +116,12 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
 
     invalid_mark_response = client.post(
         f"/api/v1/messages/{message_id}/read",
-        headers=superadmin_headers,
+        headers=sender_headers,
     )
     assert invalid_mark_response.status_code == status.HTTP_400_BAD_REQUEST
 
     delete_conversation_response = client.delete(
-        f"/api/v1/messages/conversation/{superadmin.id}",
+        f"/api/v1/messages/conversation/{sender.id}",
         headers=receiver_headers,
     )
     assert delete_conversation_response.status_code == status.HTTP_204_NO_CONTENT
@@ -126,7 +132,7 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
 
     second_send = client.post(
         "/api/v1/messages",
-        headers=superadmin_headers,
+        headers=sender_headers,
         json={"to_user_id": str(receiver.id), "message": "Segundo mensaje"},
     )
     assert second_send.status_code == status.HTTP_201_CREATED
@@ -144,7 +150,7 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
 
     third_send = client.post(
         "/api/v1/messages",
-        headers=superadmin_headers,
+        headers=sender_headers,
         json={"to_user_id": str(receiver.id), "message": "Tercer mensaje"},
     )
     assert third_send.status_code == status.HTTP_201_CREATED

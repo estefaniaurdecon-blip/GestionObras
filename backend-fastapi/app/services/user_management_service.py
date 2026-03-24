@@ -6,9 +6,10 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
-from app.models.erp import Project
+from app.models.erp import Project, WorkReport
 from app.models.role import Role
 from app.models.user import User
+from app.policies.access_policies import can_user_manage_target_user, can_user_view_target_user
 from app.models.user_app_role import UserAppRole
 from app.models.user_work_assignment import UserWorkAssignment
 from app.schemas.user_management import (
@@ -16,8 +17,10 @@ from app.schemas.user_management import (
     UserAssignmentsRead,
     UserProfileRead,
     UserRolesRead,
+    WorkMemberRead,
+    WorkMessageDirectoryRead,
 )
-from app.services.user_service import resolve_creator_group_id, users_share_creation_group
+from app.services.user_service import resolve_creator_group_id
 
 
 CORE_ROLE_TO_APP_ROLE: dict[str, AppRole] = {
@@ -49,6 +52,51 @@ def _project_or_404(session: Session, *, tenant_id: int, project_id: int) -> Pro
     if not project:
         raise ValueError("Obra no encontrada.")
     return project
+
+
+def _normalize_directory_work_name(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _resolve_directory_work_names(
+    session: Session,
+    *,
+    tenant_id: int,
+    project_ids: set[int],
+) -> dict[int, str]:
+    if not project_ids:
+        return {}
+
+    reports = session.exec(
+        select(WorkReport)
+        .where(
+            WorkReport.tenant_id == tenant_id,
+            WorkReport.project_id.in_(project_ids),
+            WorkReport.deleted_at.is_(None),
+        )
+        .order_by(WorkReport.project_id.asc(), WorkReport.created_at.desc(), WorkReport.id.desc())
+    ).all()
+
+    names_by_project_id: dict[int, str] = {}
+    for report in reports:
+        project_id = int(report.project_id)
+        if project_id in names_by_project_id:
+            continue
+
+        payload = report.payload if isinstance(report.payload, dict) else {}
+        preferred_name = (
+            _normalize_directory_work_name(payload.get("workName"))
+            or _normalize_directory_work_name(payload.get("work_name"))
+            or _normalize_directory_work_name(payload.get("title"))
+            or _normalize_directory_work_name(report.title)
+        )
+        if preferred_name:
+            names_by_project_id[project_id] = preferred_name
+
+    return names_by_project_id
 
 
 def _resolve_core_role_name(session: Session, role_id: Optional[int]) -> Optional[str]:
@@ -148,7 +196,7 @@ def add_user_role(
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
 
     if not current_user.is_super_admin:
-        if not users_share_creation_group(session, current_user, user):
+        if not can_user_manage_target_user(session, current_user, user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para gestionar este usuario.",
@@ -186,7 +234,7 @@ def remove_user_role(
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
 
     if not current_user.is_super_admin:
-        if not users_share_creation_group(session, current_user, user):
+        if not can_user_manage_target_user(session, current_user, user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para gestionar este usuario.",
@@ -216,7 +264,7 @@ def approve_user(
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
 
     if not current_user.is_super_admin:
-        if not users_share_creation_group(session, current_user, user):
+        if not can_user_manage_target_user(session, current_user, user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para gestionar este usuario.",
@@ -263,6 +311,109 @@ def list_user_assignments(
     )
 
 
+def list_work_members(
+    session: Session,
+    *,
+    tenant_id: int,
+    current_user: User,
+    work_id: int,
+) -> list[WorkMemberRead]:
+    _project_or_404(session, tenant_id=tenant_id, project_id=work_id)
+
+    users = session.exec(
+        select(User)
+        .join(UserWorkAssignment, UserWorkAssignment.user_id == User.id)
+        .where(
+            UserWorkAssignment.tenant_id == tenant_id,
+            UserWorkAssignment.project_id == work_id,
+            User.tenant_id == tenant_id,
+            User.is_super_admin.is_(False),
+        )
+        .order_by(User.full_name.asc())
+    ).all()
+
+    visible_users_by_id: dict[int, User] = {}
+    for user in users:
+        if user.id is None:
+            continue
+        if not can_user_view_target_user(session, current_user, user):
+            continue
+        visible_users_by_id.setdefault(int(user.id), user)
+
+    return [
+        WorkMemberRead(
+            id=int(user.id or 0),
+            full_name=user.full_name,
+            email=user.email,
+        )
+        for user in visible_users_by_id.values()
+        if user.id is not None
+    ]
+
+
+def list_work_message_directory(
+    session: Session,
+    *,
+    tenant_id: int,
+    current_user: User,
+) -> list[WorkMessageDirectoryRead]:
+    if current_user.is_super_admin:
+        return []
+
+    rows = session.exec(
+        select(Project, User)
+        .join(UserWorkAssignment, UserWorkAssignment.project_id == Project.id)
+        .join(User, User.id == UserWorkAssignment.user_id)
+        .where(
+            Project.tenant_id == tenant_id,
+            UserWorkAssignment.tenant_id == tenant_id,
+            User.tenant_id == tenant_id,
+            User.is_super_admin.is_(False),
+        )
+        .order_by(Project.name.asc(), User.full_name.asc())
+    ).all()
+
+    project_ids = {int(project.id) for project, _member in rows if project.id is not None}
+    directory_names_by_project_id = _resolve_directory_work_names(
+        session,
+        tenant_id=tenant_id,
+        project_ids=project_ids,
+    )
+
+    projects_by_id: dict[int, WorkMessageDirectoryRead] = {}
+    seen_members_by_project_id: dict[int, set[int]] = {}
+    for project, member in rows:
+        if project.id is None or not can_user_view_target_user(session, current_user, member):
+            continue
+        if member.id is None:
+            continue
+
+        project_id = int(project.id)
+        member_id = int(member.id)
+        seen_member_ids = seen_members_by_project_id.setdefault(project_id, set())
+        if member_id in seen_member_ids:
+            continue
+        seen_member_ids.add(member_id)
+
+        existing = projects_by_id.get(project_id)
+        if existing is None:
+            resolved_name = (
+                directory_names_by_project_id.get(project_id)
+                or _normalize_directory_work_name(project.name)
+                or f"Obra {project_id}"
+            )
+            projects_by_id[project_id] = WorkMessageDirectoryRead(
+                id=project_id,
+                name=resolved_name,
+                visible_member_count=1,
+            )
+            continue
+
+        existing.visible_member_count += 1
+
+    return sorted(projects_by_id.values(), key=lambda item: (item.name.lower(), item.id))
+
+
 def assign_user_to_work(
     session: Session,
     *,
@@ -275,7 +426,7 @@ def assign_user_to_work(
     _project_or_404(session, tenant_id=tenant_id, project_id=work_id)
 
     if not current_user.is_super_admin:
-        if not users_share_creation_group(session, current_user, user):
+        if not can_user_manage_target_user(session, current_user, user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para gestionar este usuario.",
@@ -312,7 +463,7 @@ def remove_user_from_work(
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
 
     if not current_user.is_super_admin:
-        if not users_share_creation_group(session, current_user, user):
+        if not can_user_manage_target_user(session, current_user, user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permiso para gestionar este usuario.",
@@ -412,4 +563,3 @@ def delete_user_related_data(
 
     if role_rows or assignment_rows:
         session.commit()
-

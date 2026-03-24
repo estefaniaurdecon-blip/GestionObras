@@ -59,6 +59,14 @@ from app.schemas.erp import (
     WorkPostventaRead,
     WorkPostventaUpdate,
 )
+from app.schemas.message import WorkBroadcastMessageCreate, WorkBroadcastMessageResult
+from app.schemas.project_conversation import (
+    ProjectConversationMessageCreate,
+    ProjectConversationMessageListRead,
+    ProjectConversationMessageRead,
+    ProjectConversationShellRead,
+)
+from app.schemas.user_management import WorkMemberRead, WorkMessageDirectoryRead
 from app.services.erp_service import (
     create_activity,
     create_access_control_report,
@@ -123,6 +131,14 @@ from app.services.erp_service import (
     update_time_session,
     update_project_budget_line,
 )
+from app.services.message_service import MessageValidationError, broadcast_message_to_work
+from app.services.project_conversation_service import (
+    ProjectConversationValidationError,
+    create_project_conversation_message,
+    get_or_create_project_conversation_shell,
+    list_project_conversation_messages,
+)
+from app.services.user_management_service import list_work_members, list_work_message_directory
 from app.services.project_document_service import (
     create_project_document,
     list_project_documents,
@@ -205,6 +221,20 @@ def api_list_projects(
     return list_projects(session, tenant_id)
 
 
+@router.get("/projects/member-directory", response_model=list[WorkMessageDirectoryRead])
+def api_list_project_message_directory(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[WorkMessageDirectoryRead]:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    return list_work_message_directory(
+        session,
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+
+
 @router.get("/projects/{project_id}", response_model=ProjectRead)
 def api_get_project(
     project_id: int,
@@ -217,6 +247,146 @@ def api_get_project(
         return get_project(session, project_id, tenant_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/members", response_model=list[WorkMemberRead])
+def api_list_project_members(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> list[WorkMemberRead]:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    try:
+        return list_work_members(
+            session,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            work_id=project_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/projects/{project_id}/broadcast-message",
+    response_model=WorkBroadcastMessageResult,
+    status_code=status.HTTP_200_OK,
+)
+def api_broadcast_message_to_project(
+    project_id: int,
+    payload: WorkBroadcastMessageCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> WorkBroadcastMessageResult:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    try:
+        return broadcast_message_to_work(
+            session,
+            user=current_user,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            message=payload.message,
+        )
+    except MessageValidationError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "no encontrada" in detail.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.get("/projects/{project_id}/conversation", response_model=ProjectConversationShellRead)
+def api_get_project_conversation_shell(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> ProjectConversationShellRead:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    try:
+        return get_or_create_project_conversation_shell(
+            session,
+            actor=current_user,
+            tenant_id=tenant_id,
+            project_id=project_id,
+        )
+    except ProjectConversationValidationError as exc:
+        detail = str(exc)
+        detail_lower = detail.lower()
+        if "no encontrada" in detail_lower:
+            status_code = status.HTTP_404_NOT_FOUND
+        elif "no tienes acceso" in detail_lower or "fuera del circuito" in detail_lower:
+            status_code = status.HTTP_403_FORBIDDEN
+        else:
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.get(
+    "/projects/{project_id}/conversation/messages",
+    response_model=ProjectConversationMessageListRead,
+)
+def api_list_project_conversation_messages(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> ProjectConversationMessageListRead:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    try:
+        return list_project_conversation_messages(
+            session,
+            actor=current_user,
+            tenant_id=tenant_id,
+            project_id=project_id,
+        )
+    except ProjectConversationValidationError as exc:
+        detail = str(exc)
+        detail_lower = detail.lower()
+        if "no encontrada" in detail_lower:
+            status_code = status.HTTP_404_NOT_FOUND
+        elif "no puedes" in detail_lower or "no eres participante" in detail_lower or "no tienes acceso" in detail_lower or "fuera del circuito" in detail_lower:
+            status_code = status.HTTP_403_FORBIDDEN
+        else:
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post(
+    "/projects/{project_id}/conversation/messages",
+    response_model=ProjectConversationMessageRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def api_create_project_conversation_message(
+    project_id: int,
+    payload: ProjectConversationMessageCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permissions(["erp:read"])),
+    x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+) -> ProjectConversationMessageRead:
+    tenant_id = _require_tenant_scope(current_user, x_tenant_id, for_write=False)
+    try:
+        return create_project_conversation_message(
+            session,
+            actor=current_user,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            payload=payload,
+        )
+    except ProjectConversationValidationError as exc:
+        detail = str(exc)
+        detail_lower = detail.lower()
+        if "no encontrada" in detail_lower:
+            status_code = status.HTTP_404_NOT_FOUND
+        elif "no puedes" in detail_lower or "no eres participante" in detail_lower or "no tienes acceso" in detail_lower or "fuera del circuito" in detail_lower:
+            status_code = status.HTTP_403_FORBIDDEN
+        else:
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
