@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -55,18 +56,33 @@ def _project_or_404(session: Session, *, tenant_id: int, project_id: int) -> Pro
 
 
 def _normalize_directory_work_name(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    return normalized or None
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    return None
 
 
-def _resolve_directory_work_names(
+def _normalize_directory_work_code(value: object) -> str | None:
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    if isinstance(value, int):
+        return str(value)
+    return None
+
+
+@dataclass
+class _DirectoryWorkMetadata:
+    name: str | None = None
+    code: str | None = None
+
+
+def _resolve_directory_work_metadata(
     session: Session,
     *,
     tenant_id: int,
     project_ids: set[int],
-) -> dict[int, str]:
+) -> dict[int, _DirectoryWorkMetadata]:
     if not project_ids:
         return {}
 
@@ -80,23 +96,37 @@ def _resolve_directory_work_names(
         .order_by(WorkReport.project_id.asc(), WorkReport.created_at.desc(), WorkReport.id.desc())
     ).all()
 
-    names_by_project_id: dict[int, str] = {}
+    metadata_by_project_id: dict[int, _DirectoryWorkMetadata] = {}
+    pending_project_ids = set(project_ids)
     for report in reports:
         project_id = int(report.project_id)
-        if project_id in names_by_project_id:
+        if project_id not in pending_project_ids:
             continue
 
         payload = report.payload if isinstance(report.payload, dict) else {}
-        preferred_name = (
-            _normalize_directory_work_name(payload.get("workName"))
-            or _normalize_directory_work_name(payload.get("work_name"))
-            or _normalize_directory_work_name(payload.get("title"))
-            or _normalize_directory_work_name(report.title)
-        )
-        if preferred_name:
-            names_by_project_id[project_id] = preferred_name
+        metadata = metadata_by_project_id.setdefault(project_id, _DirectoryWorkMetadata())
 
-    return names_by_project_id
+        if metadata.name is None:
+            metadata.name = (
+                _normalize_directory_work_name(payload.get("workName"))
+                or _normalize_directory_work_name(payload.get("work_name"))
+                or _normalize_directory_work_name(payload.get("title"))
+                or _normalize_directory_work_name(report.title)
+            )
+        if metadata.code is None:
+            metadata.code = (
+                _normalize_directory_work_code(payload.get("workNumber"))
+                or _normalize_directory_work_code(payload.get("work_number"))
+                or _normalize_directory_work_code(payload.get("projectCode"))
+                or _normalize_directory_work_code(payload.get("project_code"))
+            )
+
+        if metadata.name is not None and metadata.code is not None:
+            pending_project_ids.discard(project_id)
+            if not pending_project_ids:
+                break
+
+    return metadata_by_project_id
 
 
 def _resolve_core_role_name(session: Session, role_id: Optional[int]) -> Optional[str]:
@@ -138,10 +168,6 @@ def list_user_profiles(
             .where(User.tenant_id == tenant_id, User.is_super_admin.is_(False))
             .order_by(User.full_name.asc())
         )
-    if not current_user.is_super_admin:
-        group_id = resolve_creator_group_id(session, current_user, persist=True)
-        if group_id is not None:
-            stmt = stmt.where(User.creator_group_id == group_id)
     users = session.exec(stmt).all()
 
     return [
@@ -374,7 +400,7 @@ def list_work_message_directory(
     ).all()
 
     project_ids = {int(project.id) for project, _member in rows if project.id is not None}
-    directory_names_by_project_id = _resolve_directory_work_names(
+    directory_metadata_by_project_id = _resolve_directory_work_metadata(
         session,
         tenant_id=tenant_id,
         project_ids=project_ids,
@@ -397,14 +423,16 @@ def list_work_message_directory(
 
         existing = projects_by_id.get(project_id)
         if existing is None:
+            metadata = directory_metadata_by_project_id.get(project_id, _DirectoryWorkMetadata())
             resolved_name = (
-                directory_names_by_project_id.get(project_id)
+                metadata.name
                 or _normalize_directory_work_name(project.name)
                 or f"Obra {project_id}"
             )
             projects_by_id[project_id] = WorkMessageDirectoryRead(
                 id=project_id,
                 name=resolved_name,
+                code=metadata.code,
                 visible_member_count=1,
             )
             continue

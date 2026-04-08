@@ -55,4 +55,5 @@ class WorkMemberRead(BaseModel):
 class WorkMessageDirectoryRead(BaseModel):
     id: int
     name: str
+    code: Optional[str] = None
     visible_member_count: int

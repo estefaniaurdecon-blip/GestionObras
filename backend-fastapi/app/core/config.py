@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     ollama_json_timeout_seconds: int = 45
     ai_circuit_breaker_ttl_seconds: int = 60
     ai_health_check_timeout_seconds: int = 5
+    ai_help_llm_enabled: bool = True
+    ollama_help_model: str | None = None
+    ollama_help_timeout_seconds: int = 8
     lovable_api_key: str | None = None
 
     # Facturas
@@ -145,7 +148,13 @@ class Settings(BaseSettings):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("debug", "auth_cookie_secure", "smtp_use_tls", "allow_bootstrap_superadmin"):
+        for field_name in (
+            "debug",
+            "auth_cookie_secure",
+            "smtp_use_tls",
+            "allow_bootstrap_superadmin",
+            "ai_help_llm_enabled",
+        ):
             if field_name in data:
                 data[field_name] = cls._coerce_bool_like(data[field_name])
         return data

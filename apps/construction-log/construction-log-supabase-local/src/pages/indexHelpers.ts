@@ -1,4 +1,5 @@
 import type { WorkReport } from '@/offline-db/types';
+import { getCanonicalUserRoleLabel } from '@/lib/userRoles';
 
 export const PENDING_MIGRATION_MESSAGE = 'Pendiente de migracion a API';
 export const AUTO_CLONE_CHECK_INTERVAL_MS = 60_000;
@@ -12,9 +13,9 @@ export function normalizeRoles(roles: unknown): string[] {
 }
 
 export function getRoleLabel(isSuperAdmin: boolean, isTenantAdmin: boolean): string {
-  if (isSuperAdmin) return 'SUPERADMIN';
-  if (isTenantAdmin) return 'ADMIN';
-  return 'USUARIO';
+  if (isSuperAdmin) return getCanonicalUserRoleLabel('super_admin');
+  if (isTenantAdmin) return getCanonicalUserRoleLabel('tenant_admin');
+  return getCanonicalUserRoleLabel('usuario');
 }
 
 export function isTenantAdminRole(role: string): boolean {

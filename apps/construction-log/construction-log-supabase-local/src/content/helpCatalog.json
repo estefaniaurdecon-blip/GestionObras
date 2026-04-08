@@ -1,0 +1,1233 @@
+[
+  {
+    "id": "work-reports",
+    "title": "Partes de Trabajo",
+    "description": "Crea, edita y gestiona tus partes de trabajo diarios",
+    "icon": "FileText",
+    "color": "text-blue-600",
+    "gradient": "from-blue-500/20 to-blue-600/10",
+    "features": [
+      {
+        "id": "create-report",
+        "icon": "FileText",
+        "title": "Crear un Parte de Trabajo",
+        "description": "Aprende a crear partes de trabajo paso a paso",
+        "steps": [
+          "Ve a la pestaña \"Partes de Trabajo\" en el menú principal",
+          "Pulsa el botón \"+ Nuevo Parte\" en la cabecera de la lista",
+          "Se abrirá el formulario con la fecha de hoy por defecto; cámbiala si es necesario",
+          "Rellena el Nº de Obra y Nombre de la obra en la cabecera",
+          "En la sección \"Mano de Obra\" añade grupos de trabajo: empresa, nombre, actividad y horas por trabajador",
+          "En \"Maquinaria de Subcontratas\" registra empresa, tipo de máquina y horas",
+          "En \"Materiales\" pulsa \"+ Albarán\" para cada proveedor y añade líneas de material o usa \"Escanear IA\"",
+          "En \"Subcontratas\" añade empresas externas con la partida contratada y trabajadores asignados",
+          "En \"Observaciones e Incidencias\" registra cualquier incidencia o nota relevante",
+          "En la tarjeta inferior \"Encargado y Jefe de Obra\" rellena los nombres y horas del encargado",
+          "Pulsa \"Guardar\" en la barra inferior; elige el estado: Completado, Faltan Datos o Faltan Albaranes"
+        ],
+        "tips": [
+          "Las secciones Mano de Obra, Maquinaria, Subcontratas y Observaciones cuentan para el progreso de completado",
+          "El alquiler de maquinaria se rellena automáticamente desde el módulo de alquileres",
+          "Puedes dictar observaciones con el botón de micrófono en esa sección"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "report-status",
+        "icon": "CheckCircle2",
+        "title": "Estados y Aprobación del Parte",
+        "description": "Gestiona el estado y la aprobación de los partes",
+        "steps": [
+          "Al guardar, el diálogo \"Confirmar Estado\" te ofrece tres opciones",
+          "\"Completado\": el parte está terminado y listo para revisión",
+          "\"Faltan Datos\": queda información por completar (se puede combinar con la siguiente)",
+          "\"Faltan Albaranes\": faltan documentos de material por adjuntar",
+          "Para aprobar un parte ya Completado, ábrelo y pulsa el botón \"Aprobar\"",
+          "Un parte aprobado aparece con indicador azul en la lista",
+          "Solo administradores y jefes de obra pueden aprobar partes"
+        ],
+        "tips": [
+          "Los partes Completados aparecen en verde; los pendientes en ámbar; los que faltan albaranes en rosa",
+          "Las tarjetas de resumen de la lista muestran el % de completados y aprobados",
+          "Un parte aprobado no se puede editar sin desaprobarlo primero"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "navigate-reports",
+        "icon": "Navigation",
+        "title": "Navegar entre Partes",
+        "description": "Usa los controles de la cabecera para moverte entre partes",
+        "steps": [
+          "Abre cualquier parte de trabajo desde la lista",
+          "En la cabecera verás los botones \"◀ Anterior\" y \"Siguiente ▶\"",
+          "El contador central muestra tu posición, por ejemplo: 3 / 15",
+          "La secuencia de navegación depende del modo de vista activo en la lista",
+          "Modo \"Por encargado\": navegas entre partes del mismo encargado",
+          "Modo \"Semanal\": navegas entre partes de la misma semana",
+          "Modo \"Mensual\": navegas entre partes del mismo mes",
+          "Pulsa \"◀ Volver\" para regresar a la lista sin cambiar el filtro activo"
+        ],
+        "tips": [
+          "Selecciona el modo de vista en la lista antes de abrir un parte para controlar qué secuencia navegas",
+          "Los botones Anterior/Siguiente se desactivan en el primer y último parte de la secuencia"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman",
+          "ofi"
+        ]
+      },
+      {
+        "id": "export-reports",
+        "icon": "Download",
+        "title": "Exportar Partes (PDF y Excel)",
+        "description": "Descarga partes individuales o en lote",
+        "steps": [
+          "Para exportar un parte individual, ábrelo y usa los botones \"PDF\" o \"Excel\" de la barra inferior",
+          "Al pulsar PDF aparece un diálogo: \"Descargar sin imágenes\" o \"Descargar con imágenes de albaranes\"",
+          "El Excel individual genera múltiples hojas: Mano de Obra, Maquinaria, Materiales, Subcontratas, etc.",
+          "Para exportación masiva, en la lista activa las casillas de selección de cada parte",
+          "Selecciona los partes que necesitas (se muestra \"X / Y seleccionados\")",
+          "Usa \"Descargar PDFs (ZIP)\" o \"Descargar Excels (ZIP)\" para obtener todos en un archivo comprimido",
+          "El archivo ZIP se descarga con nombre del tipo: Partes_PDF_2025-03-17.zip"
+        ],
+        "tips": [
+          "Los PDF incluyen el logo y color de marca de tu organización",
+          "Si eres usuario de Oficina puedes exportar por rango de fechas desde la lista"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman",
+          "ofi"
+        ]
+      },
+      {
+        "id": "clone-report",
+        "icon": "ClipboardList",
+        "title": "Clonar Partes",
+        "description": "Duplica un parte existente para reutilizar su información",
+        "steps": [
+          "En la lista de partes localiza el parte que quieres duplicar",
+          "Pulsa el icono de clonar (dos hojas) que aparece en la fila del parte",
+          "Se abre el diálogo \"Clonar Parte\" con el nombre de la obra",
+          "Selecciona la fecha para el nuevo parte (por defecto el día siguiente)",
+          "Elige qué secciones incluir: Materiales (activo por defecto), Gestión de Residuos (activo), Imágenes de albaranes (desactivado), Firmas (desactivado)",
+          "Los datos de texto (personal, maquinaria, subcontratas, observaciones) se copian siempre",
+          "Pulsa \"Clonar Parte\" para crear la copia",
+          "El parte clonado aparece con un aviso amarillo: \"Parte clonado – Revisión necesaria\""
+        ],
+        "tips": [
+          "Revisa y actualiza los datos del parte clonado antes de guardarlo; no lo des por válido sin revisión",
+          "Activa \"Auto-clonar al día siguiente\" dentro del parte para que se cree automáticamente cada noche"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "comments-section",
+        "icon": "MessageSquare",
+        "title": "Comentarios en Partes",
+        "description": "Deja notas colaborativas visibles para todo el equipo",
+        "steps": [
+          "Abre cualquier parte de trabajo",
+          "Desplázate hasta la sección \"Comentarios\" (icono de bocadillo)",
+          "Escribe tu comentario o pregunta en el campo de texto",
+          "Pulsa \"Publicar comentario\" para enviarlo",
+          "Los comentarios muestran el nombre del autor y el tiempo transcurrido (ej: \"hace 5 minutos\")",
+          "La sección se refresca automáticamente cada 10 segundos"
+        ],
+        "tips": [
+          "Usa los comentarios para avisar al equipo de incidencias sin salir del parte",
+          "Todos los usuarios con acceso al parte pueden ver y publicar comentarios"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "active-repasos-widget",
+        "icon": "Wrench",
+        "title": "Widget de Repasos Activos",
+        "description": "Consulta los repasos pendientes de la obra mientras editas el parte",
+        "steps": [
+          "Al abrir un parte, comprueba si aparece el widget de repasos activos",
+          "El widget muestra repasos en estado pendiente (ámbar) y en proceso (azul)",
+          "Puedes ver las horas estimadas y las horas reales consumidas por repaso",
+          "También indica la empresa asignada a cada repaso",
+          "Para gestionar los repasos accede a Obras → pestaña Repasos de esa obra"
+        ],
+        "tips": [
+          "El widget sólo aparece si la obra tiene repasos activos; si no hay ninguno no se muestra",
+          "Es informativo: no puedes editar repasos directamente desde el parte"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ai-features",
+    "title": "Inteligencia Artificial",
+    "description": "Funciones de IA para automatizar tareas",
+    "icon": "Bot",
+    "color": "text-violet-600",
+    "gradient": "from-violet-500/20 to-violet-600/10",
+    "features": [
+      {
+        "id": "ai-scanner",
+        "icon": "Scan",
+        "title": "Escáner IA de Albaranes",
+        "description": "Escanea albaranes y facturas para añadir materiales automáticamente",
+        "steps": [
+          "Dentro del parte, en la sección \"Materiales\", pulsa \"+ Albarán\" para crear un grupo",
+          "En ese grupo pulsa el botón \"Escanear IA\"",
+          "Captura una foto del albarán con la cámara o selecciona una imagen de la galería",
+          "La IA extrae: proveedor, número de albarán, fecha, líneas de material con cantidades y precios",
+          "Se abre el diálogo de revisión donde puedes ver la confianza de cada campo detectado",
+          "Revisa y corrige los datos si es necesario; pulsa \"Aplicar\" para añadirlos al parte",
+          "Si el albarán contiene solo servicios (sin artículos) aparece un diálogo específico para confirmar el servicio",
+          "Si hay artículos sin precio, se te pedirá que describas el tipo de material o servicio"
+        ],
+        "tips": [
+          "Asegúrate de tener buena iluminación; evita sombras sobre el documento",
+          "Si el sistema detecta que el albarán ya fue escaneado anteriormente, te ofrece la opción de sobrescribir o cancelar",
+          "Si hay diferencia de precio superior al 20% entre el documento y el cálculo, se muestra un aviso para que elijas cuál mantener"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "ai-assistant",
+        "icon": "Bot",
+        "title": "Asistente de IA",
+        "description": "Chat inteligente para consultas sobre tus partes",
+        "steps": [
+          "Haz clic en el botón flotante de chat IA (esquina inferior)",
+          "Escribe tu pregunta o consulta",
+          "El asistente analiza tus partes de trabajo",
+          "Puedes pedir resúmenes, análisis de costes, tendencias",
+          "Sube imágenes o PDFs para análisis específico",
+          "Guarda conversaciones importantes para referencia"
+        ],
+        "tips": [
+          "Pregunta: \"¿Cuánto gastamos en materiales este mes?\"",
+          "Pregunta: \"Resume los trabajos de la obra X\"",
+          "El asistente recuerda el contexto de la conversación"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "voice-input",
+        "icon": "Mic",
+        "title": "Dictado por Voz en Observaciones",
+        "description": "Dicta observaciones e incidencias usando la voz",
+        "steps": [
+          "Abre un parte de trabajo y despliega la sección \"Observaciones e Incidencias\"",
+          "Pulsa el botón de micrófono que aparece en esa sección",
+          "Habla con claridad; la transcripción aparece en tiempo real mientras dictas",
+          "Pulsa de nuevo el micrófono para detener el dictado",
+          "El texto transcrito se añade al campo de observaciones; revísalo antes de guardar"
+        ],
+        "tips": [
+          "El reconocimiento de voz está configurado en español",
+          "Funciona mejor en entornos con poco ruido de fondo",
+          "Puedes dictar varias frases seguidas; el sistema acumula el texto"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "duplicate-detection",
+        "icon": "FileCheck",
+        "title": "Detección de Duplicados",
+        "description": "Sistema automático de detección de albaranes duplicados",
+        "steps": [
+          "Al escanear un albarán, el sistema busca duplicados",
+          "Si se encuentran, aparece un diálogo con las coincidencias",
+          "Selecciona cuáles eliminar usando los checkboxes",
+          "Usa \"Actualizar\" en el encabezado para análisis global",
+          "El sistema reubica albaranes a su fecha correcta automáticamente"
+        ],
+        "tips": [
+          "La detección compara proveedor y número de albarán",
+          "Revisa cuidadosamente antes de eliminar",
+          "El análisis global verifica todos los partes existentes"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "obras",
+    "title": "Obras",
+    "description": "Gestión completa de obras: crear, inventario, maquinaria, repasos y postventas",
+    "icon": "Building2",
+    "color": "text-orange-600",
+    "gradient": "from-orange-500/20 to-orange-600/10",
+    "features": [
+      {
+        "id": "create-work",
+        "icon": "Briefcase",
+        "title": "Crear y Gestionar Obras",
+        "description": "Crea nuevas obras y gestiona el listado completo",
+        "steps": [
+          "Ve a la pestaña \"Obras\" en el menú principal",
+          "Pulsa \"+ Nuevo registro\" para crear una nueva obra",
+          "Módulo 1 – Información General: rellena Número de Obra (*), Plazo de Ejecución, Nombre (*), Dirección, Promotor, Presupuesto (€), Fecha de Inicio y Fecha de Fin",
+          "Módulo 2 – Descripción y Contacto: añade descripción general, persona de contacto, teléfono y email",
+          "Módulo 3 – Ubicación: introduce calle, población, provincia y país (España por defecto)",
+          "Pulsa \"Buscar Coordenadas desde Dirección\" para geolocalizar automáticamente via OpenStreetMap",
+          "O pulsa \"Capturar Ubicación GPS Actual\" para usar tu posición en tiempo real",
+          "Pulsa \"Añadir\" para guardar; la obra aparecerá en la lista y en el Radar de Obras",
+          "Para editar, pulsa el icono de lápiz de la fila; para eliminar, el icono de papelera (con confirmación)"
+        ],
+        "tips": [
+          "Solo admin, jefe de obra y master pueden crear y editar obras",
+          "Cada fila tiene un menú ⚙ con accesos directos a Inventario, Maq. Alquiler, Repasos y Post-Venta de esa obra",
+          "Usa \"Asignar encargado\" en el menú ⚙ para vincular usuarios a la obra; solo los usuarios asignados verán esa obra en sus partes",
+          "Las obras geolocalizadas aparecen como marcadores en el Radar de Obras"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      },
+      {
+        "id": "work-inventory",
+        "icon": "Package",
+        "title": "Inventario de Obra",
+        "description": "Consulta y gestiona los materiales y herramientas de cada obra",
+        "steps": [
+          "Desde la lista de obras pulsa el menú ⚙ → \"Inventario\", o entra en la obra y pulsa el botón \"Inventario\"",
+          "El inventario se organiza por proveedor y albarán; se recalcula automáticamente desde los partes completados",
+          "Usa los paneles superiores para activar funciones: \"Acciones de Obra\", \"Mantenimiento\" y \"Búsqueda\"",
+          "Panel Búsqueda: filtra por texto, mes y año; pulsa \"Limpiar filtros\" para resetear",
+          "Usa las pestañas para navegar: Dashboard (resumen), Albaranes (documentos pendientes), Materiales y Herramientas",
+          "Para editar un elemento pulsa el icono de lápiz; el formulario tiene 15 campos: nombre, código, categoría, marca, modelo, cantidad, unidad, precio, nº albarán, lote, proveedor, ubicación, estado, fechas entrada/salida y observaciones",
+          "Panel Acciones de Obra: \"Recalcular desde partes\" reprocesa todos los partes completados para actualizar cantidades",
+          "Panel Acciones de Obra: \"Exportar Excel\" descarga el inventario completo; \"Exportar Albaranes\" descarga los documentos",
+          "Panel Mantenimiento: \"Limpiar Servicios\" elimina líneas de servicio/alquiler; \"Validar y Corregir\" detecta y corrige inconsistencias"
+        ],
+        "tips": [
+          "El inventario refleja lo registrado en los partes; si falta algo revisa que el parte esté en estado \"Completado\"",
+          "Para fusionar proveedores duplicados: activa las casillas de los proveedores que quieres unir y pulsa el botón \"Fusionar (N)\" que aparece en el panel Mantenimiento — el resultado adopta el nombre del primero seleccionado",
+          "La exportación global incluye toda la obra independientemente de los filtros activos",
+          "El campo \"Estado\" del ítem puede ser: Nuevo (verde), Usado (amarillo) o Dañado (rojo)"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "rental-machinery",
+        "icon": "Truck",
+        "title": "Maquinaria de Alquiler",
+        "description": "Registra y controla la maquinaria alquilada en cada obra",
+        "steps": [
+          "Desde la lista de obras pulsa el menú ⚙ → \"Maq. alquiler\", o entra en la obra y pulsa el botón \"Maq. Alquiler\"",
+          "Pulsa \"+ Añadir maquinaria\" para desplegar el formulario de alta",
+          "Rellena los campos obligatorios: Tipo de maquinaria (*), Proveedor (*), Número de máquina (*), Fecha de entrega (*)",
+          "Añade opcionalmente: Tarifa diaria (€), Fecha de baja y Notas",
+          "Para añadir imagen: pulsa \"Tomar foto\" para usar la cámara o \"Subir archivo\" para seleccionar desde galería",
+          "Pulsa \"Añadir\" para guardar; la máquina aparecerá en la sección de Alquiler de Maquinaria del parte diario en modo lectura",
+          "Cada entrada muestra una tarjeta con: fecha entrega, fecha baja (o \"En uso\"), días calculados y coste total (días × tarifa diaria)",
+          "Para asignar un operador a una máquina, pulsa el botón \"Asignar\" de esa máquina",
+          "Expande \"Ver historial de asignaciones de operadores\" para consultar el historial completo de cada máquina"
+        ],
+        "tips": [
+          "Solo admin y jefe de obra pueden acceder a esta sección",
+          "Si no introduces fecha de baja, la máquina aparece como \"En uso\" y sigue acumulando días",
+          "Las máquinas activas se muestran automáticamente en la sección de alquiler del parte; no es necesario añadirlas manualmente"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      },
+      {
+        "id": "manage-repasos",
+        "icon": "Wrench",
+        "title": "Repasos de Obra",
+        "description": "Crea y controla trabajos de repaso en obras",
+        "steps": [
+          "Desde la lista de obras pulsa el menú ⚙ → \"Repasos\", o entra en la obra y pulsa el botón \"Repasos\"",
+          "Pulsa \"+ Añadir repaso\" para registrar un nuevo repaso o desperfecto",
+          "Rellena la descripción, empresa asignada, horas estimadas y estado inicial (Pendiente por defecto)",
+          "Añade grupos de subcontratas si aplica: empresa, trabajadores (nombre y horas) y maquinaria (tipo y horas)",
+          "Las horas reales se actualizan editando el repaso cuando se complete el trabajo",
+          "El código se asigna automáticamente (REP-001, REP-002…)",
+          "Cambia el estado a \"En Proceso\" cuando empiece el trabajo y a \"Completado\" al finalizar",
+          "Usa los botones \"Excel\" y \"PDF\" para exportar el listado"
+        ],
+        "tips": [
+          "La cabecera muestra métricas en tiempo real: Pendientes, En Proceso, Completados y Horas Totales",
+          "Los repasos Pendientes y En Proceso aparecen en el widget informativo dentro del parte de trabajo de esa obra",
+          "Las horas totales se calculan sumando horas de trabajadores y maquinaria de los grupos de subcontratas"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "manage-postventas",
+        "icon": "UserCheck",
+        "title": "Postventas de Obra",
+        "description": "Registra y gestiona incidencias postventa y garantías",
+        "steps": [
+          "Desde la lista de obras pulsa el menú ⚙ → \"Post-venta\", o entra en la obra y pulsa el botón \"Post-Venta\"",
+          "Pulsa \"+ Añadir postventa\" para registrar una nueva incidencia o solicitud del cliente",
+          "Describe el problema, asigna empresa responsable y horas estimadas",
+          "El estado inicial es Pendiente; cambia a \"En Proceso\" cuando se trabaje en ello y a \"Completado\" al resolver",
+          "Añade grupos de subcontratas con empresa, trabajadores y maquinaria si aplica",
+          "Exporta el listado con los botones \"Excel\" y \"PDF\""
+        ],
+        "tips": [
+          "Los colores de estado son distintos a los de repasos: Pendiente en púrpura, En Proceso en índigo, Completado en esmeralda",
+          "Diferencia clave: repasos son correcciones internas de obra; postventas son incidencias comunicadas por el cliente final"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "repasos-photos",
+        "icon": "Camera",
+        "title": "Fotos de Antes/Después",
+        "description": "Documenta visualmente repasos y postventas con fotos",
+        "steps": [
+          "Abre el diálogo de creación o edición de un repaso o postventa",
+          "Localiza las dos áreas de imagen: \"Antes\" y \"Después\"",
+          "Pulsa el icono de cámara en el área \"Antes\" para capturar o seleccionar la foto del estado inicial",
+          "Al terminar el trabajo, edita el registro y añade la foto en el área \"Después\"",
+          "Pulsa la miniatura para verla a pantalla completa; usa el botón X para eliminarla si es incorrecta",
+          "Al guardar, las imágenes se suben y quedan asociadas al registro"
+        ],
+        "tips": [
+          "Tamaño máximo por imagen: 10 MB; solo se aceptan archivos de imagen (jpg, png, etc.)",
+          "Las miniaturas de ambas fotos aparecen directamente en la tabla del listado de repasos/postventas"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "access-control",
+    "title": "Control de Accesos",
+    "description": "Registra entradas y salidas de personal y maquinaria con firma digital",
+    "icon": "UserCheck",
+    "color": "text-red-600",
+    "gradient": "from-red-500/20 to-red-600/10",
+    "features": [
+      {
+        "id": "access-report",
+        "icon": "ClipboardList",
+        "title": "Crear Control de Accesos",
+        "description": "Registra entradas y salidas con todos los campos de trazabilidad",
+        "steps": [
+          "Ve a \"Control de Accesos\" en el menú y pulsa \"+ Nuevo Registro\"",
+          "Selecciona la obra en el desplegable (si solo tienes una asignada se rellena automáticamente)",
+          "Rellena el nombre del responsable y sus horas de entrada y salida",
+          "En la sección \"Personal\" pulsa \"+ Añadir persona\": rellena nombre, DNI, empresa, actividad y horas de entrada/salida",
+          "El DNI es obligatorio y único por control: si ya existe ese DNI se te avisará",
+          "En la sección \"Maquinaria\" pulsa \"+ Añadir maquinaria\": rellena tipo, matrícula, empresa, operador y horas de entrada/salida",
+          "Añade observaciones generales si es necesario",
+          "Pulsa \"Guardar\" para registrar el control; los cambios se autoguardan cada 30 segundos si hay obra y responsable"
+        ],
+        "tips": [
+          "El borrador se guarda localmente cada segundo; si cierras la app por accidente, al volver se recupera automáticamente",
+          "Si solo tienes una obra asignada, se selecciona sola al abrir el formulario",
+          "Puedes generar el PDF del control directamente desde el formulario con el botón \"PDF\"; en Android aparece un botón para compartirlo al instante"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "access-signature",
+        "icon": "UserCheck",
+        "title": "Firma Digital del Trabajador",
+        "description": "Captura la firma de cada persona directamente en el control",
+        "steps": [
+          "Al añadir o editar una entrada de personal, desplázate hasta la sección \"Firma\"",
+          "Se abre un área de firma táctil donde el trabajador puede firmar con el dedo o el ratón",
+          "Una vez firmado, la firma queda asociada a esa persona en el control",
+          "Pulsa el botón de borrar (X) si necesitas repetir la firma",
+          "La firma aparece en el PDF generado junto a los datos del trabajador"
+        ],
+        "tips": [
+          "Para mayor comodidad usa la pantalla en horizontal al firmar en móvil",
+          "La firma se guarda en base64; no ocupa espacio extra en el servidor",
+          "Si un trabajador no puede firmar en el momento, puedes guardar el control sin firma y editarlo después"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "access-copy",
+        "icon": "Copy",
+        "title": "Copiar Datos de Otro Control",
+        "description": "Importa personal y maquinaria de un control anterior en 3 pasos",
+        "steps": [
+          "Dentro del formulario de un control, pulsa el botón \"Copiar datos\"",
+          "Paso 1 – Seleccionar control: busca entre los controles existentes por nombre de obra, responsable o fecha",
+          "Paso 2 – Seleccionar entradas: elige individualmente qué personas y qué máquinas quieres importar; puedes modificar las horas de entrada/salida en este paso",
+          "Paso 3 – Confirmar: si hay entradas duplicadas (mismo DNI o matrícula) se te avisa antes de aplicar",
+          "Pulsa \"Aplicar\" para añadir las entradas seleccionadas al control actual"
+        ],
+        "tips": [
+          "Es ideal para obras con la misma cuadrilla diaria: importa el día anterior y solo ajusta horas o bajas",
+          "Los duplicados se detectan por DNI para personal y por matrícula para maquinaria",
+          "Puedes sobreescribir las horas al importar sin modificar el control original"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "access-reports",
+        "icon": "FileText",
+        "title": "Informes Consolidados de Accesos",
+        "description": "Genera informes periódicos agrupando varios controles",
+        "steps": [
+          "En la pantalla de Control de Accesos pulsa \"Generar Informe\"",
+          "Elige el período: Diario, Semanal, Mensual o Personalizado",
+          "Filtra por obra (puedes seleccionar varias a la vez), responsable, semana, mes o fecha concreta",
+          "El diálogo te muestra cuántos registros entrarán en el informe antes de generarlo",
+          "Pulsa \"Generar\" para crear el PDF consolidado con todos los controles del período"
+        ],
+        "tips": [
+          "El informe consolida todas las personas y maquinaria del período seleccionado en un único documento",
+          "Útil para entregar documentación de accesos a la propiedad o a la coordinación de seguridad",
+          "Con el modo \"Personalizado\" puedes elegir exactamente qué fechas incluir"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "access-list",
+        "icon": "BarChart3",
+        "title": "Lista y Estadísticas de Controles",
+        "description": "Visualiza los controles agrupados con métricas en tiempo real",
+        "steps": [
+          "La lista agrupa los controles por fecha y dentro de cada fecha por obra (desplegables)",
+          "Cada grupo muestra: nº de registros, personal único (deduplicado por DNI), maquinaria y nº de empresas",
+          "Usa el filtro de obra y el filtro de rango de fechas en la cabecera para acotar la vista",
+          "Pulsa el icono de lápiz para editar un control o el icono de copia para clonarlo a otra fecha",
+          "Pulsa el icono de PDF para descargar el control individual directamente desde la lista"
+        ],
+        "tips": [
+          "El recuento de personal elimina automáticamente los DNIs duplicados para dar el número real de personas únicas",
+          "Los grupos son colapsables: puedes plegar fechas antiguas para ver mejor los recientes"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "access-import-export",
+        "icon": "Download",
+        "title": "Exportar e Importar Datos",
+        "description": "Haz copias de seguridad o migra controles entre dispositivos",
+        "steps": [
+          "En la lista de controles pulsa \"Exportar datos\" para descargar todos los controles en formato JSON",
+          "Para restaurar o importar, pulsa \"Importar datos\" y selecciona el archivo JSON exportado previamente",
+          "Los controles importados se añaden a los existentes; no se sobreescriben los actuales"
+        ],
+        "tips": [
+          "Útil para hacer copias de seguridad manuales o para trasladar datos entre dispositivos",
+          "El archivo JSON contiene todos los campos incluyendo firmas digitales"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      },
+      {
+        "id": "bulk-access",
+        "icon": "Users",
+        "title": "Eliminación Masiva",
+        "description": "Selecciona y elimina múltiples registros a la vez",
+        "steps": [
+          "En la lista de controles pulsa \"Selección múltiple\"",
+          "Marca las casillas de los controles que quieres eliminar",
+          "Dentro de cada grupo de obra puedes pulsar la casilla del encabezado para seleccionar todos los de esa obra",
+          "Pulsa \"Eliminar (N)\" con el número de seleccionados y confirma en el diálogo",
+          "Los registros se eliminarán permanentemente"
+        ],
+        "tips": [
+          "Esta acción no se puede deshacer; verifica bien antes de confirmar",
+          "La selección es por obra dentro de una fecha, no por día completo"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "works-geolocation",
+    "title": "Radar de Obras",
+    "description": "Vista geográfica interactiva de todas tus obras",
+    "icon": "Globe",
+    "color": "text-cyan-600",
+    "gradient": "from-cyan-500/20 to-cyan-600/10",
+    "features": [
+      {
+        "id": "radar-view",
+        "icon": "Globe",
+        "title": "Vista de Radar",
+        "description": "Visualiza todas las obras en un mapa interactivo",
+        "steps": [
+          "Accede a \"Radar\" pulsando el icono de globo en la barra superior de la app",
+          "Verás un mapa con marcadores de todas las obras geolocalizadas",
+          "Obras activas en color primario, finalizadas en gris",
+          "Haz clic en un marcador para ver información de la obra",
+          "Desde el popup puedes eliminar la ubicación o ir a la gestión de esa obra"
+        ],
+        "tips": [
+          "El radar solo muestra obras con coordenadas GPS",
+          "Usa los controles de zoom para navegar por el mapa",
+          "Útil para planificar rutas y visualizar distribución de obras"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "capture-gps",
+        "icon": "Navigation",
+        "title": "Capturar Ubicación GPS",
+        "description": "Geolocaliza obras automáticamente desde tu posición",
+        "steps": [
+          "Ve a \"Obras\" y edita una obra existente o crea una nueva",
+          "En la sección de dirección, haz clic en \"Capturar Ubicación GPS Actual\"",
+          "Permite el acceso a ubicación cuando el navegador lo solicite",
+          "Las coordenadas se capturan automáticamente",
+          "Los campos de dirección se rellenan con Reverse Geocoding",
+          "Revisa y ajusta la dirección si es necesario"
+        ],
+        "tips": [
+          "El GPS rellena automáticamente: calle, ciudad, provincia, país",
+          "Funciona mejor con buena señal GPS (en exteriores)",
+          "La dirección se concatena automáticamente al guardar"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "geocoding",
+        "icon": "Search",
+        "title": "Buscar Coordenadas por Dirección",
+        "description": "Obtén coordenadas GPS escribiendo una dirección",
+        "steps": [
+          "Ve a editar una obra",
+          "Rellena los campos de dirección: calle, población, provincia",
+          "Haz clic en \"Buscar coordenadas\"",
+          "El sistema consulta la API de Nominatim (OpenStreetMap)",
+          "Si encuentra la dirección, rellena latitud y longitud",
+          "La obra aparecerá en el Radar con su ubicación correcta"
+        ],
+        "tips": [
+          "Cuanto más completa la dirección, mejor la precisión",
+          "Útil cuando no estás físicamente en la ubicación",
+          "Compatible con direcciones de España y otros países"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "deadlines",
+    "title": "Próximos Vencimientos",
+    "description": "Control de plazos y fases críticas de obra",
+    "icon": "Clock",
+    "color": "text-rose-600",
+    "gradient": "from-rose-500/20 to-rose-600/10",
+    "features": [
+      {
+        "id": "deadlines-widget",
+        "icon": "Clock",
+        "title": "Widget de Vencimientos",
+        "description": "Panel colapsable con plazos próximos a vencer",
+        "steps": [
+          "En el Dashboard, verás el widget \"Próximos Vencimientos\"",
+          "El widget muestra un resumen compacto cuando está cerrado",
+          "Badges rojos = tareas críticas/retrasadas, amarillos = próximas",
+          "Haz clic para expandir y ver el detalle de cada fase",
+          "Cada tarjeta muestra obra, fase, fecha límite y progreso"
+        ],
+        "tips": [
+          "El icono de fuego 🔥 indica tareas críticas o vencidas",
+          "El icono de reloj ⏳ indica advertencias próximas a vencer",
+          "Si no hay vencimientos, verás \"¡Todo al día!\" con confeti"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      },
+      {
+        "id": "phases-management",
+        "icon": "Calendar",
+        "title": "Gestionar Fases de Obra",
+        "description": "Crea y controla fases con fechas límite",
+        "steps": [
+          "Ve a \"Obras\" → selecciona una obra → \"Fases\"",
+          "Haz clic en \"Nueva Fase\"",
+          "Define: nombre, descripción, fechas inicio/fin",
+          "Asigna responsable y establece el progreso (%)",
+          "El sistema calcula automáticamente el estado",
+          "Las fases próximas a vencer aparecen en el widget"
+        ],
+        "tips": [
+          "Las fases se muestran en la línea de tiempo (Timeline)",
+          "Actualiza el progreso regularmente para un seguimiento preciso",
+          "Configura notificaciones para recordatorios automáticos"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "economic",
+    "title": "Gestión Económica",
+    "description": "Valoración de partes, análisis de costes e informes financieros",
+    "icon": "TrendingUp",
+    "color": "text-emerald-600",
+    "gradient": "from-emerald-500/20 to-emerald-600/10",
+    "features": [
+      {
+        "id": "economic-pricing",
+        "icon": "Briefcase",
+        "title": "Valorar un Parte (Asignar Precios)",
+        "description": "Asigna precios a los elementos de un parte para generar el informe económico",
+        "steps": [
+          "Ve a \"Gestión Económica\" y selecciona la pestaña \"Valorar Parte\"",
+          "Elige el encargado en el desplegable (buscable); a continuación selecciona el parte a valorar de los últimos 10 disponibles",
+          "Verás cuatro secciones editables: Mano de Obra, Maquinaria, Materiales y Subcontratas",
+          "En cada fila pulsa el icono de editar (lápiz) para abrir el diálogo de edición",
+          "Mano de Obra: rellena nombre, actividad, horas y precio/hora (€); el total se calcula automáticamente",
+          "Maquinaria: rellena tipo, actividad, horas y precio/hora (€)",
+          "Materiales: rellena descripción, cantidad, unidad y precio/unidad (€)",
+          "Subcontratas: elige si es por horas (trabajadores × horas × tarifa) o por cantidad (cantidad × precio/ud)",
+          "El \"Total del Parte\" en la cabecera se actualiza en tiempo real sumando todas las categorías",
+          "Pulsa \"Guardar Precios\" para crear el parte económico; se guardará y podrás verlo en \"Informes Guardados\""
+        ],
+        "tips": [
+          "Solo se contabilizan importes con precio mayor a 0; puedes dejar en blanco los que no apliquen",
+          "Los partes valorados aparecen en \"Informes Guardados\" con su total en euros",
+          "Filtra por encargado para acotar la lista de partes y encontrar el que necesitas más rápido"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "ofi"
+        ]
+      },
+      {
+        "id": "economic-analysis",
+        "icon": "BarChart3",
+        "title": "Análisis Económico",
+        "description": "Visualiza costes y tendencias de todos los partes completados con gráficos y tablas",
+        "steps": [
+          "Ve a \"Gestión Económica\" y selecciona la pestaña \"Análisis\"",
+          "Elige la granularidad temporal: \"Por Días\", \"Por Semanas\" o \"Por Meses\"",
+          "Filtra por obra concreta o deja \"Todas las obras\" para el global",
+          "Las 4 tarjetas superiores muestran: Coste Total (€), Horas Totales, Nº de Partes y Coste Medio por Parte",
+          "Explora las pestañas: Evolución (gráfico de líneas coste + horas), Distribución (tarta por categoría), Empresas (tabla y barras M.O. vs Maquinaria), Proveedores (materiales y alquiler), Tabla (resumen detallado por período)",
+          "En la pestaña \"Empresas\" verás el ranking de empresas con sus horas y costes de mano de obra y maquinaria por separado",
+          "En la pestaña \"Proveedores\" verás proveedores de materiales (nombre, nº artículos, coste) y empresas de alquiler (días, coste)",
+          "Pulsa \"Excel\" o \"PDF\" para exportar el análisis completo"
+        ],
+        "tips": [
+          "El análisis solo incluye partes en estado \"Completado\"; los partes pendientes no se contabilizan",
+          "Los costes de alquiler de maquinaria se calculan automáticamente por días × tarifa diaria",
+          "Las subcontratas pueden ser por horas (trabajadores × horas × tarifa) o por cantidad (unidades × precio), según cómo se valoraron"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "ofi"
+        ]
+      },
+      {
+        "id": "saved-reports",
+        "icon": "FolderOpen",
+        "title": "Informes Guardados",
+        "description": "Consulta, descarga y gestiona los partes económicos ya valorados",
+        "steps": [
+          "Ve a \"Gestión Económica\" y selecciona la pestaña \"Informes Guardados\"",
+          "Elige la agrupación: \"Día\", \"Semana\" o \"Mes\"; los informes se organizan en grupos con su total de período",
+          "Cada fila muestra: fecha, nombre y número de obra, encargado, jefe de obra y total en euros",
+          "Pulsa el icono de Excel (hoja de cálculo) para descargar el informe en formato .xlsx: incluye una hoja de Resumen y una hoja por cada categoría con datos (Mano de Obra, Maquinaria, Materiales, Subcontratas)",
+          "Pulsa el icono de PDF para descargar el informe con el logo de tu organización",
+          "Pulsa el icono de papelera para eliminar un informe (se pide confirmación; la acción no se puede deshacer)"
+        ],
+        "tips": [
+          "El total de período (suma de todos los partes del grupo) aparece en la cabecera de cada grupo",
+          "El Excel tiene el nombre: Parte_Económico_{nº_obra}_{fecha}.xlsx",
+          "En Android el archivo se guarda en la carpeta de Descargas y aparece un botón para compartirlo directamente"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "ofi"
+        ]
+      },
+      {
+        "id": "advanced-reports",
+        "icon": "BarChart3",
+        "title": "Informes Avanzados",
+        "description": "Genera reportes detallados con filtros avanzados de fecha y obra",
+        "steps": [
+          "Ve a \"Informes Avanzados\" desde el menú de Gestión Económica",
+          "Selecciona el tipo de período: semanal, mensual, trimestral o personalizado",
+          "Filtra por obra específica o incluye todas",
+          "El informe incluye horas de encargado, trabajadores, maquinaria de subcontratas y de alquiler",
+          "En el modo \"Alquiler\" puedes ajustar fechas y tarifas de las máquinas directamente en la tabla antes de exportar",
+          "Exporta en formato Excel o PDF"
+        ],
+        "tips": [
+          "Útil para informes periódicos que van más allá de un parte individual",
+          "El modo alquiler permite corregir tarifas sin modificar el registro original de la máquina"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "calendar",
+    "title": "Calendario y Tareas",
+    "description": "Organiza tareas y recordatorios",
+    "icon": "Calendar",
+    "color": "text-sky-600",
+    "gradient": "from-sky-500/20 to-sky-600/10",
+    "features": [
+      {
+        "id": "calendar-tasks",
+        "icon": "Calendar",
+        "title": "Calendario de Tareas",
+        "description": "Crea y gestiona tareas con fechas",
+        "steps": [
+          "Accede al Calendario desde el menú móvil",
+          "Selecciona una fecha para ver/crear tareas",
+          "Añade título, descripción y prioridad",
+          "Asigna a un usuario o a una obra",
+          "Define hora de vencimiento (opcional)",
+          "Marca como completada cuando termines"
+        ],
+        "tips": [
+          "Las tareas urgentes generan notificaciones automáticas",
+          "El asistente IA te avisa de tareas pendientes",
+          "Vista de calendario y lista disponibles"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "communication",
+    "title": "Comunicación",
+    "description": "Mensajería, archivos y notificaciones",
+    "icon": "MessageSquare",
+    "color": "text-pink-600",
+    "gradient": "from-pink-500/20 to-pink-600/10",
+    "features": [
+      {
+        "id": "messaging",
+        "icon": "MessageSquare",
+        "title": "Centro de Mensajes",
+        "description": "Comunícate con otros usuarios",
+        "steps": [
+          "Haz clic en el icono de mensajes del header (junto a notificaciones)",
+          "Selecciona un usuario de la lista de contactos o conversaciones",
+          "Escribe tu mensaje",
+          "Envía con Enter o el botón de enviar",
+          "Las notificaciones te avisan de nuevos mensajes"
+        ],
+        "tips": [
+          "Los mensajes se actualizan cada 15 segundos automáticamente",
+          "Puedes adjuntar archivos directamente desde el icono del clip en el chat"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman",
+          "ofi"
+        ]
+      },
+      {
+        "id": "file-sharing",
+        "icon": "Share2",
+        "title": "Compartir Archivos",
+        "description": "Envía y recibe archivos con otros usuarios",
+        "steps": [
+          "Ve a \"Compartir Archivos\"",
+          "Selecciona el destinatario",
+          "Adjunta el archivo",
+          "Añade un mensaje opcional",
+          "El destinatario recibe notificación",
+          "Puedes ver el estado de descarga"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman",
+          "ofi"
+        ]
+      },
+      {
+        "id": "notifications",
+        "icon": "Bell",
+        "title": "Centro de Notificaciones",
+        "description": "Gestiona todas tus notificaciones",
+        "steps": [
+          "Haz clic en el icono de campana",
+          "Verás notificaciones de: partes pendientes, tareas, archivos",
+          "Haz clic en una notificación para acceder al contenido",
+          "Usa \"Marcar todas\" para limpiar notificaciones",
+          "Descarga partes directamente desde las notificaciones"
+        ],
+        "tips": [
+          "Los roles de oficina reciben notificaciones agrupadas por obra",
+          "Configura las notificaciones push en ajustes"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman",
+          "ofi"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "management",
+    "title": "Gestión y Administración",
+    "description": "Configuración de organización, usuarios y obras",
+    "icon": "Settings",
+    "color": "text-gray-600",
+    "gradient": "from-gray-500/20 to-gray-600/10",
+    "features": [
+      {
+        "id": "user-management",
+        "icon": "Users",
+        "title": "Gestión de Usuarios",
+        "description": "Administra usuarios, roles y permisos",
+        "steps": [
+          "Ve a \"Gestión\" > \"Usuarios\"",
+          "Aprueba usuarios pendientes y asigna roles",
+          "Asigna obras específicas a cada usuario",
+          "Gestiona permisos según el rol"
+        ],
+        "tips": [
+          "Super: acceso total a todo el sistema",
+          "Admin: gestión completa de la organización",
+          "Usuario: acceso según las obras y permisos asignados"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      },
+      {
+        "id": "organization",
+        "icon": "Building2",
+        "title": "Configuración de Organización",
+        "description": "Datos legales y branding",
+        "steps": [
+          "Ve a \"Gestión\" > \"Organización\"",
+          "Completa datos legales: NIF/CIF, Razón Social",
+          "Añade información de contacto",
+          "Sube el logo de tu empresa",
+          "Selecciona colores corporativos",
+          "Los cambios se aplican en toda la app y PDFs"
+        ],
+        "roles": [
+          "master",
+          "admin"
+        ]
+      },
+      {
+        "id": "company-portfolio",
+        "icon": "Building",
+        "title": "Cartera de Empresas",
+        "description": "Gestiona contactos de proveedores, clientes y subcontratas",
+        "steps": [
+          "Ve a \"Obras\" > \"Cartera de Empresas\"",
+          "Crea tipos de empresa personalizados",
+          "Añade empresas con datos completos: NIF, contacto, dirección",
+          "Organiza por tipos: proveedor, subcontrata, cliente",
+          "Exporta la cartera a Excel",
+          "Importa contactos desde archivos VCF"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "security",
+    "title": "Seguridad",
+    "description": "Protección de datos y cumplimiento normativo",
+    "icon": "Shield",
+    "color": "text-purple-600",
+    "gradient": "from-purple-500/20 to-purple-600/10",
+    "features": [
+      {
+        "id": "data-security",
+        "icon": "Lock",
+        "title": "Seguridad de Datos",
+        "description": "Cómo protegemos tu información",
+        "steps": [
+          "Cifrado de datos en tránsito y reposo",
+          "Políticas RLS a nivel de base de datos",
+          "Cada usuario solo ve datos de su organización",
+          "Autenticación JWT segura",
+          "Validación de contraseñas contra bases de datos de fugas"
+        ],
+        "tips": [
+          "RLS (Row Level Security) previene accesos no autorizados",
+          "JWT garantiza sesiones seguras",
+          "Los datos nunca se comparten entre organizaciones"
+        ],
+        "roles": [
+          "master",
+          "admin"
+        ]
+      },
+      {
+        "id": "compliance",
+        "icon": "Shield",
+        "title": "Cumplimiento Normativo",
+        "description": "Estándares de seguridad implementados",
+        "steps": [
+          "ISO 27001: Gestión de seguridad de la información",
+          "GDPR: Protección de datos personales (Europa)",
+          "SOC 2: Controles de seguridad y disponibilidad",
+          "Control de acceso basado en roles",
+          "Auditoría de acciones críticas"
+        ],
+        "roles": [
+          "master",
+          "admin"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "offline",
+    "title": "Modo Offline",
+    "description": "Trabaja sin conexión a internet",
+    "icon": "WifiOff",
+    "color": "text-slate-600",
+    "gradient": "from-slate-500/20 to-slate-600/10",
+    "features": [
+      {
+        "id": "offline-mode",
+        "icon": "WifiOff",
+        "title": "Trabajar Sin Conexión",
+        "description": "La app funciona incluso sin internet",
+        "steps": [
+          "Los datos se guardan automáticamente en caché local",
+          "Cuando pierdas conexión, verás un indicador offline",
+          "Puedes consultar partes guardados previamente",
+          "Los cambios se sincronizarán automáticamente al reconectar",
+          "Exporta datos importantes antes de trabajar offline"
+        ],
+        "tips": [
+          "La PWA permite instalación en dispositivos móviles",
+          "El indicador de red te mantiene informado",
+          "Algunas funciones requieren conexión (escáner IA, chat)"
+        ],
+        "roles": [
+          "master",
+          "admin",
+          "site_manager",
+          "foreman"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "office-role",
+    "title": "Rol de Oficina",
+    "description": "Funciones específicas para personal administrativo",
+    "icon": "Printer",
+    "color": "text-teal-600",
+    "gradient": "from-teal-500/20 to-teal-600/10",
+    "features": [
+      {
+        "id": "office-features",
+        "icon": "Printer",
+        "title": "Funciones de Oficina",
+        "description": "Acceso optimizado para procesamiento administrativo",
+        "steps": [
+          "Visualiza partes de trabajo completados y aprobados",
+          "Exporta masivamente partes semanales y mensuales",
+          "Accede al análisis económico y reportes guardados",
+          "Recibe notificaciones agrupadas por obra",
+          "Información detallada: obra, número y fecha de cada parte",
+          "Los grupos de partes se expanden automáticamente"
+        ],
+        "tips": [
+          "NO puedes crear, editar ni clonar partes",
+          "NO tienes acceso a informes avanzados ni gestión de usuarios",
+          "NO ves el asistente IA flotante",
+          "Enfoque exclusivo en procesamiento y exportación",
+          "Solo puedes exportar partes aprobados"
+        ],
+        "roles": [
+          "ofi"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "reader-role",
+    "title": "Rol de Lector",
+    "description": "Acceso de solo lectura al sistema",
+    "icon": "BookOpen",
+    "color": "text-gray-500",
+    "gradient": "from-gray-400/20 to-gray-500/10",
+    "features": [
+      {
+        "id": "reader-features",
+        "icon": "BookOpen",
+        "title": "Funciones de Lector",
+        "description": "Visualización sin capacidad de edición",
+        "steps": [
+          "Visualiza partes de trabajo de obras asignadas",
+          "Consulta información general del sistema",
+          "Accede al centro de ayuda y documentación",
+          "No puedes crear, editar ni eliminar ningún registro"
+        ],
+        "tips": [
+          "Este rol es para supervisión y consulta",
+          "Contacta a un administrador si necesitas más permisos",
+          "Puedes usar la mensajería para comunicarte con el equipo"
+        ],
+        "roles": [
+          "reader"
+        ]
+      }
+    ]
+  }
+]

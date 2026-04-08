@@ -76,6 +76,36 @@ class OllamaClient:
         except httpx.HTTPError:
             return False
 
+    def generate_text(
+        self,
+        prompt: str,
+        *,
+        model: Optional[str] = None,
+        system: Optional[str] = None,
+        timeout: Optional[float] = None,
+        options: Optional[Dict[str, Any]] = None,
+        keep_alive: Optional[str] = None,
+    ) -> str:
+        """Generate plain text with a generic completion model."""
+        chosen_model = str(model or settings.ollama_json_model or "").strip()
+        if not chosen_model:
+            raise AIInvalidResponseError("OLLAMA_HELP_MODEL no configurado")
+
+        payload: Dict[str, Any] = {
+            "model": chosen_model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        if system:
+            payload["system"] = system
+        if options:
+            payload["options"] = options
+        if keep_alive:
+            payload["keep_alive"] = keep_alive
+
+        data = self._post_generate(payload, timeout=timeout or settings.ollama_timeout_secs)
+        return str(data.get("response", "")).strip()
+
     def ocr_image_to_text(self, image_bytes: bytes) -> str:
         """Extract text from image using OCR model."""
         encoded = base64.b64encode(image_bytes).decode("ascii")

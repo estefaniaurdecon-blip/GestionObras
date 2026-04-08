@@ -15,6 +15,20 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { getActiveTenantId, setActiveTenantId as persistActiveTenantId } from '@/offline-db/tenantScope';
 import { toast } from '@/hooks/use-toast';
+import {
+  getAssignableCanonicalRoles,
+  getCanonicalUserRoleBadgeClass,
+  getCanonicalUserRoleLabel,
+  getUserPrimaryCanonicalRole,
+  type CanonicalUserRole,
+} from '@/lib/userRoles';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface UsersAdminPanelProps {
   tenantId?: number | null;
@@ -25,7 +39,7 @@ interface UserFormState {
   email: string;
   fullName: string;
   password: string;
-  roleName: string;
+  roleName: CanonicalUserRole;
 }
 
 const INITIAL_FORM: UserFormState = {
@@ -48,6 +62,10 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<UserFormState>(INITIAL_FORM);
+  const availableRoleOptions = useMemo(
+    () => getAssignableCanonicalRoles(isSuperAdmin),
+    [isSuperAdmin],
+  );
 
   useEffect(() => {
     if (tenantId && tenantId !== selectedTenantId) {
@@ -130,8 +148,8 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
         full_name: form.fullName.trim(),
         password: form.password,
         tenant_id: selectedTenantId,
-        role_name: form.roleName.trim() || 'user',
-        is_super_admin: false,
+        role_name: form.roleName,
+        is_super_admin: form.roleName === 'super_admin',
       });
 
       toast({
@@ -190,7 +208,12 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base">Usuarios del tenant</CardTitle>
+          <div>
+            <CardTitle className="text-base">Usuarios del tenant</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Roles vigentes: <span className="font-medium text-foreground">Super Admin</span>, <span className="font-medium text-foreground">Tenant Admin</span> y <span className="font-medium text-foreground">Usuario</span>.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             {isSuperAdmin ? (
               <Input
@@ -227,7 +250,18 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
                     <Badge variant={item.is_active ? 'default' : 'secondary'}>
                       {item.is_active ? 'Activo' : 'Inactivo'}
                     </Badge>
-                    <Badge variant="outline">{item.role_name || 'user'}</Badge>
+                    {(() => {
+                      const canonicalRole = getUserPrimaryCanonicalRole({
+                        isSuperAdmin: item.is_super_admin,
+                        roles: item.roles,
+                        roleName: item.role_name,
+                      });
+                      return (
+                        <Badge className={getCanonicalUserRoleBadgeClass(canonicalRole)}>
+                          {getCanonicalUserRoleLabel(canonicalRole)}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -296,12 +330,23 @@ export function UsersAdminPanel({ tenantId, isSuperAdmin = false }: UsersAdminPa
 
             <div className="space-y-1">
               <Label htmlFor="api-user-role">Rol</Label>
-              <Input
-                id="api-user-role"
+              <Select
                 value={form.roleName}
-                onChange={(event) => setForm((prev) => ({ ...prev, roleName: event.target.value }))}
-                placeholder="tenant_admin | usuario"
-              />
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, roleName: value as CanonicalUserRole }))
+                }
+              >
+                <SelectTrigger id="api-user-role">
+                  <SelectValue placeholder="Selecciona un rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoleOptions.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {getCanonicalUserRoleLabel(role)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="md:col-span-2">

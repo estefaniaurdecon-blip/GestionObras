@@ -16,6 +16,7 @@ import { useWorkReportsSummary } from '@/hooks/useWorkReportsSummary';
 import { useWorks } from '@/hooks/useWorks';
 import { useAppUpdates } from '@/hooks/useAppUpdates';
 import { useToast } from '@/hooks/use-toast';
+import { getCanonicalUserRoleLabel, getUserPrimaryCanonicalRole } from '@/lib/userRoles';
 import { startupPerfEnd, startupPerfPoint, startupPerfStart } from '@/utils/startupPerf';
 import {
   PENDING_MIGRATION_MESSAGE,
@@ -145,7 +146,17 @@ const Index = () => {
         : [],
     [user?.permissions],
   );
-  const roleName = roles[0] || '';
+  const roleName = useMemo(
+    () =>
+      getCanonicalUserRoleLabel(
+        getUserPrimaryCanonicalRole({
+          isSuperAdmin: user?.is_super_admin,
+          roles,
+          roleName: user?.role_name,
+        }),
+      ),
+    [roles, user?.is_super_admin, user?.role_name],
+  );
 
   // Backwards-compatible mapping:
   // - New logical roles: super_admin | tenant_admin | user

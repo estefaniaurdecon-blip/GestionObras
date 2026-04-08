@@ -44,6 +44,7 @@ export interface ApiWorkMember {
 export interface ApiWorkMessageDirectoryItem {
   id: number;
   name: string;
+  code?: string | null;
   visible_member_count: number;
 }
 

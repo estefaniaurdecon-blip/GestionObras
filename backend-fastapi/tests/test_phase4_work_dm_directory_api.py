@@ -180,6 +180,7 @@ def test_work_directory_allows_dm_with_visible_member(
         {
             "id": int(project.id or 0),
             "name": "Obra Mensajeria",
+            "code": None,
             "visible_member_count": 2,
         }
     ]
@@ -248,7 +249,7 @@ def test_work_directory_prefers_latest_work_report_name_over_project_name(
         tenant_id=tenant_id,
         project_id=int(project.id or 0),
         title="Parte antiguo",
-        payload={"workName": "Nombre desde parte"},
+        payload={"workName": "Nombre desde parte", "workNumber": "OB-700"},
     )
 
     actor_headers = _auth_headers_for_user(actor, tenant_id)
@@ -262,6 +263,78 @@ def test_work_directory_prefers_latest_work_report_name_over_project_name(
         {
             "id": int(project.id or 0),
             "name": "Nombre desde parte",
+            "code": "OB-700",
+            "visible_member_count": 2,
+        }
+    ]
+
+
+def test_work_directory_keeps_latest_non_empty_work_number_from_reports(
+    client: TestClient,
+    db_session_fixture: Session,
+) -> None:
+    tenant = _create_tenant(db_session_fixture, prefix="phase4-dm-code")
+    tenant_id = int(tenant.id or 0)
+    actor = _create_user(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        email_prefix="actor-code",
+        full_name="Actor Code",
+        role_name="tenant_admin",
+        creator_group_id=710,
+    )
+    visible_member = _create_user(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        email_prefix="member-code",
+        full_name="Visible Code",
+        role_name="usuario",
+        creator_group_id=710,
+    )
+    project = _create_project(db_session_fixture, tenant_id=tenant_id, name="Obra Codigo")
+
+    _assign_user_to_project(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        user_id=int(actor.id or 0),
+        project_id=int(project.id or 0),
+        created_by_id=int(actor.id or 0),
+    )
+    _assign_user_to_project(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        user_id=int(visible_member.id or 0),
+        project_id=int(project.id or 0),
+        created_by_id=int(actor.id or 0),
+    )
+
+    _create_work_report(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        project_id=int(project.id or 0),
+        title="Parte antiguo",
+        payload={"workName": "Obra inicial", "workNumber": "OB-123"},
+    )
+    _create_work_report(
+        db_session_fixture,
+        tenant_id=tenant_id,
+        project_id=int(project.id or 0),
+        title="Parte reciente",
+        payload={"workName": "Obra renombrada"},
+    )
+
+    actor_headers = _auth_headers_for_user(actor, tenant_id)
+    directory_response = client.get(
+        "/api/v1/erp/projects/member-directory",
+        headers=actor_headers,
+    )
+
+    assert directory_response.status_code == status.HTTP_200_OK
+    assert directory_response.json() == [
+        {
+            "id": int(project.id or 0),
+            "name": "Obra renombrada",
+            "code": "OB-123",
             "visible_member_count": 2,
         }
     ]

@@ -46,9 +46,14 @@ function normalizeBaseUrl(url: string): string {
   return url;
 }
 
+function isNativeAppRuntime(): boolean {
+  const platform = Capacitor.getPlatform?.() ?? 'web';
+  return platform === 'android' || platform === 'ios' || Capacitor.isNativePlatform?.() === true;
+}
+
 function resolveApiBaseUrl(): string {
   const webBaseUrl = normalizeBaseUrl(RAW_API_BASE_URL);
-  const isNative = Capacitor.isNativePlatform?.() === true;
+  const isNative = isNativeAppRuntime();
 
   if (!isNative) return webBaseUrl;
 
@@ -69,7 +74,14 @@ function resolveApiBaseUrl(): string {
 }
 
 let activeApiBaseUrl = resolveApiBaseUrl();
+const initialApiBaseUrl = activeApiBaseUrl;
 const TENANT_ID = import.meta.env.VITE_TENANT_ID;
+
+console.info(
+  `[api] Init | platform=${Capacitor.getPlatform?.() ?? 'unknown'} | ` +
+    `isNative=${isNativeAppRuntime()} | webBase=${normalizeBaseUrl(RAW_API_BASE_URL)} | ` +
+    `nativeBase=${RAW_NATIVE_API_BASE_URL || '(empty)'} | active=${activeApiBaseUrl}`
+);
 
 export interface ApiError extends Error {
   status?: number;
@@ -130,20 +142,41 @@ function buildApiUrl(path: string, baseUrl = activeApiBaseUrl): string {
   return `${baseUrl}${normalizeApiPath(path, baseUrl)}`;
 }
 
-export function getApiBaseUrl(): string {
+function isLocalOrRelativeApiBaseUrl(baseUrl: string): boolean {
+  if (!baseUrl) return true;
+  if (baseUrl.startsWith('/')) return true;
+
+  try {
+    const parsed = new URL(baseUrl);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return true;
+  }
+}
+
+function refreshActiveApiBaseUrl(): string {
+  const resolvedBaseUrl = resolveApiBaseUrl();
+  const shouldRefresh =
+    activeApiBaseUrl === initialApiBaseUrl || isLocalOrRelativeApiBaseUrl(activeApiBaseUrl);
+
+  if (shouldRefresh && resolvedBaseUrl && resolvedBaseUrl !== activeApiBaseUrl) {
+    console.info(`[api] Base URL actualizada: ${activeApiBaseUrl} -> ${resolvedBaseUrl}`);
+    activeApiBaseUrl = resolvedBaseUrl;
+  }
+
   return activeApiBaseUrl;
 }
 
+export function getApiBaseUrl(): string {
+  return refreshActiveApiBaseUrl();
+}
+
 function resolveNativeLoopbackFallback(baseUrl: string): string | null {
-  if (Capacitor.isNativePlatform?.() !== true) return null;
+  if (!isNativeAppRuntime()) return null;
   if (!baseUrl || baseUrl.startsWith('/')) return null;
 
   try {
     const parsed = new URL(baseUrl);
-    if (parsed.hostname === '10.0.2.2') {
-      parsed.hostname = '127.0.0.1';
-      return normalizeBaseUrl(parsed.toString());
-    }
     if (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') {
       parsed.hostname = '10.0.2.2';
       return normalizeBaseUrl(parsed.toString());
@@ -156,7 +189,7 @@ function resolveNativeLoopbackFallback(baseUrl: string): string | null {
 }
 
 function resolveNativeApiFallbackCandidates(baseUrl: string): string[] {
-  if (Capacitor.isNativePlatform?.() !== true) return [];
+  if (!isNativeAppRuntime()) return [];
   if (!baseUrl || baseUrl.startsWith('/')) return [];
 
   try {
@@ -170,7 +203,10 @@ function resolveNativeApiFallbackCandidates(baseUrl: string): string[] {
       ? `${parsed.username}${parsed.password ? `:${parsed.password}` : ''}@`
       : '';
     const originalHost = parsed.hostname;
-    const hosts = [originalHost, '10.0.2.2', '127.0.0.1', 'localhost'];
+    const hosts = [
+      originalHost,
+      ...(originalHost === '10.0.2.2' ? [] : ['10.0.2.2']),
+    ];
     const uniqueHosts = [...new Set(hosts.filter(Boolean))];
 
     return uniqueHosts
@@ -196,8 +232,11 @@ export function resetAuthSessionExpiredNotification(): void {
   authSessionExpiredNotified = false;
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const timeoutMs = API_REQUEST_TIMEOUT_MS;
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
   const upstreamSignal = init.signal;
 
   if (timeoutMs <= 0 && !upstreamSignal) {
@@ -242,18 +281,34 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 }
 
 async function fetchWithNativeFallback(path: string, init: RequestInit): Promise<Response> {
-  const primaryUrl = buildApiUrl(path);
+  const baseUrl = refreshActiveApiBaseUrl();
+  const timeoutMs =
+    typeof (init as RequestInit & { timeoutMs?: number }).timeoutMs === 'number'
+      ? (init as RequestInit & { timeoutMs?: number }).timeoutMs
+      : API_REQUEST_TIMEOUT_MS;
+  const primaryUrl = buildApiUrl(path, baseUrl);
+  const requestInit = { ...init } as RequestInit & { timeoutMs?: number };
+  delete requestInit.timeoutMs;
+
+  if (isNativeAppRuntime()) {
+    console.info(`[api] Request | ${requestInit.method || 'GET'} ${primaryUrl}`);
+  }
 
   try {
-    return await fetchWithTimeout(primaryUrl, init);
+    return await fetchWithTimeout(primaryUrl, requestInit, timeoutMs);
   } catch (error) {
     if (!isNetworkError(error)) {
       throw error;
     }
 
+    console.warn(
+      `[api] Error de red en URL principal (${primaryUrl}). ` +
+        `Probando fallbacks nativos seguros.`
+    );
+
     const candidates = [
-      resolveNativeLoopbackFallback(activeApiBaseUrl),
-      ...resolveNativeApiFallbackCandidates(activeApiBaseUrl),
+      resolveNativeLoopbackFallback(baseUrl),
+      ...resolveNativeApiFallbackCandidates(baseUrl),
     ].filter((candidate): candidate is string => Boolean(candidate));
 
     let lastError: unknown = error;
@@ -261,7 +316,8 @@ async function fetchWithNativeFallback(path: string, init: RequestInit): Promise
       if (fallbackBaseUrl === activeApiBaseUrl) continue;
       try {
         const fallbackUrl = buildApiUrl(path, fallbackBaseUrl);
-        const response = await fetchWithTimeout(fallbackUrl, init);
+        console.warn(`[api] Intentando fallback nativo: ${fallbackUrl}`);
+        const response = await fetchWithTimeout(fallbackUrl, requestInit, timeoutMs);
         activeApiBaseUrl = fallbackBaseUrl;
         console.warn(`[api] Fallback nativo aplicado. Nueva base URL: ${activeApiBaseUrl}`);
         return response;
@@ -281,6 +337,7 @@ async function fetchWithNativeFallback(path: string, init: RequestInit): Promise
 type ApiFetchOptions = RequestInit & {
   skipAuth?: boolean;
   skipSessionRecovery?: boolean;
+  timeoutMs?: number;
 };
 
 async function tryRefreshSession(): Promise<boolean> {

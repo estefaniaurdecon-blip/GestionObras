@@ -5,7 +5,6 @@ from sqlmodel import Session
 from app.models.erp import WorkReport
 from app.models.project_conversation import ProjectConversation
 from app.models.user import User
-from app.services.user_service import resolve_creator_group_id, users_share_creation_group
 
 
 def can_users_message_each_other(
@@ -29,8 +28,13 @@ def can_users_operate_within_same_group_scope(
     user_a: User,
     user_b: User | None,
 ) -> bool:
-    """Operational scope policy. Today: same creator_group_id."""
-    return users_share_creation_group(session, user_a, user_b)
+    """Operational scope policy. Same tenant = same scope."""
+    del session
+    if user_b is None:
+        return False
+    if user_a.tenant_id is None or user_b.tenant_id is None:
+        return False
+    return int(user_a.tenant_id) == int(user_b.tenant_id)
 
 
 def can_user_manage_target_user(
@@ -49,14 +53,20 @@ def can_user_view_target_user(
     actor: User,
     target: User | None,
 ) -> bool:
-    """Operational user visibility policy. Super admins see everyone; tenant users are group-scoped."""
+    """Operational user visibility policy.
+
+    Super admins see everyone.
+    Within the same tenant (company), all users can see each other —
+    multiple tenant_admins in the same org should not create visibility silos.
+    """
+    del session  # no longer needed after removing group check
     if target is None:
         return False
     if actor.is_super_admin:
         return True
-    if actor.tenant_id != target.tenant_id:
+    if actor.tenant_id is None or target.tenant_id is None:
         return False
-    return users_share_creation_group(session, actor, target)
+    return int(actor.tenant_id) == int(target.tenant_id)
 
 
 def can_access_work_report(
@@ -64,15 +74,13 @@ def can_access_work_report(
     user: User,
     report: WorkReport,
 ) -> bool:
-    """Work report visibility policy. Visibility: tenant + creator_group_id."""
+    """Work report visibility policy. Same tenant = visible."""
+    del session
     if user.is_super_admin:
         return True
-    if report.tenant_id != user.tenant_id:
+    if user.tenant_id is None or report.tenant_id is None:
         return False
-    if report.creator_group_id is None:
-        return False
-    user_group = resolve_creator_group_id(session, user, persist=True)
-    return user_group == report.creator_group_id
+    return int(user.tenant_id) == int(report.tenant_id)
 
 
 def can_access_work_report_attachment(
@@ -89,8 +97,13 @@ def can_share_file_with_user(
     sender: User,
     recipient: User | None,
 ) -> bool:
-    """Shared file policy. Today: same creator_group_id."""
-    return users_share_creation_group(session, sender, recipient)
+    """Shared file policy. Same tenant = can share."""
+    del session
+    if recipient is None:
+        return False
+    if sender.tenant_id is None or recipient.tenant_id is None:
+        return False
+    return int(sender.tenant_id) == int(recipient.tenant_id)
 
 
 def can_access_project_conversation(
@@ -98,15 +111,13 @@ def can_access_project_conversation(
     actor: User,
     conversation: ProjectConversation | None,
 ) -> bool:
-    """Project conversation access policy. Scope: tenant + creator_group_id."""
+    """Project conversation access policy. Same tenant = access."""
+    del session
     if conversation is None or actor.id is None or actor.is_super_admin:
         return False
-    if actor.tenant_id != conversation.tenant_id:
+    if actor.tenant_id is None or conversation.tenant_id is None:
         return False
-    actor_group_id = resolve_creator_group_id(session, actor, persist=True)
-    if actor_group_id is None:
-        return False
-    return int(actor_group_id) == int(conversation.creator_group_id)
+    return int(actor.tenant_id) == int(conversation.tenant_id)
 
 
 def can_send_project_conversation_message(

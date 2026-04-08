@@ -1682,12 +1682,7 @@ def list_work_reports(
     stmt = select(WorkReport).where(WorkReport.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(WorkReport.deleted_at.is_(None))
-    # Fase 2d: filtro de grupo (Opción B). Solo partes del mismo creator_group_id.
-    # Partes legacy con creator_group_id=NULL quedan visibles solo para super_admin.
-    if current_user is not None and not current_user.is_super_admin:
-        group_id = resolve_creator_group_id(session, current_user, persist=True)
-        if group_id is not None:
-            stmt = stmt.where(WorkReport.creator_group_id == group_id)
+    # Visibilidad: mismo tenant = puede ver todos los partes (sin filtro de grupo).
     if project_id is not None:
         stmt = stmt.where(WorkReport.project_id == project_id)
     if external_id is not None:

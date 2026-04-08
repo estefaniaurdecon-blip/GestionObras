@@ -87,7 +87,6 @@ def _visible_scope_users(
     actor: User,
     tenant_id: int,
     project_id: int,
-    creator_group_id: int,
 ) -> list[User]:
     assigned_users = _load_assigned_users(
         session,
@@ -99,9 +98,6 @@ def _visible_scope_users(
         if candidate.id is None:
             continue
         if not can_user_view_target_user(session, actor, candidate):
-            continue
-        candidate_group_id = resolve_creator_group_id(session, candidate, persist=False)
-        if candidate_group_id != creator_group_id:
             continue
         visible_users_by_id.setdefault(int(candidate.id), candidate)
     return list(visible_users_by_id.values())
@@ -308,33 +304,39 @@ def get_or_create_project_conversation_shell(
     project_id: int,
 ) -> ProjectConversationShellRead:
     _project_or_error(session, tenant_id=tenant_id, project_id=project_id)
-    creator_group_id = _actor_group_or_error(session, actor, tenant_id=tenant_id)
+
+    # Validate actor belongs to tenant
+    if actor.is_super_admin:
+        raise ProjectConversationValidationError("super_admin fuera del circuito operativo normal.")
+    if actor.tenant_id != tenant_id:
+        raise ProjectConversationValidationError("No autorizado para ese tenant.")
 
     visible_users = _visible_scope_users(
         session,
         actor=actor,
         tenant_id=tenant_id,
         project_id=project_id,
-        creator_group_id=creator_group_id,
     )
     actor_id = int(actor.id or 0)
     if actor_id == 0 or actor_id not in {int(user.id or 0) for user in visible_users}:
         raise ProjectConversationValidationError("No tienes acceso operativo a esta obra.")
 
+    # Look up conversation by tenant + project (one conversation per obra per tenant)
     conversation = session.exec(
         select(ProjectConversation).where(
             ProjectConversation.tenant_id == tenant_id,
             ProjectConversation.project_id == project_id,
-            ProjectConversation.creator_group_id == creator_group_id,
         )
     ).first()
 
     created_now = False
     if conversation is None:
+        # creator_group_id is still stored for backwards compat but no longer used for filtering
+        actor_group_id = resolve_creator_group_id(session, actor, persist=True) or actor_id
         conversation = ProjectConversation(
             tenant_id=tenant_id,
             project_id=project_id,
-            creator_group_id=creator_group_id,
+            creator_group_id=actor_group_id,
             created_by_id=actor_id,
         )
         session.add(conversation)
