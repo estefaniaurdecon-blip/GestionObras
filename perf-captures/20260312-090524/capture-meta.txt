@@ -1,8 +1,0 @@
-capture_dir=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-090524
-started_at=2026-03-12T09:05:24.1603837+01:00
-device=emulator-5554
-package=com.partesdetrabajo.app
-duration=90s
-trace_file=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-090524\emulator-5554-perfetto-trace.bin
-logcat_file=C:\Users\pinnovacion\Desktop\rutas\Saas-Multi-Tenant-main\Saas-Multi-Tenant-main\perf-captures\20260312-090524\emulator-5554-logcat.txt
-mode=adb-exec-out-perfetto

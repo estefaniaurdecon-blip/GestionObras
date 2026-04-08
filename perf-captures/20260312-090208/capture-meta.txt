@@ -1,1 +1,0 @@
-remote_trace=/data/local/tmp/partes-trace-20260312-090208.perfetto-trace

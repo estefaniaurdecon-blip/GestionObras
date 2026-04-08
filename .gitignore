@@ -58,6 +58,8 @@ tmp_*
 bugreport-*.zip
 repo_export_*.zip
 temp_remote_*.html
+perf-captures/
+.claude/settings.local.json
 
 # Azure Functions local secrets/config
 azure-functions/docint-proxy/local.settings.json
