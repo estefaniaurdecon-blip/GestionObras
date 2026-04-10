@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { X, Building2, Bot } from "lucide-react";
+import { X, Building2, Bot, Star } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +43,7 @@ export interface ConversationListItemData {
   lastAt: string | null;
   hasConversation: boolean;
   isAiHelp?: boolean;
+  isFavorite?: boolean;
   /** "dm" for direct messages / contacts, "work" for obra group conversations */
   type: "dm" | "work";
   /** Only set when type === "work" */
@@ -59,16 +60,17 @@ interface ConversationListItemProps {
 export function ConversationListItem({ item, isSelected, onSelect, onDelete }: ConversationListItemProps) {
   const isWork = item.type === "work";
   const isAiHelp = item.isAiHelp === true;
+  const reservesDeleteSpace = Boolean(onDelete && item.hasConversation && item.type === "dm" && !isAiHelp);
 
   return (
     <div className="relative group">
       <button
         onClick={() => onSelect(item)}
-        className={`w-full text-left rounded-xl px-3 py-2.5 transition-colors ${
+        className={`w-full text-left rounded-xl px-3 py-2.5 transition-colors ${reservesDeleteSpace ? "pr-11" : ""} ${
           isSelected ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-gray-50"
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="grid min-w-0 grid-cols-[auto,minmax(0,1fr)] items-center gap-3">
           {/* Avatar */}
           <div className="relative shrink-0">
             {isWork ? (
@@ -94,18 +96,24 @@ export function ConversationListItem({ item, isSelected, onSelect, onDelete }: C
           </div>
 
           {/* Content */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center justify-between gap-2">
-              <span className={`text-base truncate ${item.unread > 0 ? "font-semibold text-gray-900" : "font-medium text-gray-800"}`}>
+              <span className={`block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[18px] ${item.unread > 0 ? "font-semibold text-gray-900" : "font-medium text-gray-800"}`}>
                 {item.userName}
               </span>
+              {item.isFavorite && item.type === "dm" && !isAiHelp && (
+                <Star className="h-4 w-4 shrink-0 fill-current text-amber-500" />
+              )}
               {item.lastAt && (
                 <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                   {item.lastAt}
                 </span>
               )}
             </div>
-            <p className={`text-sm truncate mt-0.5 ${item.unread > 0 ? "text-gray-700 font-medium" : "text-muted-foreground"}`}>
+            <p
+              className={`mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[16px] leading-6 ${item.unread > 0 ? "text-gray-700 font-medium" : "text-muted-foreground"}`}
+              title={item.lastSnippet ?? undefined}
+            >
               {item.lastSnippet ?? (isWork ? "Conversación de obra" : "Sin mensajes todavía")}
             </p>
           </div>

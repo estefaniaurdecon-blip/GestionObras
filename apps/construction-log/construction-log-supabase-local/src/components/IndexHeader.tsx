@@ -5,8 +5,9 @@ import { AppIcon } from '@/components/AppIcon';
 import { NetworkStatusIcon } from '@/components/NetworkStatusIcon';
 import { NotificationsCenter } from '@/components/NotificationsCenter';
 import { MobileActionsMenu } from '@/components/MobileActionsMenu';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Capacitor } from '@capacitor/core';
-import { Globe, LogOut, Settings } from 'lucide-react';
+import { CalendarDays, Globe, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type IndexHeaderProps = {
@@ -18,10 +19,12 @@ type IndexHeaderProps = {
   syncing?: boolean;
   tenantUnavailable?: boolean;
   tenantErrorMessage?: string;
+  tenantId?: string | number | null;
   showUpdatesTab?: boolean;
   hasPendingUpdate?: boolean;
   onReloadWorks?: () => void;
   onSyncNow?: () => Promise<void>;
+  onOpenCalendar: () => void;
   onOpenSettings: () => void;
   onSignOut: () => Promise<void>;
 };
@@ -31,12 +34,16 @@ export const IndexHeader = ({
   userEmail,
   roleName,
   showUpdatesTab: _showUpdatesTab,
+  tenantId,
   hasPendingUpdate = false,
+  onOpenCalendar,
   onOpenSettings,
   onSignOut,
 }: IndexHeaderProps) => {
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const navigate = useNavigate();
+  const notificationsState = useNotifications({ tenantId });
+  const hasCalendarAttention = notificationsState.taskAttentionCount > 0;
 
   return (
     <>
@@ -71,7 +78,7 @@ export const IndexHeader = ({
             <div className="flex w-full items-center justify-end gap-1 sm:w-auto sm:gap-2 flex-shrink-0">
               <NetworkStatusIcon />
 
-              <NotificationsCenter />
+              <NotificationsCenter {...notificationsState} />
 
               <Button
                 variant="ghost"
@@ -81,6 +88,22 @@ export const IndexHeader = ({
                 title="Radar de Obras"
               >
                 <Globe className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onOpenCalendar}
+                className="relative inline-flex h-9 w-9 rounded-lg bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
+                title="Calendario de tareas"
+              >
+                <CalendarDays className="h-4 w-4" />
+                {hasCalendarAttention ? (
+                  <span
+                    className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-blue-700"
+                    aria-label="Tareas pendientes o sin revisar"
+                  />
+                ) : null}
               </Button>
 
               <Button
@@ -110,7 +133,7 @@ export const IndexHeader = ({
               </Button>
 
               <div className="sm:hidden">
-                <MobileActionsMenu />
+                <MobileActionsMenu onOpenCalendar={onOpenCalendar} />
               </div>
             </div>
           </div>

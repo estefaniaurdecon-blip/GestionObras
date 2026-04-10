@@ -8,7 +8,7 @@ import type { Message } from "@/types/notifications";
 import { storage } from "@/utils/storage";
 import { toast } from "./use-toast";
 
-const AI_HELP_STORAGE_PREFIX = "ai_help_conversation::v1::";
+const AI_HELP_STORAGE_PREFIX = "ai_help_conversation::v2::";
 
 function toStorageKey(userId: string, tenantId: string | null): string {
   return `${AI_HELP_STORAGE_PREFIX}user-${userId}::tenant-${tenantId ?? "none"}`;
@@ -218,6 +218,7 @@ export function useAiHelpConversation() {
 
         const assistantId = crypto.randomUUID();
         let assistantContent = "";
+        let lastUiSyncAt = 0;
 
         // Parse SSE events from response. When BaseHTTPMiddleware buffers the
         // response (e.g. AuditSourceMiddleware), response.body may be null or
@@ -276,20 +277,24 @@ export function useAiHelpConversation() {
                 const chunk = parsed?.choices?.[0]?.delta?.content;
                 if (typeof chunk === "string" && chunk.length > 0) {
                   assistantContent += chunk;
+                  const nowMs = Date.now();
+                if (nowMs - lastUiSyncAt >= 240) {
+                  lastUiSyncAt = nowMs;
                   const nextMessages = [
                     ...conversationBeforeAssistant,
-                    {
-                      id: assistantId,
-                      from_user_id: AI_HELP_USER_ID,
-                      to_user_id: currentUserId,
-                      message: assistantContent,
-                      read: true,
-                      created_at: new Date().toISOString(),
-                      from_user: { full_name: AI_HELP_USER_NAME },
-                      to_user: { full_name: user?.full_name || "Tú" },
-                    },
-                  ];
-                  setMessages(nextMessages);
+                      {
+                        id: assistantId,
+                        from_user_id: AI_HELP_USER_ID,
+                        to_user_id: currentUserId,
+                        message: assistantContent,
+                        read: true,
+                        created_at: new Date().toISOString(),
+                        from_user: { full_name: AI_HELP_USER_NAME },
+                        to_user: { full_name: user?.full_name || "Tú" },
+                      },
+                    ];
+                    setMessages(nextMessages);
+                  }
                 }
               } catch {
                 // ignore partial chunks until complete line arrives

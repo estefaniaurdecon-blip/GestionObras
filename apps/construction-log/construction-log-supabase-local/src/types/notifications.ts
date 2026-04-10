@@ -1,20 +1,10 @@
-export type NotificationType = 
-  | 'work_report_created' 
-  | 'work_report_approved' 
-  | 'work_report_rejected' 
-  | 'new_message' 
-  | 'new_comment'
-  | 'new_user_pending'
-  | 'file_downloaded'
+export type NotificationType =
   | 'work_report_pending'
+  | 'work_report_approved'
   | 'work_assigned'
-  | 'work_expiry_warning'
+  | 'task_pending'
   | 'machinery_expiry_warning'
-  | 'anomaly_detected'
-  | 'ticket_assigned'
-  | 'ticket_comment'
-  | 'ticket_status'
-  | 'generic';
+  | 'new_message';
 
 export interface Notification {
   id: string;

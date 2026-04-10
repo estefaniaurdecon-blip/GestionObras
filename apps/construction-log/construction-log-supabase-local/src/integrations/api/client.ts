@@ -21,6 +21,7 @@ import { createWorkRepasosApi } from './modules/workRepasos';
 import { createWorkPostventasApi } from './modules/workPostventas';
 import { createWorkReportCommentsApi } from './modules/workReportComments';
 import { createSavedEconomicReportsApi } from './modules/savedEconomicReports';
+import { createTasksApi } from './modules/tasks';
 import type {
   ApiErpWorkReport,
   CreateErpWorkReportPayload,
@@ -1484,6 +1485,23 @@ export const listAssignableForemen = userManagementApi.listAssignableForemen;
 export const listWorkMessageDirectory = userManagementApi.listWorkMessageDirectory;
 export const listWorkMembers = userManagementApi.listWorkMembers;
 export const deleteUserAndData = userManagementApi.deleteUserAndData;
+
+export type {
+  ApiErpTask,
+  ApiErpTaskCreatePayload,
+  ApiErpTaskStatus,
+  ApiErpTaskUpdatePayload,
+} from './modules/tasks';
+
+const tasksApi = createTasksApi({
+  apiFetchJson,
+  tenantHeader,
+});
+
+export const listErpTasks = tasksApi.listTasks;
+export const createErpTask = tasksApi.createTask;
+export const updateErpTask = tasksApi.updateTask;
+export const deleteErpTask = tasksApi.deleteTask;
 
 export type {
   ApiOrganization,

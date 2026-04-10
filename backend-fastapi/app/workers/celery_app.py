@@ -36,6 +36,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.erp.auto_duplicate_rental_machinery_daily",
         "schedule": crontab(minute=0, hour=6),
     },
+    "send_rental_machinery_expiry_warnings_daily": {
+        "task": "app.workers.tasks.erp.send_rental_machinery_expiry_warnings",
+        "schedule": crontab(minute=15, hour=7),
+    },
+    "send_weekly_open_work_reports_summary": {
+        "task": "app.workers.tasks.erp.send_weekly_open_work_reports_summary",
+        "schedule": crontab(minute=30, hour=7, day_of_week="mon"),
+    },
     "ai_health_check": {
         "task": "app.workers.tasks.health.ai_health_check",
         "schedule": crontab(minute="*/3"),

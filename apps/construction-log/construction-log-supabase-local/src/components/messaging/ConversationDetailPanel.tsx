@@ -27,6 +27,7 @@ import type { ProjectConversationMessageApi } from "@/integrations/api/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useNavigate } from "react-router-dom";
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp)$/i;
 const AUDIO_EXTS = /\.(webm|mp3|m4a|ogg|wav|aac)$/i;
@@ -134,6 +135,7 @@ export function ConversationDetailPanel({
   downloadFile,
   onBack,
 }: ConversationDetailPanelProps) {
+  const navigate = useNavigate();
   const isWorkConversationSelected = selectedWorkConversation !== null;
   const isAiHelpConversation = Boolean(selectedUser && isAiHelpUserId(selectedUser.id));
   const hasActiveConversation = Boolean(selectedUser || selectedWorkConversation);
@@ -327,6 +329,34 @@ export function ConversationDetailPanel({
     }
   };
 
+  const handleAiHelpLink = useCallback(
+    (href?: string) => {
+      if (!href) return;
+      if (href.startsWith("#/settings/help")) {
+        const parsedHref = href.startsWith("#") ? href.slice(1) : href;
+        const url = new URL(parsedHref, window.location.origin);
+        document.dispatchEvent(
+          new CustomEvent("open-help-center", {
+            detail: { tab: url.searchParams.get("tab") ?? "faq" },
+          }),
+        );
+        return;
+      }
+      if (href.startsWith("#/")) {
+        navigate(href.slice(1));
+        return;
+      }
+      if (href.startsWith("/")) {
+        navigate(href);
+        return;
+      }
+      if (/^https?:\/\//i.test(href)) {
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+    },
+    [navigate],
+  );
+
   // ---------- Combined timeline ----------
   const combinedTimeline = useMemo(() => {
     if (isAiHelpConversation) return [];
@@ -487,15 +517,84 @@ export function ConversationDetailPanel({
               const senderName = isMine ? currentUserName || "Tú" : "Ayuda IA";
               return (
                 <div key={`ai-msg-${m.id}`} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
-                  <span className="text-base font-medium text-muted-foreground mb-1 px-1">{senderName}</span>
+                  <span className="mb-1 px-1 text-[17px] font-medium text-muted-foreground">{senderName}</span>
                   <div
-                    className={`max-w-[90%] rounded-2xl px-5 py-4 text-lg ${isMine ? "bg-primary/15 rounded-br-none" : "bg-amber-50 border border-amber-200 rounded-bl-none"}`}
+                    className={`max-w-[92%] rounded-2xl px-4 py-3 text-lg ${isMine ? "bg-primary/15 rounded-br-none" : "bg-amber-50 border border-amber-200 rounded-bl-none"}`}
                   >
                     {isMine ? (
-                      <div className="whitespace-pre-wrap break-words">{m.message}</div>
+                      <div className="whitespace-pre-wrap break-words text-lg leading-8">{m.message}</div>
                     ) : (
-                      <div className="prose prose-sm max-w-none break-words text-foreground prose-a:text-blue-700 prose-a:no-underline hover:prose-a:underline">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.message}</ReactMarkdown>
+                      <div className="ai-response-container markdown-wrap w-full max-w-none break-words text-lg leading-8 text-foreground">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ node, ...props }) => (
+                              <p className="mb-2.5 text-lg leading-8 text-foreground last:mb-0" {...props} />
+                            ),
+                            ul: ({ node, ...props }) => (
+                              <ul className="mb-2.5 list-disc space-y-1.5 pl-5 text-lg leading-8 text-foreground" {...props} />
+                            ),
+                            ol: ({ node, ...props }) => (
+                              <ol className="mb-2.5 list-decimal space-y-1.5 pl-5 text-lg leading-8 text-foreground" {...props} />
+                            ),
+                            li: ({ node, ...props }) => (
+                              <li className="pl-1 marker:text-foreground" {...props} />
+                            ),
+                            strong: ({ node, ...props }) => (
+                              <strong className="font-semibold text-foreground" {...props} />
+                            ),
+                            pre: ({ node, ...props }) => (
+                              <pre
+                                className="my-2 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100"
+                                {...props}
+                              />
+                            ),
+                            code: ({
+                              node,
+                              className,
+                              children,
+                              ...props
+                            }: {
+                              node?: unknown;
+                              className?: string;
+                              children?: React.ReactNode;
+                            }) => {
+                              const rawText = Array.isArray(children)
+                                ? children.join("")
+                                : typeof children === "string"
+                                  ? children
+                                  : "";
+                              const isBlockCode =
+                                Boolean(className?.startsWith("language-")) || rawText.includes("\n");
+
+                              return (
+                                <code
+                                  className={
+                                    isBlockCode
+                                      ? "font-mono text-xs text-slate-100"
+                                      : "rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-800"
+                                  }
+                                  {...props}
+                                >
+                                  {children}
+                                </code>
+                              );
+                            },
+                            a: ({ node, href, ...props }) => (
+                              <a
+                                {...props}
+                                href={href}
+                                className="font-medium text-blue-700 underline underline-offset-2"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  handleAiHelpLink(href);
+                                }}
+                              />
+                            ),
+                          }}
+                        >
+                          {m.message}
+                        </ReactMarkdown>
                       </div>
                     )}
                     <div className={`text-sm text-muted-foreground mt-2 flex items-center gap-1 ${isMine ? "justify-end" : ""}`}>

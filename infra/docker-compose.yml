@@ -24,6 +24,18 @@ services:
     ports:
       - "6379:6379"
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: saas-ollama
+    restart: unless-stopped
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    environment:
+      TZ: Europe/Madrid
+    volumes:
+      - ollama_data:/root/.ollama
+
   backend-fastapi:
     build:
       context: ../backend-fastapi
@@ -37,12 +49,16 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      AI_HELP_LLM_ENABLED: ${AI_HELP_LLM_ENABLED:-false}
+      OLLAMA_HELP_MODEL: ${OLLAMA_HELP_MODEL:-qwen2.5:3b}
       INVOICES_STORAGE_PATH: /data/invoices
       CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
       - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     volumes:
@@ -65,12 +81,15 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_HELP_MODEL: ${OLLAMA_HELP_MODEL:-qwen2.5:3b}
       INVOICES_STORAGE_PATH: /data/invoices
       CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
       - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       [
         "celery",
@@ -96,12 +115,15 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_HELP_MODEL: ${OLLAMA_HELP_MODEL:-qwen2.5:3b}
       INVOICES_STORAGE_PATH: /data/invoices
       CONTRACTS_STORAGE_PATH: /data/contracts
       TZ: Europe/Madrid
     depends_on:
       - db
       - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       [
         "celery",
@@ -133,3 +155,4 @@ services:
 volumes:
   db_data:
   moodle_db_data:
+  ollama_data:

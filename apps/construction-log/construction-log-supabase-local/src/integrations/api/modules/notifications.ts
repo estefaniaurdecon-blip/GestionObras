@@ -12,7 +12,12 @@ export interface NotificationsApiDeps {
   buildQueryParams: BuildQueryParamsFn;
 }
 
-export type ApiNotificationType = 'ticket_assigned' | 'ticket_comment' | 'ticket_status' | 'generic';
+export type ApiNotificationType =
+  | 'work_report_pending'
+  | 'work_report_approved'
+  | 'work_assigned'
+  | 'machinery_expiry_warning'
+  | 'new_message'
 
 export interface ApiNotificationCreate {
   user_id: number;

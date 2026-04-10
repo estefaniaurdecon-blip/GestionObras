@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
 from app.models.erp import Project, WorkReport
+from app.models.notification import NotificationType
 from app.models.role import Role
 from app.models.user import User
 from app.policies.access_policies import can_user_manage_target_user, can_user_view_target_user
@@ -21,6 +22,7 @@ from app.schemas.user_management import (
     WorkMemberRead,
     WorkMessageDirectoryRead,
 )
+from app.services.notification_service import create_notification
 from app.services.user_service import resolve_creator_group_id
 
 
@@ -451,7 +453,7 @@ def assign_user_to_work(
     work_id: int,
 ) -> UserAssignmentsRead:
     user = _user_or_404(session, tenant_id=tenant_id, user_id=user_id)
-    _project_or_404(session, tenant_id=tenant_id, project_id=work_id)
+    project = _project_or_404(session, tenant_id=tenant_id, project_id=work_id)
 
     if not current_user.is_super_admin:
         if not can_user_manage_target_user(session, current_user, user):
@@ -477,6 +479,16 @@ def assign_user_to_work(
             )
         )
         session.commit()
+        if user.id is not None and current_user.id != user.id:
+            create_notification(
+                session,
+                tenant_id=tenant_id,
+                user_id=int(user.id),
+                type=NotificationType.WORK_ASSIGNED,
+                title=f"Obra asignada: {project.name}",
+                body=f'Se te ha asignado la obra "{project.name}".',
+                reference=f"project_id={work_id}",
+            )
     return list_user_assignments(session, tenant_id=tenant_id, user_id=user_id)
 
 

@@ -15,6 +15,7 @@ import { startupPerfEnd, startupPerfPoint, startupPerfStart } from "@/utils/star
 
 const Index = lazy(() => import("./pages/Index"));
 const Projects = lazy(() => import("./pages/Projects"));
+const TaskCalendar = lazy(() => import("./pages/TaskCalendar"));
 const WorkManagementWorkspace = lazy(() => import("./pages/WorkManagementWorkspace"));
 const Radar = lazy(() => import("./pages/Radar"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -72,6 +73,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <Projects />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/task-calendar"
+                    element={
+                      <ProtectedRoute>
+                        <TaskCalendar />
                       </ProtectedRoute>
                     }
                   />

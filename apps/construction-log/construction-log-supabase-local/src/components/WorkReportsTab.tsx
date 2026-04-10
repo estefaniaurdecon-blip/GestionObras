@@ -248,6 +248,11 @@ export const WorkReportsTab = ({
   }, [activeToolsTab]);
 
   useEffect(() => {
+    if (activeToolsTab === 'parts') return;
+    void ensureAllWorkReportsLoaded();
+  }, [activeToolsTab, ensureAllWorkReportsLoaded]);
+
+  useEffect(() => {
     if (generatePanelOpen) return;
     setOpenedReportId(null);
     setReportNavigationIds([]);

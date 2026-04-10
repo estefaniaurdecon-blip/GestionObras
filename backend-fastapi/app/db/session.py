@@ -307,7 +307,7 @@ def init_db() -> None:
                     )
                 )
 
-    if "notification_log" in table_names:
+    if engine.dialect.name == "postgresql" and "notification_log" in table_names:
         with engine.begin() as conn:
             conn.execute(
                 text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'CREATED'")
@@ -326,6 +326,36 @@ def init_db() -> None:
             )
             conn.execute(
                 text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'DUE_DAILY'")
+            )
+
+    if engine.dialect.name == "postgresql" and "notification" in table_names:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'work_report_approved'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'work_report_pending'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'work_assigned'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'machinery_expiry_warning'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'new_message'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'ticket_assigned'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'ticket_comment'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'ticket_status'")
+            )
+            conn.execute(
+                text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'generic'")
             )
 
     if "audit_log" in table_names or "auditlog" in table_names:

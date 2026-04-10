@@ -1,11 +1,34 @@
 from datetime import datetime
 from typing import Iterable, Optional
 
+from sqlalchemy import String, cast
 from sqlmodel import Session, select
 
 from app.models.notification import Notification, NotificationType
 from app.models.user import User
 from app.schemas.notification import NotificationListResponse, NotificationRead
+
+
+APP_CENTER_NOTIFICATION_TYPES: tuple[NotificationType, ...] = (
+    NotificationType.WORK_REPORT_PENDING,
+    NotificationType.WORK_REPORT_APPROVED,
+    NotificationType.WORK_ASSIGNED,
+    NotificationType.MACHINERY_EXPIRY_WARNING,
+    NotificationType.NEW_MESSAGE,
+)
+APP_CENTER_NOTIFICATION_TYPE_VALUES: tuple[str, ...] = tuple(
+    notification_type.value for notification_type in APP_CENTER_NOTIFICATION_TYPES
+)
+
+
+def _notification_type_value(notification_type: NotificationType | str) -> str:
+    if isinstance(notification_type, NotificationType):
+        return notification_type.value
+    return str(notification_type)
+
+
+def _notification_type_text():
+    return cast(Notification.type, String)
 
 
 def create_notification(
@@ -32,6 +55,77 @@ def create_notification(
     return notification
 
 
+def notification_exists(
+    session: Session,
+    *,
+    tenant_id: int,
+    user_id: int,
+    type: NotificationType,
+    reference: str | None = None,
+    since: datetime | None = None,
+) -> bool:
+    stmt = select(Notification).where(
+        Notification.tenant_id == tenant_id,
+        Notification.user_id == user_id,
+        _notification_type_text() == _notification_type_value(type),
+    )
+    if reference is None:
+        stmt = stmt.where(Notification.reference.is_(None))
+    else:
+        stmt = stmt.where(Notification.reference == reference)
+    if since is not None:
+        stmt = stmt.where(Notification.created_at >= since)
+
+    return session.exec(stmt.limit(1)).first() is not None
+
+
+def create_notification_once(
+    session: Session,
+    *,
+    tenant_id: int,
+    user_id: int,
+    type: NotificationType,
+    title: str,
+    body: str | None = None,
+    reference: str | None = None,
+    since: datetime | None = None,
+) -> Notification:
+    if notification_exists(
+        session,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        type=type,
+        reference=reference,
+        since=since,
+    ):
+        existing_stmt = select(Notification).where(
+            Notification.tenant_id == tenant_id,
+            Notification.user_id == user_id,
+            _notification_type_text() == _notification_type_value(type),
+        )
+        if reference is None:
+            existing_stmt = existing_stmt.where(Notification.reference.is_(None))
+        else:
+            existing_stmt = existing_stmt.where(Notification.reference == reference)
+        if since is not None:
+            existing_stmt = existing_stmt.where(Notification.created_at >= since)
+        existing = session.exec(
+            existing_stmt.order_by(Notification.created_at.desc()).limit(1),
+        ).first()
+        if existing is not None:
+            return existing
+
+    return create_notification(
+        session,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        type=type,
+        title=title,
+        body=body,
+        reference=reference,
+    )
+
+
 def list_notifications_for_user(
     session: Session,
     *,
@@ -43,6 +137,7 @@ def list_notifications_for_user(
     stmt = (
         select(Notification)
         .where(Notification.user_id == user.id)
+        .where(_notification_type_text().in_(APP_CENTER_NOTIFICATION_TYPE_VALUES))
         .order_by(Notification.created_at.desc())
     )
     if only_unread:
@@ -50,7 +145,10 @@ def list_notifications_for_user(
 
     # Obtenemos el total de notificaciones para el usuario.
     total_result = session.exec(
-        select(Notification).where(Notification.user_id == user.id),
+        select(Notification).where(
+            Notification.user_id == user.id,
+            _notification_type_text().in_(APP_CENTER_NOTIFICATION_TYPE_VALUES),
+        ),
     ).all()
     total = len(total_result)
 

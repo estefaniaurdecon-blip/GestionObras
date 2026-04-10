@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +31,9 @@ import type { WorkReport } from '@/offline-db/types';
 import { payloadText, type HistoryFilterKey } from '@/pages/indexHelpers';
 import type { PendingOverwrite } from '@/hooks/useWorkReportMutations';
 import { startupPerfPoint } from '@/utils/startupPerf';
+
+type SettingsDialogTab = 'profile' | 'users' | 'updates' | 'help';
+type HelpCenterTab = 'features' | 'faq' | 'chat';
 type SettingsDialogConfig = {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
@@ -123,9 +126,35 @@ export const IndexDialogs = ({
   clone,
   overwrite,
 }: IndexDialogsProps) => {
+  const [settingsTab, setSettingsTab] = useState<SettingsDialogTab>('profile');
+  const [helpCenterTab, setHelpCenterTab] = useState<HelpCenterTab>('features');
+  const [helpCenterOpenRequestKey, setHelpCenterOpenRequestKey] = useState(0);
+
   useEffect(() => {
     startupPerfPoint('panel:IndexDialogs mounted');
   }, []);
+
+  useEffect(() => {
+    const handleOpenHelpCenter = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: HelpCenterTab }>).detail;
+      setSettingsTab('help');
+      setHelpCenterTab(detail?.tab ?? 'faq');
+      setHelpCenterOpenRequestKey((current) => current + 1);
+      settings.setOpen(true);
+    };
+
+    document.addEventListener('open-help-center', handleOpenHelpCenter as EventListener);
+    return () => {
+      document.removeEventListener('open-help-center', handleOpenHelpCenter as EventListener);
+    };
+  }, [settings]);
+
+  useEffect(() => {
+    if (!settings.open) {
+      setSettingsTab('profile');
+      setHelpCenterTab('features');
+    }
+  }, [settings.open]);
 
   return (
     <>
@@ -144,7 +173,7 @@ export const IndexDialogs = ({
             <DialogTitle>Ajustes</DialogTitle>
             <DialogDescription>Perfil, actualizaciones y ayuda.</DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="profile" className="w-full">
+          <Tabs value={settingsTab} onValueChange={(value) => setSettingsTab(value as SettingsDialogTab)} className="w-full">
             <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
               <TabsTrigger value="profile" className="text-sm sm:text-[15px]">
                 Perfil
@@ -190,7 +219,7 @@ export const IndexDialogs = ({
             ) : null}
 
             <TabsContent value="help" className="mt-4 max-h-[70vh] overflow-y-auto">
-              <HelpCenter />
+              <HelpCenter initialTab={helpCenterTab} openRequestKey={helpCenterOpenRequestKey} />
             </TabsContent>
           </Tabs>
         </DialogContent>

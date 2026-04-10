@@ -1,13 +1,20 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
   DrawerContent,
+  DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-  DrawerDescription,
 } from "@/components/ui/drawer";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +26,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Trash2, MessageCircle, Building2, Users } from "lucide-react";
+import {
+  Building2,
+  MessageCircle,
+  Settings,
+  Star,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useMessages } from "@/hooks/useMessages";
 import { useMessageableUsers } from "@/hooks/useMessageableUsers";
 import { useProjectConversation } from "@/hooks/useProjectConversation";
@@ -41,13 +56,15 @@ import { ConversationListPanel } from "@/components/messaging/ConversationListPa
 import { WorksPanel } from "@/components/messaging/WorksPanel";
 import { ContactsPanel } from "@/components/messaging/ContactsPanel";
 import { ConversationDetailPanel } from "@/components/messaging/ConversationDetailPanel";
+import { FavoriteContactsDialog } from "@/components/messaging/FavoriteContactsDialog";
 import { useWorkConversationSummaries } from "@/hooks/useWorkConversationSummaries";
+import { useFavoriteContacts } from "@/hooks/useFavoriteContacts";
 
 export const ChatCenter = () => {
   const { user } = useAuth();
   const currentUserId = user ? String(user.id) : null;
+  const currentTenantId = user?.tenant_id != null ? String(user.tenant_id) : null;
 
-  // ---- Hooks (unchanged) ----
   const {
     messages,
     unreadCount,
@@ -63,19 +80,22 @@ export const ChatCenter = () => {
     sending: sendingAiHelp,
     sendMessage: sendAiHelpMessage,
   } = useAiHelpConversation();
-  const { works, membersByWorkId, loadingWorks, loadingMembersByWorkId, loadMembersForWork } =
-    useWorkMessageDirectory();
+  const {
+    works,
+    membersByWorkId,
+    loadingWorks,
+    loadingMembersByWorkId,
+    loadMembersForWork,
+  } = useWorkMessageDirectory();
   const { isUserOnline } = useUserPresence();
   const { shareFile, sentFiles, receivedFiles, downloadFile, getFileBlob, reloadFiles } =
     useSharedFiles();
 
-  // ---- Work conversation summaries (for Conversaciones tab) ----
   const {
     summaries: workConversationSummaries,
     reload: reloadWorkConversationSummaries,
   } = useWorkConversationSummaries(works, true);
 
-  // ---- Selection state ----
   const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [activeWorkContext, setActiveWorkContext] =
@@ -83,10 +103,20 @@ export const ChatCenter = () => {
   const [selectedWorkConversation, setSelectedWorkConversation] =
     useState<ActiveWorkConversationContext | null>(null);
   const [activeTab, setActiveTab] = useState<string>("conversations");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [favoritesDialogOpen, setFavoritesDialogOpen] = useState(false);
+
+  const { favoriteContactIds, toggleFavoriteContact } = useFavoriteContacts(
+    currentUserId,
+    currentTenantId,
+  );
+  const visibleFavoriteContactIds = useMemo(() => {
+    const availableContactIds = new Set(contacts.map((contact) => contact.id));
+    return favoriteContactIds.filter((contactId) => availableContactIds.has(contactId));
+  }, [contacts, favoriteContactIds]);
 
   const hasActiveConversation = Boolean(selectedUserId || selectedWorkConversation);
 
-  // ---- Project conversation hook (enabled only when a work conversation is selected) ----
   const {
     participantCount: projectConversationParticipantCount,
     messages: projectConversationMessages,
@@ -100,12 +130,13 @@ export const ChatCenter = () => {
     open && selectedWorkConversation !== null,
   );
 
-  // ---- External open/close events (for ChatBubble) ----
   useEffect(() => {
     const openHandler = () => setOpen(true);
     const closeHandler = () => setOpen(false);
+
     document.addEventListener("open-chat-center", openHandler as EventListener);
     document.addEventListener("close-chat-center", closeHandler as EventListener);
+
     return () => {
       document.removeEventListener("open-chat-center", openHandler as EventListener);
       document.removeEventListener("close-chat-center", closeHandler as EventListener);
@@ -116,32 +147,44 @@ export const ChatCenter = () => {
     document.dispatchEvent(new CustomEvent("chat-center-state", { detail: { open } }));
   }, [open]);
 
-  // ---- Reload data when drawer opens ----
   useEffect(() => {
-    if (open) {
-      reloadMessages();
-      reloadFiles();
-      void reloadWorkConversationSummaries();
-      if (selectedWorkConversation) {
-        void reloadProjectConversation();
-      }
+    if (!open) {
+      setSettingsOpen(false);
+      setFavoritesDialogOpen(false);
+      return;
     }
-  }, [open, reloadFiles, reloadMessages, reloadWorkConversationSummaries, reloadProjectConversation, selectedWorkConversation]);
 
-  // ---- Auto mark-as-read for selected DM ----
+    reloadMessages();
+    reloadFiles();
+    void reloadWorkConversationSummaries();
+
+    if (selectedWorkConversation) {
+      void reloadProjectConversation();
+    }
+  }, [
+    open,
+    reloadFiles,
+    reloadMessages,
+    reloadProjectConversation,
+    reloadWorkConversationSummaries,
+    selectedWorkConversation,
+  ]);
+
   useEffect(() => {
-    if (!open || !currentUserId || !selectedUserId || isAiHelpUserId(selectedUserId)) return;
+    if (!open || !currentUserId || !selectedUserId || isAiHelpUserId(selectedUserId)) {
+      return;
+    }
+
     messages
       .filter(
-        (m) =>
-          m.from_user_id === selectedUserId &&
-          m.to_user_id === currentUserId &&
-          !m.read,
+        (message) =>
+          message.from_user_id === selectedUserId &&
+          message.to_user_id === currentUserId &&
+          !message.read,
       )
-      .forEach((m) => markAsRead(m.id));
+      .forEach((message) => markAsRead(message.id));
   }, [open, currentUserId, selectedUserId, messages, markAsRead]);
 
-  // ---- Selection helpers ----
   const applySelection = (next: ReturnType<typeof clearConversationSelection>) => {
     setSelectedUserId(next.selectedUserId);
     setActiveWorkContext(next.activeWorkContext);
@@ -169,36 +212,64 @@ export const ChatCenter = () => {
 
   const handleDeleteConversation = (userId: string) => {
     deleteConversation(userId);
-    if (selectedUserId === userId) resetConversationSelection();
+    if (selectedUserId === userId) {
+      resetConversationSelection();
+    }
   };
 
-  // ---- Resolve selected user info ----
   const selectedUser = (() => {
-    if (!selectedUserId) return undefined;
-    if (isAiHelpUserId(selectedUserId)) {
-      return { id: AI_HELP_USER_ID, full_name: AI_HELP_USER_NAME, roles: [], approved: true };
+    if (!selectedUserId) {
+      return undefined;
     }
-    const fromContacts = contacts.find((c) => c.id === selectedUserId);
-    if (fromContacts) return fromContacts;
+
+    if (isAiHelpUserId(selectedUserId)) {
+      return {
+        id: AI_HELP_USER_ID,
+        full_name: AI_HELP_USER_NAME,
+        roles: [],
+        approved: true,
+      };
+    }
+
+    const fromContacts = contacts.find((contact) => contact.id === selectedUserId);
+    if (fromContacts) {
+      return fromContacts;
+    }
+
     const fromWorkMembers = Object.values(membersByWorkId)
       .flat()
       .find((member) => member.id === selectedUserId);
+
     if (fromWorkMembers) {
-      return { id: fromWorkMembers.id, full_name: fromWorkMembers.full_name, roles: [], approved: true };
+      return {
+        id: fromWorkMembers.id,
+        full_name: fromWorkMembers.full_name,
+        roles: [],
+        approved: true,
+      };
     }
-    // Fallback from message data
-    for (const m of messages) {
-      const isFromMe = m.from_user_id === currentUserId;
-      const otherId = isFromMe ? m.to_user_id : m.from_user_id;
+
+    for (const message of messages) {
+      const isFromMe = message.from_user_id === currentUserId;
+      const otherId = isFromMe ? message.to_user_id : message.from_user_id;
+
       if (otherId === selectedUserId) {
-        const name = (isFromMe ? m.to_user?.full_name : m.from_user?.full_name) || "Usuario";
-        return { id: selectedUserId, full_name: name, roles: [], approved: true };
+        const name =
+          (isFromMe ? message.to_user?.full_name : message.from_user?.full_name) ||
+          "Usuario";
+
+        return {
+          id: selectedUserId,
+          full_name: name,
+          roles: [],
+          approved: true,
+        };
       }
     }
+
     return undefined;
   })();
 
-  // ---- Render ----
   return (
     <Drawer open={open} onOpenChange={setOpen} dismissible>
       <DrawerContent
@@ -206,64 +277,148 @@ export const ChatCenter = () => {
         onPointerDownOutside={() => setOpen(false)}
         onInteractOutside={() => setOpen(false)}
       >
-        {/* Header */}
-        <DrawerHeader className="pb-0 border-b">
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Ajustes de mensajeria</DialogTitle>
+              <DialogDescription>
+                Gestiona las acciones generales de esta ventana.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-foreground">
+                    Contactos favoritos
+                  </h3>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Elige los contactos que quieras ver primero en tus listas de
+                    conversaciones y contactos.
+                  </p>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {visibleFavoriteContactIds.length === 0
+                      ? "Aun no has marcado ningun favorito."
+                      : `${visibleFavoriteContactIds.length} contacto(s) marcado(s) como favorito(s).`}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => setFavoritesDialogOpen(true)}
+                  >
+                    <Star className="h-4 w-4" />
+                    Gestionar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-foreground">
+                    Borrar conversaciones
+                  </h3>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Elimina todos los mensajes guardados en esta ventana de
+                    mensajeria. Esta accion no se puede deshacer.
+                  </p>
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="gap-2"
+                        title="Vaciar todos los mensajes"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Vaciar mensajes
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Vaciar todos los mensajes</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta accion eliminara permanentemente todos tus mensajes
+                          y conversaciones. No se puede deshacer.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            clearAllMessages();
+                            resetConversationSelection();
+                            setSettingsOpen(false);
+                          }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Vaciar mensajes
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <FavoriteContactsDialog
+          open={favoritesDialogOpen}
+          onOpenChange={setFavoritesDialogOpen}
+          contacts={contacts}
+          favoriteContactIds={visibleFavoriteContactIds}
+          onToggleFavorite={toggleFavoriteContact}
+        />
+
+        <DrawerHeader className="border-b pb-0">
           <div className="flex items-center justify-between">
             <div>
-              <DrawerTitle className="text-xl">Mensajería</DrawerTitle>
+              <DrawerTitle className="text-xl">Mensajeria</DrawerTitle>
               <DrawerDescription className="text-sm">
                 Chatea con tu equipo en tiempo real
               </DrawerDescription>
             </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  title="Vaciar todos los mensajes"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Vaciar todos los mensajes?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta acción eliminará permanentemente todos tus mensajes y
-                    conversaciones. No se puede deshacer.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      clearAllMessages();
-                      resetConversationSelection();
-                    }}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Vaciar mensajes
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                title="Ajustes de mensajeria"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                title="Cerrar mensajeria"
+                onClick={() => setOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </DrawerHeader>
 
-        {/* Main area: full-screen list OR full-screen detail — never both */}
-        <div className="flex-1 min-h-0 flex flex-col h-full">
-          {/* ===== LIST (hidden when conversation active) ===== */}
+        <div className="flex h-full min-h-0 flex-1 flex-col">
           <div
-            className={`${hasActiveConversation ? "hidden" : "flex"} flex-col min-h-0 flex-1`}
+            className={`${hasActiveConversation ? "hidden" : "flex"} min-h-0 flex-1 flex-col`}
           >
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              className="flex flex-col min-h-0 h-full"
+              className="flex h-full min-h-0 flex-col"
             >
-              <div className="px-3 pt-3 pb-0">
-                <TabsList className="w-full h-11">
+              <div className="px-3 pb-0 pt-3">
+                <TabsList className="h-11 w-full">
                   <TabsTrigger value="conversations" className="flex-1 gap-2 text-base">
                     <MessageCircle className="h-4 w-4" />
                     Chats
@@ -281,11 +436,12 @@ export const ChatCenter = () => {
 
               <TabsContent
                 value="conversations"
-                className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden"
+                className="mt-0 flex-1 min-h-0 data-[state=inactive]:hidden"
               >
                 <ConversationListPanel
                   currentUserId={currentUserId}
                   messages={messages}
+                  favoriteContactIds={visibleFavoriteContactIds}
                   loadingContacts={loadingContacts}
                   selectedUserId={selectedUserId}
                   selectedWorkConversationId={selectedWorkConversation?.workId ?? null}
@@ -301,7 +457,7 @@ export const ChatCenter = () => {
 
               <TabsContent
                 value="works"
-                className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden"
+                className="mt-0 flex-1 min-h-0 data-[state=inactive]:hidden"
               >
                 <WorksPanel
                   works={works}
@@ -316,10 +472,11 @@ export const ChatCenter = () => {
 
               <TabsContent
                 value="contacts"
-                className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden"
+                className="mt-0 flex-1 min-h-0 data-[state=inactive]:hidden"
               >
                 <ContactsPanel
                   contacts={contacts}
+                  favoriteContactIds={visibleFavoriteContactIds}
                   loading={loadingContacts}
                   selectedUserId={selectedUserId}
                   isUserOnline={isUserOnline}
@@ -329,36 +486,34 @@ export const ChatCenter = () => {
             </Tabs>
           </div>
 
-          {/* ===== DETAIL (full-screen when conversation active) ===== */}
           {hasActiveConversation && (
-          <div className="flex flex-col min-h-0 flex-1">
-
-            <ConversationDetailPanel
-              currentUserId={currentUserId}
-              currentUserName={user?.full_name}
-              selectedUser={selectedUser}
-              selectedWorkConversation={selectedWorkConversation}
-              activeWorkContext={activeWorkContext}
-              isUserOnline={isUserOnline}
-              messages={messages}
-              sendMessage={sendMessage}
-              projectConversationMessages={projectConversationMessages}
-              projectConversationParticipantCount={projectConversationParticipantCount}
-              loadingProjectConversation={loadingProjectConversation}
-              sendingProjectConversation={sendingProjectConversation}
-              projectConversationError={projectConversationError ?? null}
-              sendProjectConversationMessage={sendProjectConversationMessage}
-              aiHelpMessages={aiHelpMessages}
-              sendingAiHelp={sendingAiHelp}
-              sendAiHelpMessage={sendAiHelpMessage}
-              sentFiles={sentFiles}
-              receivedFiles={receivedFiles}
-              shareFile={shareFile}
-              getFileBlob={getFileBlob}
-              downloadFile={downloadFile}
-              onBack={resetConversationSelection}
-            />
-          </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <ConversationDetailPanel
+                currentUserId={currentUserId}
+                currentUserName={user?.full_name}
+                selectedUser={selectedUser}
+                selectedWorkConversation={selectedWorkConversation}
+                activeWorkContext={activeWorkContext}
+                isUserOnline={isUserOnline}
+                messages={messages}
+                sendMessage={sendMessage}
+                projectConversationMessages={projectConversationMessages}
+                projectConversationParticipantCount={projectConversationParticipantCount}
+                loadingProjectConversation={loadingProjectConversation}
+                sendingProjectConversation={sendingProjectConversation}
+                projectConversationError={projectConversationError ?? null}
+                sendProjectConversationMessage={sendProjectConversationMessage}
+                aiHelpMessages={aiHelpMessages}
+                sendingAiHelp={sendingAiHelp}
+                sendAiHelpMessage={sendAiHelpMessage}
+                sentFiles={sentFiles}
+                receivedFiles={receivedFiles}
+                shareFile={shareFile}
+                getFileBlob={getFileBlob}
+                downloadFile={downloadFile}
+                onBack={resetConversationSelection}
+              />
+            </div>
           )}
         </div>
       </DrawerContent>

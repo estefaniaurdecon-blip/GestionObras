@@ -381,6 +381,7 @@ const Index = () => {
           roleLabel={roleLabel}
           userEmail={user.email}
           roleName={roleName}
+          tenantId={resolvedTenantId}
           worksLoading={worksLoading}
           syncing={syncing}
           tenantUnavailable={tenantUnavailable}
@@ -388,6 +389,7 @@ const Index = () => {
           hasPendingUpdate={hasPendingUpdate}
           onReloadWorks={loadWorks}
           onSyncNow={handleSyncNow}
+          onOpenCalendar={() => navigate('/task-calendar')}
           onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={signOut}
         />

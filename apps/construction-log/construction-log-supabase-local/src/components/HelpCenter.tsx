@@ -97,6 +97,13 @@ interface FeatureCard {
   roles: string[];
 }
 
+type HelpCenterTab = 'features' | 'faq' | 'chat';
+
+interface HelpCenterProps {
+  initialTab?: HelpCenterTab;
+  openRequestKey?: number;
+}
+
 type CurrentHelpRole = 'super_admin' | 'tenant_admin' | 'usuario';
 
 const ADMIN_ROLE_NAMES = new Set([
@@ -236,10 +243,11 @@ const HELP_ICON_MAP = {
 
 const getHelpIcon = (iconName: string) => HELP_ICON_MAP[iconName as keyof typeof HELP_ICON_MAP] ?? HelpCircle;
 
-export const HelpCenter = () => {
+export const HelpCenter = ({ initialTab = 'features', openRequestKey = 0 }: HelpCenterProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const currentUserId = user ? String(user.id) : null;
+  const [activeTab, setActiveTab] = useState<HelpCenterTab>(initialTab);
   const [adminId, setAdminId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -248,6 +256,13 @@ export const HelpCenter = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+    setSearchQuery('');
+    setSelectedCategory(null);
+    setExpandedFeature(null);
+  }, [initialTab, openRequestKey]);
 
   useEffect(() => {
     void loadAdmin();
@@ -623,7 +638,7 @@ export const HelpCenter = () => {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="features" className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as HelpCenterTab)} className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="features" className="text-xs sm:text-sm">
             <BookOpen className="h-4 w-4 mr-1 sm:mr-2" />

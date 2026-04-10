@@ -4,6 +4,7 @@ import re
 from datetime import date
 from typing import Any, Dict, Optional
 import time
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -28,6 +29,47 @@ def _parse_headers(headers_json: Optional[str]) -> Dict[str, str]:
     return {str(k): str(v) for k, v in parsed.items()}
 
 
+_LOCAL_OLLAMA_HOSTS = (
+    "host.docker.internal",
+    "localhost",
+    "127.0.0.1",
+)
+
+
+def _candidate_base_urls(base_url: str) -> list[str]:
+    normalized = str(base_url or "").strip().rstrip("/")
+    if not normalized:
+        return []
+
+    try:
+        parsed = urlsplit(normalized)
+    except ValueError:
+        return [normalized]
+
+    host = parsed.hostname or ""
+    if not parsed.scheme or not parsed.netloc or host not in _LOCAL_OLLAMA_HOSTS:
+        return [normalized]
+
+    auth = ""
+    if parsed.username:
+        auth = parsed.username
+        if parsed.password:
+            auth = f"{auth}:{parsed.password}"
+        auth = f"{auth}@"
+
+    candidates: list[str] = []
+    for candidate_host in _LOCAL_OLLAMA_HOSTS:
+        netloc = f"{auth}{candidate_host}"
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        candidate_url = urlunsplit(
+            (parsed.scheme, netloc, parsed.path.rstrip("/"), parsed.query, parsed.fragment)
+        ).rstrip("/")
+        if candidate_url and candidate_url not in candidates:
+            candidates.append(candidate_url)
+    return candidates or [normalized]
+
+
 # ============================================================
 # CLIENT
 # ============================================================
@@ -36,45 +78,75 @@ class OllamaClient:
     """Cliente HTTP mínimo para Ollama remoto."""
 
     def __init__(self) -> None:
-        self.base_url = settings.ollama_base_url.rstrip("/")
+        self.base_urls = _candidate_base_urls(settings.ollama_base_url)
+        self.base_url = self.base_urls[0] if self.base_urls else ""
         self.default_headers = _parse_headers(settings.ollama_headers_json)
 
+    def _ordered_base_urls(self) -> list[str]:
+        ordered: list[str] = []
+        for candidate in [self.base_url, *self.base_urls]:
+            cleaned = str(candidate or "").strip().rstrip("/")
+            if cleaned and cleaned not in ordered:
+                ordered.append(cleaned)
+        return ordered
+
     def _post_generate(
-        self, 
-        payload: Dict[str, Any], 
-        timeout: float, 
+        self,
+        payload: Dict[str, Any],
+        timeout: float,
         max_retries: int = 3
     ) -> Dict[str, Any]:
         """Post a generate request with retry logic."""
-        url = f"{self.base_url}/api/generate"
-        
-        for attempt in range(max_retries):
-            try:
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.post(url, json=payload, headers=self.default_headers)
-                    response.raise_for_status()
-                    return response.json()
-            except httpx.TimeoutException as exc:
-                if attempt == max_retries - 1:
-                    raise AIUnavailableError(
-                        f"Timeout con Ollama después de {max_retries} intentos"
-                    ) from exc
-                time.sleep(1)  # Breve pausa antes de reintentar
-                continue
-            except httpx.ConnectError as exc:
-                raise AIUnavailableError(f"Error de conexión con Ollama: {exc}") from exc
-            except httpx.HTTPError as exc:
-                raise AIUnavailableError(f"Error HTTP con Ollama: {exc}") from exc
+        base_urls = self._ordered_base_urls()
+        if not base_urls:
+            raise AIUnavailableError("OLLAMA_BASE_URL no configurado")
+
+        last_error: AIUnavailableError | None = None
+        for base_url in base_urls:
+            url = f"{base_url}/api/generate"
+            for attempt in range(max_retries):
+                try:
+                    with httpx.Client(timeout=timeout) as client:
+                        response = client.post(url, json=payload, headers=self.default_headers)
+                        response.raise_for_status()
+                        self.base_url = base_url
+                        return response.json()
+                except httpx.TimeoutException as exc:
+                    last_error = AIUnavailableError(
+                        f"Timeout con Ollama en {base_url} despu?s de {max_retries} intentos"
+                    )
+                    if attempt == max_retries - 1:
+                        break
+                    time.sleep(1)
+                except httpx.ConnectError as exc:
+                    last_error = AIUnavailableError(
+                        f"Error de conexi?n con Ollama en {base_url}: {exc}"
+                    )
+                    break
+                except httpx.HTTPError as exc:
+                    last_error = AIUnavailableError(
+                        f"Error HTTP con Ollama en {base_url}: {exc}"
+                    )
+                    break
+
+        if last_error is not None:
+            raise last_error
+        raise AIUnavailableError("No se pudo conectar con Ollama")
 
     def health_check(self, timeout: float = 5.0) -> bool:
         """Check if Ollama service is available."""
-        url = f"{self.base_url}/api/tags"
-        try:
-            with httpx.Client(timeout=timeout) as client:
-                client.get(url, headers=self.default_headers).raise_for_status()
-            return True
-        except httpx.HTTPError:
-            return False
+        for base_url in self._ordered_base_urls():
+            url = f"{base_url}/api/tags"
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    client.get(url, headers=self.default_headers).raise_for_status()
+                self.base_url = base_url
+                return True
+            except httpx.HTTPError:
+                continue
+            except httpx.RequestError:
+                continue
+        return False
 
     def generate_text(
         self,

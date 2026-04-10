@@ -10,6 +10,7 @@ import type { WorkConversationSummary } from "@/hooks/useWorkConversationSummari
 export interface ConversationListPanelProps {
   currentUserId: string | null;
   messages: Message[];
+  favoriteContactIds: string[];
   loadingContacts: boolean;
   selectedUserId: string;
   selectedWorkConversationId: number | null;
@@ -20,103 +21,19 @@ export interface ConversationListPanelProps {
   onSelectWorkConversation: (workId: number, workName: string) => void;
 }
 
-/**
- * View model that merges:
- * 1. DM conversations (from messages) — sorted by last message timestamp
- * 2. Obra group conversations WITH messages — sorted by last message timestamp, interleaved with DMs
- */
-function useConversationListViewModel(
-  currentUserId: string | null,
-  messages: Message[],
-  workSummaries: WorkConversationSummary[],
-  aiHelpMessages: Message[],
-  search: string,
-): ConversationListItemData[] {
-  return useMemo(() => {
-    if (!currentUserId) return [];
+function buildConversationSnippet(raw: string | null | undefined, fallback: string): string {
+  const base = (raw ?? "").trim();
+  if (!base) return fallback;
 
-    // 1. Build DM conversations from messages
-    const convMap = new Map<string, { userName: string; unread: number; lastSnippet: string; lastAt: string; lastTs: number }>();
+  const cleaned = base
+    .replace(/\r?\n+/g, " ")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .replace(/[`*_>#-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-    for (const m of messages) {
-      const isFromMe = m.from_user_id === currentUserId;
-      const otherId = isFromMe ? m.to_user_id : m.from_user_id;
-      const otherName =
-        (isFromMe ? m.to_user?.full_name : m.from_user?.full_name) || "Usuario";
-      const ts = new Date(m.created_at).getTime();
-
-      const existing = convMap.get(otherId);
-      if (!existing) {
-        convMap.set(otherId, {
-          userName: otherName,
-          unread: !isFromMe && !m.read ? 1 : 0,
-          lastSnippet: m.message.slice(0, 60),
-          lastAt: formatTimestamp(m.created_at),
-          lastTs: ts,
-        });
-      } else {
-        if (ts > existing.lastTs) {
-          existing.lastSnippet = m.message.slice(0, 60);
-          existing.lastAt = formatTimestamp(m.created_at);
-          existing.lastTs = ts;
-        }
-        if (!isFromMe && !m.read) existing.unread += 1;
-      }
-    }
-
-    // DM items with sort timestamp
-    const dmItems: (ConversationListItemData & { _sortTs: number })[] = [];
-    for (const [userId, c] of convMap) {
-      dmItems.push({
-        userId,
-        userName: c.userName,
-        unread: c.unread,
-        lastSnippet: c.lastSnippet,
-        lastAt: c.lastAt,
-        hasConversation: true,
-        type: "dm",
-        _sortTs: c.lastTs,
-      });
-    }
-
-    // 2. Obra items — only those with messages (from summaries)
-    const workItems: (ConversationListItemData & { _sortTs: number })[] = workSummaries.map((ws) => ({
-      userId: `work-${ws.workId}`,
-      userName: ws.workName,
-      unread: 0,
-      lastSnippet: ws.lastMessage,
-      lastAt: formatTimestamp(ws.lastMessageAt),
-      hasConversation: true,
-      type: "work" as const,
-      workId: ws.workId,
-      _sortTs: ws.lastMessageTs,
-    }));
-
-    // 3. Merge DMs + Obras sorted by last message timestamp (newest first)
-    const all = [...dmItems, ...workItems].sort((a, b) => b._sortTs - a._sortTs);
-    const result: ConversationListItemData[] = all.map(({ _sortTs, ...rest }) => rest);
-
-    const aiLastMessage = aiHelpMessages[aiHelpMessages.length - 1];
-    const aiHelpItem: ConversationListItemData = {
-      userId: AI_HELP_USER_ID,
-      userName: AI_HELP_USER_NAME,
-      unread: 0,
-      lastSnippet: aiLastMessage?.message ?? "Pregunta como hacer algo en la aplicación",
-      lastAt: aiLastMessage ? formatTimestamp(aiLastMessage.created_at) : null,
-      hasConversation: true,
-      isAiHelp: true,
-      type: "dm",
-    };
-
-    // 4. Apply search filter
-    if (!search.trim()) return [aiHelpItem, ...result];
-    const q = search.trim().toLowerCase();
-    const filtered = result.filter((item) => item.userName.toLowerCase().includes(q));
-    const matchesAi =
-      AI_HELP_USER_NAME.toLowerCase().includes(q) ||
-      aiHelpItem.lastSnippet?.toLowerCase().includes(q);
-    return matchesAi ? [aiHelpItem, ...filtered] : filtered;
-  }, [aiHelpMessages, currentUserId, messages, workSummaries, search]);
+  if (!cleaned) return fallback;
+  return cleaned.length > 72 ? `${cleaned.slice(0, 69).trimEnd()}...` : cleaned;
 }
 
 function formatTimestamp(isoDate: string): string {
@@ -135,9 +52,118 @@ function formatTimestamp(isoDate: string): string {
   return date.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
 }
 
+/**
+ * View model that merges:
+ * 1. DM conversations (from messages) - sorted by last message timestamp
+ * 2. Obra group conversations WITH messages - sorted by last message timestamp, interleaved with DMs
+ */
+function useConversationListViewModel(
+  currentUserId: string | null,
+  messages: Message[],
+  favoriteContactIds: string[],
+  workSummaries: WorkConversationSummary[],
+  aiHelpMessages: Message[],
+  search: string,
+): ConversationListItemData[] {
+  return useMemo(() => {
+    if (!currentUserId) return [];
+
+    const favoriteIds = new Set(favoriteContactIds);
+
+    const convMap = new Map<
+      string,
+      { userName: string; unread: number; lastSnippet: string; lastAt: string; lastTs: number }
+    >();
+
+    for (const m of messages) {
+      const isFromMe = m.from_user_id === currentUserId;
+      const otherId = isFromMe ? m.to_user_id : m.from_user_id;
+      const otherName =
+        (isFromMe ? m.to_user?.full_name : m.from_user?.full_name) || "Usuario";
+      const ts = new Date(m.created_at).getTime();
+
+      const existing = convMap.get(otherId);
+      if (!existing) {
+        convMap.set(otherId, {
+          userName: otherName,
+          unread: !isFromMe && !m.read ? 1 : 0,
+          lastSnippet: buildConversationSnippet(m.message, "Sin mensajes todavía"),
+          lastAt: formatTimestamp(m.created_at),
+          lastTs: ts,
+        });
+      } else {
+        if (ts > existing.lastTs) {
+          existing.lastSnippet = buildConversationSnippet(m.message, "Sin mensajes todavía");
+          existing.lastAt = formatTimestamp(m.created_at);
+          existing.lastTs = ts;
+        }
+        if (!isFromMe && !m.read) existing.unread += 1;
+      }
+    }
+
+    const dmItems: (ConversationListItemData & { _sortTs: number })[] = [];
+    for (const [userId, c] of convMap) {
+      dmItems.push({
+        userId,
+        userName: c.userName,
+        unread: c.unread,
+        lastSnippet: c.lastSnippet,
+        lastAt: c.lastAt,
+        hasConversation: true,
+        isFavorite: favoriteIds.has(userId),
+        type: "dm",
+        _sortTs: c.lastTs,
+      });
+    }
+
+    const workItems: (ConversationListItemData & { _sortTs: number })[] = workSummaries.map((ws) => ({
+      userId: `work-${ws.workId}`,
+      userName: ws.workName,
+      unread: 0,
+      lastSnippet: buildConversationSnippet(ws.lastMessage, "Conversacion de obra"),
+      lastAt: formatTimestamp(ws.lastMessageAt),
+      hasConversation: true,
+      type: "work" as const,
+      workId: ws.workId,
+      _sortTs: ws.lastMessageTs,
+    }));
+
+    const all = [...dmItems, ...workItems].sort((a, b) => {
+      const favoriteDelta = Number(Boolean(b.isFavorite && b.type === "dm")) - Number(Boolean(a.isFavorite && a.type === "dm"));
+      if (favoriteDelta !== 0) return favoriteDelta;
+      return b._sortTs - a._sortTs;
+    });
+    const result: ConversationListItemData[] = all.map(({ _sortTs, ...rest }) => rest);
+
+    const aiLastMessage = aiHelpMessages[aiHelpMessages.length - 1];
+    const aiHelpItem: ConversationListItemData = {
+      userId: AI_HELP_USER_ID,
+      userName: AI_HELP_USER_NAME,
+      unread: 0,
+      lastSnippet: buildConversationSnippet(
+        aiLastMessage?.message,
+        "Pregunta como hacer algo en la aplicacion",
+      ),
+      lastAt: aiLastMessage ? formatTimestamp(aiLastMessage.created_at) : null,
+      hasConversation: true,
+      isAiHelp: true,
+      type: "dm",
+    };
+
+    if (!search.trim()) return [aiHelpItem, ...result];
+    const q = search.trim().toLowerCase();
+    const filtered = result.filter((item) => item.userName.toLowerCase().includes(q));
+    const matchesAi =
+      AI_HELP_USER_NAME.toLowerCase().includes(q) ||
+      aiHelpItem.lastSnippet?.toLowerCase().includes(q);
+    return matchesAi ? [aiHelpItem, ...filtered] : filtered;
+  }, [aiHelpMessages, currentUserId, favoriteContactIds, messages, workSummaries, search]);
+}
+
 export function ConversationListPanel({
   currentUserId,
   messages,
+  favoriteContactIds,
   loadingContacts,
   selectedUserId,
   selectedWorkConversationId,
@@ -151,6 +177,7 @@ export function ConversationListPanel({
   const items = useConversationListViewModel(
     currentUserId,
     messages,
+    favoriteContactIds,
     workConversationSummaries,
     aiHelpMessages,
     search,
@@ -170,9 +197,8 @@ export function ConversationListPanel({
   };
 
   return (
-    <div className="flex flex-col min-h-0 h-full">
-      {/* Search */}
-      <div className="p-3 border-b flex items-center gap-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-2 border-b p-3">
         <Search className="h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar conversaciones..."
@@ -182,27 +208,24 @@ export function ConversationListPanel({
         />
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-2 space-y-0.5">
-          {/* Loading state */}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-0.5 p-2">
           {loadingContacts && items.length === 0 && (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-base">Cargando...</span>
             </div>
           )}
 
-          {/* Empty state */}
           {!loadingContacts && items.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <MessageCircle className="h-10 w-10 mb-3 opacity-40" />
+              <MessageCircle className="mb-3 h-10 w-10 opacity-40" />
               <p className="text-base">
-                {search.trim() ? "Sin resultados para esta búsqueda" : "No hay conversaciones aún"}
+                {search.trim() ? "Sin resultados para esta busqueda" : "No hay conversaciones aun"}
               </p>
             </div>
           )}
 
-          {/* All conversations (DMs + Obras interleaved by timestamp) */}
           {items.map((item) => (
             <ConversationListItem
               key={item.userId}

@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
-from datetime import date
 from datetime import UTC
+from datetime import date
+from datetime import datetime, timezone
 from decimal import Decimal
 from math import ceil
 from typing import Any, Optional
@@ -32,7 +32,9 @@ from app.models.erp import (
 from app.models.inventory import WorkInventorySyncLog
 from app.models.hr import Department, EmployeeProfile
 from app.models.notification import NotificationType
+from app.models.role import Role
 from app.models.user import User
+from app.models.user_app_role import UserAppRole
 from app.models.user_work_assignment import UserWorkAssignment
 from app.schemas.erp import (
     ActivityCreate,
@@ -85,6 +87,53 @@ WORK_REPORT_CLOSED_STATUSES = {"closed"}
 RENTAL_ALLOWED_STATUSES = {"active", "inactive", "archived"}
 RENTAL_PRICE_UNITS = {"day", "hour", "month"}
 WORK_SERVICE_ALLOWED_STATUSES = {"pending", "in_progress", "completed"}
+
+
+def _work_report_notification_label(report: WorkReport) -> str:
+    if report.title and report.title.strip():
+        return report.title.strip()
+    if isinstance(report.payload, dict):
+        for key in ("workName", "work_name", "title"):
+            candidate = report.payload.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return f"Parte #{report.id}"
+
+
+def _user_has_app_role(
+    session: Session,
+    *,
+    user_id: Optional[int],
+    tenant_id: Optional[int],
+    role: str,
+) -> bool:
+    if user_id is None or tenant_id is None:
+        return False
+    return (
+        session.exec(
+            select(UserAppRole).where(
+                UserAppRole.user_id == user_id,
+                UserAppRole.tenant_id == tenant_id,
+                UserAppRole.role == role,
+            )
+        ).first()
+        is not None
+    )
+
+
+def _is_tenant_admin_actor(session: Session, user: User) -> bool:
+    if user.is_super_admin:
+        return False
+    role_name: Optional[str] = None
+    if user.role_id is not None:
+        role = session.get(Role, user.role_id)
+        role_name = role.name if role else None
+    return role_name == "tenant_admin" or _user_has_app_role(
+        session,
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        role="admin",
+    )
 
 # Valida que exista un tenant_id
 def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
@@ -857,14 +906,17 @@ def create_task(
     session.commit()
     session.refresh(task)
 
-    if assignee and assignee.tenant_id:
+    if assignee and assignee.tenant_id and _is_tenant_admin_actor(session, current_user):
         create_notification(
             session,
             tenant_id=assignee.tenant_id,
             user_id=assignee.id,
-            type=NotificationType.GENERIC,
+            type=NotificationType.WORK_ASSIGNED,
             title=f"Tarea asignada: {task.title}",
-            body="Se te ha asignado una nueva tarea en el ERP.",
+            body=(
+                f'Se te ha asignado la tarea "{task.title}"'
+                + (f' en la obra "{project.name}".' if project else ".")
+            ),
             reference=f"task_id={task.id}",
         )
 
@@ -881,6 +933,7 @@ def update_task(
     task = session.get(Task, task_id)
     if not task or (tenant_id is not None and task.tenant_id != tenant_id):
         raise ValueError("Tarea no encontrada.")
+    previous_assigned_to_id = task.assigned_to_id
 
     if data.title is not None:
         task.title = data.title
@@ -906,14 +959,23 @@ def update_task(
     if data.assigned_to_id is not None:
         assignee = _resolve_assignee(session, current_user, data.assigned_to_id)
         task.assigned_to_id = assignee.id if assignee else None
-        if assignee and assignee.tenant_id:
+        if (
+            assignee
+            and assignee.tenant_id
+            and assignee.id != previous_assigned_to_id
+            and _is_tenant_admin_actor(session, current_user)
+        ):
+            project = session.get(Project, task.project_id) if task.project_id else None
             create_notification(
                 session,
                 tenant_id=assignee.tenant_id,
                 user_id=assignee.id,
-                type=NotificationType.GENERIC,
+                type=NotificationType.WORK_ASSIGNED,
                 title=f"Tarea asignada: {task.title}",
-                body="Se te ha asignado una nueva tarea en el ERP.",
+                body=(
+                    f'Se te ha asignado la tarea "{task.title}"'
+                    + (f' en la obra "{project.name}".' if project else ".")
+                ),
                 reference=f"task_id={task.id}",
             )
 
@@ -1895,6 +1957,7 @@ def update_work_report(
     resolved_tenant_id = _require_tenant(tenant_id)
     report = _get_work_report_or_404(session, report_id, resolved_tenant_id)
     _validate_work_report_open(report)
+    previous_status = report.status
 
     if payload.expected_updated_at is not None:
         expected = _normalize_dt_for_compare(payload.expected_updated_at)
@@ -1967,6 +2030,25 @@ def update_work_report(
         session.rollback()
         _raise_work_report_integrity_error(exc)
     session.refresh(report)
+
+    if (
+        previous_status != "approved"
+        and report.status == "approved"
+        and report.created_by_id is not None
+        and report.created_by_id != current_user_id
+        and current_user_id is not None
+    ):
+        actor = session.get(User, current_user_id)
+        if actor is not None and _is_tenant_admin_actor(session, actor):
+            create_notification(
+                session,
+                tenant_id=resolved_tenant_id,
+                user_id=report.created_by_id,
+                type=NotificationType.WORK_REPORT_APPROVED,
+                title=f"Parte aprobado: {_work_report_notification_label(report)}",
+                body="Tu parte ha sido aprobado por el administrador del tenant.",
+                reference=f"work_report_id={report.id}",
+            )
     return report
 
 

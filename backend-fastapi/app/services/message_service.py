@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.models.erp import Project
 from app.models.message import Message
+from app.models.notification import NotificationType
 from app.models.user import User
 from app.models.user_work_assignment import UserWorkAssignment
 from app.policies.access_policies import (
@@ -20,6 +21,7 @@ from app.schemas.message import (
     MessageUserRead,
     WorkBroadcastMessageResult,
 )
+from app.services.notification_service import create_notification
 
 
 class MessageValidationError(ValueError):
@@ -157,6 +159,16 @@ def create_message(
     session.add(row)
     session.commit()
     session.refresh(row)
+
+    create_notification(
+        session,
+        tenant_id=tenant_id,
+        user_id=target_user.id,
+        type=NotificationType.NEW_MESSAGE,
+        title=f"Nuevo mensaje de {user.full_name}",
+        body=body[:240],
+        reference=f"message_id={row.id}",
+    )
     return _serialize_message(session, row)
 
 
@@ -216,6 +228,19 @@ def broadcast_message_to_work(
         )
 
     session.commit()
+
+    for candidate in eligible_users:
+        if candidate.id is None:
+            continue
+        create_notification(
+            session,
+            tenant_id=tenant_id,
+            user_id=int(candidate.id),
+            type=NotificationType.NEW_MESSAGE,
+            title=f"Nuevo mensaje de {user.full_name}",
+            body=body[:240],
+            reference=f"project_broadcast:{project_id}:{candidate.id}",
+        )
 
     eligible_count = len(eligible_users)
     skipped_count = len(assigned_unique_by_id) - eligible_count
