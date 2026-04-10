@@ -1,18 +1,6 @@
 ingress:
-  - hostname: moodle.mavico.shop
-    service: http://saas-moodle
-
   - hostname: api.mavico.shop
     service: http://saas-backend-fastapi:8000
-
-  - hostname: erp.mavico.shop
-    service: http://saas-frontend-react:5173
-
-  - hostname: dashboard.mavico.shop
-    service: http://saas-frontend-react:5173
-
-  - hostname: "*.mavico.shop"
-    service: http://saas-frontend-react:5173
 
   - service: http_status:404
 # #UrdeconInnova.2025

@@ -31,12 +31,6 @@ services:
       - ./data/invoices:/data/invoices
       - ./data/contracts:/data/contracts
 
-  frontend-react:
-    # El frontend habla siempre con la API publica HTTPS.
-    environment:
-      VITE_API_BASE_URL: https://api.mavico.shop
-    ports: []
-
   celery-worker:
     environment:
       REDIS_URL: redis://redis:6379/0

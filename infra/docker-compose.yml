@@ -136,23 +136,6 @@ services:
       - ./data/invoices:/data/invoices
       - ./data/contracts:/data/contracts
 
-  frontend-react:
-    build:
-      context: ../frontend-react
-      dockerfile: Dockerfile
-    container_name: saas-frontend-react
-    restart: unless-stopped
-    environment:
-      # En Docker usamos URL directa al backend en el host para evitar fallos del proxy.
-      VITE_API_BASE_URL: http://localhost:8000
-      VITE_API_PROXY_TARGET: http://backend-fastapi:8000
-      TZ: Europe/Madrid
-    depends_on:
-      - backend-fastapi
-    ports:
-      - "5173:5173"
-
 volumes:
   db_data:
-  moodle_db_data:
   ollama_data:
