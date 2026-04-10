@@ -1645,58 +1645,65 @@ def _special_help_response(question: str) -> str | None:
         "clip",
     ):
         return (
-            "Se hace desde el chat actual.\n\n"
-            "1. Pulsa el icono de mensajes del header.\n"
-            "2. Abre la conversación con el usuario.\n"
-            "3. Usa el icono del clip para adjuntar el archivo.\n"
-            "4. Envíalo desde el propio chat.\n\n"
-            "Si estás en móvil y no ves el chat arriba, abre `Chat` desde `Más opciones`."
+            "Se hace desde la mensajeria (burbuja flotante).\n\n"
+            "1. Pulsa la burbuja flotante de mensajeria.\n"
+            "2. Abre la conversacion con el usuario o la obra.\n"
+            "3. Usa el icono del clip (📎) en la barra de escritura para adjuntar el archivo.\n"
+            "4. Envialo desde el propio chat."
         )
 
     if _contains_phrase(question, "donde esta ayuda", "abrir ayuda", "centro de ayuda") or (
         _contains_phrase(question, "ayuda") and _is_where_question(question)
     ):
         return (
-            "Está en el engranaje superior del header en [Inicio](#/), dentro de la pestaña `Ayuda`.\n\n"
-            "1. Abre `Ajustes`.\n"
-            "2. Entra en `Ayuda`.\n"
-            "3. Ahí tienes guías, FAQ y el propio chat de ayuda."
+            "Está en Ajustes > pestaña `Ayuda`.\n\n"
+            "1. Pulsa el engranaje (⚙) en la cabecera de [Inicio](#/).\n"
+            "2. Entra en la pestaña `Ayuda`.\n"
+            "3. Ahí tienes guías, FAQ y el propio chat de ayuda.\n\n"
+            "También puedes acceder al asistente de IA desde la burbuja flotante de mensajería > canal `Ayuda IA`."
         )
 
     if _contains_phrase(question, "ajustes", "configuracion", "perfil", "actualizaciones"):
         detail = (
-            "Dentro verás `Perfil`, `Gestion de usuarios` si tu rol lo permite, "
-            "`Actualizaciones` y `Ayuda`."
+            "Dentro verás las pestañas: `Perfil`, `Gestion de usuarios` (solo admins), "
+            "`Actualizaciones` (solo admins) y `Ayuda`."
         )
         if _contains_phrase(question, "perfil"):
-            detail = "Dentro entra en la pestaña `Perfil`."
+            detail = "Dentro entra en la pestaña `Perfil`. Ahí puedes cambiar tu nombre y el idioma de la app."
         elif _contains_phrase(question, "actualizaciones"):
-            detail = "Dentro entra en la pestaña `Actualizaciones`."
+            detail = "Dentro entra en la pestaña `Actualizaciones` (solo visible para administradores)."
         return (
-            "Está en el engranaje superior del header en [Inicio](#/).\n\n"
+            "Ajustes se abre con el engranaje (⚙) en la cabecera de [Inicio](#/).\n\n"
             f"{detail}"
         )
 
     if _contains_phrase(question, "idioma", "lenguaje", "language"):
         return (
-            "En la UI actual se cambia desde `Más opciones` en móvil.\n\n"
-            "1. Abre el menú de tres puntos del header.\n"
-            "2. Pulsa el selector de idioma.\n"
-            "3. Elige `Español` o `English`.\n\n"
-            "No veo un selector independiente en el header de escritorio actual."
+            "Se cambia desde Ajustes > Perfil.\n\n"
+            "1. Pulsa el engranaje (⚙) en la cabecera.\n"
+            "2. Entra en la pestaña `Perfil`.\n"
+            "3. Usa el selector de idioma.\n"
+            "4. La app soporta español e inglés."
         )
 
     if _contains_phrase(question, "organizacion", "organización", "branding", "logo", "colores corporativos"):
         return (
-            "En la UI actual no veo una pestaña independiente de `Organización` dentro de `Ajustes`.\n\n"
-            "Ahora mismo las pestañas visibles son `Perfil`, `Gestion de usuarios`, `Actualizaciones` y `Ayuda`.\n"
-            "Si necesitas datos legales, branding o logo, puede depender de una pantalla administrativa que no está expuesta en este flujo."
+            "La configuración de organización está dentro de Ajustes.\n\n"
+            "1. Pulsa el engranaje (⚙) en la cabecera de [Inicio](#/).\n"
+            "2. Dentro de Ajustes encontrarás la configuración de tu organización.\n"
+            "3. Ahí puedes completar datos legales (NIF/CIF, Razón Social), subir el logo y seleccionar colores corporativos.\n"
+            "4. Los cambios se aplican en toda la app y en los PDFs generados.\n\n"
+            "Solo los administradores (super_admin, tenant_admin) pueden acceder a esta sección."
         )
 
     if _contains_phrase(question, "calendario", "tareas", "task", "timeline"):
         return (
-            "En la ayuda funcional aparece como acceso desde `Más opciones` > `Calendario` en móvil.\n\n"
-            "En la UI actual no veo una ruta principal pública para el calendario en el router, así que puede depender de que esa acción esté habilitada en tu versión."
+            "El Calendario de Tareas se abre desde el icono de calendario en la cabecera superior.\n\n"
+            "1. Pulsa el icono de calendario en la cabecera (tiene badge rojo si hay tareas pendientes).\n"
+            "2. También puedes ir directamente a la ruta `#/task-calendar`.\n"
+            "3. Los días con tareas asignadas se marcan con un punto.\n"
+            "4. Selecciona un día para ver sus tareas y cambiar su estado: Pendiente, En Progreso o Completada.\n\n"
+            "Los administradores crean y asignan tareas a cada usuario."
         )
 
     return None
@@ -1847,10 +1854,11 @@ def _faq_special_help_response(question: str) -> str | None:
 
     if _contains_phrase(question, "donde estan los mensajes", "como abro la mensajeria", "abrir chat", "mensajeria de la app"):
         return (
-            "La mensajería se abre desde una burbuja flotante anclable en pantalla.\n\n"
+            "La mensajería se abre desde la burbuja flotante arrastrable que aparece sobre la app.\n\n"
             "1. Pulsa la burbuja flotante de mensajería.\n"
-            "2. Se abrirá el panel completo de conversaciones.\n"
-            "3. Dentro verás las pestañas `Chats`, `Obras` y `Contactos`."
+            "2. Se abrirá el panel con cuatro pestañas: `Conversaciones`, `Obras`, `Contactos` y `Ayuda IA`.\n"
+            "3. Puedes adjuntar archivos con el icono del clip (📎) en cualquier conversación.\n"
+            "4. Marca contactos como favoritos (⭐) para acceder más rápido."
         )
 
     if _contains_phrase(
@@ -1880,9 +1888,12 @@ def _faq_special_help_response(question: str) -> str | None:
         "clip",
     ):
         return (
-            "No veo un flujo confirmado para compartir archivos en la FAQ Android actual.\n\n"
-            "Lo que si esta documentado es que la mensajeria se abre desde una burbuja flotante y que `Ayuda IA` vive dentro de ese sistema.\n"
-            "Si me dices la pantalla exacta en la que estas, intento orientarte sin inventar botones."
+            "Se hace desde la mensajería (burbuja flotante).\n\n"
+            "1. Pulsa la burbuja flotante de mensajería.\n"
+            "2. Abre la conversación (directa o grupal de obra).\n"
+            "3. Pulsa el icono del clip (📎) en la barra de escritura.\n"
+            "4. Selecciona el archivo y se adjuntará al mensaje.\n"
+            "5. El destinatario puede descargarlo pulsando sobre él en la conversación."
         )
 
     if _contains_phrase(question, "donde esta ayuda", "abrir ayuda", "centro de ayuda") or (
@@ -1896,27 +1907,45 @@ def _faq_special_help_response(question: str) -> str | None:
         )
 
     if _contains_phrase(question, "ajustes", "configuracion", "perfil", "actualizaciones"):
+        detail = (
+            "Dentro verás las pestañas: `Perfil`, `Gestion de usuarios` (solo admins), "
+            "`Actualizaciones` (solo admins) y `Ayuda`."
+        )
+        if _contains_phrase(question, "perfil"):
+            detail = "Dentro entra en la pestaña `Perfil`. Ahí puedes cambiar tu nombre y el idioma de la app."
+        elif _contains_phrase(question, "actualizaciones"):
+            detail = "Dentro entra en la pestaña `Actualizaciones` (solo visible para administradores)."
         return (
-            "La FAQ Android confirma que `Ajustes` esta en la cabecera principal.\n\n"
-            "No tengo una descripcion mas detallada de sus subpantallas en la FAQ actual, asi que prefiero no inventarlas."
+            "Ajustes se abre con el engranaje (⚙) en la cabecera de [Inicio](#/).\n\n"
+            f"{detail}"
         )
 
     if _contains_phrase(question, "idioma", "lenguaje", "language"):
         return (
-            "No veo un cambio de idioma documentado en la FAQ Android actual.\n\n"
-            "No te quiero inventar una pantalla o un boton que no aparezcan en esa base de conocimiento."
+            "Se cambia desde Ajustes > Perfil.\n\n"
+            "1. Pulsa el engranaje (⚙) en la cabecera.\n"
+            "2. Entra en la pestaña `Perfil`.\n"
+            "3. Usa el selector de idioma.\n"
+            "4. La app soporta español e inglés."
         )
 
-    if _contains_phrase(question, "organizacion", "organizaciÃ³n", "branding", "logo", "colores corporativos"):
+    if _contains_phrase(question, "organizacion", "organización", "branding", "logo", "colores corporativos"):
         return (
-            "No veo una pantalla de organizacion o branding confirmada en la FAQ Android actual.\n\n"
-            "Lo unico que si esta claro es que `Ajustes` existe en la cabecera principal, pero la FAQ no detalla ese flujo."
+            "La configuración de organización está dentro de Ajustes.\n\n"
+            "1. Pulsa el engranaje (⚙) en la cabecera de [Inicio](#/).\n"
+            "2. Dentro encontrarás la configuración de tu organización.\n"
+            "3. Ahí puedes completar datos legales (NIF/CIF), subir logo y seleccionar colores corporativos.\n\n"
+            "Solo los administradores pueden acceder."
         )
 
     if _contains_phrase(question, "calendario", "tareas", "task", "timeline"):
         return (
-            "No veo un flujo de calendario documentado en la FAQ Android actual.\n\n"
-            "Prefiero dejarlo en duda antes que inventarte una ruta o una opcion que no pueda confirmar."
+            "El Calendario de Tareas se abre desde el icono de calendario en la cabecera superior.\n\n"
+            "1. Pulsa el icono de calendario en la cabecera (tiene badge rojo si hay tareas pendientes).\n"
+            "2. También puedes ir directamente a `#/task-calendar`.\n"
+            "3. Los días con tareas se marcan con un punto.\n"
+            "4. Selecciona un día para ver sus tareas: Pendiente (ámbar), En Progreso (azul), Completada (verde).\n\n"
+            "Los administradores crean y asignan tareas a cada usuario."
         )
 
     return None
@@ -1941,31 +1970,32 @@ def _android_contextual_note(response: str, question: str) -> str:
     return response
 
 
-def _build_help_response(user: User, messages: list[HelpChatMessage]) -> str:
+def _build_help_response(user: User, messages: list[HelpChatMessage]) -> tuple[str, bool]:
+    """Return (response_text, is_direct) — is_direct=True skips LLM rewrite."""
     question = _conversation_question(messages)
     if not question:
-        return _fallback_help_response()
+        return _fallback_help_response(), False
 
     role_response = _role_help_response(user, question) if _is_role_question(question) else None
     if role_response:
-        return _with_help_center_redirect(_android_contextual_note(role_response, question))
+        return _with_help_center_redirect(_android_contextual_note(role_response, question)), True
 
     special_response = _faq_special_help_response(question) or _special_help_response(question)
     if special_response:
-        return _with_help_center_redirect(_android_contextual_note(special_response, question))
+        return _with_help_center_redirect(_android_contextual_note(special_response, question)), True
 
     matched_intent = _best_matching_intent(question)
     if matched_intent:
         return _with_help_center_redirect(
             _android_contextual_note(_build_response_from_intent(question, matched_intent), question)
-        )
+        ), True
 
     relevant_chunks = _topic_chunks_for_question(question)
     if not relevant_chunks:
         ranked = _rank_knowledge_chunks(question)
         relevant_chunks = [chunk for score, _index, chunk in ranked if score >= _MIN_RANKED_HELP_CHUNK_SCORE][:4]
     if not relevant_chunks:
-        return _fallback_help_response()
+        return _fallback_help_response(), False
 
     route_hint = _route_hint_for_question(question)
     steps: list[str] = []
@@ -2037,8 +2067,8 @@ def _build_help_response(user: User, messages: list[HelpChatMessage]) -> str:
 
     cleaned_response = "\n".join(line for line in response_lines if line is not None).strip()
     if not cleaned_response:
-        return _fallback_help_response()
-    return _with_help_center_redirect(_android_contextual_note(cleaned_response, question))
+        return _fallback_help_response(), False
+    return _with_help_center_redirect(_android_contextual_note(cleaned_response, question)), False
 
 
 def _help_system_prompt(user: User, messages: list[HelpChatMessage]) -> str:
@@ -2362,8 +2392,8 @@ def _rewrite_help_response_with_ollama(
 
 
 def _build_help_chat_response(user: User, messages: list[HelpChatMessage]) -> str:
-    draft = _build_help_response(user, messages)
-    if not _help_llm_enabled() or _help_llm_is_temporarily_down():
+    draft, is_direct = _build_help_response(user, messages)
+    if is_direct or not _help_llm_enabled() or _help_llm_is_temporarily_down():
         return draft
 
     question = _conversation_question(messages)

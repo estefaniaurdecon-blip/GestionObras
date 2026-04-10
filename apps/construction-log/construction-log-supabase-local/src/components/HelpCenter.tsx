@@ -647,12 +647,11 @@ export const HelpCenter = ({ initialTab = 'features', openRequestKey = 0 }: Help
           </TabsTrigger>
           <TabsTrigger value="faq" className="text-xs sm:text-sm">
             <HelpCircle className="h-4 w-4 mr-1 sm:mr-2" />
-            <span>FAQ</span>
+            <span>{t('help.faq')}</span>
           </TabsTrigger>
           <TabsTrigger value="chat" className="text-xs sm:text-sm">
             <MessageSquare className="h-4 w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">{t('help.chat')}</span>
-            <span className="sm:hidden">Chat</span>
+            <span>{t('help.chat')}</span>
           </TabsTrigger>
         </TabsList>
 
