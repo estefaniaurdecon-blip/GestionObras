@@ -284,29 +284,6 @@ def init_db() -> None:
                     )
                 )
 
-    if "invoice" in table_names:
-        invoice_columns = {col["name"] for col in inspector.get_columns("invoice")}
-        with engine.begin() as conn:
-            if "subsidizable" not in invoice_columns:
-                conn.execute(
-                    text("ALTER TABLE invoice ADD COLUMN subsidizable BOOLEAN NULL")
-                )
-            if "expense_type" not in invoice_columns:
-                conn.execute(
-                    text("ALTER TABLE invoice ADD COLUMN expense_type VARCHAR(128) NULL")
-                )
-            if "milestone_id" not in invoice_columns:
-                conn.execute(
-                    text("ALTER TABLE invoice ADD COLUMN milestone_id INTEGER NULL")
-                )
-            if "budget_milestone_id" not in invoice_columns:
-                conn.execute(
-                    text(
-                        "ALTER TABLE invoice "
-                        "ADD COLUMN budget_milestone_id INTEGER NULL"
-                    )
-                )
-
     if engine.dialect.name == "postgresql" and "notification_log" in table_names:
         with engine.begin() as conn:
             conn.execute(
@@ -358,13 +335,19 @@ def init_db() -> None:
                 text("ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'generic'")
             )
 
-    if "audit_log" in table_names or "auditlog" in table_names:
-        audit_table = "audit_log" if "audit_log" in table_names else "auditlog"
+    _AUDIT_TABLE_WHITELIST = {"audit_log", "auditlog"}
+    audit_candidates = _AUDIT_TABLE_WHITELIST & table_names
+    if audit_candidates:
+        audit_table = "audit_log" if "audit_log" in audit_candidates else "auditlog"
         audit_columns = {col["name"] for col in inspector.get_columns(audit_table)}
         with engine.begin() as conn:
             if "source" not in audit_columns:
                 conn.execute(
-                    text(f"ALTER TABLE {audit_table} ADD COLUMN source VARCHAR(16) NULL")
+                    text(
+                        "ALTER TABLE audit_log ADD COLUMN source VARCHAR(16) NULL"
+                        if audit_table == "audit_log"
+                        else "ALTER TABLE auditlog ADD COLUMN source VARCHAR(16) NULL"
+                    )
                 )
 
     if "user" in table_names:

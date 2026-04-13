@@ -61,7 +61,7 @@ const Index = () => {
   const { search } = useLocation();
   const initialWorkId = useMemo(() => new URLSearchParams(search).get('workId') ?? undefined, [search]);
   const { toast } = useToast();
-  const { user, loading: authLoading, signOut, refreshUser } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const indexFirstRenderMeasuredRef = useRef(false);
   const authReadyLoggedRef = useRef(false);
 
@@ -75,8 +75,6 @@ const Index = () => {
   const {
     activeTab,
     setActiveTab,
-    settingsOpen,
-    setSettingsOpen,
     metricsOpen,
     setMetricsOpen,
     workReports,
@@ -167,8 +165,7 @@ const Index = () => {
 
   // Super admins and tenant admins can both manage users.
   // Tenant admins stay scoped to their own tenant.
-  const showUserManagementTab = isSuperAdmin || isTenantAdmin;
-  const showUpdatesTab = isSuperAdmin || isTenantAdmin;
+  const showUpdatesTab = true;
   const canCreateTimeReports =
     isSuperAdmin ||
     permissions.includes('can_create_time_reports') ||
@@ -355,7 +352,6 @@ const Index = () => {
     activeTab === 'economics' ||
     activeTab === 'help';
   const shouldRenderDialogs =
-    settingsOpen ||
     metricsOpen ||
     accessPersonalDialogOpen ||
     historyOpen ||
@@ -390,7 +386,7 @@ const Index = () => {
           onReloadWorks={loadWorks}
           onSyncNow={handleSyncNow}
           onOpenCalendar={() => navigate('/task-calendar')}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => navigate('/settings')}
           onSignOut={signOut}
         />
 
@@ -562,15 +558,6 @@ const Index = () => {
         {shouldRenderDialogs ? (
           <Suspense fallback={null}>
             <IndexDialogs
-              settings={{
-                open: settingsOpen,
-                setOpen: setSettingsOpen,
-                user,
-                onProfileUpdated: refreshUser,
-                showUserManagementTab,
-                showUpdatesTab,
-                hasPendingUpdate,
-              }}
               metrics={{
                 open: metricsOpen,
                 setOpen: setMetricsOpen,

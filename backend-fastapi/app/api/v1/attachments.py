@@ -3,6 +3,7 @@ from __future__ import annotations
 import mimetypes
 import re
 from datetime import datetime
+from app.core.datetime import utc_now
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -120,12 +121,12 @@ def _get_report_or_403(
 ) -> "WorkReport":
     """
     Fase 1: valida existencia + pertenencia al tenant.
-    Fase 2d: valida acceso por grupo (Opción B).
+    Fase 2d: valida acceso por grupo (OpciÃ³n B).
     Devuelve 404 para errores de existencia/tenant (no revela existencia cross-tenant).
     Devuelve 403 para errores de acceso de grupo.
     Partes legacy con creator_group_id=NULL son solo accesibles por super_admin.
     """
-    from app.models.erp import WorkReport  # importación local para evitar circular
+    from app.models.erp import WorkReport  # importaciÃ³n local para evitar circular
 
     report = session.get(WorkReport, work_report_id)
     if not report or report.tenant_id != tenant_id:
@@ -259,7 +260,7 @@ def create_work_report_attachment(
     content_type = _safe_content_type(file)
     extension = _guess_extension(file)
     filename = _sanitize_filename(file.filename, "image")
-    timestamp = int(datetime.utcnow().timestamp() * 1000)
+    timestamp = int(utc_now().timestamp() * 1000)
     relative_path = (
         f"tenant_{tenant_id}/work-reports/{_sanitize_filename(str(work_report_id), 'work-report')}/"
         f"{timestamp}_{filename.rsplit('.', 1)[0]}.{extension}"
@@ -291,8 +292,8 @@ def create_work_report_attachment(
         description=(description or "").strip() or None,
         display_order=int(display_order),
         created_by=str(current_user.id),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     session.add(row)
     session.commit()
@@ -322,7 +323,7 @@ def update_work_report_attachment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Adjunto no encontrado.")
 
     row.description = (payload.description or "").strip() or None
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -406,7 +407,7 @@ def upload_generic_image(
 
     extension = _guess_extension(file)
     filename = _sanitize_filename(file.filename, "image")
-    timestamp = int(datetime.utcnow().timestamp() * 1000)
+    timestamp = int(utc_now().timestamp() * 1000)
     relative_path = (
         f"tenant_{tenant_id}/{safe_category}/{safe_entity}/"
         f"{safe_type}_{timestamp}_{filename.rsplit('.', 1)[0]}.{extension}"
@@ -512,7 +513,7 @@ def create_shared_file(
 
     filename = _sanitize_filename(file.filename, "file")
     extension = _guess_extension(file)
-    timestamp = int(datetime.utcnow().timestamp() * 1000)
+    timestamp = int(utc_now().timestamp() * 1000)
     relative_path = (
         f"tenant_{tenant_id}/{from_user_id}/"
         f"{timestamp}_{filename.rsplit('.', 1)[0]}.{extension}"
@@ -532,7 +533,7 @@ def create_shared_file(
         work_report_id=(work_report_id or "").strip() or None,
         message=(message or "").strip() or None,
         downloaded=False,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(row)
     session.commit()

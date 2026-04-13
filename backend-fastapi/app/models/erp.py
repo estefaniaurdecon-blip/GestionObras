@@ -1,8 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import date as DateType, datetime
+from app.core.datetime import utc_now
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import Column, Index, JSON, Numeric, Text
 from sqlmodel import Field, SQLModel
@@ -13,7 +14,6 @@ class Project(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
-    department_id: Optional[int] = Field(default=None, foreign_key="department.id")
     name: str
     description: Optional[str] = None
     project_type: Optional[str] = Field(default=None, max_length=32)
@@ -26,7 +26,7 @@ class Project(SQLModel, table=True):
     is_active: bool = Field(default=True)
     latitude: Optional[float] = Field(default=None)
     longitude: Optional[float] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Task(SQLModel, table=True):
@@ -46,7 +46,7 @@ class Task(SQLModel, table=True):
     end_date: Optional[datetime] = None
     status: str = Field(default="pending", max_length=20)
     is_completed: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class TaskTemplate(SQLModel, table=True):
@@ -57,7 +57,7 @@ class TaskTemplate(SQLModel, table=True):
     title: str
     description: Optional[str] = None
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Activity(SQLModel, table=True):
@@ -71,7 +71,7 @@ class Activity(SQLModel, table=True):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class SubActivity(SQLModel, table=True):
@@ -85,7 +85,7 @@ class SubActivity(SQLModel, table=True):
     description: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Milestone(SQLModel, table=True):
@@ -100,7 +100,7 @@ class Milestone(SQLModel, table=True):
     description: Optional[str] = None
     due_date: Optional[datetime] = None
     allow_late_submission: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Deliverable(SQLModel, table=True):
@@ -117,7 +117,7 @@ class Deliverable(SQLModel, table=True):
     file_id: Optional[str] = None
     submitted_at: Optional[datetime] = None
     is_late: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class TimeEntry(SQLModel, table=True):
@@ -132,7 +132,7 @@ class TimeEntry(SQLModel, table=True):
     time_session_id: Optional[int] = Field(default=None, foreign_key="erp_timesession.id")
     hours: Decimal = Field(sa_column=Column(Numeric(6, 2)))
     description: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class TimeSession(SQLModel, table=True):
@@ -149,7 +149,7 @@ class TimeSession(SQLModel, table=True):
     ended_at: Optional[datetime] = None
     duration_seconds: int = Field(default=0)
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class ProjectBudgetLine(SQLModel, table=True):
@@ -166,7 +166,7 @@ class ProjectBudgetLine(SQLModel, table=True):
     approved_budget: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
     percent_spent: Decimal = Field(sa_column=Column(Numeric(6, 2), nullable=False))
     forecasted_spent: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class ProjectBudgetMilestone(SQLModel, table=True):
@@ -177,7 +177,7 @@ class ProjectBudgetMilestone(SQLModel, table=True):
     project_id: int = Field(foreign_key="erp_project.id")
     name: str
     order_index: int = Field(default=0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class BudgetLineMilestone(SQLModel, table=True):
@@ -189,7 +189,7 @@ class BudgetLineMilestone(SQLModel, table=True):
     milestone_id: int = Field(foreign_key="erp_project_budget_milestone.id")
     amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
     justified: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class ExternalCollaboration(SQLModel, table=True):
@@ -202,8 +202,8 @@ class ExternalCollaboration(SQLModel, table=True):
     legal_name: str
     cif: str
     contact_email: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class SimulationProject(SQLModel, table=True):
@@ -222,8 +222,8 @@ class SimulationProject(SQLModel, table=True):
         sa_column=Column(Numeric(6, 2), nullable=False),
         default=50,
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class SimulationExpense(SQLModel, table=True):
@@ -234,8 +234,8 @@ class SimulationExpense(SQLModel, table=True):
     project_id: int = Field(foreign_key="erp_simulation_project.id")
     concept: str
     amount: Decimal = Field(sa_column=Column(Numeric(14, 2), nullable=False), default=0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class ProjectDocument(SQLModel, table=True):
@@ -249,7 +249,7 @@ class ProjectDocument(SQLModel, table=True):
     original_name: str
     content_type: str
     size_bytes: int
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=utc_now)
 
 
 class WorkReport(SQLModel, table=True):
@@ -278,8 +278,8 @@ class WorkReport(SQLModel, table=True):
     # Fase 2a: grupo del creador; nullable para preservar partes legacy.
     # Activar filtro en list_work_reports() solo tras completar backfill (Fase 2c).
     creator_group_id: Optional[int] = Field(default=None, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (
@@ -317,8 +317,8 @@ class AccessControlReport(SQLModel, table=True):
 
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (
@@ -344,7 +344,7 @@ class WorkReportSyncLog(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON, nullable=False, default=dict),
     )
-    processed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    processed_at: datetime = Field(default_factory=utc_now, index=True)
 
     __table_args__ = (
         Index("ix_erp_work_report_sync_tenant_op", "tenant_id", "client_op_id", unique=True),
@@ -373,8 +373,8 @@ class RentalMachinery(SQLModel, table=True):
 
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (
@@ -403,8 +403,8 @@ class WorkRepaso(SQLModel, table=True):
 
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (
@@ -433,8 +433,8 @@ class WorkPostventa(SQLModel, table=True):
 
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (

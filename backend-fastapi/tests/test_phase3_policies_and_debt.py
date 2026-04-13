@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 import pytest
@@ -89,24 +90,24 @@ def test_work_report_access_policy_respects_group_and_legacy(
         project_id=1,
         date=date(2026, 3, 23),
         creator_group_id=10,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     other_group_report = WorkReport(
         tenant_id=int(tenant.id or 0),
         project_id=1,
         date=date(2026, 3, 23),
         creator_group_id=20,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     legacy_report = WorkReport(
         tenant_id=int(tenant.id or 0),
         project_id=1,
         date=date(2026, 3, 23),
         creator_group_id=None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
 
     assert can_access_work_report(db_session_fixture, normal_user, same_group_report) is True

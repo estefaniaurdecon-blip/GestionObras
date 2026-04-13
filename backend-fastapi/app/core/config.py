@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     env: str = "local"
     debug: bool = False
+    enable_legacy_non_app_routers: bool = False
 
     # Config base de datos (PostgreSQL)
     database_url: str
@@ -79,8 +80,8 @@ class Settings(BaseSettings):
     celery_soft_time_limit_seconds: int = 600
     celery_time_limit_seconds: int = 720
 
-    # IA (Ollama remoto)
-    ollama_base_url: str = "http://192.168.1.171:11434"
+    # IA (Ollama remoto) — sobreescribir con OLLAMA_BASE_URL en produccion
+    ollama_base_url: str = "http://localhost:11434"
     ollama_headers_json: str | None = None
     ollama_ocr_model: str = "deepseek-ocr:3b"
     ollama_json_model: str = "qwen3-coder:30b"
@@ -93,21 +94,6 @@ class Settings(BaseSettings):
     ollama_help_model: str | None = None
     ollama_help_timeout_seconds: int = 8
     lovable_api_key: str | None = None
-
-    # Facturas
-    invoices_storage_path: str = "/data/invoices"
-    invoice_min_text_length: int = 80
-    reminders_daily_enabled: bool = True
-    reminders_daily_threshold: int = 5
-    invoice_created_extra_recipients: List[str] = []
-    invoice_due_base_recipients: List[str] = []
-    invoice_due_extra_recipients_10: List[str] = []
-    invoice_due_extra_recipients_5: List[str] = []
-
-    # Contratos
-    contracts_storage_path: str = "/data/contracts"
-    signature_request_ttl_hours: int = 168
-    public_api_base_url: str | None = None
 
     # Avatares y branding
     avatars_storage_path: str = str(BASE_DIR / "data" / "avatars")
@@ -150,6 +136,7 @@ class Settings(BaseSettings):
 
         for field_name in (
             "debug",
+            "enable_legacy_non_app_routers",
             "auth_cookie_secure",
             "smtp_use_tls",
             "allow_bootstrap_superadmin",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Dict, Optional
 
 from sqlalchemy import Column, JSON
@@ -26,5 +27,5 @@ class TenantBranding(SQLModel, table=True):
         default=None,
         sa_column=Column(JSON, nullable=True),
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

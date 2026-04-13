@@ -1,8 +1,33 @@
-Workdir recomendado: `apps/construction-log` (wrapper).
+# Frontend Wrapper
 
-El Vite real corre en `apps/construction-log/construction-log-supabase-local` y usa su `index.html`.
+Workdir recomendado para desarrollo del frontend:
+`apps/construction-log`
 
-Ejecuta: `npm run install:app` y luego `npm run dev` (URL local: `http://localhost:8080`).
+Este directorio actua como wrapper del proyecto real Vite/React ubicado en
+`apps/construction-log/construction-log-supabase-local`.
 
-La app usa proxy de Vite: frontend llama a `/api/*` (same-origin) y Vite reenvia a `http://192.168.1.227:8000`.
-Variables activas en `.env.local`: `VITE_API_BASE_URL=/api` y `VITE_TENANT_ID=1`.
+## Scripts utiles
+
+```bash
+npm run install:app
+npm run dev
+npm run build
+npm run lint
+npm run tsc
+```
+
+La app real corre por defecto en `http://localhost:8080`.
+
+## Estado actual del frontend
+
+El arbol refleja una modularizacion en progreso:
+
+- componentes grandes se estan dividiendo por dominio
+- aparecen subdirectorios como `economic-management/`, `work-management/`,
+  `work-postventas/`, `work-repasos/` y `tools-panel/parts-tab/`
+- la logica de partes y escaneo se esta moviendo a hooks especializados
+
+Para detalles operativos y de estructura interna revisa el README del proyecto
+real:
+
+- [construction-log-supabase-local/README.md](construction-log-supabase-local/README.md)

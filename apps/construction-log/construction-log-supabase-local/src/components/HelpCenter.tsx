@@ -97,11 +97,12 @@ interface FeatureCard {
   roles: string[];
 }
 
-type HelpCenterTab = 'features' | 'faq' | 'chat';
+export type HelpCenterTab = 'features' | 'faq' | 'chat';
 
 interface HelpCenterProps {
   initialTab?: HelpCenterTab;
   openRequestKey?: number;
+  onTabChange?: (tab: HelpCenterTab) => void;
 }
 
 type CurrentHelpRole = 'super_admin' | 'tenant_admin' | 'usuario';
@@ -243,7 +244,11 @@ const HELP_ICON_MAP = {
 
 const getHelpIcon = (iconName: string) => HELP_ICON_MAP[iconName as keyof typeof HELP_ICON_MAP] ?? HelpCircle;
 
-export const HelpCenter = ({ initialTab = 'features', openRequestKey = 0 }: HelpCenterProps) => {
+export const HelpCenter = ({
+  initialTab = 'features',
+  openRequestKey = 0,
+  onTabChange,
+}: HelpCenterProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const currentUserId = user ? String(user.id) : null;
@@ -638,7 +643,15 @@ export const HelpCenter = ({ initialTab = 'features', openRequestKey = 0 }: Help
         </CardHeader>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as HelpCenterTab)} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          const nextTab = value as HelpCenterTab;
+          setActiveTab(nextTab);
+          onTabChange?.(nextTab);
+        }}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="features" className="text-xs sm:text-sm">
             <BookOpen className="h-4 w-4 mr-1 sm:mr-2" />
@@ -868,4 +881,3 @@ export const HelpCenter = ({ initialTab = 'features', openRequestKey = 0 }: Help
     </div>
   );
 };
-

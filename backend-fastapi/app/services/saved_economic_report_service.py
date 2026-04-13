@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from sqlmodel import Session, select, func
 
@@ -67,7 +68,7 @@ def upsert_saved_economic_report(
         existing.subcontract_groups = payload.subcontract_groups
         existing.rental_machinery_groups = payload.rental_machinery_groups
         existing.total_amount = payload.total_amount
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         session.add(existing)
         session.commit()
         session.refresh(existing)

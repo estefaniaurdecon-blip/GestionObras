@@ -45,6 +45,7 @@ import { useSharedFiles } from "@/hooks/useSharedFiles";
 import { useAiHelpConversation } from "@/hooks/useAiHelpConversation";
 import { AI_HELP_USER_ID, AI_HELP_USER_NAME, isAiHelpUserId } from "@/lib/aiHelp";
 import {
+  CHAT_UNREAD_COUNT_EVENT,
   clearConversationSelection,
   selectConversationDirect,
   selectConversationFromWork,
@@ -64,6 +65,7 @@ export const ChatCenter = () => {
   const { user } = useAuth();
   const currentUserId = user ? String(user.id) : null;
   const currentTenantId = user?.tenant_id != null ? String(user.tenant_id) : null;
+  const [open, setOpen] = useState(false);
 
   const {
     messages,
@@ -72,7 +74,6 @@ export const ChatCenter = () => {
     markAsRead,
     deleteConversation,
     clearAllMessages,
-    reloadMessages,
   } = useMessages();
   const { users: contacts, loading: loadingContacts } = useMessageableUsers();
   const {
@@ -88,15 +89,13 @@ export const ChatCenter = () => {
     loadMembersForWork,
   } = useWorkMessageDirectory();
   const { isUserOnline } = useUserPresence();
-  const { shareFile, sentFiles, receivedFiles, downloadFile, getFileBlob, reloadFiles } =
-    useSharedFiles();
+  const { shareFile, sentFiles, receivedFiles, downloadFile, getFileBlob } =
+    useSharedFiles(open);
 
   const {
     summaries: workConversationSummaries,
-    reload: reloadWorkConversationSummaries,
-  } = useWorkConversationSummaries(works, true);
+  } = useWorkConversationSummaries(works, open);
 
-  const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [activeWorkContext, setActiveWorkContext] =
     useState<ActiveWorkConversationContext | null>(null);
@@ -123,7 +122,6 @@ export const ChatCenter = () => {
     loading: loadingProjectConversation,
     sending: sendingProjectConversation,
     error: projectConversationError,
-    reload: reloadProjectConversation,
     sendMessage: sendProjectConversationMessage,
   } = useProjectConversation(
     selectedWorkConversation,
@@ -148,27 +146,17 @@ export const ChatCenter = () => {
   }, [open]);
 
   useEffect(() => {
+    document.dispatchEvent(
+      new CustomEvent(CHAT_UNREAD_COUNT_EVENT, { detail: { unreadCount } }),
+    );
+  }, [unreadCount]);
+
+  useEffect(() => {
     if (!open) {
       setSettingsOpen(false);
       setFavoritesDialogOpen(false);
-      return;
     }
-
-    reloadMessages();
-    reloadFiles();
-    void reloadWorkConversationSummaries();
-
-    if (selectedWorkConversation) {
-      void reloadProjectConversation();
-    }
-  }, [
-    open,
-    reloadFiles,
-    reloadMessages,
-    reloadProjectConversation,
-    reloadWorkConversationSummaries,
-    selectedWorkConversation,
-  ]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !currentUserId || !selectedUserId || isAiHelpUserId(selectedUserId)) {

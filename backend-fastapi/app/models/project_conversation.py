@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlalchemy import Index, UniqueConstraint
@@ -15,8 +16,8 @@ class ProjectConversation(SQLModel, table=True):
     project_id: int = Field(foreign_key="erp_project.id", index=True)
     creator_group_id: int = Field(foreign_key="user.id", index=True)
     created_by_id: int = Field(foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
     last_message_at: datetime | None = Field(default=None, index=True)
 
     __table_args__ = (
@@ -39,7 +40,7 @@ class ProjectConversationParticipant(SQLModel, table=True):
     project_id: int = Field(foreign_key="erp_project.id", index=True)
     creator_group_id: int = Field(foreign_key="user.id", index=True)
     is_active: bool = Field(default=True, index=True)
-    joined_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    joined_at: datetime = Field(default_factory=utc_now, index=True)
     left_at: datetime | None = Field(default=None, index=True)
     last_read_at: datetime | None = Field(default=None, index=True)
 
@@ -68,7 +69,7 @@ class ProjectConversationMessage(SQLModel, table=True):
     creator_group_id: int = Field(foreign_key="user.id", index=True)
     from_user_id: int = Field(foreign_key="user.id", index=True)
     message: str = Field(max_length=4000)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
 
     __table_args__ = (
         Index(

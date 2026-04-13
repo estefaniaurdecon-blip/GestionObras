@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -184,7 +185,7 @@ def create_delivery_note(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict[str, Any]:
     tenant_id = _tenant_scope(current_user, x_tenant_id)
-    now = datetime.utcnow()
+    now = utc_now()
 
     note = PendingDeliveryNote(
         tenant_id=tenant_id,
@@ -228,7 +229,7 @@ def update_delivery_note(
         note.status = _normalize_status(payload.status)
         if note.status in {"validated", "rejected"}:
             note.validated_by_id = current_user.id
-            note.validated_at = datetime.utcnow()
+            note.validated_at = utc_now()
     if "processed_items" in updates and payload.processed_items is not None:
         note.processed_items = _serialize_items(payload.processed_items)
     if "raw_ocr_data" in updates:
@@ -238,7 +239,7 @@ def update_delivery_note(
     if "notes" in updates:
         note.notes = _normalize_text(payload.notes) or None
 
-    note.updated_at = datetime.utcnow()
+    note.updated_at = utc_now()
     session.add(note)
     session.commit()
     session.refresh(note)
@@ -284,7 +285,7 @@ def validate_delivery_note(
 
     supplier = _normalize_text(note.supplier)
     delivery_note_number = _normalize_text(note.delivery_note_number) or None
-    today = datetime.utcnow().date().isoformat()
+    today = utc_now().date().isoformat()
     items = payload.items
     if not items:
         raise HTTPException(
@@ -364,9 +365,9 @@ def validate_delivery_note(
 
     note.status = "validated"
     note.validated_by_id = current_user.id
-    note.validated_at = datetime.utcnow()
+    note.validated_at = utc_now()
     note.processed_items = _serialize_items(items)
-    note.updated_at = datetime.utcnow()
+    note.updated_at = utc_now()
     session.add(note)
     session.commit()
     session.refresh(note)
@@ -390,10 +391,10 @@ def reject_delivery_note(
 
     note.status = "rejected"
     note.validated_by_id = current_user.id
-    note.validated_at = datetime.utcnow()
+    note.validated_at = utc_now()
     if payload.reason:
         note.notes = _normalize_text(payload.reason)
-    note.updated_at = datetime.utcnow()
+    note.updated_at = utc_now()
     session.add(note)
     session.commit()
     session.refresh(note)

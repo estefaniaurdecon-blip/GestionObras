@@ -14,6 +14,7 @@ import { queryClient, persistOptions } from "@/lib/queryClient";
 import { startupPerfEnd, startupPerfPoint, startupPerfStart } from "@/utils/startupPerf";
 
 const Index = lazy(() => import("./pages/Index"));
+const Settings = lazy(() => import("./pages/Settings"));
 const Projects = lazy(() => import("./pages/Projects"));
 const TaskCalendar = lazy(() => import("./pages/TaskCalendar"));
 const WorkManagementWorkspace = lazy(() => import("./pages/WorkManagementWorkspace"));
@@ -73,6 +74,14 @@ const App = () => {
                     element={
                       <ProtectedRoute>
                         <Projects />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
                       </ProtectedRoute>
                     }
                   />

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as DateType, datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -133,7 +134,7 @@ def update_rental_machinery_assignment(
     if "activity" in fields_set:
         row.activity = payload.activity.strip() if payload.activity else None
 
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)

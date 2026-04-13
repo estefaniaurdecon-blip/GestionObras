@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -59,7 +60,7 @@ def _create_user(
 def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> None:
     tenant = Tenant(
         name="Tenant Messages",
-        subdomain=f"messages-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"messages-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)
@@ -69,14 +70,14 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
     sender = _create_user(
         db_session_fixture,
         tenant_id=int(tenant.id or 0),
-        email=f"sender-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"sender-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Sender User",
         creator_group_id=777,
     )
     receiver = _create_user(
         db_session_fixture,
         tenant_id=int(tenant.id or 0),
-        email=f"receiver-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"receiver-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Receiver User",
         creator_group_id=777,
     )
@@ -161,3 +162,59 @@ def test_messages_api_flow(client: TestClient, db_session_fixture: Session) -> N
     final_list = client.get("/api/v1/messages?limit=100", headers=receiver_headers)
     assert final_list.status_code == status.HTTP_200_OK
     assert final_list.json()["items"] == []
+
+
+def test_messages_api_paginates_in_database(client: TestClient, db_session_fixture: Session) -> None:
+    tenant = Tenant(
+        name="Tenant Messages Pagination",
+        subdomain=f"messages-pagination-{int(utc_now().timestamp())}",
+        is_active=True,
+    )
+    db_session_fixture.add(tenant)
+    db_session_fixture.commit()
+    db_session_fixture.refresh(tenant)
+
+    sender = _create_user(
+        db_session_fixture,
+        tenant_id=int(tenant.id or 0),
+        email=f"sender-pagination-{int(utc_now().timestamp() * 1000)}@example.com",
+        full_name="Sender Pagination",
+        creator_group_id=888,
+    )
+    receiver = _create_user(
+        db_session_fixture,
+        tenant_id=int(tenant.id or 0),
+        email=f"receiver-pagination-{int(utc_now().timestamp() * 1000)}@example.com",
+        full_name="Receiver Pagination",
+        creator_group_id=888,
+    )
+
+    sender_headers = _auth_headers_for_user(sender, int(tenant.id or 0))
+    receiver_headers = _auth_headers_for_user(receiver, int(tenant.id or 0))
+
+    for index in range(12):
+        response = client.post(
+            "/api/v1/messages",
+            headers=sender_headers,
+            json={
+                "to_user_id": str(receiver.id),
+                "message": f"Mensaje {index}",
+            },
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+    first_page = client.get("/api/v1/messages?limit=5&offset=0", headers=receiver_headers)
+    assert first_page.status_code == status.HTTP_200_OK
+    first_payload = first_page.json()
+    assert first_payload["total"] == 12
+    assert len(first_payload["items"]) == 5
+
+    second_page = client.get("/api/v1/messages?limit=5&offset=5", headers=receiver_headers)
+    assert second_page.status_code == status.HTTP_200_OK
+    second_payload = second_page.json()
+    assert second_payload["total"] == 12
+    assert len(second_payload["items"]) == 5
+
+    first_page_ids = {item["id"] for item in first_payload["items"]}
+    second_page_ids = {item["id"] for item in second_payload["items"]}
+    assert first_page_ids.isdisjoint(second_page_ids)

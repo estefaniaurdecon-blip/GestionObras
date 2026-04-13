@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -12,12 +13,12 @@ from app.schemas.dashboard import DashboardSummary
 
 def get_dashboard_summary(session: Session, *, current_user: User) -> DashboardSummary:
     """
-    Calcula métricas básicas para el dashboard.
+    Calcula mÃ©tricas bÃ¡sicas para el dashboard.
 
     - Tenants activos (solo visible para super admin).
     - Usuarios activos (del sistema o del tenant).
     - Herramientas activas para el tenant actual.
-    - Horas registradas hoy y en la última semana (placeholder: 0.0 de momento).
+    - Horas registradas hoy y en la Ãºltima semana (placeholder: 0.0 de momento).
     """
 
     # Tenants activos
@@ -60,8 +61,8 @@ def get_dashboard_summary(session: Session, *, current_user: User) -> DashboardS
     horas_hoy = 0.0
     horas_ultima_semana = 0.0
 
-    # Métricas básicas de soporte (tickets)
-    now = datetime.utcnow()
+    # MÃ©tricas bÃ¡sicas de soporte (tickets)
+    now = utc_now()
     today_start = datetime(now.year, now.month, now.day)
     week_start = today_start - timedelta(days=7)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -39,8 +40,8 @@ class WorkInventoryItem(SQLModel, table=True):
 
     is_immediate_consumption: bool = Field(default=False, index=True)
     source: Optional[str] = Field(default=None, max_length=32)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class InventoryMovement(SQLModel, table=True):
@@ -62,7 +63,7 @@ class InventoryMovement(SQLModel, table=True):
     source: Optional[str] = Field(default=None, max_length=32)
     notes: Optional[str] = Field(default=None, max_length=500)
     is_immediate_consumption: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class WorkInventorySyncLog(SQLModel, table=True):
@@ -72,7 +73,7 @@ class WorkInventorySyncLog(SQLModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
     work_external_id: str = Field(index=True, max_length=128)
     work_report_id: int = Field(foreign_key="erp_work_report.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class PendingDeliveryNote(SQLModel, table=True):
@@ -97,5 +98,5 @@ class PendingDeliveryNote(SQLModel, table=True):
 
     validated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     validated_at: Optional[datetime] = Field(default=None, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)

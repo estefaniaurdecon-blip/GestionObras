@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from decimal import Decimal
 from typing import Optional
 
@@ -27,9 +28,9 @@ class Department(SQLModel, table=True):
     is_active: bool = Field(default=True)
     project_allocation_percentage: Optional[Decimal] = Field(
         default=Decimal(100),
-        description="Porcentaje máximo del tiempo disponible que el departamento puede dedicar a proyectos.",
+        description="Porcentaje mÃƒÂ¡ximo del tiempo disponible que el departamento puede dedicar a proyectos.",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class EmployeeProfile(SQLModel, table=True):
@@ -46,7 +47,7 @@ class EmployeeProfile(SQLModel, table=True):
     hourly_rate: Optional[Decimal] = Field(default=None)
 
     available_hours: Optional[Decimal] = Field(
-        default=None, description="Horas disponibles al año para asignación."
+        default=None, description="Horas disponibles al aÃƒÂ±o para asignaciÃƒÂ³n."
     )
     availability_percentage: Optional[Decimal] = Field(
         default=None, description="Porcentaje de disponibilidad sobre las horas base."
@@ -63,12 +64,12 @@ class EmployeeProfile(SQLModel, table=True):
     end_date: Optional[datetime] = None
 
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class EmployeeAllocation(SQLModel, table=True):
     """
-    Asignación de horas de un empleado a un proyecto/departamento concreto.
+    AsignaciÃƒÂ³n de horas de un empleado a un proyecto/departamento concreto.
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,16 +78,16 @@ class EmployeeAllocation(SQLModel, table=True):
     department_id: Optional[int] = Field(default=None, foreign_key="department.id", index=True)
     project_id: Optional[int] = Field(default=None, foreign_key="erp_project.id", index=True)
     milestone: Optional[str] = Field(default=None, max_length=50)
-    year: int = Field(default=datetime.utcnow().year, index=True)
+    year: int = Field(default=utc_now().year, index=True)
     allocated_hours: Optional[Decimal] = Field(default=None)
     notes: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class EmployeeDepartment(SQLModel, table=True):
     """
-    Relación N:N entre empleados y departamentos.
+    RelaciÃƒÂ³n N:N entre empleados y departamentos.
     """
 
     employee_id: int = Field(foreign_key="employeeprofile.id", primary_key=True)

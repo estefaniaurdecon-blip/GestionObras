@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from decimal import Decimal
 from typing import List, Optional
 
@@ -75,8 +76,8 @@ def _sync_gerencia_role(
     if role_name == "tenant_admin":
         return
 
-    # El rol "gerencia" ya no existe — solo super_admin, tenant_admin, usuario.
-    # Esta función es un no-op: la asignación de rol por departamento ya no aplica.
+    # El rol "gerencia" ya no existe â€” solo super_admin, tenant_admin, usuario.
+    # Esta funciÃ³n es un no-op: la asignaciÃ³n de rol por departamento ya no aplica.
     usuario_role = session.exec(select(Role).where(Role.name == "usuario")).one_or_none()
     if not usuario_role:
         return
@@ -496,7 +497,7 @@ def update_employee_allocation(
 ) -> EmployeeAllocationRead:
     allocation = session.get(EmployeeAllocation, allocation_id)
     if not allocation:
-        raise ValueError("Asignación no encontrada")
+        raise ValueError("AsignaciÃ³n no encontrada")
     _ensure_same_tenant(allocation.tenant_id, current_user)
 
     if data.department_id is not None:
@@ -512,7 +513,7 @@ def update_employee_allocation(
     if data.notes is not None:
         allocation.notes = data.notes
 
-    allocation.updated_at = datetime.utcnow()
+    allocation.updated_at = utc_now()
     session.add(allocation)
     session.commit()
     session.refresh(allocation)
@@ -738,7 +739,7 @@ def get_headcount_by_department(
     tenant_id: Optional[int] = None,
 ) -> List[HeadcountItem]:
     """
-    Devuelve el número de empleados activos por departamento dentro de un tenant.
+    Devuelve el nÃºmero de empleados activos por departamento dentro de un tenant.
     """
 
     if not current_user.is_super_admin:

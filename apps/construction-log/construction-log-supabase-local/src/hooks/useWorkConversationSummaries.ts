@@ -14,9 +14,25 @@ export interface WorkConversationSummary {
   lastMessageTs: number;
 }
 
+const REQUEST_BATCH_SIZE = 6;
+
 function formatWorkConversationName(work: { name: string; code?: string | null }): string {
   const code = work.code?.trim();
   return code ? `${code} - ${work.name}` : work.name;
+}
+
+async function runPromiseAllSettledInBatches<T>(
+  tasks: Array<() => Promise<T>>,
+  batchSize = REQUEST_BATCH_SIZE,
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = [];
+
+  for (let index = 0; index < tasks.length; index += batchSize) {
+    const batch = tasks.slice(index, index + batchSize).map((task) => task());
+    results.push(...(await Promise.allSettled(batch)));
+  }
+
+  return results;
 }
 
 /**
@@ -44,8 +60,8 @@ export function useWorkConversationSummaries(
 
     try {
       // 1. Load shells for all works in parallel
-      const shellResults = await Promise.allSettled(
-        works.map((w) =>
+      const shellResults = await runPromiseAllSettledInBatches(
+        works.map((w) => () =>
           getProjectConversationShell(w.id, tenantId).then((shell) => ({
             workId: w.id,
             workName: formatWorkConversationName(w),
@@ -71,8 +87,8 @@ export function useWorkConversationSummaries(
       }
 
       // 3. Load last message for each active conversation in parallel
-      const msgResults = await Promise.allSettled(
-        activeWorks.map((aw) =>
+      const msgResults = await runPromiseAllSettledInBatches(
+        activeWorks.map((aw) => () =>
           listProjectConversationMessages(aw.workId, tenantId).then((resp) => {
             const msgs = resp.items;
             const last = msgs.length > 0 ? msgs[msgs.length - 1] : null;

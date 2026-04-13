@@ -5,7 +5,6 @@ import type { WorkReport } from '@/offline-db/types';
 
 export const useIndexUIState = () => {
   const [activeTab, setActiveTab] = useState('work-reports');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [workReports, setWorkReports] = useState<WorkReport[]>([]);
   const [allWorkReports, setAllWorkReports] = useState<WorkReport[]>([]);
@@ -26,8 +25,6 @@ export const useIndexUIState = () => {
   return {
     activeTab,
     setActiveTab,
-    settingsOpen,
-    setSettingsOpen,
     metricsOpen,
     setMetricsOpen,
     workReports,

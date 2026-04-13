@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Iterable, Optional
 
 from sqlalchemy import String, cast
@@ -182,11 +183,11 @@ def mark_notification_as_read(
 ) -> NotificationRead:
     notification = session.get(Notification, notification_id)
     if not notification or notification.user_id != user.id:
-        raise ValueError("Notificación no encontrada")
+        raise ValueError("NotificaciÃ³n no encontrada")
 
     if not notification.is_read:
         notification.is_read = True
-        notification.read_at = datetime.utcnow()
+        notification.read_at = utc_now()
         session.add(notification)
         session.commit()
         session.refresh(notification)
@@ -212,7 +213,7 @@ def mark_all_as_read(session: Session, *, user: User) -> None:
     )
     for n in session.exec(stmt).all():
         n.is_read = True
-        n.read_at = datetime.utcnow()
+        n.read_at = utc_now()
         session.add(n)
     session.commit()
 
@@ -225,7 +226,7 @@ def delete_notification(
 ) -> None:
     notification = session.get(Notification, notification_id)
     if not notification or notification.user_id != user.id:
-        raise ValueError("Notificación no encontrada")
+        raise ValueError("NotificaciÃ³n no encontrada")
 
     session.delete(notification)
     session.commit()

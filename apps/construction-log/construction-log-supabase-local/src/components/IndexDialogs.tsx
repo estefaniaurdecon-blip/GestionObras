@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,37 +12,18 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessPersonalDialog, type AccessPersonalForm } from '@/components/AccessPersonalDialog';
 import { CloneOptionsDialog, type CloneOptions } from '@/components/CloneOptionsDialog';
 import { DashboardSummaryPanel } from '@/components/api/DashboardSummaryPanel';
-import { ProfileSettingsPanel } from '@/components/api/ProfileSettingsPanel';
-import { UsersAdminPanel } from '@/components/api/UsersAdminPanel';
-import { UpdatesViewer } from '@/components/UpdatesViewer';
-import { HelpCenter } from '@/components/HelpCenter';
 import { HistoryReportsDialog } from '@/components/HistoryReportsDialog';
 import { toast } from '@/hooks/use-toast';
-import type { ApiUser } from '@/integrations/api/client';
 import type { WorkReport } from '@/offline-db/types';
 import { payloadText, type HistoryFilterKey } from '@/pages/indexHelpers';
 import type { PendingOverwrite } from '@/hooks/useWorkReportMutations';
 import { startupPerfPoint } from '@/utils/startupPerf';
-
-type SettingsDialogTab = 'profile' | 'users' | 'updates' | 'help';
-type HelpCenterTab = 'features' | 'faq' | 'chat';
-type SettingsDialogConfig = {
-  open: boolean;
-  setOpen: Dispatch<SetStateAction<boolean>>;
-  user: ApiUser;
-  onProfileUpdated: () => Promise<void>;
-  showUserManagementTab: boolean;
-  showUpdatesTab?: boolean;
-  hasPendingUpdate?: boolean;
-};
 
 type MetricsDialogConfig = {
   open: boolean;
@@ -110,7 +91,6 @@ type OverwriteDialogConfig = {
 };
 
 type IndexDialogsProps = {
-  settings: SettingsDialogConfig;
   metrics: MetricsDialogConfig;
   accessPersonal: AccessPersonalDialogConfig;
   history: HistoryDialogConfig;
@@ -119,42 +99,15 @@ type IndexDialogsProps = {
 };
 
 export const IndexDialogs = ({
-  settings,
   metrics,
   accessPersonal,
   history,
   clone,
   overwrite,
 }: IndexDialogsProps) => {
-  const [settingsTab, setSettingsTab] = useState<SettingsDialogTab>('profile');
-  const [helpCenterTab, setHelpCenterTab] = useState<HelpCenterTab>('features');
-  const [helpCenterOpenRequestKey, setHelpCenterOpenRequestKey] = useState(0);
-
   useEffect(() => {
     startupPerfPoint('panel:IndexDialogs mounted');
   }, []);
-
-  useEffect(() => {
-    const handleOpenHelpCenter = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: HelpCenterTab }>).detail;
-      setSettingsTab('help');
-      setHelpCenterTab(detail?.tab ?? 'faq');
-      setHelpCenterOpenRequestKey((current) => current + 1);
-      settings.setOpen(true);
-    };
-
-    document.addEventListener('open-help-center', handleOpenHelpCenter as EventListener);
-    return () => {
-      document.removeEventListener('open-help-center', handleOpenHelpCenter as EventListener);
-    };
-  }, [settings]);
-
-  useEffect(() => {
-    if (!settings.open) {
-      setSettingsTab('profile');
-      setHelpCenterTab('features');
-    }
-  }, [settings.open]);
 
   return (
     <>
@@ -166,64 +119,6 @@ export const IndexDialogs = ({
         onSave={accessPersonal.onSave}
         onCancel={accessPersonal.onCancel}
       />
-
-      <Dialog open={settings.open} onOpenChange={settings.setOpen}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>Ajustes</DialogTitle>
-            <DialogDescription>Perfil, actualizaciones y ayuda.</DialogDescription>
-          </DialogHeader>
-          <Tabs value={settingsTab} onValueChange={(value) => setSettingsTab(value as SettingsDialogTab)} className="w-full">
-            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
-              <TabsTrigger value="profile" className="text-sm sm:text-[15px]">
-                Perfil
-              </TabsTrigger>
-              {settings.showUserManagementTab ? (
-                <TabsTrigger value="users" className="text-sm sm:text-[15px]">
-                  Gestion de usuarios
-                </TabsTrigger>
-              ) : null}
-              {settings.showUpdatesTab ? (
-                <TabsTrigger value="updates" className="relative text-sm sm:text-[15px]">
-                  Actualizaciones
-                  {settings.hasPendingUpdate ? (
-                    <span
-                      className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-orange-400"
-                      aria-label="Actualizaciones disponibles"
-                    />
-                  ) : null}
-                </TabsTrigger>
-              ) : null}
-              <TabsTrigger value="help" className="text-sm sm:text-[15px]">
-                Ayuda
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="profile" className="mt-4 max-h-[70vh] overflow-y-auto">
-              <ProfileSettingsPanel user={settings.user} onProfileUpdated={settings.onProfileUpdated} />
-            </TabsContent>
-
-            {settings.showUserManagementTab ? (
-              <TabsContent value="users" className="mt-4 max-h-[70vh] overflow-y-auto">
-                <UsersAdminPanel
-                  tenantId={settings.user.tenant_id}
-                  isSuperAdmin={Boolean(settings.user.is_super_admin)}
-                />
-              </TabsContent>
-            ) : null}
-
-            {settings.showUpdatesTab ? (
-              <TabsContent value="updates" className="mt-4 max-h-[70vh] overflow-y-auto">
-                <UpdatesViewer />
-              </TabsContent>
-            ) : null}
-
-            <TabsContent value="help" className="mt-4 max-h-[70vh] overflow-y-auto">
-              <HelpCenter initialTab={helpCenterTab} openRequestKey={helpCenterOpenRequestKey} />
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={metrics.open} onOpenChange={metrics.setOpen}>
         <DialogContent className="max-w-4xl">

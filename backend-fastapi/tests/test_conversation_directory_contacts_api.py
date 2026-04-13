@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -53,7 +54,7 @@ def _create_user(
         tenant_id=tenant_id,
         role_id=int(role.id or 0),
         creator_group_id=creator_group_id,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(user)
     session.commit()
@@ -68,14 +69,14 @@ def test_general_conversation_directory_lists_all_normal_tenant_users_and_allows
     tenant = _create_tenant(
         db_session_fixture,
         name="Tenant Contactos",
-        subdomain=f"contacts-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"contacts-{int(utc_now().timestamp())}",
     )
     tenant_id = int(tenant.id or 0)
 
     actor = _create_user(
         db_session_fixture,
         tenant_id=tenant_id,
-        email=f"actor-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"actor-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Actor Contactos",
         creator_group_id=100,
         role_name="tenant_admin",
@@ -83,7 +84,7 @@ def test_general_conversation_directory_lists_all_normal_tenant_users_and_allows
     same_group_user = _create_user(
         db_session_fixture,
         tenant_id=tenant_id,
-        email=f"same-group-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"same-group-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Same Group User",
         creator_group_id=100,
         role_name="usuario",
@@ -91,7 +92,7 @@ def test_general_conversation_directory_lists_all_normal_tenant_users_and_allows
     other_group_user = _create_user(
         db_session_fixture,
         tenant_id=tenant_id,
-        email=f"other-group-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"other-group-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Other Group User",
         creator_group_id=200,
         role_name="usuario",
@@ -99,7 +100,7 @@ def test_general_conversation_directory_lists_all_normal_tenant_users_and_allows
     _create_user(
         db_session_fixture,
         tenant_id=tenant_id,
-        email=f"super-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"super-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Tenant Super Admin",
         creator_group_id=None,
         role_name="tenant_admin",
@@ -151,12 +152,12 @@ def test_general_dm_rejects_cross_tenant_and_self_messages(
     tenant_a = _create_tenant(
         db_session_fixture,
         name="Tenant A DM",
-        subdomain=f"tenant-a-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"tenant-a-{int(utc_now().timestamp())}",
     )
     tenant_b = _create_tenant(
         db_session_fixture,
         name="Tenant B DM",
-        subdomain=f"tenant-b-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"tenant-b-{int(utc_now().timestamp())}",
     )
     tenant_a_id = int(tenant_a.id or 0)
     tenant_b_id = int(tenant_b.id or 0)
@@ -164,7 +165,7 @@ def test_general_dm_rejects_cross_tenant_and_self_messages(
     actor = _create_user(
         db_session_fixture,
         tenant_id=tenant_a_id,
-        email=f"actor-self-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"actor-self-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Actor Self",
         creator_group_id=100,
         role_name="tenant_admin",
@@ -172,7 +173,7 @@ def test_general_dm_rejects_cross_tenant_and_self_messages(
     other_tenant_user = _create_user(
         db_session_fixture,
         tenant_id=tenant_b_id,
-        email=f"other-tenant-{int(datetime.utcnow().timestamp() * 1000)}@example.com",
+        email=f"other-tenant-{int(utc_now().timestamp() * 1000)}@example.com",
         full_name="Other Tenant User",
         creator_group_id=200,
         role_name="usuario",

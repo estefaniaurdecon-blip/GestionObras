@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 import secrets
 
 from sqlmodel import Session, select
@@ -33,7 +34,7 @@ def create_user_invitation(
     data: UserInvitationCreate,
 ) -> UserInvitationRead:
     """
-    Crea una invitación de usuario y envía un correo con el enlace.
+    Crea una invitaciÃ³n de usuario y envÃ­a un correo con el enlace.
 
     Solo permitido para:
     - Super Admin (para cualquier tenant).
@@ -43,11 +44,11 @@ def create_user_invitation(
     if not current_user.is_super_admin and not current_user.tenant_id:
         raise PermissionError("Solo usuarios asociados a un tenant pueden invitar.")
 
-    # Determinar tenant de la invitación.
+    # Determinar tenant de la invitaciÃ³n.
     tenant_id: int
     if current_user.is_super_admin:
         if not data.tenant_id:
-            raise ValueError("Debe indicarse el tenant para la invitación.")
+            raise ValueError("Debe indicarse el tenant para la invitaciÃ³n.")
         tenant_id = data.tenant_id
     else:
         tenant_id = current_user.tenant_id  # type: ignore[assignment]
@@ -62,7 +63,7 @@ def create_user_invitation(
 
     role = session.exec(select(Role).where(Role.name == data.role_name)).one_or_none()
     if not role:
-        raise ValueError("Rol de invitación no válido.")
+        raise ValueError("Rol de invitaciÃ³n no vÃ¡lido.")
 
     # Eliminar invitaciones antiguas para el mismo email+tenant.
     existing_invites = session.exec(
@@ -72,9 +73,9 @@ def create_user_invitation(
         ),
     ).all()
     for inv in existing_invites:
-        # No las borramos físicamente, solo las marcamos como usadas si no lo estaban.
+        # No las borramos fÃ­sicamente, solo las marcamos como usadas si no lo estaban.
         if not inv.used_at:
-            inv.used_at = datetime.utcnow()
+            inv.used_at = utc_now()
             session.add(inv)
 
     token = _generate_token()
@@ -91,7 +92,7 @@ def create_user_invitation(
     session.commit()
     session.refresh(invitation)
 
-    # Enviar email de invitación
+    # Enviar email de invitaciÃ³n
     frontend_url = settings.frontend_base_url
     if not frontend_url:
         raise ValueError("FRONTEND_BASE_URL no configurado.")
@@ -105,7 +106,7 @@ def create_user_invitation(
             role_name=data.role_name,
         )
     except Exception:
-        # No rompemos la invitación si el correo falla.
+        # No rompemos la invitaciÃ³n si el correo falla.
         pass
 
     log_action(
@@ -113,7 +114,7 @@ def create_user_invitation(
         user_id=current_user.id,
         tenant_id=tenant_id,
         action="user.invitation.create",
-        details=f"Invitación creada para {invitation.email} en tenant_id={tenant_id}",
+        details=f"InvitaciÃ³n creada para {invitation.email} en tenant_id={tenant_id}",
     )
 
     return UserInvitationRead(
@@ -133,7 +134,7 @@ def validate_invitation(
     token: str,
 ) -> UserInvitationValidateResponse:
     """
-    Devuelve información reducida sobre una invitación.
+    Devuelve informaciÃ³n reducida sobre una invitaciÃ³n.
     """
 
 
@@ -155,7 +156,7 @@ def validate_invitation(
     tenant = session.get(Tenant, invitation.tenant_id)
     tenant_name = tenant.name if tenant else ""
 
-    now = datetime.utcnow()
+    now = utc_now()
     is_used = invitation.used_at is not None
     is_expired = invitation.expires_at < now
 
@@ -175,7 +176,7 @@ def accept_invitation(
     data: UserInvitationAccept,
 ) -> None:
     """
-    Acepta una invitación creando el usuario asociado.
+    Acepta una invitaciÃ³n creando el usuario asociado.
     """
 
 
@@ -183,20 +184,20 @@ def accept_invitation(
         select(UserInvitation).where(UserInvitation.token == data.token),
     ).one_or_none()
     if not invitation:
-        raise ValueError("Invitación no encontrada.")
+        raise ValueError("InvitaciÃ³n no encontrada.")
 
-    now = datetime.utcnow()
+    now = utc_now()
     if invitation.used_at is not None:
-        raise ValueError("La invitación ya ha sido utilizada.")
+        raise ValueError("La invitaciÃ³n ya ha sido utilizada.")
     if invitation.expires_at < now:
-        raise ValueError("La invitación ha caducado.")
+        raise ValueError("La invitaciÃ³n ha caducado.")
 
     if data.password != data.password_confirm:
-        raise ValueError("La contraseña y su confirmación deben ser iguales.")
+        raise ValueError("La contraseÃ±a y su confirmaciÃ³n deben ser iguales.")
 
     tenant = session.get(Tenant, invitation.tenant_id)
     if not tenant:
-        raise ValueError("Tenant asociado a la invitación no encontrado.")
+        raise ValueError("Tenant asociado a la invitaciÃ³n no encontrado.")
 
     # Verificamos que no exista ya un usuario con ese email.
     existing_user = session.exec(
@@ -205,10 +206,10 @@ def accept_invitation(
     if existing_user:
         raise ValueError("Ya existe un usuario con este email.")
 
-    # Usuario que "crea" a efectos de auditoría es el creador de la invitación.
+    # Usuario que "crea" a efectos de auditorÃ­a es el creador de la invitaciÃ³n.
     created_by = session.get(User, invitation.created_by_id)
     if not created_by:
-        raise ValueError("Usuario creador de la invitación no encontrado.")
+        raise ValueError("Usuario creador de la invitaciÃ³n no encontrado.")
 
     user_payload = UserCreate(
         email=invitation.email,
@@ -219,7 +220,7 @@ def accept_invitation(
         role_name=invitation.role_name,
     )
 
-    # Reutilizamos la lógica de creación de usuarios existente.
+    # Reutilizamos la lÃ³gica de creaciÃ³n de usuarios existente.
     create_user(
         session=session,
         current_user=created_by,
@@ -241,5 +242,5 @@ def accept_invitation(
         user_id=created_by.id,
         tenant_id=invitation.tenant_id,
         action="user.invitation.accept",
-        details=f"Invitación aceptada para {invitation.email}",
+        details=f"InvitaciÃ³n aceptada para {invitation.email}",
     )

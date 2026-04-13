@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -151,7 +152,7 @@ def rename_company_type(
         raise ValueError("El nuevo nombre ya existe.")
 
     row.type_name = normalized_new
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
 
     companies = session.exec(
@@ -163,7 +164,7 @@ def rename_company_type(
         )
         if normalized_types != list(company.company_type or []):
             company.company_type = normalized_types
-            company.updated_at = datetime.utcnow()
+            company.updated_at = utc_now()
             company.updated_by_id = current_user.id
             session.add(company)
 
@@ -303,7 +304,7 @@ def update_company_portfolio_item(
         row.notes = _normalize_optional_text(payload.notes)
 
     row.updated_by_id = current_user.id
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)

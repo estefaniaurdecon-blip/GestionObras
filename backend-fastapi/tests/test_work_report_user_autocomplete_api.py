@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from fastapi import status
@@ -72,7 +73,7 @@ def _create_user(
         tenant_id=tenant_id,
         role_id=int(role.id or 0),
         creator_group_id=creator_group_id,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(user)
     session.commit()

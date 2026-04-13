@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from sqlmodel import Session, select
 
@@ -123,7 +124,7 @@ def _reconcile_participants(
         for user in visible_users
         if user.id is not None
     }
-    now = datetime.utcnow()
+    now = utc_now()
 
     for user in visible_users:
         if user.id is None:
@@ -267,7 +268,7 @@ def _active_participant_or_error(
     ).first()
     if participant is None or not participant.is_active:
         raise ProjectConversationValidationError(
-            "No eres participante activo de esta conversación de obra."
+            "No eres participante activo de esta conversaciÃ³n de obra."
         )
     return participant
 
@@ -287,7 +288,7 @@ def _resolve_conversation_context(
     )
     conversation = session.get(ProjectConversation, shell.conversation.id)
     if conversation is None:
-        raise ProjectConversationValidationError("Conversación de obra no encontrada.")
+        raise ProjectConversationValidationError("ConversaciÃ³n de obra no encontrada.")
     participant = _active_participant_or_error(
         session,
         conversation=conversation,
@@ -345,7 +346,7 @@ def get_or_create_project_conversation_shell(
         created_now = True
 
     if not can_access_project_conversation(session, actor, conversation):
-        raise ProjectConversationValidationError("No tienes acceso a esta conversación de obra.")
+        raise ProjectConversationValidationError("No tienes acceso a esta conversaciÃ³n de obra.")
 
     _reconcile_participants(
         session,
@@ -415,14 +416,14 @@ def create_project_conversation_message(
     )
     if not can_send_project_conversation_message(session, actor, conversation):
         raise ProjectConversationValidationError(
-            "No puedes enviar mensajes en esta conversación de obra."
+            "No puedes enviar mensajes en esta conversaciÃ³n de obra."
         )
     if not participant.is_active:
         raise ProjectConversationValidationError(
-            "No eres participante activo de esta conversación de obra."
+            "No eres participante activo de esta conversaciÃ³n de obra."
         )
 
-    now = datetime.utcnow()
+    now = utc_now()
     row = ProjectConversationMessage(
         conversation_id=int(conversation.id or 0),
         tenant_id=conversation.tenant_id,

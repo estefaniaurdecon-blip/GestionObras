@@ -35,11 +35,11 @@ export const AccessPersonalDialog = ({
   form,
   setForm,
   onSave,
-  onCancel,
+    onCancel,
 }: AccessPersonalDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registro de Personal</DialogTitle>
           <DialogDescription>

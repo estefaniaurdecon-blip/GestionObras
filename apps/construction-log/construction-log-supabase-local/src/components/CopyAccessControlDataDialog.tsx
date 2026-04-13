@@ -286,7 +286,7 @@ export const CopyAccessControlDataDialog = ({
           Copiar de otro control
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {step === 'confirm-replace' ? (

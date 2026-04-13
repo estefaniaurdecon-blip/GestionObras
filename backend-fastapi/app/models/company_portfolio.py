@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlalchemy import Column, Index, JSON, Text
@@ -14,8 +15,8 @@ class CompanyType(SQLModel, table=True):
     tenant_id: int = Field(foreign_key="tenant.id", index=True)
     type_name: str = Field(max_length=128, index=True)
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
 
     __table_args__ = (
         Index("ix_erp_company_type_tenant_name_uq", "tenant_id", "type_name", unique=True),
@@ -43,8 +44,8 @@ class CompanyPortfolio(SQLModel, table=True):
     notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     updated_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
 
     __table_args__ = (
         Index("ix_erp_company_portfolio_tenant_name", "tenant_id", "company_name"),

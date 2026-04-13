@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import Column, Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 
@@ -18,6 +20,10 @@ class NotificationType(str, Enum):
     TICKET_COMMENT = "ticket_comment"
     TICKET_STATUS = "ticket_status"
     GENERIC = "generic"
+
+
+def _notification_type_values(enum_cls: type[NotificationType]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 
 class Notification(SQLModel, table=True):
@@ -38,7 +44,18 @@ class Notification(SQLModel, table=True):
 
     type: NotificationType = Field(
         default=NotificationType.GENERIC,
-        index=True,
+        sa_column=Column(
+            SAEnum(
+                NotificationType,
+                name="notificationtype",
+                values_callable=_notification_type_values,
+                native_enum=True,
+                validate_strings=True,
+            ),
+            nullable=False,
+            index=True,
+            default=NotificationType.GENERIC,
+        ),
         description="Tipo logico de la notificacion",
     )
     title: str = Field(max_length=200)
@@ -49,5 +66,5 @@ class Notification(SQLModel, table=True):
     )
 
     is_read: bool = Field(default=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
     read_at: Optional[datetime] = None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Any, Optional
 
 from sqlalchemy import Column, Index
@@ -32,8 +33,8 @@ class SavedEconomicReport(SQLModel, table=True):
 
     total_amount: float = Field(default=0.0)
 
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     __table_args__ = (
         Index(

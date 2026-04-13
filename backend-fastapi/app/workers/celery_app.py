@@ -28,10 +28,6 @@ celery_app.conf.update(
 
 # Programacion de tareas recurrentes.
 celery_app.conf.beat_schedule = {
-    "send_due_reminders_daily": {
-        "task": "app.workers.tasks.invoices.send_due_reminders",
-        "schedule": crontab(minute=0, hour=7),
-    },
     "auto_duplicate_rental_machinery_daily": {
         "task": "app.workers.tasks.erp.auto_duplicate_rental_machinery_daily",
         "schedule": crontab(minute=0, hour=6),
@@ -52,9 +48,7 @@ celery_app.conf.beat_schedule = {
 
 celery_app.conf.update(
     include=[
-        "app.workers.tasks.invoices",
         "app.workers.tasks.health",
-        "app.workers.tasks.contracts",
         "app.workers.tasks.erp",
     ]
 )

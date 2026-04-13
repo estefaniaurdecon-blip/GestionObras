@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -25,7 +26,7 @@ def test_phases_crud_and_children_guard(client: TestClient, db_session_fixture: 
 
     tenant = Tenant(
         name="Tenant Phases",
-        subdomain=f"phases-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"phases-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

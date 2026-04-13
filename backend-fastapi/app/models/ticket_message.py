@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -11,7 +12,7 @@ class TicketMessage(SQLModel, table=True):
     Mensaje dentro de un ticket de soporte.
 
     Puede ser un mensaje visible para el usuario o una nota interna
-    solo para el equipo (según `is_internal`).
+    solo para el equipo (segÃºn `is_internal`).
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -33,9 +34,9 @@ class TicketMessage(SQLModel, table=True):
         default=False,
         description=(
             "Si es True, el mensaje es una nota interna y "
-            "solo es visible para Super Admin y usuarios con permisos de gestión"
+            "solo es visible para Super Admin y usuarios con permisos de gestiÃ³n"
         ),
     )
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 

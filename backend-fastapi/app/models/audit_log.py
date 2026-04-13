@@ -1,6 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -30,6 +31,6 @@ class AuditLog(SQLModel, table=True):
         description="Detalles adicionales (JSON, texto, etc.)",
     )
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 

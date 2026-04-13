@@ -396,8 +396,11 @@ def api_create_project(
     current_user: User = Depends(require_permissions(["erp:manage"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
 ) -> ProjectRead:
-    tenant_id = _tenant_for_write(current_user, x_tenant_id)
-    return create_project(session, payload, tenant_id)
+    try:
+        tenant_id = _tenant_for_write(current_user, x_tenant_id)
+        return create_project(session, payload, tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectRead)

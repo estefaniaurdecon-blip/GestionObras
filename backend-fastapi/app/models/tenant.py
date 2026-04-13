@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -24,7 +25,7 @@ class Tenant(SQLModel, table=True):
     )
     is_active: bool = Field(default=True)
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="Fecha de creación del tenant",
+        default_factory=utc_now,
+        description="Fecha de creaciÃ³n del tenant",
     )
 

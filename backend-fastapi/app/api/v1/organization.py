@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from pathlib import Path
 import re
 
@@ -66,7 +67,7 @@ def _load_or_create_profile(session: Session, tenant: Tenant) -> TenantProfile:
     if profile:
         if not profile.invitation_code:
             profile.invitation_code = _default_invitation_code(tenant)
-            profile.updated_at = datetime.utcnow()
+            profile.updated_at = utc_now()
             session.add(profile)
             session.commit()
             session.refresh(profile)
@@ -197,15 +198,15 @@ def update_my_organization(
         if branding is None:
             branding = TenantBranding(tenant_id=tenant_id)
         branding.accent_color = payload.brand_color.lower()
-        branding.updated_at = datetime.utcnow()
+        branding.updated_at = utc_now()
         session.add(branding)
 
     if payload.commercial_name is not None and branding is not None:
         branding.company_name = profile.commercial_name
-        branding.updated_at = datetime.utcnow()
+        branding.updated_at = utc_now()
         session.add(branding)
 
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
     session.add(tenant)
     session.add(profile)
     session.commit()
@@ -241,7 +242,7 @@ def upload_my_organization_logo(
             detail=str(exc),
         ) from exc
 
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
     session.add(profile)
     session.commit()
     session.refresh(profile)
@@ -266,12 +267,12 @@ def remove_my_organization_logo(
             if file_path.exists():
                 file_path.unlink()
         branding.logo_path = None
-        branding.updated_at = datetime.utcnow()
+        branding.updated_at = utc_now()
         session.add(branding)
         session.commit()
         session.refresh(branding)
 
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = utc_now()
     session.add(profile)
     session.commit()
     session.refresh(profile)
@@ -316,7 +317,7 @@ def update_my_user_preferences(
         pref = UserPreference(user_id=int(current_user.id), user_platform=platform)
     else:
         pref.user_platform = platform
-        pref.updated_at = datetime.utcnow()
+        pref.updated_at = utc_now()
 
     session.add(pref)
     session.commit()

@@ -33,8 +33,28 @@ export interface StoredSharedFileRecord {
   localContentType?: string | null;
 }
 
+export interface StoredMessageScopeSnapshot {
+  scopeId: string;
+  items: StoredMessageRecord[];
+}
+
 const MESSAGE_STORAGE_KEY_PREFIX = 'messaging_messages_local::v1::';
 const SHARED_FILES_STORAGE_KEY_PREFIX = 'messaging_shared_files_local::v1::';
+const LOCAL_MESSAGE_ID_PREFIX = 'local-message-';
+const LOCAL_MESSAGE_SERVER_MATCH_WINDOW_MS = 10 * 60 * 1000;
+const MESSAGE_STORAGE_CHUNK_SUFFIXES = ['__chunked', '__chunk_count'] as const;
+const MESSAGE_STORAGE_CHUNK_PREFIX = '__chunk_';
+const TRANSIENT_MESSAGE_ERROR_PATTERNS = [
+  'unexpected end of stream',
+  'failed to fetch',
+  'network request failed',
+  'fetch failed',
+  'networkerror',
+  'request timeout',
+  'api error: 500',
+  '500 internal server error',
+  'internal server error',
+] as const;
 
 function toMessageStorageKey(scopeId: string): string {
   return `${MESSAGE_STORAGE_KEY_PREFIX}${scopeId}`;
@@ -42,6 +62,23 @@ function toMessageStorageKey(scopeId: string): string {
 
 function toSharedFilesStorageKey(scopeId: string): string {
   return `${SHARED_FILES_STORAGE_KEY_PREFIX}${scopeId}`;
+}
+
+function normalizeMessageStorageBaseKey(key: string): string | null {
+  if (!key.startsWith(MESSAGE_STORAGE_KEY_PREFIX)) return null;
+
+  for (const suffix of MESSAGE_STORAGE_CHUNK_SUFFIXES) {
+    if (key.endsWith(suffix)) {
+      return key.slice(0, -suffix.length);
+    }
+  }
+
+  const chunkIndex = key.lastIndexOf(MESSAGE_STORAGE_CHUNK_PREFIX);
+  if (chunkIndex >= 0) {
+    return key.slice(0, chunkIndex);
+  }
+
+  return key;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -71,10 +108,22 @@ function normalizeSyncStatus(value: unknown): LocalSyncStatus {
   return value === 'pending' || value === 'error' ? value : 'synced';
 }
 
+function normalizeTimestampForParsing(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) return normalized;
+
+  const hasExplicitTimezone = /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(normalized);
+  return hasExplicitTimezone ? normalized : `${normalized}Z`;
+}
+
+function parseTimestampMs(value: string): number {
+  return new Date(normalizeTimestampForParsing(value)).getTime();
+}
+
 function sortMessages(items: StoredMessageRecord[]): StoredMessageRecord[] {
   return [...items].sort((a, b) => {
-    const aTs = new Date(a.created_at).getTime();
-    const bTs = new Date(b.created_at).getTime();
+    const aTs = parseTimestampMs(a.created_at);
+    const bTs = parseTimestampMs(b.created_at);
     return aTs - bTs;
   });
 }
@@ -234,6 +283,141 @@ export function mergeMessageRecords(
   return sortMessages([...byId.values()]);
 }
 
+function normalizeComparableMessageText(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeComparableWorkReportId(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toTimestampMs(value: string): number | null {
+  const parsed = parseTimestampMs(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isTransientMessageError(value: string | null | undefined): boolean {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return (
+    normalized.length > 0 &&
+    TRANSIENT_MESSAGE_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern))
+  );
+}
+
+function shouldAttemptMessageServerReconciliation(item: StoredMessageRecord): boolean {
+  if (item.id.startsWith(LOCAL_MESSAGE_ID_PREFIX) === false) return false;
+  if (item.syncStatus === 'synced') return false;
+
+  return item.syncStatus === 'error' || isTransientMessageError(item.lastSyncError);
+}
+
+function isServerMatchForLocalMessage(
+  localItem: StoredMessageRecord,
+  serverItem: StoredMessageRecord
+): boolean {
+  if (localItem.from_user_id !== serverItem.from_user_id) return false;
+  if (localItem.to_user_id !== serverItem.to_user_id) return false;
+  if (
+    normalizeComparableWorkReportId(localItem.work_report_id) !==
+    normalizeComparableWorkReportId(serverItem.work_report_id)
+  ) {
+    return false;
+  }
+  if (
+    normalizeComparableMessageText(localItem.message) !==
+    normalizeComparableMessageText(serverItem.message)
+  ) {
+    return false;
+  }
+
+  const localTimestamp = toTimestampMs(localItem.created_at);
+  const serverTimestamp = toTimestampMs(serverItem.created_at);
+  if (localTimestamp === null || serverTimestamp === null) return false;
+
+  return Math.abs(serverTimestamp - localTimestamp) <= LOCAL_MESSAGE_SERVER_MATCH_WINDOW_MS;
+}
+
+export function reconcileStoredMessagesWithServer(
+  serverItems: StoredMessageRecord[],
+  localItems: StoredMessageRecord[]
+): StoredMessageRecord[] {
+  const matchedServerIds = new Set<string>();
+
+  return sortMessages(
+    localItems.filter((item) => {
+      if (!shouldAttemptMessageServerReconciliation(item)) {
+        return true;
+      }
+
+      const matchedServer = serverItems.find((serverItem) => {
+        if (matchedServerIds.has(serverItem.id)) return false;
+        return isServerMatchForLocalMessage(item, serverItem);
+      });
+
+      if (!matchedServer) {
+        return true;
+      }
+
+      matchedServerIds.add(matchedServer.id);
+      return false;
+    })
+  );
+}
+
+export function reconcileStoredMessageScopes(
+  scopes: StoredMessageScopeSnapshot[],
+): StoredMessageScopeSnapshot[] {
+  const syncedReferences = scopes.flatMap((scope) =>
+    scope.items.filter((item) => item.syncStatus === 'synced'),
+  );
+
+  if (syncedReferences.length === 0) {
+    return scopes;
+  }
+
+  return scopes.map((scope) => ({
+    ...scope,
+    items: reconcileStoredMessagesWithServer(syncedReferences, scope.items),
+  }));
+}
+
+export async function cleanupStoredMessageArtifacts(): Promise<void> {
+  const baseKeys = Array.from(
+    new Set(
+      (await storage.keys())
+        .map((key) => normalizeMessageStorageBaseKey(key))
+        .filter((key): key is string => Boolean(key)),
+    ),
+  );
+
+  if (baseKeys.length === 0) return;
+
+  const scopes = (
+    await Promise.all(
+      baseKeys.map(async (key) => {
+        const scopeId = key.slice(MESSAGE_STORAGE_KEY_PREFIX.length);
+        const items = await readStoredMessages(scopeId);
+        if (items.length === 0) return null;
+        return { scopeId, items } satisfies StoredMessageScopeSnapshot;
+      }),
+    )
+  ).filter((scope): scope is StoredMessageScopeSnapshot => Boolean(scope));
+
+  if (scopes.length === 0) return;
+
+  const reconciledScopes = reconcileStoredMessageScopes(scopes);
+
+  await Promise.all(
+    reconciledScopes.map(async (scope, index) => {
+      if (JSON.stringify(scope.items) === JSON.stringify(scopes[index].items)) {
+        return;
+      }
+
+      await writeStoredMessages(scope.scopeId, scope.items);
+    }),
+  );
+}
+
 export function mergeSharedFileRecords(
   serverItems: StoredSharedFileRecord[],
   localItems: StoredSharedFileRecord[]
@@ -333,4 +517,3 @@ export function fileBase64ToBlob(
   }
   return new Blob([bytes], { type: contentType });
 }
-

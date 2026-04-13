@@ -1,14 +1,21 @@
-# DocInt Proxy (Azure Functions)
+# DocInt Proxy
 
-> Referencia unica de endpoints: `documentacion/ENDPOINTS_UNIFICADOS.md`.
-
-Proxy HTTP para procesar albaranes con Azure AI Document Intelligence.
-Android sube el archivo al proxy y el proxy invoca DocInt con secretos
-guardados solo en App Settings.
+Azure Function HTTP para procesar albaranes con Azure AI Document Intelligence.
 
 ## Flujo
 
-`Tablet Android -> docint-proxy -> REST DocInt -> JSON normalizado -> revision/aplicar en UI`
+`Cliente -> docint-proxy -> Azure DocInt -> JSON normalizado`
+
+El proxy valida el bearer token contra el backend antes de invocar Document
+Intelligence.
+
+## Cambios recientes reflejados en este arbol
+
+- `src/functions/processAlbaran.ts` se simplifico extrayendo logica pura.
+- Las utilidades viven ahora en `src/functions/processAlbaran.utils.ts`.
+- Hay base minima de tests en `tests/processAlbaran.utils.test.ts`.
+- `npm test` ya forma parte de los scripts del paquete.
+- `tsconfig.json` incluye `tests/**/*.ts`.
 
 ## Variables de entorno
 
@@ -18,34 +25,50 @@ guardados solo en App Settings.
 - `DOCINT_MODEL_PRIMARY`
 - `DOCINT_MODEL_FALLBACK`
 - `DOCINT_LOCALE`
-- `DOCINT_PAGES_LIMIT` (opcional)
+- `DOCINT_PAGES_LIMIT`
 - `DOCINT_TIMEOUT_MS`
-- `DOCINT_MAX_FILE_BYTES` (opcional, por defecto `12582912`)
-- `DOCINT_IS_F0` (opcional)
-
-Validacion de autenticacion contra backend:
-
+- `DOCINT_MAX_FILE_BYTES`
+- `DOCINT_IS_F0`
 - `API_BASE_URL`
 - `API_AUTH_ME_PATH`
 - `API_AUTH_ME_FALLBACK_PATH`
 - `API_AUTH_TIMEOUT_MS`
 
-## Ejecucion local
+Usa `local.settings.example.json` como plantilla. No subas
+`local.settings.json`.
 
-1. `npm install`
-2. Copiar `local.settings.example.json` a `local.settings.json` y completar valores.
-3. `npm run build`
-4. `func start`
+## Desarrollo local
 
-## Solicitud y respuesta
+```bash
+npm install
+npm run build
+func start
+```
 
-- Solicitud: `multipart/form-data` con `file`.
-- Cabecera requerida: `Authorization: Bearer <token>`.
-- Respuesta: JSON normalizado de albaran (proveedor, fecha, numero, items, warnings).
+Tests:
 
-## Errores esperables
+```bash
+npm test
+```
 
-- `400`: solicitud invalida.
-- `401`: token invalido o ausente.
-- `500`: error interno o de configuracion.
-- `502`: fallo de servicio aguas arriba (auth o DocInt).
+## Contrato HTTP
+
+- Metodo: `POST`
+- Content-Type: `multipart/form-data`
+- Campo requerido: `file`
+- Cabecera requerida: `Authorization: Bearer <token>`
+
+Respuesta:
+
+- `200`: documento procesado y normalizado
+- `400`: solicitud invalida o archivo no soportado
+- `401`: token ausente o no valido
+- `429`: throttling de DocInt
+- `500`: error de configuracion local
+- `502`: fallo aguas arriba en auth o DocInt
+
+## Notas de seguridad
+
+- Los secretos reales deben vivir solo en App Settings o archivos ignorados.
+- Si hubo exposicion previa de claves, rota `DOCINT_KEY` antes de seguir usando
+  el recurso.

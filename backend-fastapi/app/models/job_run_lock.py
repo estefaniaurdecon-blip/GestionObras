@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlalchemy import Index
@@ -20,7 +21,7 @@ class JobRunLock(SQLModel, table=True):
     run_date: date = Field(index=True)
     status: str = Field(default="completed", max_length=32, index=True)
     detail: Optional[str] = Field(default=None, max_length=512)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
     completed_at: Optional[datetime] = Field(default=None, index=True)
 
     __table_args__ = (

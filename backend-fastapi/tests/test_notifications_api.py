@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -7,6 +8,12 @@ from sqlmodel import Session, select
 from app.models.notification import Notification, NotificationType
 from app.models.tenant import Tenant
 from app.models.user import User
+
+
+def test_notification_model_uses_enum_values_for_storage() -> None:
+    enum_values = list(Notification.__table__.c.type.type.enums)
+    assert NotificationType.NEW_MESSAGE.value in enum_values
+    assert NotificationType.NEW_MESSAGE.name not in enum_values
 
 
 def _login_superadmin(client: TestClient) -> str:
@@ -30,7 +37,7 @@ def test_delete_notification_endpoint(
 
     tenant = Tenant(
         name="Tenant Notifications",
-        subdomain=f"notifications-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"notifications-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)
@@ -85,7 +92,7 @@ def test_list_notifications_endpoint_only_returns_supported_app_types(
 
     tenant = Tenant(
         name="Tenant Notifications Filter",
-        subdomain=f"notifications-filter-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"notifications-filter-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

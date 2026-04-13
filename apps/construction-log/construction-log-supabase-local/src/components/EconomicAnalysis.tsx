@@ -11,7 +11,15 @@ import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { listRentalMachinery } from '@/integrations/api/client';
+import { listRentalMachinery, type ApiRentalMachinery } from '@/integrations/api/client';
+
+// Legacy field aliases used by the economic analysis charts
+type RentalMachineryDisplay = ApiRentalMachinery & {
+  work_id: string;
+  delivery_date: string;
+  removal_date: string | null | undefined;
+  daily_rate: number;
+};
 
 interface EconomicAnalysisProps {
   reports: WorkReport[];
@@ -22,16 +30,16 @@ type PeriodType = 'daily' | 'weekly' | 'monthly';
 export const EconomicAnalysis = ({ reports }: EconomicAnalysisProps) => {
   const [periodType, setPeriodType] = useState<PeriodType>('daily');
   const [selectedWork, setSelectedWork] = useState<string>('all');
-  const [rentalMachinery, setRentalMachinery] = useState<any[]>([]);
+  const [rentalMachinery, setRentalMachinery] = useState<RentalMachineryDisplay[]>([]);
 
   // Cargar maquinaria de alquiler via API (map API fields to legacy names)
   useEffect(() => {
     const loadRentalMachinery = async () => {
       try {
         const items = await listRentalMachinery();
-        const data = items.map((m: any) => ({
+        const data: RentalMachineryDisplay[] = items.map((m) => ({
           ...m,
-          work_id: m.project_id,
+          work_id: String(m.project_id),
           delivery_date: m.start_date,
           removal_date: m.end_date,
           daily_rate: m.price != null ? Number(m.price) : 0,

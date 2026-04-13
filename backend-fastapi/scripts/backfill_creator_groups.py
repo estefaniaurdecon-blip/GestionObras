@@ -1,26 +1,26 @@
 """
-Fase 2c — Script de auditoría y backfill de creator_group_id.
+Fase 2c â€” Script de auditorÃ­a y backfill de creator_group_id.
 
-Propósito:
+PropÃ³sito:
   - Auditar usuarios legacy con creator_group_id IS NULL
   - Auditar partes de obra legacy con creator_group_id IS NULL
-  - Clasificar por categoría de resolución
+  - Clasificar por categorÃ­a de resoluciÃ³n
   - Aplicar backfill seguro en dry_run=False
 
 Uso:
-  # Solo auditoría (sin escribir nada):
+  # Solo auditorÃ­a (sin escribir nada):
   python -m scripts.backfill_creator_groups --dry-run
 
-  # Aplicar solo automáticos (Categoría 1):
+  # Aplicar solo automÃ¡ticos (CategorÃ­a 1):
   python -m scripts.backfill_creator_groups --apply-auto
 
-  # Aplicar automáticos + last_resort:
+  # Aplicar automÃ¡ticos + last_resort:
   python -m scripts.backfill_creator_groups --apply-auto --apply-last-resort
 
   # Ver informe de semi_auto / manual sin escribir:
   python -m scripts.backfill_creator_groups --dry-run --verbose
 
-Variables de entorno requeridas (o .env en raíz del backend):
+Variables de entorno requeridas (o .env en raÃ­z del backend):
   DATABASE_URL  (ej. postgresql://user:pass@localhost:5432/dbname)
 
 IMPORTANTE: Ejecutar SIEMPRE con --dry-run primero.
@@ -34,9 +34,10 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 from typing import Optional
 
-# Añadir backend-fastapi al path para importar la app
+# AÃ±adir backend-fastapi al path para importar la app
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlmodel import Session, create_engine, select
@@ -48,7 +49,7 @@ from app.services.user_service import resolve_creator_group_id
 
 
 # ---------------------------------------------------------------------------
-# Helpers de auditoría
+# Helpers de auditorÃ­a
 # ---------------------------------------------------------------------------
 
 def _count_audit_matches_for_user(session: Session, user: User) -> int:
@@ -57,7 +58,7 @@ def _count_audit_matches_for_user(session: Session, user: User) -> int:
     a este usuario, ya sea por JSON estructurado (campo created_user_id)
     o por substring legacy del email.
 
-    Ventana temporal: ±5 minutos del user.created_at.
+    Ventana temporal: Â±5 minutos del user.created_at.
     """
     if not user.id or not user.tenant_id:
         return 0
@@ -101,7 +102,7 @@ def _count_audit_matches_for_user(session: Session, user: User) -> int:
 def _get_audit_creator_user_id(session: Session, user: User) -> Optional[int]:
     """
     Devuelve el user_id del creador si hay exactamente 1 match en audit_log.
-    Retorna None si hay 0 o más de 1 matches.
+    Retorna None si hay 0 o mÃ¡s de 1 matches.
     """
     if not user.id or not user.tenant_id:
         return None
@@ -148,13 +149,13 @@ def _get_audit_creator_user_id(session: Session, user: User) -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
-# Clasificación de usuarios
+# ClasificaciÃ³n de usuarios
 # ---------------------------------------------------------------------------
 
-CATEGORY_AUTO = "auto"            # Categoría 1: backfill directo seguro
-CATEGORY_SEMI_AUTO = "semi_auto"  # Categoría 2: requiere revisión antes de escribir
-CATEGORY_MANUAL = "manual"        # Categoría 3: revisión manual obligatoria
-CATEGORY_LAST_RESORT = "last_resort"  # Categoría 4: auto-grupo cuando condiciones aplican
+CATEGORY_AUTO = "auto"            # CategorÃ­a 1: backfill directo seguro
+CATEGORY_SEMI_AUTO = "semi_auto"  # CategorÃ­a 2: requiere revisiÃ³n antes de escribir
+CATEGORY_MANUAL = "manual"        # CategorÃ­a 3: revisiÃ³n manual obligatoria
+CATEGORY_LAST_RESORT = "last_resort"  # CategorÃ­a 4: auto-grupo cuando condiciones aplican
 
 
 def classify_user_for_backfill(session: Session, user: User) -> tuple[str, str]:
@@ -163,7 +164,7 @@ def classify_user_for_backfill(session: Session, user: User) -> tuple[str, str]:
 
     Retorna: (category, reason)
       category: 'auto' | 'semi_auto' | 'manual' | 'last_resort'
-      reason: descripción textual del motivo de clasificación
+      reason: descripciÃ³n textual del motivo de clasificaciÃ³n
     """
     if user.created_by_user_id:
         creator = session.get(User, user.created_by_user_id)
@@ -173,26 +174,26 @@ def classify_user_for_backfill(session: Session, user: User) -> tuple[str, str]:
             return CATEGORY_MANUAL, f"created_by_user_id={user.created_by_user_id} no existe en DB (usuario eliminado)"
 
         if creator.is_super_admin:
-            # Decisión de negocio: ¿a qué grupo asignar un usuario creado por super_admin?
-            return CATEGORY_MANUAL, f"creado por super_admin (id={creator.id}) — decisión de negocio requerida"
+            # DecisiÃ³n de negocio: Â¿a quÃ© grupo asignar un usuario creado por super_admin?
+            return CATEGORY_MANUAL, f"creado por super_admin (id={creator.id}) â€” decisiÃ³n de negocio requerida"
 
         if creator.creator_group_id is not None:
-            # Cadena directa resuelta: resolve_creator_group_id() devolverá creator.creator_group_id
+            # Cadena directa resuelta: resolve_creator_group_id() devolverÃ¡ creator.creator_group_id
             return CATEGORY_AUTO, f"cadena directa: creator.id={creator.id}, creator.creator_group_id={creator.creator_group_id}"
 
-        # Creador existe pero también tiene creator_group_id=NULL -> cadena incompleta
+        # Creador existe pero tambiÃ©n tiene creator_group_id=NULL -> cadena incompleta
         # Intentar resolver recursivamente via resolve_creator_group_id()
         resolved = resolve_creator_group_id(session, creator, persist=False)
         if resolved is not None:
             return CATEGORY_SEMI_AUTO, (
-                f"cadena incompleta: creator.id={creator.id} también NULL, "
-                f"pero resolve() devuelve {resolved} — verificar profundidad"
+                f"cadena incompleta: creator.id={creator.id} tambiÃ©n NULL, "
+                f"pero resolve() devuelve {resolved} â€” verificar profundidad"
             )
         return CATEGORY_SEMI_AUTO, (
-            f"cadena incompleta: creator.id={creator.id} también NULL y resolve() no resuelve — revisar manualmente"
+            f"cadena incompleta: creator.id={creator.id} tambiÃ©n NULL y resolve() no resuelve â€” revisar manualmente"
         )
 
-    # Sin created_by_user_id — buscar en audit_log
+    # Sin created_by_user_id â€” buscar en audit_log
     matches = _count_audit_matches_for_user(session, user)
 
     if matches == 1:
@@ -202,34 +203,34 @@ def classify_user_for_backfill(session: Session, user: User) -> tuple[str, str]:
             if audit_creator and not audit_creator.is_super_admin and audit_creator.creator_group_id is not None:
                 return CATEGORY_SEMI_AUTO, (
                     f"sin created_by, 1 match en audit_log: creator_id={creator_id}, "
-                    f"creator.creator_group_id={audit_creator.creator_group_id} — alta confianza, revisar lista"
+                    f"creator.creator_group_id={audit_creator.creator_group_id} â€” alta confianza, revisar lista"
                 )
             return CATEGORY_SEMI_AUTO, (
-                f"sin created_by, 1 match en audit_log: creator_id={creator_id} — "
+                f"sin created_by, 1 match en audit_log: creator_id={creator_id} â€” "
                 f"creator tiene group=NULL o es super_admin, revisar"
             )
         return CATEGORY_SEMI_AUTO, "sin created_by, 1 match en audit_log pero no se pudo extraer creator_id"
 
     if matches > 1:
-        return CATEGORY_MANUAL, f"sin created_by, {matches} matches en audit_log — ambigüedad, revisar manualmente"
+        return CATEGORY_MANUAL, f"sin created_by, {matches} matches en audit_log â€” ambigÃ¼edad, revisar manualmente"
 
-    # Sin ningún rastro — evaluar condiciones para last_resort
-    # Condición 1: tenant_admin (tiene su propia jerarquía por diseño)
+    # Sin ningÃºn rastro â€” evaluar condiciones para last_resort
+    # CondiciÃ³n 1: tenant_admin (tiene su propia jerarquÃ­a por diseÃ±o)
     role_name = _get_role_name(session, user)
     if role_name and "admin" in role_name.lower():
-        return CATEGORY_LAST_RESORT, f"tenant_admin (role={role_name}) sin creador conocido — auto-grupo aceptable por diseño"
+        return CATEGORY_LAST_RESORT, f"tenant_admin (role={role_name}) sin creador conocido â€” auto-grupo aceptable por diseÃ±o"
 
-    # Condición 2: nunca activado (is_active=False desde creación)
+    # CondiciÃ³n 2: nunca activado (is_active=False desde creaciÃ³n)
     if not user.is_active:
-        return CATEGORY_LAST_RESORT, "usuario inactivo (nunca completó onboarding) sin rastro — auto-grupo aceptable"
+        return CATEGORY_LAST_RESORT, "usuario inactivo (nunca completÃ³ onboarding) sin rastro â€” auto-grupo aceptable"
 
-    # Condición 3: único usuario del tenant
+    # CondiciÃ³n 3: Ãºnico usuario del tenant
     tenant_user_count = _count_tenant_users(session, user.tenant_id)
     if tenant_user_count == 1:
-        return CATEGORY_LAST_RESORT, f"único usuario del tenant_id={user.tenant_id} sin rastro — auto-grupo aceptable"
+        return CATEGORY_LAST_RESORT, f"Ãºnico usuario del tenant_id={user.tenant_id} sin rastro â€” auto-grupo aceptable"
 
-    # Usuario activo sin ningún rastro: NO asumir
-    return CATEGORY_MANUAL, "usuario activo sin created_by, sin matches en audit_log — no asumir grupo, requiere revisión manual"
+    # Usuario activo sin ningÃºn rastro: NO asumir
+    return CATEGORY_MANUAL, "usuario activo sin created_by, sin matches en audit_log â€” no asumir grupo, requiere revisiÃ³n manual"
 
 
 def _get_role_name(session: Session, user: User) -> Optional[str]:
@@ -273,9 +274,9 @@ def run_users_backfill(
     Clasifica y opcionalmente aplica backfill a usuarios con creator_group_id IS NULL.
 
     En dry_run=True: solo clasifica, no escribe.
-    En dry_run=False + apply_auto=True: aplica Categoría 1 automáticamente.
-    En dry_run=False + apply_last_resort=True: aplica Categoría 4 (auto-grupo).
-    Categorías 2 y 3 NUNCA se aplican automáticamente.
+    En dry_run=False + apply_auto=True: aplica CategorÃ­a 1 automÃ¡ticamente.
+    En dry_run=False + apply_last_resort=True: aplica CategorÃ­a 4 (auto-grupo).
+    CategorÃ­as 2 y 3 NUNCA se aplican automÃ¡ticamente.
     """
     users = session.exec(
         select(User).where(
@@ -311,12 +312,12 @@ def run_users_backfill(
         report[category].append(entry)
 
         if verbose:
-            print(f"  [{category.upper():12s}] user_id={user.id} ({user.email}) — {reason}")
+            print(f"  [{category.upper():12s}] user_id={user.id} ({user.email}) â€” {reason}")
 
         if dry_run:
             continue
 
-        # --- Aplicar Categoría 1 (automático seguro) ---
+        # --- Aplicar CategorÃ­a 1 (automÃ¡tico seguro) ---
         if category == CATEGORY_AUTO and apply_auto:
             try:
                 resolved = resolve_creator_group_id(session, user, persist=True)
@@ -327,12 +328,12 @@ def run_users_backfill(
                 else:
                     report["errors"].append({
                         "user_id": user.id,
-                        "error": "resolve_creator_group_id() devolvió None en categoría auto",
+                        "error": "resolve_creator_group_id() devolviÃ³ None en categorÃ­a auto",
                     })
             except Exception as exc:
                 report["errors"].append({"user_id": user.id, "error": str(exc)})
 
-        # --- Aplicar Categoría 4 (auto-grupo, solo condiciones explícitas) ---
+        # --- Aplicar CategorÃ­a 4 (auto-grupo, solo condiciones explÃ­citas) ---
         elif category == CATEGORY_LAST_RESORT and apply_last_resort:
             try:
                 if user.id is not None:
@@ -363,9 +364,9 @@ def run_work_reports_backfill(
     Backfill seguro de creator_group_id en WorkReport.
 
     Solo aplica cuando el creador (created_by_id) tiene creator_group_id ya resuelto.
-    No aplica resolución recursiva para no asumir grupos en cadenas incompletas.
+    No aplica resoluciÃ³n recursiva para no asumir grupos en cadenas incompletas.
 
-    Equivalente a Categoría 1 para usuarios: copia directa creator -> parte.
+    Equivalente a CategorÃ­a 1 para usuarios: copia directa creator -> parte.
     """
     reports_pending = session.exec(
         select(WorkReport).where(WorkReport.creator_group_id.is_(None))
@@ -385,10 +386,10 @@ def run_work_reports_backfill(
                 "report_id": report.id,
                 "tenant_id": report.tenant_id,
                 "created_by_id": None,
-                "reason": "created_by_id IS NULL — parte sin creador identificado",
+                "reason": "created_by_id IS NULL â€” parte sin creador identificado",
             })
             if verbose:
-                print(f"  [UNRESOLVED] report_id={report.id} — sin created_by_id")
+                print(f"  [UNRESOLVED] report_id={report.id} â€” sin created_by_id")
             continue
 
         creator = session.get(User, report.created_by_id)
@@ -401,7 +402,7 @@ def run_work_reports_backfill(
                 "reason": f"created_by_id={report.created_by_id} no existe en DB (usuario eliminado)",
             })
             if verbose:
-                print(f"  [UNRESOLVED] report_id={report.id} — creator eliminado (id={report.created_by_id})")
+                print(f"  [UNRESOLVED] report_id={report.id} â€” creator eliminado (id={report.created_by_id})")
             continue
 
         if creator.is_super_admin:
@@ -409,10 +410,10 @@ def run_work_reports_backfill(
                 "report_id": report.id,
                 "tenant_id": report.tenant_id,
                 "created_by_id": report.created_by_id,
-                "reason": f"creador es super_admin (id={creator.id}) — parte sin grupo asignable automáticamente",
+                "reason": f"creador es super_admin (id={creator.id}) â€” parte sin grupo asignable automÃ¡ticamente",
             })
             if verbose:
-                print(f"  [UNRESOLVED] report_id={report.id} — creado por super_admin")
+                print(f"  [UNRESOLVED] report_id={report.id} â€” creado por super_admin")
             continue
 
         if creator.creator_group_id is None:
@@ -421,14 +422,14 @@ def run_work_reports_backfill(
                 "tenant_id": report.tenant_id,
                 "created_by_id": report.created_by_id,
                 "reason": (
-                    f"creator.id={creator.id} aún tiene creator_group_id=NULL — "
+                    f"creator.id={creator.id} aÃºn tiene creator_group_id=NULL â€” "
                     "backfill de usuarios debe ejecutarse primero"
                 ),
             })
             if verbose:
                 print(
-                    f"  [UNRESOLVED] report_id={report.id} — "
-                    f"creator_id={creator.id} aún sin grupo (ejecutar backfill de usuarios primero)"
+                    f"  [UNRESOLVED] report_id={report.id} â€” "
+                    f"creator_id={creator.id} aÃºn sin grupo (ejecutar backfill de usuarios primero)"
                 )
             continue
 
@@ -447,7 +448,7 @@ def run_work_reports_backfill(
             except Exception as exc:
                 result["errors"].append({"report_id": report.id, "error": str(exc)})
         else:
-            result["resolved"] += 1  # cuenta lo que se resolvería
+            result["resolved"] += 1  # cuenta lo que se resolverÃ­a
 
     if not dry_run and result["resolved"] > 0:
         session.commit()
@@ -456,7 +457,7 @@ def run_work_reports_backfill(
 
 
 # ---------------------------------------------------------------------------
-# Consultas SQL de auditoría inicial (referencia para ejecutar directamente en DB)
+# Consultas SQL de auditorÃ­a inicial (referencia para ejecutar directamente en DB)
 # ---------------------------------------------------------------------------
 
 AUDIT_QUERIES = """
@@ -468,7 +469,7 @@ WHERE creator_group_id IS NULL
   AND tenant_id IS NOT NULL
 ORDER BY tenant_id, created_at;
 
--- [Q2] Partes de obra sin creator_group_id (requiere migración d4e5f6a7b8c9 aplicada)
+-- [Q2] Partes de obra sin creator_group_id (requiere migraciÃ³n d4e5f6a7b8c9 aplicada)
 SELECT wr.id, wr.tenant_id, wr.created_by_id,
        u.email AS creator_email,
        u.creator_group_id AS creator_group
@@ -478,13 +479,13 @@ WHERE wr.creator_group_id IS NULL
   AND wr.deleted_at IS NULL
 ORDER BY wr.tenant_id, wr.created_at;
 
--- [Q3] Adjuntos huérfanos (work_report_id no referencia parte existente)
+-- [Q3] Adjuntos huÃ©rfanos (work_report_id no referencia parte existente)
 SELECT a.id, a.work_report_id, a.tenant_id, a.file_name
 FROM erp_work_report_attachment a
 LEFT JOIN erp_work_report wr ON wr.id = a.work_report_id
 WHERE wr.id IS NULL;
 
--- [Q4] Usuarios por categoría estimada (sin resolver, solo conteo rápido)
+-- [Q4] Usuarios por categorÃ­a estimada (sin resolver, solo conteo rÃ¡pido)
 SELECT
   CASE
     WHEN created_by_user_id IS NOT NULL THEN 'tiene_created_by'
@@ -497,7 +498,7 @@ WHERE creator_group_id IS NULL
   AND tenant_id IS NOT NULL
 GROUP BY 1;
 
--- [Q5] Cobertura tras backfill (ejecutar después de aplicar)
+-- [Q5] Cobertura tras backfill (ejecutar despuÃ©s de aplicar)
 SELECT
   COUNT(*) FILTER (WHERE creator_group_id IS NOT NULL) AS con_grupo,
   COUNT(*) FILTER (WHERE creator_group_id IS NULL) AS sin_grupo,
@@ -522,42 +523,42 @@ WHERE deleted_at IS NULL;
 PHASE_2C_CLOSURE_CRITERIA = """
 Criterios para dar Fase 2c por cerrada y pasar a Fase 2d:
 ---------------------------------------------------------
-1. PASO 1 — apply-auto completado:
-   - Categoría 1 (auto): 100% aplicada, 0 errores en report["applied_auto"]
+1. PASO 1 â€” apply-auto completado:
+   - CategorÃ­a 1 (auto): 100% aplicada, 0 errores en report["applied_auto"]
    - Semi-auto y manual: listados, cada caso revisado individualmente
 
-2. PASO 2 — apply-work-reports completado:
+2. PASO 2 â€” apply-work-reports completado:
    - Backfill aplicado en todos los partes cuyo creador tiene grupo ya resuelto
    - 0 errores en report["errors"]
 
-3. PASO 3 — apply-last-resort (solo si necesario y documentado):
+3. PASO 3 â€” apply-last-resort (solo si necesario y documentado):
    - Aplicar SOLO cuando cada caso last_resort haya sido revisado: confirmar que
-     el usuario es tenant_admin sin creador conocido, o inactivo, o único del tenant
+     el usuario es tenant_admin sin creador conocido, o inactivo, o Ãºnico del tenant
    - NO aplicar a usuarios activos con partes de obra asociados sin revisar antes
 
-4. CASOS RESTANTES CON NULL — todos deben estar identificados:
+4. CASOS RESTANTES CON NULL â€” todos deben estar identificados:
    - Cada usuario con creator_group_id=NULL tras los 3 pasos debe tener una de estas:
-     a) Es super_admin (NULL por diseño — no afecta visibilidad operativa)
-     b) Es un caso manual documentado con decisión explícita (issue abierto o anotado aquí)
+     a) Es super_admin (NULL por diseÃ±o â€” no afecta visibilidad operativa)
+     b) Es un caso manual documentado con decisiÃ³n explÃ­cita (issue abierto o anotado aquÃ­)
      c) Es un usuario inactivo sin datos operativos (no ha creado partes, mensajes, etc.)
    - NO es aceptable tener NULLs en usuarios activos con partes de obra sin identificar
 
-5. PARTES RESTANTES CON NULL — todos deben estar identificados:
+5. PARTES RESTANTES CON NULL â€” todos deben estar identificados:
    - Cada parte con creator_group_id=NULL debe corresponder a:
-     a) Parte creado por super_admin (NULL por diseño — visible solo para super_admin en Fase 2d)
-     b) Parte con FK rota (creator eliminado) — documentado y sin actividad reciente
-   - NO es aceptable que partes activos de usuarios normales queden con NULL sin razón documentada
+     a) Parte creado por super_admin (NULL por diseÃ±o â€” visible solo para super_admin en Fase 2d)
+     b) Parte con FK rota (creator eliminado) â€” documentado y sin actividad reciente
+   - NO es aceptable que partes activos de usuarios normales queden con NULL sin razÃ³n documentada
 
-6. CONDICIÓN DE PASO A FASE 2D:
+6. CONDICIÃ“N DE PASO A FASE 2D:
    - Los NULLs restantes no corresponden a usuarios/partes activos con actividad operativa actual
-   - La lista de casos pendientes está documentada en SECURITY_REVIEW_GROUP_POLICY.md §8
-   - 0 errores en report["errors"] del último pase con --apply-*
+   - La lista de casos pendientes estÃ¡ documentada en SECURITY_REVIEW_GROUP_POLICY.md Â§8
+   - 0 errores en report["errors"] del Ãºltimo pase con --apply-*
    - Verificado con Q5/Q6: los NULLs restantes coinciden exactamente con los casos identificados
    - Comportamiento nuevo verificado: usuarios/partes creados post-Fase-2a tienen creator_group_id
 
-7. NO ACTIVAR todavía:
+7. NO ACTIVAR todavÃ­a:
    - list_work_reports() sin filtro de grupo (Fase 2d)
-   - _get_report_or_403() sin validación de grupo para adjuntos (Fase 2d)
+   - _get_report_or_403() sin validaciÃ³n de grupo para adjuntos (Fase 2d)
    - can_access_work_report() no activa en endpoints (Fase 2d)
 """
 
@@ -569,24 +570,24 @@ Criterios para dar Fase 2c por cerrada y pasar a Fase 2d:
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Fase 2c — Auditoría y backfill de creator_group_id.\n\n"
+            "Fase 2c â€” AuditorÃ­a y backfill de creator_group_id.\n\n"
             "PASOS OBLIGATORIOS (ejecutar en este orden, uno por uno):\n"
-            "  Paso 0: --dry-run --verbose            (auditoría sin escribir)\n"
-            "  Paso 1: --apply-auto                   (Categoría 1 usuarios)\n"
+            "  Paso 0: --dry-run --verbose            (auditorÃ­a sin escribir)\n"
+            "  Paso 1: --apply-auto                   (CategorÃ­a 1 usuarios)\n"
             "  Paso 2: --apply-work-reports           (partes de obra)\n"
             "  Paso 3: --apply-last-resort            (solo si necesario y revisado)\n\n"
-            "IMPORTANTE: solo un --apply-* por ejecución."
+            "IMPORTANTE: solo un --apply-* por ejecuciÃ³n."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--dry-run", action="store_true", default=True,
-        help="Solo clasifica, no escribe en DB (default: True — activo salvo que se pase --apply-*)",
+        help="Solo clasifica, no escribe en DB (default: True â€” activo salvo que se pase --apply-*)",
     )
     parser.add_argument(
         "--apply-auto", action="store_true", default=False,
         help=(
-            "PASO 1: aplicar Categoría 1 (automático seguro) para usuarios. "
+            "PASO 1: aplicar CategorÃ­a 1 (automÃ¡tico seguro) para usuarios. "
             "No toca partes de obra. Incompatible con --apply-work-reports y --apply-last-resort."
         ),
     )
@@ -601,14 +602,14 @@ def main():
     parser.add_argument(
         "--apply-last-resort", action="store_true", default=False,
         help=(
-            "PASO 3: aplicar Categoría 4 (auto-grupo) solo cuando necesario y revisado. "
-            "Ejecutar solo después de revisar la lista de last_resort del dry-run. "
+            "PASO 3: aplicar CategorÃ­a 4 (auto-grupo) solo cuando necesario y revisado. "
+            "Ejecutar solo despuÃ©s de revisar la lista de last_resort del dry-run. "
             "Incompatible con --apply-auto y --apply-work-reports."
         ),
     )
     parser.add_argument(
         "--show-queries", action="store_true", default=False,
-        help="Mostrar consultas SQL de auditoría para ejecutar en DB directamente",
+        help="Mostrar consultas SQL de auditorÃ­a para ejecutar en DB directamente",
     )
     parser.add_argument(
         "--show-closure-criteria", action="store_true", default=False,
@@ -632,11 +633,11 @@ def main():
         print(PHASE_2C_CLOSURE_CRITERIA)
         return
 
-    # --- Exclusión mutua: máximo un --apply-* por ejecución ---
+    # --- ExclusiÃ³n mutua: mÃ¡ximo un --apply-* por ejecuciÃ³n ---
     apply_flags = [args.apply_auto, args.apply_work_reports, args.apply_last_resort]
     active_flags = sum(1 for f in apply_flags if f)
     if active_flags > 1:
-        print("ERROR: solo se puede usar un --apply-* por ejecución.")
+        print("ERROR: solo se puede usar un --apply-* por ejecuciÃ³n.")
         print("  Paso 1: --apply-auto")
         print("  Paso 2: --apply-work-reports")
         print("  Paso 3: --apply-last-resort")
@@ -652,29 +653,29 @@ def main():
 
     engine = create_engine(database_url, echo=False)
 
-    # Describir qué hace esta ejecución
+    # Describir quÃ© hace esta ejecuciÃ³n
     if dry_run:
-        mode_label = "DRY RUN — auditoría completa, sin escribir"
+        mode_label = "DRY RUN â€” auditorÃ­a completa, sin escribir"
     elif args.apply_auto:
-        mode_label = "PASO 1 — aplicando Categoría 1 (auto) en usuarios"
+        mode_label = "PASO 1 â€” aplicando CategorÃ­a 1 (auto) en usuarios"
     elif args.apply_work_reports:
-        mode_label = "PASO 2 — aplicando backfill en partes de obra"
+        mode_label = "PASO 2 â€” aplicando backfill en partes de obra"
     else:
-        mode_label = "PASO 3 — aplicando Categoría 4 (last_resort) en usuarios"
+        mode_label = "PASO 3 â€” aplicando CategorÃ­a 4 (last_resort) en usuarios"
 
     print("=" * 70)
-    print("FASE 2C — Backfill creator_group_id")
+    print("FASE 2C â€” Backfill creator_group_id")
     print(f"Modo: {mode_label}")
-    print(f"Fecha: {datetime.utcnow().isoformat()}")
+    print(f"Fecha: {utc_now().isoformat()}")
     print("=" * 70)
 
     with Session(engine) as session:
 
         # ----------------------------------------------------------------
-        # SECCIÓN USUARIOS
-        # En dry_run: siempre auditar y mostrar clasificación completa.
-        # En --apply-auto: aplicar Categoría 1; los WR solo se auditan.
-        # En --apply-last-resort: aplicar Categoría 4; los WR solo se auditan.
+        # SECCIÃ“N USUARIOS
+        # En dry_run: siempre auditar y mostrar clasificaciÃ³n completa.
+        # En --apply-auto: aplicar CategorÃ­a 1; los WR solo se auditan.
+        # En --apply-last-resort: aplicar CategorÃ­a 4; los WR solo se auditan.
         # En --apply-work-reports: usuarios solo se auditan (dry_run=True).
         # ----------------------------------------------------------------
         users_dry_run = dry_run or args.apply_work_reports
@@ -689,10 +690,10 @@ def main():
         )
 
         print(f"\n  Total usuarios legacy (creator_group_id IS NULL): {user_report['total_legacy']}")
-        print(f"  Categoría 1 — Auto (seguro):       {len(user_report[CATEGORY_AUTO])}")
-        print(f"  Categoría 2 — Semi-auto (revisar): {len(user_report[CATEGORY_SEMI_AUTO])}")
-        print(f"  Categoría 3 — Manual:              {len(user_report[CATEGORY_MANUAL])}")
-        print(f"  Categoría 4 — Last resort:         {len(user_report[CATEGORY_LAST_RESORT])}")
+        print(f"  CategorÃ­a 1 â€” Auto (seguro):       {len(user_report[CATEGORY_AUTO])}")
+        print(f"  CategorÃ­a 2 â€” Semi-auto (revisar): {len(user_report[CATEGORY_SEMI_AUTO])}")
+        print(f"  CategorÃ­a 3 â€” Manual:              {len(user_report[CATEGORY_MANUAL])}")
+        print(f"  CategorÃ­a 4 â€” Last resort:         {len(user_report[CATEGORY_LAST_RESORT])}")
 
         if not users_dry_run:
             print(f"\n  -> Aplicados auto:         {user_report['applied_auto']}")
@@ -704,22 +705,22 @@ def main():
                 print(f"    user_id={err['user_id']}: {err['error']}")
 
         if user_report[CATEGORY_SEMI_AUTO]:
-            print(f"\n  [SEMI-AUTO — requieren revisión manual antes de aplicar]:")
+            print(f"\n  [SEMI-AUTO â€” requieren revisiÃ³n manual antes de aplicar]:")
             for u in user_report[CATEGORY_SEMI_AUTO]:
-                print(f"    user_id={u['user_id']} ({u['email']}) — {u['reason']}")
+                print(f"    user_id={u['user_id']} ({u['email']}) â€” {u['reason']}")
 
         if user_report[CATEGORY_MANUAL]:
-            print(f"\n  [MANUAL — no se aplican automáticamente, documentar decisión]:")
+            print(f"\n  [MANUAL â€” no se aplican automÃ¡ticamente, documentar decisiÃ³n]:")
             for u in user_report[CATEGORY_MANUAL]:
-                print(f"    user_id={u['user_id']} ({u['email']}) — {u['reason']}")
+                print(f"    user_id={u['user_id']} ({u['email']}) â€” {u['reason']}")
 
         if user_report[CATEGORY_LAST_RESORT] and (dry_run or args.apply_work_reports):
-            print(f"\n  [LAST RESORT — revisar cada caso antes de ejecutar --apply-last-resort]:")
+            print(f"\n  [LAST RESORT â€” revisar cada caso antes de ejecutar --apply-last-resort]:")
             for u in user_report[CATEGORY_LAST_RESORT]:
-                print(f"    user_id={u['user_id']} ({u['email']}) — {u['reason']}")
+                print(f"    user_id={u['user_id']} ({u['email']}) â€” {u['reason']}")
 
         # ----------------------------------------------------------------
-        # SECCIÓN PARTES DE OBRA
+        # SECCIÃ“N PARTES DE OBRA
         # En dry_run: auditar siempre.
         # En --apply-work-reports: aplicar.
         # En --apply-auto o --apply-last-resort: solo auditar (dry_run=True).
@@ -739,9 +740,9 @@ def main():
         print(f"  Irresolubles (super_admin/FK rota/sin creador): {len(wr_report['unresolved'])}")
 
         if wr_report["unresolved"]:
-            print(f"\n  [IRRESOLUBLES — quedarán con NULL; visibles solo para super_admin en Fase 2d]:")
+            print(f"\n  [IRRESOLUBLES â€” quedarÃ¡n con NULL; visibles solo para super_admin en Fase 2d]:")
             for u in wr_report["unresolved"]:
-                print(f"    report_id={u['report_id']} (tenant={u['tenant_id']}) — {u['reason']}")
+                print(f"    report_id={u['report_id']} (tenant={u['tenant_id']}) â€” {u['reason']}")
 
         if wr_report["errors"]:
             print(f"\n  ERRORES ({len(wr_report['errors'])}):")
@@ -783,7 +784,7 @@ def main():
                 print(f"\n  [OK] Paso 1 completado. Siguiente:")
                 print(f"    python -m scripts.backfill_creator_groups --apply-work-reports [-v]")
             else:
-                print(f"\n  [ERROR] Hay errores — revisar antes de continuar.")
+                print(f"\n  [ERROR] Hay errores â€” revisar antes de continuar.")
 
         elif args.apply_work_reports:
             errors = len(wr_report["errors"])
@@ -798,9 +799,9 @@ def main():
                     print(f"    python -m scripts.backfill_creator_groups --dry-run -v  -> revisar last_resort")
                     print(f"    python -m scripts.backfill_creator_groups --apply-last-resort [-v]")
                 else:
-                    print(f"  No hay casos last_resort — Fase 2c completada salvo revisión de manuales.")
+                    print(f"  No hay casos last_resort â€” Fase 2c completada salvo revisiÃ³n de manuales.")
             else:
-                print(f"\n  [ERROR] Hay errores — revisar antes de continuar.")
+                print(f"\n  [ERROR] Hay errores â€” revisar antes de continuar.")
 
         else:  # apply_last_resort
             errors = len(user_report["errors"])
@@ -810,11 +811,11 @@ def main():
             if errors == 0:
                 print(f"\n  [OK] Paso 3 completado.")
                 if pending_manual:
-                    print(f"  Quedan {pending_manual} casos semi_auto/manual — documentar decisión antes de Fase 2d.")
+                    print(f"  Quedan {pending_manual} casos semi_auto/manual â€” documentar decisiÃ³n antes de Fase 2d.")
                 else:
                     print(f"  Verificar Q5/Q6 y documentar irresolubles para cerrar Fase 2c.")
             else:
-                print(f"\n  [ERROR] Hay errores — revisar antes de dar Fase 2c por cerrada.")
+                print(f"\n  [ERROR] Hay errores â€” revisar antes de dar Fase 2c por cerrada.")
 
         print(f"\n  Consultas Q5/Q6:          python -m scripts.backfill_creator_groups --show-queries")
         print(f"  Criterios de cierre:      python -m scripts.backfill_creator_groups --show-closure-criteria")

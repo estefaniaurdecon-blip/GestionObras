@@ -71,22 +71,14 @@ from app.schemas.erp import (
 )
 from app.services.notification_service import create_notification
 from app.services.user_service import resolve_creator_group_id
-
-TASK_STATUSES = {"pending", "in_progress", "done"}
-WORK_REPORT_ALLOWED_STATUSES = {
-    "draft",
-    "pending",
-    "approved",
-    "completed",
-    "missing_data",
-    "missing_delivery_notes",
-    "closed",
-    "archived",
-}
-WORK_REPORT_CLOSED_STATUSES = {"closed"}
-RENTAL_ALLOWED_STATUSES = {"active", "inactive", "archived"}
-RENTAL_PRICE_UNITS = {"day", "hour", "month"}
-WORK_SERVICE_ALLOWED_STATUSES = {"pending", "in_progress", "completed"}
+from app.core.constants import (
+    TASK_STATUSES,
+    WORK_REPORT_ALLOWED_STATUSES,
+    WORK_REPORT_CLOSED_STATUSES,
+    RENTAL_ALLOWED_STATUSES,
+    RENTAL_PRICE_UNITS,
+    WORK_SERVICE_ALLOWED_STATUSES,
+)
 
 
 def _work_report_notification_label(report: WorkReport) -> str:
@@ -670,6 +662,7 @@ def update_project(
     session: Session, project_id: int, data: ProjectUpdate, tenant_id: Optional[int]
 ) -> Project:
     project = _get_project_or_404(session, project_id, tenant_id)
+    fields_set = data.model_fields_set
 
     if data.name is not None:
         project.name = data.name
@@ -677,7 +670,7 @@ def update_project(
         project.description = data.description
     if data.project_type is not None:
         project.project_type = _normalize_project_type(data.project_type)
-    if "department_id" in data.__fields_set__:
+    if "department_id" in fields_set:
         if data.department_id is None:
             project.department_id = None
         else:
@@ -697,9 +690,9 @@ def update_project(
         project.subsidy_percent = Decimal(_clamp_percent(data.subsidy_percent) or 0)
     if data.is_active is not None:
         project.is_active = data.is_active
-    if "latitude" in data.__fields_set__:
+    if "latitude" in fields_set:
         project.latitude = data.latitude
-    if "longitude" in data.__fields_set__:
+    if "longitude" in fields_set:
         project.longitude = data.longitude
 
     if project.start_date and project.end_date:

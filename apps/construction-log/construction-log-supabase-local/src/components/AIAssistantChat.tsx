@@ -71,7 +71,7 @@ interface SavedAnalysis {
 
 interface AIAssistantChatProps {
   workReports: WorkReport[];
-  advancedReportsData?: any; // Datos de informes avanzados para comparación
+  advancedReportsData?: Record<string, unknown>; // Datos de informes avanzados para comparación
   accessReports?: AccessReport[]; // Datos de control de accesos
   inventory?: InventoryItem[]; // Datos de inventario
 }
@@ -91,8 +91,9 @@ export const AIAssistantChat = ({ workReports, advancedReportsData, accessReport
   const [currentAnalysisIndex, setCurrentAnalysisIndex] = useState<number>(-1);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null);
-  const [urgentTasks, setUrgentTasks] = useState<any[]>([]);
-  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
+  // Legacy task slots — kept for AI context shape; always empty (calendar disabled)
+  const [urgentTasks, setUrgentTasks] = useState<unknown[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<unknown[]>([]);
   const [isButtonEnabled, setIsButtonEnabled] = useState(true);
   const [isButtonHovered, setIsButtonHovered] = useState(false);
   const [isButtonActive, setIsButtonActive] = useState(false);
@@ -616,7 +617,8 @@ useEffect(() => {
         (async () => {
           try {
             const buffer = await file.arrayBuffer();
-            const loadingTask: any = (pdfjsLib as any).getDocument({ data: buffer });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const loadingTask = (pdfjsLib as any).getDocument({ data: buffer });
             const pdf = await loadingTask.promise;
             const maxPages = Math.min(pdf.numPages, 5);
             
@@ -724,7 +726,8 @@ useEffect(() => {
     (async () => {
       try {
         const buffer = await file.arrayBuffer();
-        const loadingTask: any = (pdfjsLib as any).getDocument({ data: buffer });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const loadingTask = (pdfjsLib as any).getDocument({ data: buffer });
         const pdf = await loadingTask.promise;
         const maxPages = Math.min(pdf.numPages, 10); // Hasta 10 páginas para análisis de partes
         
@@ -1440,7 +1443,8 @@ useEffect(() => {
                           a: ({node, ...props}) => (
                             <a className="text-primary hover:text-primary/80 underline underline-offset-2 font-medium transition-colors [word-break:break-all] inline" {...props} />
                           ),
-                          code: ({node, inline, ...props}: any) => 
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          code: ({node, inline, ...props}: any) =>
                             inline ? (
                               <code className="bg-primary/15 text-primary px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-mono border border-primary/25 font-semibold [word-break:break-all] inline-block max-w-full" {...props} />
                             ) : (

@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Dict, List
 
 from sqlmodel import Session, select
@@ -44,7 +45,7 @@ def upsert_summary_by_year(
     record = session.exec(
         select(SummaryYear).where(SummaryYear.year == year),
     ).one_or_none()
-    now = datetime.utcnow()
+    now = utc_now()
     if record is None:
         record = SummaryYear(year=year)
         record.created_at = now

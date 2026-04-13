@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from fastapi import status
@@ -69,7 +70,7 @@ def _create_project(session: Session, *, tenant_id: int, name: str) -> Project:
     project = Project(
         tenant_id=tenant_id,
         name=name,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(project)
     session.commit()
@@ -108,7 +109,7 @@ def _create_work_report(
         tenant_id=tenant_id,
         project_id=project_id,
         title=title,
-        date=datetime.utcnow().date(),
+        date=utc_now().date(),
         status="draft",
         payload=payload,
     )

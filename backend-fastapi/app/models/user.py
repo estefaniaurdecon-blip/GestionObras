@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -36,27 +37,27 @@ class User(SQLModel, table=True):
         description="Rol principal del usuario dentro del tenant",
     )
 
-    # Usuario que creó este usuario.
-    # Se mantiene como entero simple para no bloquear eliminaciones históricas.
+    # Usuario que creÃ³ este usuario.
+    # Se mantiene como entero simple para no bloquear eliminaciones histÃ³ricas.
     created_by_user_id: Optional[int] = Field(
         default=None,
         index=True,
         description="ID del usuario creador directo",
     )
 
-    # Grupo lógico de visibilidad basado en la cadena de creación.
-    # Todos los usuarios del mismo grupo pueden verse entre sí.
+    # Grupo lÃ³gico de visibilidad basado en la cadena de creaciÃ³n.
+    # Todos los usuarios del mismo grupo pueden verse entre sÃ­.
     creator_group_id: Optional[int] = Field(
         default=None,
         index=True,
-        description="ID del grupo de creación/visibilidad",
+        description="ID del grupo de creaciÃ³n/visibilidad",
     )
 
     # Campos para MFA
     mfa_enabled: bool = Field(default=False)
     mfa_secret: Optional[str] = Field(
         default=None,
-        description="Clave secreta TOTP para MFA. Solo se guarda si MFA está habilitado.",
+        description="Clave secreta TOTP para MFA. Solo se guarda si MFA estÃ¡ habilitado.",
     )
 
     # Idioma preferido del usuario.
@@ -65,7 +66,8 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(default=None)
     # Avatar almacenado en base64 (data URL).
     avatar_data: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Mantiene UTC como fuente de verdad sin usar datetime.utcnow() deprecado.
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class UserRead(SQLModel):

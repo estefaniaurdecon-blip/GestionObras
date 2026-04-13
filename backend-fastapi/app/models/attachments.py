@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from sqlmodel import Field, SQLModel
@@ -23,8 +24,8 @@ class WorkReportAttachment(SQLModel, table=True):
     description: str | None = Field(default=None, max_length=2000)
     display_order: int = Field(default=0, index=True)
     created_by: str | None = Field(default=None, max_length=128)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class SharedFile(SQLModel, table=True):
@@ -41,4 +42,4 @@ class SharedFile(SQLModel, table=True):
     work_report_id: str | None = Field(default=None, max_length=128)
     message: str | None = Field(default=None, max_length=2000)
     downloaded: bool = Field(default=False, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)

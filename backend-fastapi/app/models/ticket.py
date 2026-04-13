@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from enum import Enum
 from typing import Optional
 
@@ -33,7 +34,7 @@ class Ticket(SQLModel, table=True):
     """
     Ticket de soporte multi-tenant.
 
-    Incluye campos de actividad y SLA básicos para uso empresarial.
+    Incluye campos de actividad y SLA bÃ¡sicos para uso empresarial.
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -64,7 +65,7 @@ class Ticket(SQLModel, table=True):
         default=None,
         index=True,
         description=(
-            "Categoría funcional del ticket (ERP, Moodle, Plataforma, "
+            "CategorÃ­a funcional del ticket (ERP, Moodle, Plataforma, "
             "Infraestructura, etc.)"
         ),
     )
@@ -74,7 +75,7 @@ class Ticket(SQLModel, table=True):
         index=True,
         description="Asunto corto del ticket",
     )
-    description: str = Field(description="Descripción detallada del problema")
+    description: str = Field(description="DescripciÃ³n detallada del problema")
 
     status: TicketStatus = Field(
         default=TicketStatus.OPEN,
@@ -87,14 +88,14 @@ class Ticket(SQLModel, table=True):
         description="Prioridad del ticket",
     )
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     # Actividad y SLA
     last_activity_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=utc_now,
         index=True,
-        description="Última actividad registrada (mensaje, cambio de estado, asignación)",
+        description="Ãšltima actividad registrada (mensaje, cambio de estado, asignaciÃ³n)",
     )
     first_response_at: Optional[datetime] = Field(
         default=None,
@@ -102,11 +103,11 @@ class Ticket(SQLModel, table=True):
     )
     resolved_at: Optional[datetime] = Field(
         default=None,
-        description="Momento en el que se marcó RESOLVED por primera vez",
+        description="Momento en el que se marcÃ³ RESOLVED por primera vez",
     )
     closed_at: Optional[datetime] = Field(
         default=None,
-        description="Momento en el que se cerró el ticket",
+        description="Momento en el que se cerrÃ³ el ticket",
     )
 
     # Preparado para adjuntos futuros

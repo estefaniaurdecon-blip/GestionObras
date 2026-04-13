@@ -1,8 +1,11 @@
+from datetime import timedelta
+
 from fastapi import status
 from fastapi.testclient import TestClient
+import pytest
 from sqlmodel import Session, select
 
-from app.core.security import hash_password
+from app.core.security import JWTError, create_access_token, decode_token, hash_password
 from app.models.mfa_email_code import MFAEmailCode
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -98,3 +101,12 @@ def test_mfa_login_flow(client: TestClient, db_session_fixture: Session) -> None
     assert "access_token" in body_mfa and body_mfa["access_token"]
     assert body_mfa["token_type"] == "bearer"
 
+
+def test_decode_token_rejects_expired_jwt() -> None:
+    token = create_access_token(
+        subject="123",
+        expires_delta=timedelta(seconds=-1),
+    )
+
+    with pytest.raises(JWTError):
+        decode_token(token)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -173,7 +174,7 @@ def update_phase(
         row.progress = payload.progress
 
     _validate_date_range(row.start_date, row.end_date)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)

@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -27,7 +28,7 @@ def create_external_collaboration(
     if not name or not legal_name or not cif or not contact_email or not collaboration_type:
         raise ValueError("Todos los campos son obligatorios.")
 
-    now = datetime.utcnow()
+    now = utc_now()
     collaboration = ExternalCollaboration(
         tenant_id=tenant_id,
         collaboration_type=collaboration_type,
@@ -80,7 +81,7 @@ def update_external_collaboration(
             raise ValueError("Correo obligatorio.")
         collaboration.contact_email = value
 
-    collaboration.updated_at = datetime.utcnow()
+    collaboration.updated_at = utc_now()
     session.add(collaboration)
     session.commit()
     session.refresh(collaboration)

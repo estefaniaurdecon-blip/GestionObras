@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,9 +23,10 @@ import {
   removeManagedUserRole,
   assignManagedUserToWork,
   removeManagedUserFromWork,
+  type ApiProject,
 } from '@/integrations/api/client';
 
-const getRoleLabel = (role: AppRole, t: any): string => {
+const getRoleLabel = (role: AppRole, t: TFunction): string => {
   const labels: Record<AppRole, string> = {
     master: t('roles.master'),
     admin: t('roles.admin'),
@@ -52,7 +54,7 @@ export const UserManagement = () => {
   const { organization } = useOrganization();
   const [usersWithData, setUsersWithData] = useState<UserWithAssignments[]>([]);
   const [pendingUsers, setPendingUsers] = useState<UserWithAssignments[]>([]);
-  const [assignableWorks, setAssignableWorks] = useState<any[]>([]);
+  const [assignableWorks, setAssignableWorks] = useState<ApiProject[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserWithAssignments | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<AppRole>('foreman');
@@ -122,7 +124,7 @@ export const UserManagement = () => {
         const assigned_works = await getUserAssignments(selectedUser.id);
         setSelectedUser({ ...updatedUser, roles, assigned_works });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error adding role:', error);
       toast({
         title: t('userManagement.errorAddingRole'),
@@ -153,7 +155,7 @@ export const UserManagement = () => {
         title: t('userManagement.roleRemoved'),
         description: t('userManagement.roleRemovedDesc', { role: getRoleLabel(role, t) }),
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: t('userManagement.errorRemovingRole'),
         description: error.message,
@@ -502,7 +504,7 @@ export const UserManagement = () => {
               <h3 className="font-semibold mb-3">{t('userManagement.assignedWorks')}</h3>
               <div className="space-y-2">
                 {assignableWorks.map((work) => {
-                  const isAssigned = selectedUser?.assigned_works.includes(work.id);
+                  const isAssigned = selectedUser?.assigned_works.includes(String(work.id));
                   return (
                     <div key={work.id} className="flex items-center justify-between p-2 border rounded">
                       <span className="text-sm">{work.name}</span>
@@ -533,7 +535,7 @@ export const UserManagement = () => {
                             const roles = await getUserRoles(selectedUser.id);
                             const assigned_works = await getUserAssignments(selectedUser.id);
                             setSelectedUser({ ...selectedUser, roles, assigned_works });
-                          } catch (error: any) {
+                          } catch (error) {
                             toast({
                               title: t('common.error'),
                               description: error.message,

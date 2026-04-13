@@ -13,6 +13,9 @@ const config: CapacitorConfig = {
     contentInset: 'automatic'
   },
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       // Mantener el splash nativo hasta que React monte para evitar
       // pantallas negras/intermedias en Android al arrancar.

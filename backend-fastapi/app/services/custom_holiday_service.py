@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -92,7 +93,7 @@ def update_custom_holiday(
     if payload.region is not None:
         row.region = payload.region.strip() or None
 
-    row.updated_at = datetime.utcnow()
+    row.updated_at = utc_now()
     session.add(row)
     session.commit()
     session.refresh(row)

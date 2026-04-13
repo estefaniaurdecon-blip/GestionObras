@@ -61,7 +61,7 @@ const toStoredSharedFile = (item: SharedFileApi): SharedFile => ({
   localContentType: null,
 });
 
-export const useSharedFiles = () => {
+export const useSharedFiles = (enabled = true) => {
   const [sentFiles, setSentFiles] = useState<SharedFile[]>([]);
   const [receivedFiles, setReceivedFiles] = useState<SharedFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,7 +220,7 @@ export const useSharedFiles = () => {
   );
 
   const loadFiles = useCallback(async () => {
-    if (!user || !sharedFilesScopeId || !activeTenantId) {
+    if (!enabled || !user || !sharedFilesScopeId || !activeTenantId) {
       storedFilesRef.current = [];
       setSentFiles([]);
       setReceivedFiles([]);
@@ -270,7 +270,7 @@ export const useSharedFiles = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTenantId, applyFiles, persistFiles, sharedFilesScopeId, syncPendingFiles, user]);
+  }, [activeTenantId, applyFiles, enabled, persistFiles, sharedFilesScopeId, syncPendingFiles, user]);
 
   useEffect(() => {
     void loadFiles();

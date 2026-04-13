@@ -1051,7 +1051,7 @@ const PersonalEntryForm = ({
         }
       }}
     >
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle className={modalTitleClass}>Registro de Personal</DialogTitle>
           <DialogDescription className={modalDescriptionClass}>
@@ -1225,7 +1225,7 @@ const MachineryEntryForm = ({
         }
       }}
     >
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle className={modalTitleClass}>Registro de Maquinaria</DialogTitle>
           <DialogDescription className={modalDescriptionClass}>

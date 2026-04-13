@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from fastapi import status
@@ -67,7 +68,7 @@ def _create_user(
 
 
 def _create_project(session: Session, *, tenant_id: int, name: str) -> Project:
-    project = Project(tenant_id=tenant_id, name=name, created_at=datetime.utcnow())
+    project = Project(tenant_id=tenant_id, name=name, created_at=utc_now())
     session.add(project)
     session.commit()
     session.refresh(project)

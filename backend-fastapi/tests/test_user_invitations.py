@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -21,11 +22,11 @@ def test_create_and_accept_invitation_flow(
     db_session_fixture: Session,
 ) -> None:
     """
-    Flujo completo de invitación:
+    Flujo completo de invitaciÃ³n:
     - Super admin crea tenant de pruebas.
-    - Super admin crea invitación para ese tenant.
-    - Se valida el token de invitación (endpoint público).
-    - Se acepta la invitación y se crea el usuario.
+    - Super admin crea invitaciÃ³n para ese tenant.
+    - Se valida el token de invitaciÃ³n (endpoint pÃºblico).
+    - Se acepta la invitaciÃ³n y se crea el usuario.
     - El usuario queda ligado al tenant correcto.
     """
 
@@ -93,7 +94,7 @@ def test_invitation_cannot_be_reused(
     db_session_fixture: Session,
 ) -> None:
     """
-    Una invitación aceptada no puede volver a usarse.
+    Una invitaciÃ³n aceptada no puede volver a usarse.
     """
 
     token_sa = _login_superadmin(client)
@@ -142,7 +143,7 @@ def test_expired_invitation_is_not_valid(
     db_session_fixture: Session,
 ) -> None:
     """
-    Una invitación expirada no se puede usar.
+    Una invitaciÃ³n expirada no se puede usar.
     """
 
     tenant = Tenant(name="Tenant Expired", subdomain="expired", is_active=True)
@@ -157,7 +158,7 @@ def test_expired_invitation_is_not_valid(
         role_name="user",
         token="expired-token",
         created_by_id=1,
-        expires_at=datetime.utcnow() - timedelta(days=1),
+        expires_at=utc_now() - timedelta(days=1),
     )
     db_session_fixture.add(invitation)
     db_session_fixture.commit()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -29,5 +30,5 @@ class TenantProfile(SQLModel, table=True):
     subscription_end_date: Optional[datetime] = Field(default=None)
     trial_end_date: Optional[datetime] = Field(default=None)
     invitation_code: Optional[str] = Field(default=None, max_length=64)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

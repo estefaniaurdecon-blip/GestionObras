@@ -61,6 +61,20 @@ temp_remote_*.html
 perf-captures/
 .claude/settings.local.json
 
+# Development artifacts (do not commit)
+*.patch
+resume_work.patch
+# Orphaned/minified JS dumps at repo root
+installed_WorkInventory.js
+wi_installed.js
+*_installed*.js
+# Emulator diagnostics
+emulator_base*.apk
+emulator_check*.apk
+# TypeScript check logs
+tsc-*.log
+backend_run*.log
+
 # Azure Functions local secrets/config
 azure-functions/docint-proxy/local.settings.json
 **/local.settings*.json

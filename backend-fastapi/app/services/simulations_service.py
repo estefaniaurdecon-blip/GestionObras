@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from decimal import Decimal
 from typing import Optional
 
@@ -91,7 +92,7 @@ def create_simulation_project(
     if not name:
         raise ValueError("Nombre obligatorio.")
 
-    now = datetime.utcnow()
+    now = utc_now()
     project = SimulationProject(
         tenant_id=tenant_id,
         name=name,
@@ -141,7 +142,7 @@ def update_simulation_project(
     if data.threshold_percent is not None:
         project.threshold_percent = Decimal(data.threshold_percent)
 
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utc_now()
     session.add(project)
     session.commit()
     session.refresh(project)
@@ -205,7 +206,7 @@ def create_simulation_expense(
     concept = data.concept.strip()
     if not concept:
         raise ValueError("Concepto obligatorio.")
-    now = datetime.utcnow()
+    now = utc_now()
     expense = SimulationExpense(
         project_id=project.id,
         concept=concept,
@@ -252,7 +253,7 @@ def update_simulation_expense(
     if data.amount is not None:
         expense.amount = Decimal(data.amount)
 
-    expense.updated_at = datetime.utcnow()
+    expense.updated_at = utc_now()
     session.add(expense)
     session.commit()
     session.refresh(expense)

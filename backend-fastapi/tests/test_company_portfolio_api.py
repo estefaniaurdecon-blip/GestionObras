@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -24,7 +25,7 @@ def test_company_portfolio_and_types_flow(client: TestClient, db_session_fixture
 
     tenant = Tenant(
         name="Tenant Portfolio",
-        subdomain=f"portfolio-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"portfolio-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

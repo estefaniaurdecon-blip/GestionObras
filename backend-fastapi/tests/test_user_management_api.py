@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -31,7 +32,7 @@ def test_user_management_roles_assignments_and_delete(
 
     tenant = Tenant(
         name="Tenant Users",
-        subdomain=f"users-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"users-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

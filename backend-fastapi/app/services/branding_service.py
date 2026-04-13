@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import colorsys
 from datetime import datetime
+from app.core.datetime import utc_now
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,7 +17,7 @@ from app.storage.local import save_logo_to_disk
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     value = hex_color.lstrip("#")
     if len(value) != 6:
-        raise ValueError("Color inválido. Usa formato #RRGGBB.")
+        raise ValueError("Color invÃ¡lido. Usa formato #RRGGBB.")
     r = int(value[0:2], 16) / 255.0
     g = int(value[2:4], 16) / 255.0
     b = int(value[4:6], 16) / 255.0
@@ -45,9 +46,9 @@ def _mix_rgb(
 
 def build_palette(accent_color: str) -> Dict[str, str]:
     """
-    Genera paleta con la misma relación siempre:
-    - 50..400: mezcla del color con blanco (más claro)
-    - 600..900: mezcla del color con negro (más oscuro)
+    Genera paleta con la misma relaciÃ³n siempre:
+    - 50..400: mezcla del color con blanco (mÃ¡s claro)
+    - 600..900: mezcla del color con negro (mÃ¡s oscuro)
     - 500: color exacto elegido
     """
 
@@ -56,7 +57,7 @@ def build_palette(accent_color: str) -> Dict[str, str]:
     black = (0.0, 0.0, 0.0)
 
     # Ratios calibrados con la paleta URDECON (#00662b)
-    # para mantener la misma relación entre tonos.
+    # para mantener la misma relaciÃ³n entre tonos.
     light_mix = {
         "50": 0.9227,
         "100": 0.8365,
@@ -162,7 +163,7 @@ def update_branding(
             if not key or not email:
                 continue
             if "@" not in email:
-                raise ValueError(f"Email inválido para '{key}'")
+                raise ValueError(f"Email invÃ¡lido para '{key}'")
             cleaned[key] = email
         branding.department_emails = cleaned or None
 
@@ -186,7 +187,7 @@ def update_branding(
         target_path = save_logo_to_disk(logo_upload, tenant_id, extension)
         branding.logo_path = f"/static/logos/{target_path.name}"
 
-    branding.updated_at = datetime.utcnow()
+    branding.updated_at = utc_now()
     session.add(branding)
     session.commit()
     session.refresh(branding)

@@ -3,6 +3,8 @@ export interface ActiveWorkConversationContext {
   workName: string;
 }
 
+export const CHAT_UNREAD_COUNT_EVENT = "chat-unread-count";
+
 export interface ConversationSelectionState {
   selectedUserId: string;
   activeWorkContext: ActiveWorkConversationContext | null;

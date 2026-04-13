@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -436,7 +437,7 @@ def _detect_anomalies(reports: list[dict[str, Any]], stats: dict[str, Any]) -> l
             }
         )
 
-    threshold = datetime.utcnow() - timedelta(days=30)
+    threshold = utc_now() - timedelta(days=30)
     last_by_work: dict[str, str] = {}
     for report in reports:
         work_key = f"{report.get('workNumber', '')} - {report.get('workName', '')}".strip(" -")
@@ -649,7 +650,7 @@ def _normalize_company_name(name: str) -> str:
         cleaned,
     )
     cleaned = _CLEAN_WS_RE.sub(" ", cleaned)
-    cleaned = re.sub(r"[^a-z0-9\sáéíóúñü]", "", cleaned)
+    cleaned = re.sub(r"[^a-z0-9\sÃ¡Ã©Ã­Ã³ÃºÃ±Ã¼]", "", cleaned)
     return cleaned.strip()
 
 
@@ -808,13 +809,13 @@ def _is_immediate_consumption_material(name: str) -> bool:
     low_name = (name or "").lower()
     keywords = [
         "hormigon",
-        "hormigón",
+        "hormigÃ³n",
         "concrete",
         "asfalto",
         "aglomerado",
         "mezcla bituminosa",
         "arido",
-        "árido",
+        "Ã¡rido",
         "grava",
         "gravilla",
         "arena",
@@ -840,10 +841,10 @@ def _service_keywords() -> list[str]:
         "transporte",
         "portes",
         "grua",
-        "grúa",
+        "grÃºa",
         "plataforma",
         "excavacion",
-        "excavación",
+        "excavaciÃ³n",
         "retirada",
         "montaje",
         "desmontaje",
@@ -867,7 +868,7 @@ def _item_type_from_name(name: str) -> str:
         "alicate",
         "nivel",
         "flexometro",
-        "flexómetro",
+        "flexÃ³metro",
         "sierra",
         "lijadora",
         "carretilla",
@@ -881,7 +882,7 @@ def _item_type_from_name(name: str) -> str:
 def _normalize_supplier_name(name: str) -> str:
     text = (name or "").lower()
     text = _CLEAN_WS_RE.sub("", text)
-    translation = str.maketrans("áàäâéèëêíìïîóòöôúùüûñ", "aaaaeeeeiiiioooouuuun")
+    translation = str.maketrans("Ã¡Ã Ã¤Ã¢Ã©Ã¨Ã«ÃªÃ­Ã¬Ã¯Ã®Ã³Ã²Ã¶Ã´ÃºÃ¹Ã¼Ã»Ã±", "aaaaeeeeiiiioooouuuun")
     text = text.translate(translation)
     return re.sub(r"[^a-z0-9]", "", text)
 
@@ -1512,7 +1513,7 @@ def populate_inventory_from_reports(
                         existing.brand = existing.brand or str(item.get("brand") or "").strip() or None
                         existing.model = existing.model or str(item.get("model") or "").strip() or None
                         existing.is_immediate_consumption = immediate
-                        existing.updated_at = datetime.utcnow()
+                        existing.updated_at = utc_now()
                         session.add(existing)
                         inventory_item = existing
                         updated += 1
@@ -1832,7 +1833,7 @@ def update_inventory_item(
             item.total_price = _as_float(item.quantity) * _as_float(item.unit_price)
         else:
             item.total_price = None
-    item.updated_at = datetime.utcnow()
+    item.updated_at = utc_now()
 
     session.add(item)
     session.commit()
@@ -1899,7 +1900,7 @@ def merge_inventory_suppliers(
     for item in items:
         if (item.last_supplier or "").strip() in suppliers_to_merge:
             item.last_supplier = target_supplier
-            item.updated_at = datetime.utcnow()
+            item.updated_at = utc_now()
             session.add(item)
             inventory_updated += 1
 
@@ -1971,10 +1972,10 @@ def validate_fix_inventory(
         "arena": "tn",
         "grava": "tn",
         "arido": "tn",
-        "árido": "tn",
+        "Ã¡rido": "tn",
         "rechazo": "tn",
         "hormigon": "m3",
-        "hormigón": "m3",
+        "hormigÃ³n": "m3",
     }
     name_corrections = {
         "calefaccion": "cafetera",
@@ -1989,7 +1990,7 @@ def validate_fix_inventory(
         "dumper",
         "bulldozer",
         "grua movil",
-        "grúa móvil",
+        "grÃºa mÃ³vil",
     ]
 
     fixed_count = 0
@@ -2039,7 +2040,7 @@ def validate_fix_inventory(
             changed = True
 
         if changed:
-            item.updated_at = datetime.utcnow()
+            item.updated_at = utc_now()
             session.add(item)
             fixed_count += 1
 
@@ -2102,7 +2103,7 @@ def apply_inventory_analysis(
                         setattr(item, key, value.lower().strip())
                     else:
                         setattr(item, key, value)
-                item.updated_at = datetime.utcnow()
+                item.updated_at = utc_now()
                 session.add(item)
                 updated_count += 1
         except Exception as exc:

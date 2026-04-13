@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -76,7 +77,7 @@ def _login_with_mfa(
     Realiza el flujo completo de login con MFA por email para usuarios no superadmin.
     """
 
-    # Paso 1: login con usuario/contraseña.
+    # Paso 1: login con usuario/contraseÃ±a.
     data = {
         "username": email,
         "password": password,
@@ -87,7 +88,7 @@ def _login_with_mfa(
     assert body["mfa_required"] is True
     assert body.get("access_token") is None
 
-    # Paso 2: fijamos un código conocido en el registro MFA y lo verificamos.
+    # Paso 2: fijamos un cÃ³digo conocido en el registro MFA y lo verificamos.
     user = db_session.exec(select(User).where(User.email == email)).one()
     mfa_record = db_session.exec(
         select(MFAEmailCode).where(MFAEmailCode.user_id == user.id),
@@ -114,11 +115,11 @@ def test_ticket_flow_for_tenant_admin(
     db_session_fixture: Session,
 ) -> None:
     """
-    Comprueba el flujo básico de tickets para un admin de tenant:
-    - Creación de ticket.
+    Comprueba el flujo bÃ¡sico de tickets para un admin de tenant:
+    - CreaciÃ³n de ticket.
     - Listado filtrado por tenant.
     - Cambio de estado (close / reopen).
-    - Asignación a usuario.
+    - AsignaciÃ³n a usuario.
     """
 
     super_token = _login_superadmin(client)
@@ -219,7 +220,7 @@ def test_superadmin_can_filter_tickets_by_tenant(client: TestClient, db_session_
     tenant_b = _create_tenant(client, token, name="Tenant B", subdomain="tickets-b")
 
     # Insertamos tickets directamente en la BD de pruebas
-    now = datetime.utcnow()
+    now = utc_now()
     with db_session_fixture as session:
         for tenant_id in (tenant_a, tenant_b):
             t = Ticket(
@@ -259,7 +260,7 @@ def test_dashboard_support_metrics_respect_tenant_scope(
     db_session_fixture: Session,
 ) -> None:
     """
-    Comprueba que las métricas de soporte del dashboard se calculan
+    Comprueba que las mÃ©tricas de soporte del dashboard se calculan
     por tenant para un admin de tenant.
     """
 
@@ -279,7 +280,7 @@ def test_dashboard_support_metrics_respect_tenant_scope(
     admin_token = _login_with_mfa(client, email, "tickets-pass", db_session_fixture)
 
     # Creamos algunos tickets en distintos estados para ese tenant
-    now = datetime.utcnow()
+    now = utc_now()
     yesterday = now - timedelta(days=1)
     last_week = now - timedelta(days=6)
 
@@ -357,7 +358,7 @@ def test_internal_notes_visibility_and_permissions(
 ) -> None:
     """
     Verifica que las notas internas solo son visibles para agentes (tenant_admin)
-    y que los usuarios finales ven únicamente los mensajes públicos.
+    y que los usuarios finales ven Ãºnicamente los mensajes pÃºblicos.
     """
 
     super_token = _login_superadmin(client)
@@ -411,15 +412,15 @@ def test_internal_notes_visibility_and_permissions(
     assert resp_create.status_code == status.HTTP_201_CREATED
     ticket_id = resp_create.json()["id"]
 
-    # El Super Admin actúa como agente y añade un mensaje público
+    # El Super Admin actÃºa como agente y aÃ±ade un mensaje pÃºblico
     resp_public = client.post(
         f"/api/v1/tickets/{ticket_id}/messages",
-        json={"body": "Mensaje público", "is_internal": False},
+        json={"body": "Mensaje pÃºblico", "is_internal": False},
         headers=headers_super,
     )
     assert resp_public.status_code == status.HTTP_201_CREATED
 
-    # El Super Admin añade una nota interna
+    # El Super Admin aÃ±ade una nota interna
     resp_internal = client.post(
         f"/api/v1/tickets/{ticket_id}/messages",
         json={"body": "Nota interna", "is_internal": True},
@@ -427,7 +428,7 @@ def test_internal_notes_visibility_and_permissions(
     )
     assert resp_internal.status_code == status.HTTP_201_CREATED
 
-    # Usuario final ve solo el mensaje público
+    # Usuario final ve solo el mensaje pÃºblico
     resp_msgs_user = client.get(
         f"/api/v1/tickets/{ticket_id}/messages",
         headers=headers_user,
@@ -435,10 +436,10 @@ def test_internal_notes_visibility_and_permissions(
     assert resp_msgs_user.status_code == status.HTTP_200_OK
     msgs_user = resp_msgs_user.json()
     assert len(msgs_user) == 1
-    assert msgs_user[0]["body"] == "Mensaje público"
+    assert msgs_user[0]["body"] == "Mensaje pÃºblico"
     assert msgs_user[0]["is_internal"] is False
 
-    # Super Admin ve ambos mensajes (público + interno)
+    # Super Admin ve ambos mensajes (pÃºblico + interno)
     resp_msgs_admin = client.get(
         f"/api/v1/tickets/{ticket_id}/messages",
         headers=headers_super,
@@ -446,7 +447,7 @@ def test_internal_notes_visibility_and_permissions(
     assert resp_msgs_admin.status_code == status.HTTP_200_OK
     msgs_admin = resp_msgs_admin.json()
     bodies = {m["body"] for m in msgs_admin}
-    assert bodies == {"Mensaje público", "Nota interna"}
+    assert bodies == {"Mensaje pÃºblico", "Nota interna"}
     has_internal = any(m["is_internal"] for m in msgs_admin)
     assert has_internal is True
 
@@ -546,7 +547,7 @@ def test_ticket_list_scope_user_vs_tenant_admin(
 
 def test_superadmin_cannot_create_tickets(client: TestClient) -> None:
     """
-    El Super Admin global no debe crear tickets directamente vía API.
+    El Super Admin global no debe crear tickets directamente vÃ­a API.
     """
 
     super_token = _login_superadmin(client)
@@ -554,7 +555,7 @@ def test_superadmin_cannot_create_tickets(client: TestClient) -> None:
 
     payload = {
         "subject": "Ticket desde superadmin",
-        "description": "No debería permitirse",
+        "description": "No deberÃ­a permitirse",
         "priority": "high",
         "tool_slug": "erp",
         "category": "erp",

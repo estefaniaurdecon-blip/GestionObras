@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -126,7 +127,7 @@ def _touch_activity(ticket: Ticket) -> None:
     Actualiza los campos de actividad del ticket.
     """
 
-    now = datetime.utcnow()
+    now = utc_now()
     ticket.last_activity_at = now
     ticket.updated_at = now
 
@@ -188,7 +189,7 @@ def _ensure_visibility_for_user(
     Reglas:
     - Super Admin: ve todo.
     - Usuarios con `tickets:read_tenant`: ven todos los tickets de su tenant.
-    - Resto: solo tickets creados por él o en los que participa.
+    - Resto: solo tickets creados por Ã©l o en los que participa.
     """
 
     if user.is_super_admin:
@@ -198,12 +199,12 @@ def _ensure_visibility_for_user(
     if not user.tenant_id or user.tenant_id != ticket.tenant_id:
         raise PermissionError("El usuario no pertenece al tenant del ticket")
 
-    # Agentes con permisos de gestión ven siempre todos los tickets del tenant.
+    # Agentes con permisos de gestiÃ³n ven siempre todos los tickets del tenant.
     if _user_has_permission(session, user, "tickets:manage"):
         return
 
     # Usuarios con permiso de lectura a nivel de tenant (ej. tenant_admin)
-    # también ven todos los tickets del tenant.
+    # tambiÃ©n ven todos los tickets del tenant.
     if _user_has_permission(session, user, "tickets:read_tenant"):
         return
 
@@ -237,7 +238,7 @@ def _get_ticket_for_manage(
         raise PermissionError("El usuario no puede gestionar este ticket")
 
     # A estas alturas, el endpoint ya ha validado el permiso `tickets:manage`
-    # mediante `require_permissions`. Aquí solo comprobamos pertenencia al tenant.
+    # mediante `require_permissions`. AquÃ­ solo comprobamos pertenencia al tenant.
     return ticket
 
 
@@ -257,7 +258,7 @@ def create_ticket(
     if tenant_id is None:
         raise PermissionError("El Super Admin debe actuar dentro de un tenant concreto")
 
-    now = datetime.utcnow()
+    now = utc_now()
     ticket = Ticket(
         tenant_id=tenant_id,
         created_by_id=current_user.id,
@@ -319,7 +320,7 @@ def list_tickets(
     offset: int = 0,
 ) -> List[TicketRead]:
     """
-    Lista tickets visibles para el usuario, con paginación y filtros.
+    Lista tickets visibles para el usuario, con paginaciÃ³n y filtros.
     """
 
     statement = select(Ticket)
@@ -417,9 +418,9 @@ def add_message(
     data: TicketMessageCreate,
 ) -> TicketMessageRead:
     """
-    Añade un mensaje a un ticket.
+    AÃ±ade un mensaje a un ticket.
 
-    Si el mensaje es interno, solo se permite a usuarios con permisos de gestión.
+    Si el mensaje es interno, solo se permite a usuarios con permisos de gestiÃ³n.
     """
 
     ticket = session.get(Ticket, ticket_id)
@@ -498,7 +499,7 @@ def update_ticket(
     data: TicketUpdate,
 ) -> TicketRead:
     """
-    Actualización genérica de ticket (status, prioridad, asignación).
+    ActualizaciÃ³n genÃ©rica de ticket (status, prioridad, asignaciÃ³n).
     """
 
     ticket = _get_ticket_for_manage(session, current_user, ticket_id)
@@ -549,7 +550,7 @@ def update_ticket(
             ticket=ticket,
             actor_id=current_user.id,
             notification_type=NotificationType.TICKET_STATUS,
-            title="Actualización de ticket",
+            title="ActualizaciÃ³n de ticket",
             body=ticket.subject,
         )
 
@@ -562,7 +563,7 @@ def close_ticket(
     ticket_id: int,
 ) -> TicketRead:
     """
-    Marca un ticket como cerrado. También rellena `resolved_at` si no estaba.
+    Marca un ticket como cerrado. TambiÃ©n rellena `resolved_at` si no estaba.
     """
 
     ticket = _get_ticket_for_manage(session, current_user, ticket_id)
@@ -570,7 +571,7 @@ def close_ticket(
     if ticket.status == TicketStatus.CLOSED:
         return _ticket_to_read(session, ticket)
 
-    now = datetime.utcnow()
+    now = utc_now()
     ticket.status = TicketStatus.CLOSED
     ticket.closed_at = now
     if ticket.resolved_at is None:
@@ -608,7 +609,7 @@ def reopen_ticket(
     ticket_id: int,
 ) -> TicketRead:
     """
-    Reabre un ticket cerrado o resuelto, dejándolo en estado IN_PROGRESS.
+    Reabre un ticket cerrado o resuelto, dejÃ¡ndolo en estado IN_PROGRESS.
     """
 
     ticket = _get_ticket_for_manage(session, current_user, ticket_id)

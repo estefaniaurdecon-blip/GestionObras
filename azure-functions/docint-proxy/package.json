@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist",
     "start": "func start",
-    "start:watch": "npm run build && func start"
+    "start:watch": "npm run build && func start",
+    "test": "npm run build && node --test dist/tests/**/*.test.js"
   },
   "dependencies": {
     "@azure/functions": "^4.6.0"

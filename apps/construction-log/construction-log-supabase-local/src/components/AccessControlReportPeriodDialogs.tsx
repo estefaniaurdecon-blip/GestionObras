@@ -68,7 +68,7 @@ export const AccessControlSinglePeriodDialog = ({
   mode,
   reports,
   applyButtonClassName,
-  onApply,
+    onApply,
 }: AccessControlSinglePeriodDialogProps) => {
   const {
     selectedDay,
@@ -100,7 +100,7 @@ export const AccessControlSinglePeriodDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader className="text-center">
           <DialogTitle>{dialogCopy.title}</DialogTitle>
           <DialogDescription>{dialogCopy.description}</DialogDescription>
@@ -253,7 +253,7 @@ export const AccessControlCustomPeriodDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader className="text-center">
           <DialogTitle>Exportacion personalizada</DialogTitle>
           <DialogDescription>Selecciona dias sueltos o rangos para generar el informe.</DialogDescription>

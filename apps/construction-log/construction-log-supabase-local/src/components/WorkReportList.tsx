@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,9 @@ import { WorkReportStatusSummary, StatusFilter } from './WorkReportStatusSummary
 import { BulkPdfExport } from './BulkPdfExport';
 import { exportWeeklyReports, exportMonthlyReports } from '@/utils/weeklyMonthlyExportUtils';
 import { WorkReport, WorkReportSection } from '@/types/workReport';
+import { useWorkReportListFilters } from '@/hooks/useWorkReportListFilters';
+import { useWorkReportGrouping, getWeekNumber } from '@/hooks/useWorkReportGrouping';
+import { useWorkReportExportActions } from '@/hooks/useWorkReportExportActions';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { enUS, es, fr, it, de as deLocale } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,14 +56,11 @@ import {
 import { ArchivedReportsDialog } from './ArchivedReportsDialog';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { generateWorkReportPDF } from '@/utils/pdfGenerator';
-import { exportToExcel } from '@/utils/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useWorkReportDownloads } from '@/hooks/useWorkReportDownloads';
-import { listRentalMachinery } from '@/integrations/api/client';
 import { listAssignedWorksByUser, listProfileNamesByIds } from '@/services/workReportsSupabaseGateway';
-import JSZip from 'jszip';
 
 export type ViewMode = 'byForeman' | 'weekly' | 'monthly';
 
@@ -114,53 +114,86 @@ export const WorkReportList = ({
   const [dateRange, setDateRange] = useState('weekly');
   const [showAdvancedReports, setShowAdvancedReports] = useState(false);
   const [viewMode, setViewMode] = useState<'byForeman' | 'weekly' | 'monthly'>('byForeman');
-  const dfLocale = useMemo(() => {
-    const map: Record<string, any> = { es, en: enUS, 'en-US': enUS, fr, it, de: deLocale };
+  const dfLocale = (() => {
+    const map: Record<string, typeof es> = { es, en: enUS, 'en-US': enUS, fr, it, de: deLocale };
     return map[i18n.language] || es;
-  }, [i18n.language]);
-  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string>('');
-  const [pdfBuffer, setPdfBuffer] = useState<Uint8Array | null>(null);
-  const [showImageDialog, setShowImageDialog] = useState(false);
-  const [pendingReport, setPendingReport] = useState<WorkReport | null>(null);
-  const [pendingAction, setPendingAction] = useState<'view' | 'download'>('download');
-  const [selectedWorkFilter, setSelectedWorkFilter] = useState<string>('');
+  })();
   const [availableWorks, setAvailableWorks] = useState<Array<{id: string, number: string, name: string}>>([]);
-  const [showStatusWarning, setShowStatusWarning] = useState(false);
-  const [statusWarningMessage, setStatusWarningMessage] = useState('');
-  
+
   // Archive dialog state
   const [showArchivedDialog, setShowArchivedDialog] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [showArchiveConfirmDialog, setShowArchiveConfirmDialog] = useState(false);
   const [pendingArchiveGroup, setPendingArchiveGroup] = useState<{ name: string; reports: WorkReport[] } | null>(null);
-  
-  // Advanced filters
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [dateFilterStart, setDateFilterStart] = useState<string>('');
-  const [dateFilterEnd, setDateFilterEnd] = useState<string>('');
-  const [approvalFilter, setApprovalFilter] = useState<'all' | 'approved' | 'not-approved'>('all');
-  const [foremanFilter, setForemanFilter] = useState<string>('');
-  const [siteManagerFilter, setSiteManagerFilter] = useState<string>('');
-  
-  // Status filter from summary cards
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  
+
+  // Filter state and computed values via hook
+  const {
+    selectedWorkFilter, setSelectedWorkFilter,
+    showAdvancedFilters, setShowAdvancedFilters,
+    dateFilterStart, setDateFilterStart,
+    dateFilterEnd, setDateFilterEnd,
+    approvalFilter, setApprovalFilter,
+    foremanFilter, setForemanFilter,
+    siteManagerFilter, setSiteManagerFilter,
+    statusFilter, setStatusFilter,
+    archivedReports,
+    reportsForStats,
+    filteredReports,
+    uniqueForemen,
+    uniqueSiteManagers,
+    clearAllFilters,
+  } = useWorkReportListFilters({ reports, isOfi, isAdmin, isMaster });
+
+  // Grouping
+  const { weeklyGroups, monthlyGroups, foremanGroups, workGroups } = useWorkReportGrouping(filteredReports);
+
+  // Export / download actions
+  const {
+    pdfViewerOpen,
+    pdfUrl,
+    pdfBuffer,
+    showImageDialog,
+    pendingReport,
+    pendingAction,
+    showStatusWarning,
+    statusWarningMessage,
+    selectedReports,
+    isDownloadingBulk,
+    isDownloadingExcelBulk,
+    showBulkImageDialog,
+    setPdfViewerOpen,
+    setShowImageDialog,
+    setShowStatusWarning,
+    setShowBulkImageDialog,
+    toggleReportSelection,
+    selectAllReports,
+    handleBulkDownloadClick,
+    downloadSelectedPDFs,
+    downloadSelectedExcels,
+    handleViewPDFClick,
+    handleViewPDF,
+    handleClosePdfViewer,
+    handleDownloadPDFClick,
+    handleDownloadPDF,
+    handleDownloadExcel,
+  } = useWorkReportExportActions({
+    filteredReports,
+    isOfi,
+    isSiteManager,
+    isAdmin,
+    isMaster,
+    companyLogo,
+    brandColor: organization?.brand_color,
+    trackDownload,
+  });
+
   // Office role export filters
   const [officeExportWork, setOfficeExportWork] = useState<string>('');
   const [officeExportPeriod, setOfficeExportPeriod] = useState<'weekly' | 'monthly'>('weekly');
-  
+
   // Map para almacenar nombres de editores por user_id
   const [editorNames, setEditorNames] = useState<Map<string, string>>(new Map());
-
-  // Selection state for bulk PDF/Excel download
-  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
-  const [isDownloadingBulk, setIsDownloadingBulk] = useState(false);
-  const [isDownloadingExcelBulk, setIsDownloadingExcelBulk] = useState(false);
-  const [showBulkImageDialog, setShowBulkImageDialog] = useState(false);
-
-
 
   // Cargar obras disponibles desde los partes
   useEffect(() => {
@@ -208,108 +241,6 @@ export const WorkReportList = ({
     loadEditorNames();
   }, [reports]);
 
-
-  // Filtrar partes archivados (para el dialog)
-  const archivedReports = useMemo(() => {
-    return reports.filter(r => r.isArchived === true);
-  }, [reports]);
-
-  // Reportes base para las estadísticas (respetando el rol del usuario)
-  // El rol ofi solo debe ver estadísticas de reportes con status='completed'
-  const reportsForStats = useMemo(() => {
-    let baseReports = reports.filter(r => !r.isArchived);
-    
-    // Si el usuario es solo ofi (no admin ni master), filtrar a solo completed
-    if (isOfi && !isAdmin && !isMaster) {
-      baseReports = baseReports.filter(r => r.status === 'completed');
-    }
-    
-    return baseReports;
-  }, [reports, isOfi, isAdmin, isMaster]);
-
-  // Filtrar reportes con todos los filtros aplicados (excluyendo archivados)
-  const filteredReports = useMemo(() => {
-    // Secciones que cuentan para determinar si está completado
-    const totalSections: WorkReportSection[] = [
-      'work_groups',
-      'machinery_groups',
-      'subcontract_groups',
-      'observations'
-    ];
-    
-    // PRIMERO: Excluir partes archivados
-    let filtered = reports.filter(r => !r.isArchived);
-    
-    // Filtro por estado desde las tarjetas de resumen
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(report => {
-        const completedSections = report.completedSections || [];
-        const allSectionsCompleted = totalSections.every(section => 
-          completedSections.includes(section)
-        );
-        const isCompleted = allSectionsCompleted || report.status === 'completed';
-        
-        switch (statusFilter) {
-          case 'completed':
-            return isCompleted;
-          case 'pending':
-            return !isCompleted;
-          case 'approved':
-            return isCompleted && report.approved === true;
-          case 'not-approved':
-            return isCompleted && !report.approved;
-          default:
-            return true;
-        }
-      });
-    }
-    
-    // Filtro por obra
-    if (selectedWorkFilter && selectedWorkFilter !== 'all') {
-      filtered = filtered.filter(r => r.workId === selectedWorkFilter);
-    }
-    
-    // Filtro por rango de fechas
-    if (dateFilterStart) {
-      filtered = filtered.filter(r => new Date(r.date) >= new Date(dateFilterStart));
-    }
-    if (dateFilterEnd) {
-      filtered = filtered.filter(r => new Date(r.date) <= new Date(dateFilterEnd));
-    }
-    
-    // Filtro por estado de aprobación (del filtro avanzado)
-    if (approvalFilter === 'approved') {
-      filtered = filtered.filter(r => r.approved === true);
-    } else if (approvalFilter === 'not-approved') {
-      filtered = filtered.filter(r => !r.approved);
-    }
-    
-    // Filtro por encargado (normalizado a Title Case)
-    if (foremanFilter && foremanFilter !== 'all') {
-      filtered = filtered.filter(r => {
-        const normalizedForeman = r.foreman
-          ?.toLowerCase()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        return normalizedForeman === foremanFilter;
-      });
-    }
-    
-    // Filtro por jefe de obra (normalizado a Title Case)
-    if (siteManagerFilter && siteManagerFilter !== 'all') {
-      filtered = filtered.filter(r => {
-        const normalizedSiteManager = r.siteManager
-          ?.toLowerCase()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        return normalizedSiteManager === siteManagerFilter;
-      });
-    }
-    
-    return filtered;
-  }, [reports, statusFilter, selectedWorkFilter, dateFilterStart, dateFilterEnd, approvalFilter, foremanFilter, siteManagerFilter]);
 
   // Handler para desarchivar
   const handleUnarchive = async (reportId: string) => {
@@ -403,490 +334,6 @@ export const WorkReportList = ({
     return pendingSections.map(s => sectionNames[s] || s).join(', ');
   };
 
-  // Toggle report selection
-  const toggleReportSelection = (reportId: string) => {
-    setSelectedReports(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(reportId)) {
-        newSet.delete(reportId);
-      } else {
-        newSet.add(reportId);
-      }
-      return newSet;
-    });
-  };
-
-  // Select all filtered reports
-  const selectAllReports = () => {
-    if (selectedReports.size === filteredReports.length) {
-      setSelectedReports(new Set());
-    } else {
-      setSelectedReports(new Set(filteredReports.map(r => r.id)));
-    }
-  };
-
-  // Show dialog to ask about images for bulk download
-  const handleBulkDownloadClick = () => {
-    if (selectedReports.size === 0) {
-      toast({
-        title: "No hay partes seleccionados",
-        description: "Selecciona al menos un parte de trabajo para descargar",
-        variant: "destructive"
-      });
-      return;
-    }
-    setShowBulkImageDialog(true);
-  };
-
-  // Download selected reports as PDFs in a ZIP file
-  const downloadSelectedPDFs = async (includeImages: boolean) => {
-    setShowBulkImageDialog(false);
-    setIsDownloadingBulk(true);
-    
-    try {
-      const zip = new JSZip();
-      // Para rol oficina, solo descargar partes aprobados
-      const reportsToDownload = filteredReports.filter(r => 
-        selectedReports.has(r.id) && (!isOfi || r.approved === true)
-      );
-
-      if (reportsToDownload.length === 0) {
-        toast({
-          title: "Sin partes para descargar",
-          description: isOfi 
-            ? "Solo se pueden descargar partes aprobados. Ninguno de los seleccionados está aprobado."
-            : "No hay partes seleccionados para descargar",
-          variant: "destructive"
-        });
-        setIsDownloadingBulk(false);
-        return;
-      }
-      
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const report of reportsToDownload) {
-        try {
-          const pdfBlob = await generateWorkReportPDF(
-            report,
-            includeImages,
-            companyLogo,
-            organization?.brand_color,
-            true  // returnBlob
-          );
-
-          if (pdfBlob) {
-            const fileName = `Parte_${report.workNumber}_${format(new Date(report.date), 'yyyy-MM-dd')}.pdf`;
-            zip.file(fileName, pdfBlob);
-            successCount++;
-          } else {
-            failCount++;
-          }
-        } catch (error) {
-          console.error(`Error generating PDF for report ${report.id}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(zipBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Partes_PDF_${format(new Date(), 'yyyy-MM-dd')}.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        // Registrar las descargas para notificaciones de modificación
-        if (isSiteManager || isAdmin || isMaster || isOfi) {
-          for (const report of reportsToDownload) {
-            await trackDownload(report.id, 'pdf');
-          }
-        }
-
-        toast({
-          title: "Descarga completada",
-          description: `Se han descargado ${successCount} partes en ZIP${failCount > 0 ? ` (${failCount} fallaron)` : ''}`,
-        });
-
-        // Clear selection after successful download
-        setSelectedReports(new Set());
-      } else {
-        throw new Error("No se pudo generar ningún PDF");
-      }
-    } catch (error) {
-      console.error('Error downloading PDFs:', error);
-      toast({
-        title: "Error al descargar",
-        description: "Hubo un problema al generar los PDFs",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDownloadingBulk(false);
-    }
-  };
-
-  // Download selected reports as Excel files in a ZIP
-  const downloadSelectedExcels = async () => {
-    if (selectedReports.size === 0) {
-      toast({
-        title: "No hay partes seleccionados",
-        description: "Selecciona al menos un parte de trabajo para descargar",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsDownloadingExcelBulk(true);
-    
-    try {
-      const { exportSingleReportToExcel } = await import('@/utils/exportUtils');
-      const XLSX = await import('xlsx-js-style');
-      const zip = new JSZip();
-      // Para rol oficina, solo descargar partes aprobados
-      const reportsToDownload = filteredReports.filter(r => 
-        selectedReports.has(r.id) && (!isOfi || r.approved === true)
-      );
-
-      if (reportsToDownload.length === 0) {
-        toast({
-          title: "Sin partes para descargar",
-          description: isOfi 
-            ? "Solo se pueden descargar partes aprobados. Ninguno de los seleccionados está aprobado."
-            : "No hay partes seleccionados para descargar",
-          variant: "destructive"
-        });
-        setIsDownloadingExcelBulk(false);
-        return;
-      }
-      
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const report of reportsToDownload) {
-        try {
-          // Fetch rental machinery data for this report
-          let rentalMachineryData: any[] = [];
-          if (report.workId) {
-            const projectId = Number(report.workId);
-            if (Number.isFinite(projectId)) {
-              const rentalRows = await listRentalMachinery({ projectId, limit: 500 });
-              rentalMachineryData = rentalRows
-                .map((row) => ({
-                  provider: row.provider || '',
-                  type: row.name || row.description || '',
-                  machine_number: String(row.id),
-                  delivery_date: row.start_date,
-                  daily_rate:
-                    typeof row.price === 'number'
-                      ? row.price
-                      : Number.isFinite(Number(row.price))
-                        ? Number(row.price)
-                        : 0,
-                }))
-                .sort(
-                  (a, b) =>
-                    new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime()
-                );
-            }
-          }
-
-          // Create workbook for this report
-          const wb = XLSX.utils.book_new();
-          
-          // General Info sheet
-          const generalData = [
-            ['PARTE DE TRABAJO'],
-            [],
-            ['Nº Obra', report.workNumber || 'N/A'],
-            ['Nombre Obra', report.workName || 'N/A'],
-            ['Fecha', format(new Date(report.date), 'dd/MM/yyyy')],
-            ['Encargado', report.foreman || 'N/A'],
-            ['Jefe de Obra', report.siteManager || 'N/A'],
-            ['Horas Encargado', report.foremanHours?.toString() || '0'],
-            [],
-            ['Observaciones', report.observations || '']
-          ];
-          const wsGeneral = XLSX.utils.aoa_to_sheet(generalData);
-          XLSX.utils.book_append_sheet(wb, wsGeneral, 'Info General');
-
-          // Work groups sheet
-          if (report.workGroups && report.workGroups.length > 0) {
-            const workData: any[][] = [['Empresa', 'Trabajador', 'Horas', 'Actividad']];
-            report.workGroups.forEach(group => {
-              group.items.forEach(item => {
-                workData.push([group.company, item.name, item.hours, item.activity || '']);
-              });
-            });
-            const wsWork = XLSX.utils.aoa_to_sheet(workData);
-            XLSX.utils.book_append_sheet(wb, wsWork, 'Mano de Obra');
-          }
-
-          // Machinery groups sheet
-          if (report.machineryGroups && report.machineryGroups.length > 0) {
-            const machData: any[][] = [['Empresa', 'Tipo Maquinaria', 'Horas', 'Actividad']];
-            report.machineryGroups.forEach(group => {
-              group.items.forEach(item => {
-                machData.push([group.company, item.type, item.hours, item.activity || '']);
-              });
-            });
-            const wsMach = XLSX.utils.aoa_to_sheet(machData);
-            XLSX.utils.book_append_sheet(wb, wsMach, 'Maquinaria');
-          }
-
-          // Rental machinery sheet
-          if (rentalMachineryData.length > 0) {
-            const rentalData: any[][] = [['Proveedor', 'Tipo', 'Nº Máquina', 'Fecha Entrega', 'Tarifa Diaria']];
-            rentalMachineryData.forEach(item => {
-              rentalData.push([
-                item.provider,
-                item.type,
-                item.machine_number,
-                format(new Date(item.delivery_date), 'dd/MM/yyyy'),
-                item.daily_rate || ''
-              ]);
-            });
-            const wsRental = XLSX.utils.aoa_to_sheet(rentalData);
-            XLSX.utils.book_append_sheet(wb, wsRental, 'Maq. Alquiler');
-          }
-
-          // Materials sheet
-          if (report.materialGroups && report.materialGroups.length > 0) {
-            const matData: any[][] = [['Proveedor', 'Material', 'Cantidad', 'Unidad', 'Nº Albarán']];
-            report.materialGroups.forEach(group => {
-              group.items.forEach(item => {
-                matData.push([group.supplier, item.name, item.quantity, item.unit, group.invoiceNumber || '']);
-              });
-            });
-            const wsMat = XLSX.utils.aoa_to_sheet(matData);
-            XLSX.utils.book_append_sheet(wb, wsMat, 'Materiales');
-          }
-
-          // Subcontracts sheet
-          if (report.subcontractGroups && report.subcontractGroups.length > 0) {
-            const subData: any[][] = [['Empresa', 'Trabajos Realizados']];
-            report.subcontractGroups.forEach(group => {
-              group.items.forEach(item => {
-                subData.push([group.company, item.activity]);
-              });
-            });
-            const wsSub = XLSX.utils.aoa_to_sheet(subData);
-            XLSX.utils.book_append_sheet(wb, wsSub, 'Subcontratas');
-          }
-
-          // Generate Excel buffer
-          const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-          const fileName = `Parte_${report.workNumber}_${format(new Date(report.date), 'yyyy-MM-dd')}.xlsx`;
-          zip.file(fileName, excelBuffer);
-          successCount++;
-        } catch (error) {
-          console.error(`Error generating Excel for report ${report.id}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(zipBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Partes_Excel_${format(new Date(), 'yyyy-MM-dd')}.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        // Registrar las descargas
-        if (isSiteManager || isAdmin || isMaster || isOfi) {
-          for (const report of reportsToDownload) {
-            await trackDownload(report.id, 'excel');
-          }
-        }
-
-        toast({
-          title: "Descarga completada",
-          description: `Se han descargado ${successCount} partes Excel en ZIP${failCount > 0 ? ` (${failCount} fallaron)` : ''}`,
-        });
-
-        setSelectedReports(new Set());
-      } else {
-        throw new Error("No se pudo generar ningún Excel");
-      }
-    } catch (error) {
-      console.error('Error downloading Excels:', error);
-      toast({
-        title: "Error al descargar",
-        description: "Hubo un problema al generar los archivos Excel",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDownloadingExcelBulk(false);
-    }
-  };
-
-  // Mostrar diálogo para preguntar si quiere incluir imágenes
-  const handleViewPDFClick = (report: WorkReport) => {
-    setPendingReport(report);
-    setPendingAction('view');
-    setShowImageDialog(true);
-  };
-
-  // Función para visualizar PDF en un visor integrado
-  const handleViewPDF = async (report: WorkReport, includeImages: boolean = false) => {
-    try {
-      const jsPDF = (await import('jspdf')).default;
-      const { default: autoTable } = await import('jspdf-autotable');
-      
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let y = 20;
-
-      // Título visible grande
-      doc.setFontSize(22);
-      doc.setTextColor(10, 10, 10);
-      doc.text('PARTE DE TRABAJO', pageWidth / 2, y, { align: 'center' });
-      y += 14;
-
-      // Datos básicos claramente visibles
-      doc.setFontSize(12);
-      doc.text(`Nº OBRA: ${report.workNumber || 'N/A'}`, 20, y);
-      doc.text(`FECHA: ${new Date(report.date).toLocaleDateString()}`, pageWidth - 80, y);
-      y += 10;
-      doc.text(`OBRA: ${report.workName || 'N/A'}`, 20, y);
-      y += 8;
-
-      // Separador visible
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.5);
-      doc.line(15, y, pageWidth - 15, y);
-      y += 8;
-
-      // Tabla mínima para asegurar contenido visible
-      autoTable(doc, {
-        head: [["Campo", "Valor"]],
-        body: [
-          ["Encargado", report.foreman || "-"],
-          ["Jefe de obra", report.siteManager || "-"],
-        ],
-        startY: y,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [230, 230, 230] },
-        margin: { left: 15, right: 15 }
-      });
-
-      // Exportar como Blob para usar blob: URL
-      const blob = doc.output('blob');
-      const url = URL.createObjectURL(blob);
-
-      // Limpiar URL previa y setear
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
-        setPdfUrl('');
-      }
-      setPdfUrl(url);
-      setPdfBuffer(null);
-      setPdfViewerOpen(true);
-      setShowImageDialog(false);
-      setPendingReport(null);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'No se pudo generar el PDF.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Limpiar URL del PDF al cerrar el visor
-  const handleClosePdfViewer = () => {
-    setPdfViewerOpen(false);
-    if (pdfUrl) {
-      URL.revokeObjectURL(pdfUrl);
-      setPdfUrl('');
-    }
-    setPdfBuffer(null);
-  };
-
-  // Mostrar diálogo antes de descargar PDF
-  const handleDownloadPDFClick = (report: WorkReport) => {
-    // Validar estado del parte
-    if (report.status !== 'completed') {
-      const statusMessages = {
-        'missing_data': 'Este parte tiene datos incompletos. Complete todos los datos antes de descargar.',
-        'missing_delivery_notes': 'Este parte tiene albaranes pendientes. Adjunte todos los albaranes antes de descargar.'
-      };
-      setStatusWarningMessage(statusMessages[report.status as 'missing_data' | 'missing_delivery_notes'] || 'Este parte no está completado. Complete el parte antes de descargar.');
-      setShowStatusWarning(true);
-      return;
-    }
-    
-    setPendingReport(report);
-    setPendingAction('download');
-    setShowImageDialog(true);
-  };
-
-  const handleDownloadPDF = async (report: WorkReport, includeImages: boolean = false) => {
-    try {
-      const brandColor = organization?.brand_color || undefined;
-      await generateWorkReportPDF(report, includeImages, companyLogo, brandColor);
-      
-      // Registrar la descarga para notificaciones de modificación
-      if (isSiteManager || isAdmin || isMaster) {
-        await trackDownload(report.id, 'pdf');
-      }
-      
-      toast({
-        title: "PDF descargado",
-        description: "El parte de trabajo se ha descargado correctamente.",
-      });
-      setShowImageDialog(false);
-      setPendingReport(null);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo descargar el PDF.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Función para descargar Excel de un solo parte
-  const handleDownloadExcel = async (report: WorkReport) => {
-    // Validar estado del parte
-    if (report.status !== 'completed') {
-      const statusMessages = {
-        'missing_data': 'Este parte tiene datos incompletos. Complete todos los datos antes de exportar a Excel.',
-        'missing_delivery_notes': 'Este parte tiene albaranes pendientes. Adjunte todos los albaranes antes de exportar a Excel.'
-      };
-      setStatusWarningMessage(statusMessages[report.status as 'missing_data' | 'missing_delivery_notes'] || 'Este parte no está completado. Complete el parte antes de exportar a Excel.');
-      setShowStatusWarning(true);
-      return;
-    }
-    
-    try {
-      const { exportSingleReportToExcel } = await import('@/utils/exportUtils');
-      await exportSingleReportToExcel(report);
-      
-      // Registrar la descarga para notificaciones de modificación
-      if (isSiteManager || isAdmin || isMaster) {
-        await trackDownload(report.id, 'excel');
-      }
-      
-      toast({
-        title: "Excel descargado",
-        description: "El parte de trabajo se ha exportado a Excel con pestañas separadas.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo exportar a Excel.",
-        variant: "destructive",
-      });
-    }
-  };
 
   // Helper function to check if user can edit/delete a report
   const canModifyReport = (report: WorkReport) => {
@@ -907,160 +354,6 @@ export const WorkReportList = ({
     return false;
   };
 
-  // Función auxiliar para obtener el número de semana del año
-  const getWeekNumber = (date: Date): number => {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  };
-
-  // Agrupar partes por semanas, luego por obra
-  const weeklyGroups = useMemo(() => {
-    const groups = new Map<string, Map<string, WorkReport[]>>();
-    
-    filteredReports.forEach(report => {
-      const reportDate = new Date(report.date);
-      const year = reportDate.getFullYear();
-      const weekNum = getWeekNumber(reportDate);
-      const weekKey = `${year}-S${weekNum.toString().padStart(2, '0')}`;
-      const workKey = `${report.workNumber}|||${report.workName}`; // Using ||| as separator
-      
-      if (!groups.has(weekKey)) {
-        groups.set(weekKey, new Map());
-      }
-      
-      const weekGroup = groups.get(weekKey)!;
-      if (!weekGroup.has(workKey)) {
-        weekGroup.set(workKey, []);
-      }
-      weekGroup.get(workKey)!.push(report);
-    });
-    
-    // Convert to array and sort weeks descending
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([weekKey, workGroups]) => {
-        // Sort works by work number
-        const sortedWorkGroups = Array.from(workGroups.entries())
-          .sort(([a], [b]) => {
-            const [numA] = a.split('|||');
-            const [numB] = b.split('|||');
-            return numA.localeCompare(numB);
-          });
-        return [weekKey, sortedWorkGroups] as const;
-      });
-  }, [filteredReports]);
-
-  // Agrupar partes por meses, luego por obra
-  const monthlyGroups = useMemo(() => {
-    const groups = new Map<string, Map<string, WorkReport[]>>();
-    
-    filteredReports.forEach(report => {
-      const reportDate = new Date(report.date);
-      const monthKey = `${reportDate.getFullYear()}-${(reportDate.getMonth() + 1).toString().padStart(2, '0')}`;
-      const workKey = `${report.workNumber}|||${report.workName}`; // Using ||| as separator
-      
-      if (!groups.has(monthKey)) {
-        groups.set(monthKey, new Map());
-      }
-      
-      const monthGroup = groups.get(monthKey)!;
-      if (!monthGroup.has(workKey)) {
-        monthGroup.set(workKey, []);
-      }
-      monthGroup.get(workKey)!.push(report);
-    });
-    
-    // Convert to array and sort months descending
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([monthKey, workGroups]) => {
-        // Sort works by work number
-        const sortedWorkGroups = Array.from(workGroups.entries())
-          .sort(([a], [b]) => {
-            const [numA] = a.split('|||');
-            const [numB] = b.split('|||');
-            return numA.localeCompare(numB);
-          });
-        return [monthKey, sortedWorkGroups] as const;
-      });
-  }, [filteredReports]);
-
-  // Obtener lista única de encargados y jefes de obra
-  const uniqueForemen = useMemo(() => {
-    const foremenSet = new Set<string>();
-    reports.forEach(report => {
-      if (report.foreman) {
-        const normalized = report.foreman
-          .toLowerCase()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        foremenSet.add(normalized);
-      }
-    });
-    return Array.from(foremenSet).sort();
-  }, [reports]);
-
-  const uniqueSiteManagers = useMemo(() => {
-    const managersSet = new Set<string>();
-    reports.forEach(report => {
-      if (report.siteManager) {
-        const normalized = report.siteManager
-          .toLowerCase()
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        managersSet.add(normalized);
-      }
-    });
-    return Array.from(managersSet).sort();
-  }, [reports]);
-
-  // Agrupar partes por encargado (normalizando a Title Case para evitar duplicados)
-  const foremanGroups = useMemo(() => {
-    const groups = new Map<string, WorkReport[]>();
-    
-    filteredReports.forEach(report => {
-      // Normalizar el nombre del encargado a Title Case
-      const rawForeman = report.foreman || 'Sin Encargado';
-      const foremanName = rawForeman === 'Sin Encargado' 
-        ? rawForeman 
-        : rawForeman
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-      
-      if (!groups.has(foremanName)) {
-        groups.set(foremanName, []);
-      }
-      groups.get(foremanName)!.push(report);
-    });
-    
-    // Ordenar por nombre de encargado alfabéticamente
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredReports]);
-
-  // Agrupar partes por obra (para rol ofi)
-  const workGroups = useMemo(() => {
-    const groups = new Map<string, WorkReport[]>();
-    
-    filteredReports.forEach(report => {
-      const workKey = `${report.workNumber || 'N/A'} - ${report.workName || 'Sin nombre'}`;
-      
-      if (!groups.has(workKey)) {
-        groups.set(workKey, []);
-      }
-      groups.get(workKey)!.push(report);
-    });
-    
-    // Ordenar por número de obra alfabéticamente
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredReports]);
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -1070,15 +363,6 @@ export const WorkReportList = ({
   };
 
   const uniqueWorks = [...new Set(reports.map(r => r.workName).filter(Boolean))];
-  
-  const clearAllFilters = () => {
-    setSelectedWorkFilter('');
-    setDateFilterStart('');
-    setDateFilterEnd('');
-    setApprovalFilter('all');
-    setForemanFilter('');
-    setSiteManagerFilter('');
-  };
   
   const activeFiltersCount = [
     selectedWorkFilter && selectedWorkFilter !== 'all',

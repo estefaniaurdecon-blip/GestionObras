@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from pathlib import Path
 from typing import Optional
 
@@ -79,7 +80,7 @@ def create_project_document(
         original_name=upload.filename or target_path.name,
         content_type=getattr(upload, "content_type", None) or "application/octet-stream",
         size_bytes=size_bytes,
-        uploaded_at=datetime.utcnow(),
+        uploaded_at=utc_now(),
     )
     session.add(doc)
     session.commit()

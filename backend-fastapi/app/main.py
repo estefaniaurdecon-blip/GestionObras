@@ -9,7 +9,6 @@ from app.core.config import settings
 from app.core.audit import set_audit_source, reset_audit_source
 from app.db.session import init_db
 from app.api.v1.router import api_router as api_v1_router
-from app.contracts.router import public_router as contracts_public_router
 
 
 def create_app() -> FastAPI:
@@ -72,8 +71,6 @@ def create_app() -> FastAPI:
 
     # Montamos rutas versionadas bajo `/api/v1`.
     app.include_router(api_v1_router, prefix="/api/v1")
-    # Endpoint publico para firma de contratos.
-    app.include_router(contracts_public_router, prefix="/public")
 
     avatars_path = Path(settings.avatars_storage_path)
     avatars_path.mkdir(parents=True, exist_ok=True)

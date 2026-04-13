@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Dict, List, Optional
 
 from sqlalchemy import Column, JSON
@@ -24,5 +25,5 @@ class SummaryYear(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON, nullable=False, default=dict),
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

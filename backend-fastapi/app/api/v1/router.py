@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.core.config import settings
+
 from . import (
     attachments,
     ai_runtime,
@@ -18,8 +20,6 @@ from . import (
     invitations,
     inventory_movements,
     internal,
-    contracts,
-    invoices,
     messages,
     notifications,
     organization,
@@ -78,7 +78,6 @@ api_router.include_router(
 )
 api_router.include_router(work_report_comments.router, prefix="", tags=["erp"])
 api_router.include_router(tools.router, prefix="/tools", tags=["tools"])
-api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(erp.router, prefix="/erp", tags=["erp"])
 api_router.include_router(
@@ -106,28 +105,11 @@ api_router.include_router(
     prefix="/erp",
     tags=["erp"],
 )
-api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
-api_router.include_router(hr.router, prefix="/hr", tags=["hr"])
-api_router.include_router(
-    invitations.router,
-    prefix="/invitations",
-    tags=["invitations"],
-)
 api_router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["notifications"],
-)
-api_router.include_router(
-    invoices.router,
-    prefix="/invoices",
-    tags=["invoices"],
-)
-api_router.include_router(
-    contracts.router,
-    prefix="/contracts",
-    tags=["contracts"],
 )
 api_router.include_router(
     internal.router,
@@ -149,3 +131,13 @@ api_router.include_router(
     prefix="/erp/saved-economic-reports",
     tags=["erp"],
 )
+
+if settings.enable_legacy_non_app_routers:
+    api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+    api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
+    api_router.include_router(hr.router, prefix="/hr", tags=["hr"])
+    api_router.include_router(
+        invitations.router,
+        prefix="/invitations",
+        tags=["invitations"],
+    )

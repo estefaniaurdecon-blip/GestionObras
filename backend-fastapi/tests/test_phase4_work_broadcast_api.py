@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from fastapi import status
@@ -100,7 +101,7 @@ def _create_project(session: Session, *, tenant_id: int, name: str) -> Project:
     project = Project(
         tenant_id=tenant_id,
         name=name,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(project)
     session.commit()
@@ -271,7 +272,7 @@ def test_work_broadcast_rejects_superadmin_from_operational_circuit(
 def test_work_broadcast_deduplicates_anomalous_duplicate_recipients() -> None:
     actor = User(id=1, tenant_id=1, creator_group_id=500, is_super_admin=False, email="a@example.com", full_name="Actor", hashed_password="x", is_active=True)
     duplicate_recipient = User(id=2, tenant_id=1, creator_group_id=500, is_super_admin=False, email="b@example.com", full_name="Dup", hashed_password="x", is_active=True)
-    project = Project(id=7, tenant_id=1, name="Obra Duplicada", created_at=datetime.utcnow())
+    project = Project(id=7, tenant_id=1, name="Obra Duplicada", created_at=utc_now())
 
     fake_session = _FakeSession(
         queued_results=[

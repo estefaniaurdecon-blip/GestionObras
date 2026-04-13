@@ -262,12 +262,18 @@ def backfill_audit_log_source() -> None:
     """Default source = 'app' for existing rows."""
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
-    if "audit_log" not in table_names and "auditlog" not in table_names:
+    _AUDIT_TABLE_WHITELIST = {"audit_log", "auditlog"}
+    audit_candidates = _AUDIT_TABLE_WHITELIST & table_names
+    if not audit_candidates:
         return
-    audit_table = "audit_log" if "audit_log" in table_names else "auditlog"
+    audit_table = "audit_log" if "audit_log" in audit_candidates else "auditlog"
     with engine.begin() as conn:
         conn.execute(
-            text(f"UPDATE {audit_table} SET source = 'app' WHERE source IS NULL")
+            text(
+                "UPDATE audit_log SET source = 'app' WHERE source IS NULL"
+                if audit_table == "audit_log"
+                else "UPDATE auditlog SET source = 'app' WHERE source IS NULL"
+            )
         )
     print("  [OK] backfill_audit_log_source")
 

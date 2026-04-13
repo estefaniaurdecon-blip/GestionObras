@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -24,7 +25,7 @@ def test_custom_holidays_crud_flow(client: TestClient, db_session_fixture: Sessi
 
     tenant = Tenant(
         name="Tenant Holidays",
-        subdomain=f"holidays-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"holidays-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
-
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.models.erp import Project
@@ -32,7 +30,32 @@ class MessageNotFoundError(ValueError):
     pass
 
 
-def _resolve_user_name(session: Session, user_id: str) -> str:
+def _resolve_user_names(session: Session, user_ids: set[str]) -> dict[str, str]:
+    numeric_user_ids = sorted(
+        {int(user_id) for user_id in user_ids if user_id and user_id.isdigit()}
+    )
+    if not numeric_user_ids:
+        return {}
+
+    users = session.exec(
+        select(User).where(User.id.in_(numeric_user_ids))
+    ).all()
+    return {
+        str(user.id): user.full_name
+        for user in users
+        if user.id is not None and user.full_name
+    }
+
+
+def _resolve_user_name(
+    session: Session,
+    user_id: str,
+    *,
+    names_by_id: dict[str, str] | None = None,
+) -> str:
+    if names_by_id and user_id in names_by_id:
+        return names_by_id[user_id]
+
     if user_id.isdigit():
         user_obj = session.get(User, int(user_id))
         if user_obj:
@@ -40,7 +63,12 @@ def _resolve_user_name(session: Session, user_id: str) -> str:
     return user_id
 
 
-def _serialize_message(session: Session, row: Message) -> MessageRead:
+def _serialize_message(
+    session: Session,
+    row: Message,
+    *,
+    names_by_id: dict[str, str] | None = None,
+) -> MessageRead:
     return MessageRead(
         id=int(row.id or 0),
         tenant_id=row.tenant_id,
@@ -50,19 +78,25 @@ def _serialize_message(session: Session, row: Message) -> MessageRead:
         message=row.message,
         read=bool(row.is_read),
         created_at=row.created_at,
-        from_user=MessageUserRead(full_name=_resolve_user_name(session, row.from_user_id)),
-        to_user=MessageUserRead(full_name=_resolve_user_name(session, row.to_user_id)),
+        from_user=MessageUserRead(
+            full_name=_resolve_user_name(
+                session,
+                row.from_user_id,
+                names_by_id=names_by_id,
+            )
+        ),
+        to_user=MessageUserRead(
+            full_name=_resolve_user_name(
+                session,
+                row.to_user_id,
+                names_by_id=names_by_id,
+            )
+        ),
     )
 
 
 def _current_user_id(user: User) -> str:
     return str(user.id)
-
-
-def _load_numeric_user(session: Session, user_id: str) -> User | None:
-    if not user_id.isdigit():
-        return None
-    return session.get(User, int(user_id))
 
 
 def _project_or_error(
@@ -82,13 +116,6 @@ def _project_or_error(
     return project
 
 
-def _is_message_visible_to_user_group(session: Session, user: User, row: Message) -> bool:
-    current_user_id = _current_user_id(user)
-    other_user_id = row.to_user_id if row.from_user_id == current_user_id else row.from_user_id
-    other_user = _load_numeric_user(session, other_user_id)
-    return can_users_message_each_other(session, user, other_user)
-
-
 def list_messages_for_user(
     session: Session,
     *,
@@ -103,18 +130,31 @@ def list_messages_for_user(
         Message.to_user_id == current_user_id,
     )
 
-    rows: Iterable[Message] = session.exec(
+    rows = session.exec(
         select(Message)
         .where(Message.tenant_id == tenant_id, visibility_filter)
-        .order_by(Message.created_at.desc())
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
 
-    visible_rows = [row for row in rows if _is_message_visible_to_user_group(session, user, row)]
-    paged_rows = visible_rows[offset : offset + limit]
+    total = session.exec(
+        select(func.count())
+        .select_from(Message)
+        .where(Message.tenant_id == tenant_id, visibility_filter)
+    ).one()
+
+    names_by_id = _resolve_user_names(
+        session,
+        {row.from_user_id for row in rows} | {row.to_user_id for row in rows},
+    )
 
     return MessageListResponse(
-        items=[_serialize_message(session, row) for row in paged_rows],
-        total=len(visible_rows),
+        items=[
+            _serialize_message(session, row, names_by_id=names_by_id)
+            for row in rows
+        ],
+        total=int(total),
     )
 
 
@@ -169,7 +209,11 @@ def create_message(
         body=body[:240],
         reference=f"message_id={row.id}",
     )
-    return _serialize_message(session, row)
+    names_by_id = {
+        _current_user_id(user): user.full_name,
+        to_user_id: target_user.full_name,
+    }
+    return _serialize_message(session, row, names_by_id=names_by_id)
 
 
 def broadcast_message_to_work(
@@ -280,7 +324,8 @@ def mark_message_as_read(
         session.commit()
         session.refresh(row)
 
-    return _serialize_message(session, row)
+    names_by_id = _resolve_user_names(session, {row.from_user_id, row.to_user_id})
+    return _serialize_message(session, row, names_by_id=names_by_id)
 
 
 def delete_message(

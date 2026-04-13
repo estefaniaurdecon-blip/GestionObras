@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as DateType, datetime
+from app.core.datetime import utc_now
 from typing import Optional
 
 from sqlalchemy import Index, UniqueConstraint
@@ -20,8 +21,8 @@ class RentalMachineryAssignment(SQLModel, table=True):
     company_name: str = Field(max_length=255)
     activity: Optional[str] = Field(default=None)
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
 
     __table_args__ = (
         Index("ix_erp_rental_assignment_tenant_work_date", "tenant_id", "work_id", "assignment_date"),

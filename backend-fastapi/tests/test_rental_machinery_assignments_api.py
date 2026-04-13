@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.core.datetime import utc_now
 
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -27,7 +28,7 @@ def test_rental_machinery_assignments_crud_flow(
 
     tenant = Tenant(
         name="Tenant Assignments",
-        subdomain=f"assignments-{int(datetime.utcnow().timestamp())}",
+        subdomain=f"assignments-{int(utc_now().timestamp())}",
         is_active=True,
     )
     db_session_fixture.add(tenant)

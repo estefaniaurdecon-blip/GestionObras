@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Configurar el worker de PDF.js usando URL manejada por Vite
+// pdfjs-dist GlobalWorkerOptions requires a cast until they ship a proper type for workerSrc
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc as unknown as string;
 
 interface PdfViewerProps {
@@ -18,13 +20,13 @@ export const PdfViewer = ({ pdfUrl, pdfBuffer }: PdfViewerProps) => {
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.5);
   const [loading, setLoading] = useState<boolean>(true);
-  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
 
   useEffect(() => {
     const loadPdf = async () => {
       try {
         setLoading(true);
-        let loadingTask: any;
+        let loadingTask;
         if (pdfBuffer) {
           loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
         } else if (pdfUrl) {
@@ -58,6 +60,7 @@ export const PdfViewer = ({ pdfUrl, pdfBuffer }: PdfViewerProps) => {
         const viewport = page.getViewport({ scale });
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
+        if (!context) return;
 
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -65,6 +68,7 @@ export const PdfViewer = ({ pdfUrl, pdfBuffer }: PdfViewerProps) => {
         const renderContext = {
           canvasContext: context,
           viewport: viewport,
+          canvas: canvas,
         };
 
         await page.render(renderContext).promise;

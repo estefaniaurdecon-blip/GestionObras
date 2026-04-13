@@ -1,6 +1,6 @@
 type ApiFetchJsonFn = <T>(
   path: string,
-  init?: RequestInit & { skipAuth?: boolean }
+  init?: RequestInit & { skipAuth?: boolean; timeoutMs?: number }
 ) => Promise<T>;
 
 type BuildQueryParamsFn = (
@@ -48,6 +48,8 @@ export interface MessageCreatePayload {
   tenantId?: string | number | null;
 }
 
+const MESSAGING_API_TIMEOUT_MS = 10000;
+
 export function createMessagesApi(deps: MessagesApiDeps) {
   const listMessages = async (params: ListMessagesParams = {}): Promise<ApiMessageListResponse> => {
     const query = deps.buildQueryParams({
@@ -56,6 +58,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     });
     return deps.apiFetchJson<ApiMessageListResponse>(`/api/v1/messages${query}`, {
       headers: deps.tenantHeader?.(params.tenantId),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 
@@ -65,6 +68,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
       method: 'POST',
       headers: deps.tenantHeader?.(tenantId),
       body: JSON.stringify(body),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 
@@ -75,6 +79,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     return deps.apiFetchJson<ApiMessageRead>(`/api/v1/messages/${messageId}/read`, {
       method: 'POST',
       headers: deps.tenantHeader?.(tenantId),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 
@@ -82,6 +87,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     return deps.apiFetchJson<void>(`/api/v1/messages/${messageId}`, {
       method: 'DELETE',
       headers: deps.tenantHeader?.(tenantId),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 
@@ -92,6 +98,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     return deps.apiFetchJson<void>(`/api/v1/messages/conversation/${encodeURIComponent(otherUserId)}`, {
       method: 'DELETE',
       headers: deps.tenantHeader?.(tenantId),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 
@@ -99,6 +106,7 @@ export function createMessagesApi(deps: MessagesApiDeps) {
     return deps.apiFetchJson<void>('/api/v1/messages/clear-all', {
       method: 'DELETE',
       headers: deps.tenantHeader?.(tenantId),
+      timeoutMs: MESSAGING_API_TIMEOUT_MS,
     });
   };
 

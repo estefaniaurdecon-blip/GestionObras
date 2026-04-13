@@ -73,15 +73,3 @@ from app.models.project_conversation import (  # noqa: F401
 )
 from app.models.company_portfolio import CompanyPortfolio, CompanyType  # noqa: F401
 from app.models.saved_economic_report import SavedEconomicReport  # noqa: F401
-from app.invoices.models import Invoice, InvoiceEvent, NotificationLog  # noqa: F401
-from app.contracts.models import (  # noqa: F401
-    Contract,
-    ContractOffer,
-    ContractApproval,
-    ContractDocument,
-    SignatureRequest,
-    ContractEvent,
-    ContractNotificationLog,
-    Supplier,
-    SupplierInvitation,
-)

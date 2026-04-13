@@ -1,15 +1,12 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, type Dispatch, type SetStateAction } from 'react';
 import { useAlbaranScanController } from '@/hooks/useAlbaranScanController';
 import {
   normalizeDocType,
   type ParsedAlbaranItem,
   type ParsedAlbaranResult,
-  type ParsedFieldConfidence,
-  type ParsedFieldWarnings,
 } from '@/plugins/albaranScanner';
 import { toast } from '@/hooks/use-toast';
 import {
-  COST_DIFF_THRESHOLD,
   buildDeliveryNoteKey,
   createMaterialRow,
   createParsedAlbaranReviewItem,
@@ -25,22 +22,20 @@ import {
   sanitizeText,
 } from '@/components/work-report/helpers';
 import type {
-  DuplicateScanResolution,
   MaterialCostDifference,
   MaterialGroup,
   MaterialRow,
-  NoPriceScanResolution,
   ServiceLine,
-  ServiceScanResolution,
 } from '@/components/work-report/types';
-
-const SERVICE_SCAN_SUBTYPES = new Set<
-  NonNullable<ParsedAlbaranResult['docSubtype']>
->([
-  'BOMBEOS_GILGIL_ALBARAN_BOMBA',
-  'RECICLESAN_ALBARAN_JORNADA_MAQUINA',
-  'CONSTRUCCIONES_PARTE_TRABAJO',
-]);
+import {
+  SERVICE_SCAN_SUBTYPES,
+  buildMaterialRowFromParsedItem,
+  buildServiceLinesFromParsedResult,
+  buildParsedItemsFromServiceLines,
+  isServiceLikeParsedResult,
+  buildOthersRowFromParsedResult,
+} from './scanParsingUtils';
+import { useScanReviewState } from './useScanReviewState';
 
 type UseWorkReportScanOrchestratorParams = {
   readOnly: boolean;
@@ -66,336 +61,82 @@ export const useWorkReportScanOrchestrator = ({
     clearError: clearAlbaranScanError,
   } = useAlbaranScanController();
 
-  const [scanReviewDialogOpen, setScanReviewDialogOpenState] = useState(false);
-  const [scanReviewReason, setScanReviewReason] = useState<string | null>(null);
-  const [scanReviewSupplierState, setScanReviewSupplierState] = useState('');
-  const [scanReviewInvoiceNumberState, setScanReviewInvoiceNumberState] =
-    useState('');
-  const [scanReviewDocumentDateState, setScanReviewDocumentDateState] =
-    useState('');
-  const [scanReviewDocType, setScanReviewDocType] =
-    useState<ParsedAlbaranResult['docType']>('UNKNOWN');
-  const [scanReviewDocSubtype, setScanReviewDocSubtype] =
-    useState<ParsedAlbaranResult['docSubtype']>(null);
-  const [scanReviewServiceDescriptionState, setScanReviewServiceDescriptionState] =
-    useState('');
-  const [scanReviewConfidence, setScanReviewConfidence] =
-    useState<ParsedAlbaranResult['confidence']>('medium');
-  const [scanReviewWarnings, setScanReviewWarnings] = useState<string[]>([]);
-  const [scanReviewFieldConfidence, setScanReviewFieldConfidence] =
-    useState<ParsedFieldConfidence | null>(null);
-  const [scanReviewFieldWarnings, setScanReviewFieldWarnings] =
-    useState<ParsedFieldWarnings | null>(null);
-  const [scanReviewFieldMeta, setScanReviewFieldMeta] =
-    useState<ParsedAlbaranResult['fieldMeta']>(null);
-  const [scanReviewTemplateData, setScanReviewTemplateData] =
-    useState<ParsedAlbaranResult['templateData']>(null);
-  const [scanReviewProfileUsed, setScanReviewProfileUsed] =
-    useState<ParsedAlbaranResult['profileUsed']>('ORIGINAL');
-  const [scanReviewScore, setScanReviewScore] = useState(0);
-  const [scanReviewItems, setScanReviewItems] = useState<ParsedAlbaranItem[]>(
-    [],
-  );
-  const [scanReviewServiceLines, setScanReviewServiceLines] = useState<
-    ServiceLine[]
-  >([]);
-  const [scanReviewImageUris, setScanReviewImageUris] = useState<string[]>([]);
-  const [scanReviewRawText, setScanReviewRawText] = useState('');
-  const [scanReviewTargetGroupId, setScanReviewTargetGroupId] = useState<
-    string | null
-  >(null);
-  const [scanInFlightTargetGroupId, setScanInFlightTargetGroupId] = useState<
-    string | null
-  >(null);
-  const [rescanConfirmDialogOpen, setRescanConfirmDialogOpenState] =
-    useState(false);
-  const [pendingRescanTargetGroupId, setPendingRescanTargetGroupId] =
-    useState<string | null>(null);
-  const [serviceScanDialogOpen, setServiceScanDialogOpenState] = useState(false);
-  const [pendingServiceScanResolution, setPendingServiceScanResolution] =
-    useState<ServiceScanResolution | null>(null);
-  const [noPriceScanDialogOpen, setNoPriceScanDialogOpenState] =
-    useState(false);
-  const [pendingNoPriceScanResolution, setPendingNoPriceScanResolution] =
-    useState<NoPriceScanResolution | null>(null);
-  const [duplicateDialogOpen, setDuplicateDialogOpenState] = useState(false);
-  const [pendingDuplicateResolution, setPendingDuplicateResolution] =
-    useState<DuplicateScanResolution | null>(null);
-  const [albaranViewerOpen, setAlbaranViewerOpen] = useState(false);
-  const [albaranViewerImageUris, setAlbaranViewerImageUris] = useState<
-    string[]
-  >([]);
-  const [albaranViewerInitialIndex, setAlbaranViewerInitialIndex] = useState(0);
-  const [albaranViewerTitle, setAlbaranViewerTitle] = useState(
-    'Adjuntos del albaran',
-  );
-  const [costDifferenceDialogOpen, setCostDifferenceDialogOpenState] =
-    useState(false);
-  const [pendingCostDifferences, setPendingCostDifferences] = useState<
-    MaterialCostDifference[]
-  >([]);
-
-  const setScanReviewSupplier = useCallback((value: string) => {
-    setScanReviewSupplierState(value);
-  }, []);
-
-  const setScanReviewInvoiceNumber = useCallback((value: string) => {
-    setScanReviewInvoiceNumberState(value);
-  }, []);
-
-  const setScanReviewDocumentDate = useCallback((value: string) => {
-    setScanReviewDocumentDateState(value);
-  }, []);
-
-  const setScanReviewServiceDescription = useCallback((value: string) => {
-    setScanReviewServiceDescriptionState(value);
-  }, []);
-
-  const openAlbaranViewer = useCallback(
-    (
-      imageUris: string[],
-      title = 'Adjuntos del albaran',
-      initialIndex = 0,
-    ) => {
-      if (!Array.isArray(imageUris) || imageUris.length === 0) return;
-      const sanitized = imageUris.filter(
-        (uri) => typeof uri === 'string' && uri.trim().length > 0,
-      );
-      if (sanitized.length === 0) return;
-      const safeIndex = Math.max(
-        0,
-        Math.min(initialIndex, sanitized.length - 1),
-      );
-      setAlbaranViewerImageUris(sanitized);
-      setAlbaranViewerTitle(title);
-      setAlbaranViewerInitialIndex(safeIndex);
-      setAlbaranViewerOpen(true);
-    },
-    [],
-  );
-
-  const closeAlbaranViewer = useCallback(() => {
-    setAlbaranViewerOpen(false);
-  }, []);
-
-  const buildMaterialRowFromParsedItem = useCallback(
-    (item: ParsedAlbaranItem): MaterialRow => {
-      const quantity =
-        typeof item.quantity === 'number' && Number.isFinite(item.quantity)
-          ? nonNegative(item.quantity)
-          : 0;
-      const unitPrice =
-        typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice)
-          ? nonNegative(item.unitPrice)
-          : 0;
-      const costCalc = quantity * unitPrice;
-      const costDoc =
-        typeof item.costDoc === 'number' && Number.isFinite(item.costDoc)
-          ? nonNegative(item.costDoc)
-          : null;
-      const difference =
-        costDoc !== null ? Math.abs(costDoc - costCalc) : null;
-
-      return {
-        ...createMaterialRow(),
-        name: sanitizeText(item.material),
-        quantity,
-        unit: normalizeMaterialUnitFromScan(item.unit),
-        unitPrice,
-        total: costDoc ?? costCalc,
-        costDocValue: costDoc,
-        costWarningDelta:
-          difference !== null && difference > COST_DIFF_THRESHOLD
-            ? difference
-            : null,
-      };
-    },
-    [],
-  );
-
-  const buildServiceLinesFromParsedResult = useCallback(
-    (parsed: ParsedAlbaranResult): ServiceLine[] => {
-      const grouped = new Map<string, ServiceLine>();
-
-      parsed.items.forEach((item, index) => {
-        const description = sanitizeText(item.material);
-        const quantity =
-          typeof item.quantity === 'number' && Number.isFinite(item.quantity)
-            ? nonNegative(item.quantity)
-            : null;
-        const hintedText = sanitizeText(
-          `${item.unit ?? ''} ${item.rowText ?? ''} ${description}`,
-        ).toLowerCase();
-        let unit = normalizeServiceUnitFromScan(item.unit);
-
-        if (!unit) {
-          if (hintedText.includes('hora') || /\bh\b/.test(hintedText)) {
-            unit = 'h';
-          } else if (hintedText.includes('viaj')) {
-            unit = 'viaje';
-          } else if (
-            hintedText.includes('tonel') ||
-            /\btn\b/.test(hintedText) ||
-            /\bt\b/.test(hintedText)
-          ) {
-            unit = 't';
-          } else if (hintedText.includes('m3') || hintedText.includes('m³')) {
-            unit = 'm3';
-          }
-        }
-
-        if (!description && quantity === null && !unit) return;
-
-        const key = description ? description.toLowerCase() : `__empty_${index}`;
-        const current = grouped.get(key) ?? {
-          ...createServiceLine(),
-          description,
-        };
-
-        if (quantity !== null && unit) {
-          if (unit === 'h') current.hours = nonNegative(current.hours ?? 0) + quantity;
-          if (unit === 'viaje') {
-            current.trips = nonNegative(current.trips ?? 0) + quantity;
-          }
-          if (unit === 't') current.tons = nonNegative(current.tons ?? 0) + quantity;
-          if (unit === 'm3') current.m3 = nonNegative(current.m3 ?? 0) + quantity;
-        }
-
-        grouped.set(key, current);
-      });
-
-      const lines = Array.from(grouped.values()).filter((line) => {
-        const hasDescription = sanitizeText(line.description).length > 0;
-        const hasValues =
-          nonNegative(line.hours ?? 0) > 0 ||
-          nonNegative(line.trips ?? 0) > 0 ||
-          nonNegative(line.tons ?? 0) > 0 ||
-          nonNegative(line.m3 ?? 0) > 0;
-        return hasDescription || hasValues;
-      });
-
-      if (lines.length > 0) return lines;
-
-      const fallbackDescription = sanitizeText(parsed.serviceDescription);
-      if (!fallbackDescription) return [];
-
-      return [
-        {
-          ...createServiceLine(),
-          description: fallbackDescription,
-        },
-      ];
-    },
-    [],
-  );
-
-  const buildParsedItemsFromServiceLines = useCallback((lines: ServiceLine[]) => {
-    const items: ParsedAlbaranItem[] = [];
-
-    lines.forEach((line) => {
-      const description = sanitizeText(line.description);
-      const quantities: Array<{
-        unit: 'h' | 'viaje' | 't' | 'm3';
-        value: number | null | undefined;
-      }> = [
-        { unit: 'h', value: line.hours },
-        { unit: 'viaje', value: line.trips },
-        { unit: 't', value: line.tons },
-        { unit: 'm3', value: line.m3 },
-      ];
-
-      let hasMetric = false;
-      quantities.forEach(({ unit, value }) => {
-        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-          return;
-        }
-        hasMetric = true;
-        items.push({
-          ...createParsedAlbaranReviewItem(),
-          material: description,
-          quantity: nonNegative(value),
-          unit,
-          unitPrice: null,
-          costDoc: null,
-          costCalc: null,
-          difference: null,
-          rowText: 'SERVICE_LINE',
-          missingCritical: false,
-        });
-      });
-
-      if (!hasMetric && description) {
-        items.push({
-          ...createParsedAlbaranReviewItem(),
-          material: description,
-          quantity: null,
-          unit: null,
-          unitPrice: null,
-          costDoc: null,
-          costCalc: null,
-          difference: null,
-          rowText: 'SERVICE_LINE',
-          missingCritical: false,
-        });
-      }
-    });
-
-    return items;
-  }, []);
-
-  const isServiceLikeParsedResult = useCallback((parsed: ParsedAlbaranResult) => {
-    if (parsed.docType === 'SERVICE_MACHINERY') return true;
-    if (parsed.docSubtype && SERVICE_SCAN_SUBTYPES.has(parsed.docSubtype)) {
-      return true;
-    }
-
-    const warningSet = new Set(parsed.warnings || []);
-    if (
-      warningSet.has('SERVICE_LAYOUT_HEADER') ||
-      warningSet.has('SERVICE_MARKERS_DETECTED') ||
-      warningSet.has('SERVICE_TABLE_DETECTED')
-    ) {
-      return true;
-    }
-
-    const hasServiceUnit = parsed.items.some((item) => {
-      const normalized = normalizeServiceUnitFromScan(item.unit);
-      return (
-        normalized === 'h' ||
-        normalized === 'viaje' ||
-        normalized === 't' ||
-        normalized === 'm3'
-      );
-    });
-    if (hasServiceUnit) return true;
-
-    const hasServiceDescription = sanitizeText(parsed.serviceDescription).length > 0;
-    if (
-      hasServiceDescription &&
-      (warningSet.has('NO_PRICE_COLUMNS') ||
-        warningSet.has('NO_ECONOMIC_COLUMNS'))
-    ) {
-      return true;
-    }
-
-    return false;
-  }, []);
-
-  const buildOthersRowFromParsedResult = useCallback((parsed: ParsedAlbaranResult) => {
-    const description = extractNoPriceDescription(parsed);
-    const materialName = description ? `OTROS - ${description}` : 'OTROS';
-
-    return {
-      ...createMaterialRow(),
-      name: materialName,
-      quantity: 1,
-      unit: 'ud',
-      unitPrice: 0,
-      total: 0,
-      costDocValue: null,
-      costWarningDelta: null,
-    };
-  }, []);
+  const {
+    scanReviewDialogOpen,
+    setScanReviewDialogOpenState,
+    scanReviewReason,
+    setScanReviewReason,
+    scanReviewSupplierState,
+    setScanReviewSupplierState,
+    setScanReviewSupplier,
+    scanReviewInvoiceNumberState,
+    setScanReviewInvoiceNumberState,
+    setScanReviewInvoiceNumber,
+    scanReviewDocumentDateState,
+    setScanReviewDocumentDateState,
+    setScanReviewDocumentDate,
+    scanReviewDocType,
+    setScanReviewDocType,
+    scanReviewDocSubtype,
+    setScanReviewDocSubtype,
+    scanReviewServiceDescriptionState,
+    setScanReviewServiceDescriptionState,
+    setScanReviewServiceDescription,
+    scanReviewConfidence,
+    setScanReviewConfidence,
+    scanReviewWarnings,
+    setScanReviewWarnings,
+    scanReviewFieldConfidence,
+    setScanReviewFieldConfidence,
+    scanReviewFieldWarnings,
+    setScanReviewFieldWarnings,
+    scanReviewFieldMeta,
+    setScanReviewFieldMeta,
+    scanReviewTemplateData,
+    setScanReviewTemplateData,
+    scanReviewProfileUsed,
+    setScanReviewProfileUsed,
+    scanReviewScore,
+    setScanReviewScore,
+    scanReviewItems,
+    setScanReviewItems,
+    scanReviewServiceLines,
+    setScanReviewServiceLines,
+    scanReviewImageUris,
+    setScanReviewImageUris,
+    scanReviewRawText,
+    setScanReviewRawText,
+    scanReviewTargetGroupId,
+    setScanReviewTargetGroupId,
+    scanInFlightTargetGroupId,
+    setScanInFlightTargetGroupId,
+    rescanConfirmDialogOpen,
+    setRescanConfirmDialogOpenState,
+    pendingRescanTargetGroupId,
+    setPendingRescanTargetGroupId,
+    serviceScanDialogOpen,
+    setServiceScanDialogOpenState,
+    pendingServiceScanResolution,
+    setPendingServiceScanResolution,
+    noPriceScanDialogOpen,
+    setNoPriceScanDialogOpenState,
+    pendingNoPriceScanResolution,
+    setPendingNoPriceScanResolution,
+    duplicateDialogOpen,
+    setDuplicateDialogOpenState,
+    pendingDuplicateResolution,
+    setPendingDuplicateResolution,
+    costDifferenceDialogOpen,
+    setCostDifferenceDialogOpenState,
+    pendingCostDifferences,
+    setPendingCostDifferences,
+    albaranViewerOpen,
+    albaranViewerImageUris,
+    albaranViewerInitialIndex,
+    albaranViewerTitle,
+    openAlbaranViewer,
+    closeAlbaranViewer,
+  } = useScanReviewState();
 
   const applyParsedScanMetadataOnly = useCallback(
     (targetGroupId: string, parsed: ParsedAlbaranResult) => {
@@ -501,7 +242,6 @@ export const useWorkReportScanOrchestrator = ({
       });
     },
     [
-      buildServiceLinesFromParsedResult,
       materialGroups,
       setActiveMaterialGroupId,
       setMaterialGroups,
@@ -555,7 +295,6 @@ export const useWorkReportScanOrchestrator = ({
       });
     },
     [
-      buildOthersRowFromParsedResult,
       materialGroups,
       setActiveMaterialGroupId,
       setMaterialGroups,
@@ -647,7 +386,6 @@ export const useWorkReportScanOrchestrator = ({
       });
     },
     [
-      buildMaterialRowFromParsedItem,
       materialGroups,
       setActiveMaterialGroupId,
       setMaterialGroups,
@@ -699,7 +437,7 @@ export const useWorkReportScanOrchestrator = ({
       setScanReviewTargetGroupId(targetGroupId);
       setScanReviewDialogOpenState(true);
     },
-    [buildServiceLinesFromParsedResult, isServiceLikeParsedResult],
+    [],
   );
 
   const applyParsedScanResultToGroup = useCallback(
@@ -728,7 +466,6 @@ export const useWorkReportScanOrchestrator = ({
       applyParsedAlbaranToMaterials,
       applyParsedScanMetadataOnly,
       applyParsedServiceToGroup,
-      isServiceLikeParsedResult,
       openScanReview,
     ],
   );
@@ -805,7 +542,6 @@ export const useWorkReportScanOrchestrator = ({
     [
       clearAlbaranScanError,
       isAlbaranProcessing,
-      isServiceLikeParsedResult,
       openScanReview,
       readOnly,
       resolveDuplicateForScan,
@@ -1123,7 +859,6 @@ export const useWorkReportScanOrchestrator = ({
     setScanReviewServiceLines([]);
     resolveDuplicateForScan(targetGroupId, reviewedResult);
   }, [
-    buildParsedItemsFromServiceLines,
     resolveDuplicateForScan,
     scanReviewDocumentDateState,
     scanReviewDocType,

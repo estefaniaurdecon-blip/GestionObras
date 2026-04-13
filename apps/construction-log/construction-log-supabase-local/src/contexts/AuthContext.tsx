@@ -9,6 +9,7 @@ import {
   getToken,
   isTokenExpired,
   resetAuthSessionExpiredNotification,
+  setSessionRefreshMode,
   setToken,
   clearToken,
   ApiUser 
@@ -248,6 +249,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Try to resolve current user from token OR cookie session.
         try {
           const userData = await getCurrentUser();
+          await setSessionRefreshMode(Boolean(userData.is_super_admin));
           await writeCachedUser(userData);
           offlineWarningRef.current = null;
           if (isMounted) {
@@ -369,6 +371,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Session must be usable immediately after login (token-based or cookie-based).
       try {
         const userData = await getCurrentUser();
+        await setSessionRefreshMode(Boolean(userData.is_super_admin));
         await writeCachedUser(userData);
         try {
           await saveOfflineCredential(normalizedEmail, password);
@@ -419,6 +422,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Always confirm session by reading /users/me right after MFA.
       try {
         const userData = await getCurrentUser();
+        await setSessionRefreshMode(Boolean(userData.is_super_admin));
         await writeCachedUser(userData);
         if (password) {
           try {
@@ -467,6 +471,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshUser = async () => {
     try {
       const userData = await getCurrentUser();
+      await setSessionRefreshMode(Boolean(userData.is_super_admin));
       offlineWarningRef.current = null;
       setUser(userData);
     } catch (error: any) {

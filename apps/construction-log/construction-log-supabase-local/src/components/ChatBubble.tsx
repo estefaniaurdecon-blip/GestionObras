@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquare } from 'lucide-react';
-import { useMessages } from '@/hooks/useMessages';
+import { CHAT_UNREAD_COUNT_EVENT } from '@/components/chatCenterContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BUBBLE_SIZE = 56;
@@ -33,7 +33,7 @@ function initPos(): Pos {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export const ChatBubble = () => {
-  const { unreadCount } = useMessages();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [pos,        setPos]       = useState<Pos>(initPos);
   const [isDragging, setDragging]  = useState(false);
@@ -60,6 +60,18 @@ export const ChatBubble = () => {
     };
     document.addEventListener('chat-center-state', handler);
     return () => document.removeEventListener('chat-center-state', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const nextUnreadCount =
+        (e as CustomEvent<{ unreadCount?: number }>).detail?.unreadCount ?? 0;
+      setUnreadCount(nextUnreadCount);
+    };
+
+    document.addEventListener(CHAT_UNREAD_COUNT_EVENT, handler as EventListener);
+    return () =>
+      document.removeEventListener(CHAT_UNREAD_COUNT_EVENT, handler as EventListener);
   }, []);
 
   // ── Persist position ───────────────────────────────────────────────────────

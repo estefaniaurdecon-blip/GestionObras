@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from app.core.datetime import utc_now
 import secrets
 
 from sqlmodel import Session, select
@@ -20,9 +21,9 @@ from app.schemas.password import ChangePasswordRequest
 
 def authenticate_user(session: Session, email: str, password: str) -> User:
     """
-    Autentica un usuario por email y contraseña.
+    Autentica un usuario por email y contraseÃ±a.
 
-    Lanza ValueError si las credenciales no son válidas.
+    Lanza ValueError si las credenciales no son vÃ¡lidas.
     """
 
     statement = select(User).where(User.email == email)
@@ -72,7 +73,7 @@ def login_step1(
     Paso 1 de login:
     - Valida credenciales.
     - Si el usuario es SUPER_ADMIN, devuelve token directo sin MFA.
-    - Para el resto de usuarios, genera y envía un código MFA por email
+    - Para el resto de usuarios, genera y envÃ­a un cÃ³digo MFA por email
       y marca `mfa_required=True`.
     """
 
@@ -123,7 +124,7 @@ def login_step1(
     # Resto de usuarios: MFA por email.
     code = f"{secrets.randbelow(1_000_000):06d}"
     code_hash = hash_password(code)
-    expires_at = datetime.utcnow() + timedelta(hours=24)
+    expires_at = utc_now() + timedelta(hours=24)
 
     # Guardamos/actualizamos el registro MFA para este usuario.
     mfa_record = session.exec(
@@ -147,7 +148,7 @@ def login_step1(
 
     session.commit()
 
-    # Enviamos el código por email (no interrumpimos login si el envío falla).
+    # Enviamos el cÃ³digo por email (no interrumpimos login si el envÃ­o falla).
     try:
         send_mfa_email_code(to_email=user.email, code=code)
     except Exception:
@@ -158,12 +159,12 @@ def login_step1(
         user_id=user.id,
         tenant_id=user.tenant_id,
         action="login.mfa_request",
-        details="Se ha enviado un código MFA por correo electrónico",
+        details="Se ha enviado un cÃ³digo MFA por correo electrÃ³nico",
     )
 
     return LoginResponse(
         mfa_required=True,
-        message="MFA requerido, revisa tu correo para obtener el código (válido 24h)",
+        message="MFA requerido, revisa tu correo para obtener el cÃ³digo (vÃ¡lido 24h)",
     )
 
 
@@ -174,8 +175,8 @@ def login_step2_verify_mfa(
 ) -> MFAVerifyResponse:
     """
     Paso 2 de login:
-    - Verifica el código MFA enviado por correo para el usuario indicado.
-    - Devuelve token de acceso completo en caso de éxito.
+    - Verifica el cÃ³digo MFA enviado por correo para el usuario indicado.
+    - Devuelve token de acceso completo en caso de Ã©xito.
     """
 
     statement = select(User).where(User.email == username)
@@ -189,32 +190,32 @@ def login_step2_verify_mfa(
     ).one_or_none()
 
     if not mfa_record:
-        raise ValueError("No hay un código MFA activo para este usuario")
+        raise ValueError("No hay un cÃ³digo MFA activo para este usuario")
 
-    if mfa_record.expires_at < datetime.utcnow():
-        # Código expirado: lo invalidamos.
+    if mfa_record.expires_at < utc_now():
+        # CÃ³digo expirado: lo invalidamos.
         session.delete(mfa_record)
         session.commit()
-        raise ValueError("El código MFA ha expirado, vuelve a iniciar sesión")
+        raise ValueError("El cÃ³digo MFA ha expirado, vuelve a iniciar sesiÃ³n")
 
-    # Verificamos el código.
+    # Verificamos el cÃ³digo.
     if not verify_password(mfa_code, mfa_record.code_hash):
         mfa_record.failed_attempts += 1
         session.add(mfa_record)
         session.commit()
 
         if mfa_record.failed_attempts >= 3:
-            # Invalida el código tras 3 intentos fallidos.
+            # Invalida el cÃ³digo tras 3 intentos fallidos.
             session.delete(mfa_record)
             session.commit()
             raise ValueError(
-                "Has superado el número de intentos. "
-                "Vuelve a iniciar sesión para obtener un nuevo código MFA.",
+                "Has superado el nÃºmero de intentos. "
+                "Vuelve a iniciar sesiÃ³n para obtener un nuevo cÃ³digo MFA.",
             )
 
-        raise ValueError("Código MFA incorrecto")
+        raise ValueError("CÃ³digo MFA incorrecto")
 
-    # Código correcto: marcamos el usuario como activo (primera verificación)
+    # CÃ³digo correcto: marcamos el usuario como activo (primera verificaciÃ³n)
     # e invalidamos el registro MFA.
     if not user.is_active:
         user.is_active = True
@@ -249,28 +250,28 @@ def refresh_super_admin_session(
     refresh_token: str | None,
 ) -> tuple[User, str]:
     """
-    Renueva la sesión de un SUPER_ADMIN usando una cookie de refresco
+    Renueva la sesiÃ³n de un SUPER_ADMIN usando una cookie de refresco
     separada del JWT de acceso.
     """
 
     if not refresh_token:
-        raise ValueError("No hay una sesión renovable activa")
+        raise ValueError("No hay una sesiÃ³n renovable activa")
 
     try:
         payload = decode_token(refresh_token)
     except Exception as exc:
-        raise ValueError("La sesión renovable ha expirado. Inicia sesión de nuevo.") from exc
+        raise ValueError("La sesiÃ³n renovable ha expirado. Inicia sesiÃ³n de nuevo.") from exc
 
     if payload.get("typ") != "superadmin_refresh":
-        raise ValueError("Token de renovación no permitido")
+        raise ValueError("Token de renovaciÃ³n no permitido")
 
     user_id = payload.get("sub")
     if user_id is None:
-        raise ValueError("Token de renovación inválido")
+        raise ValueError("Token de renovaciÃ³n invÃ¡lido")
 
     user = session.get(User, int(user_id))
     if not user or not user.is_active or not user.is_super_admin:
-        raise ValueError("La sesión renovable ya no es válida")
+        raise ValueError("La sesiÃ³n renovable ya no es vÃ¡lida")
 
     access_token = create_access_token(
         subject=str(user.id),
@@ -282,7 +283,7 @@ def refresh_super_admin_session(
         user_id=user.id,
         tenant_id=user.tenant_id,
         action="login.refresh",
-        details="Renovación automática de sesión SUPER_ADMIN",
+        details="RenovaciÃ³n automÃ¡tica de sesiÃ³n SUPER_ADMIN",
     )
 
     return user, access_token
@@ -294,21 +295,21 @@ def change_password(
     data: ChangePasswordRequest,
 ) -> None:
     """
-    Cambia la contraseña del propio usuario verificando la actual
-    y aplicando validaciones básicas a la nueva.
+    Cambia la contraseÃ±a del propio usuario verificando la actual
+    y aplicando validaciones bÃ¡sicas a la nueva.
     """
 
     if data.new_password != data.new_password_confirm:
-        raise ValueError("La nueva contraseña y su confirmación no coinciden")
+        raise ValueError("La nueva contraseÃ±a y su confirmaciÃ³n no coinciden")
 
     if len(data.new_password) < 8:
-        raise ValueError("La nueva contraseña debe tener al menos 8 caracteres")
+        raise ValueError("La nueva contraseÃ±a debe tener al menos 8 caracteres")
 
     if not verify_password(data.current_password, user.hashed_password):
-        raise ValueError("La contraseña actual no es correcta")
+        raise ValueError("La contraseÃ±a actual no es correcta")
 
     if verify_password(data.new_password, user.hashed_password):
-        raise ValueError("La nueva contraseña no puede ser igual a la actual")
+        raise ValueError("La nueva contraseÃ±a no puede ser igual a la actual")
 
     user.hashed_password = hash_password(data.new_password)
     session.add(user)
@@ -319,7 +320,7 @@ def change_password(
         user_id=user.id,
         tenant_id=user.tenant_id,
         action="user.change_password",
-        details="Cambio de contraseña del propio usuario",
+        details="Cambio de contraseÃ±a del propio usuario",
     )
 
 
@@ -328,19 +329,19 @@ def request_password_reset(session: Session, email: str) -> tuple[str, str] | No
     Genera un token de reset, lo persiste en BD y devuelve (to_email, reset_url).
 
     Si el email no existe devuelve None sin revelar ese dato.
-    El envío del correo queda en manos del llamador (background task).
+    El envÃ­o del correo queda en manos del llamador (background task).
     """
 
     user = session.exec(select(User).where(User.email == email)).one_or_none()
     if not user:
         return None  # No revelar si el email existe o no
 
-    # Token en claro (se envía por email) y su hash (se guarda en BD)
+    # Token en claro (se envÃ­a por email) y su hash (se guarda en BD)
     raw_token = secrets.token_urlsafe(32)
     token_hash = hash_password(raw_token)
-    expires_at = datetime.utcnow() + timedelta(hours=1)
+    expires_at = utc_now() + timedelta(hours=1)
 
-    # Reemplazar token anterior si existía
+    # Reemplazar token anterior si existÃ­a
     existing = session.exec(
         select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     ).one_or_none()
@@ -365,7 +366,7 @@ def request_password_reset(session: Session, email: str) -> tuple[str, str] | No
         user_id=user.id,
         tenant_id=user.tenant_id,
         action="auth.password_reset_request",
-        details="Solicitud de recuperación de contraseña",
+        details="Solicitud de recuperaciÃ³n de contraseÃ±a",
     )
 
     return user.email, reset_url
@@ -373,14 +374,14 @@ def request_password_reset(session: Session, email: str) -> tuple[str, str] | No
 
 def confirm_password_reset(session: Session, data: ResetPasswordRequest) -> str:
     """
-    Valida el token de reset, actualiza la contraseña y devuelve el email del usuario.
+    Valida el token de reset, actualiza la contraseÃ±a y devuelve el email del usuario.
     """
 
     if data.new_password != data.new_password_confirm:
-        raise ValueError("Las contraseñas no coinciden")
+        raise ValueError("Las contraseÃ±as no coinciden")
 
-    # Buscar todos los tokens válidos (no expirados) y verificar
-    now = datetime.utcnow()
+    # Buscar todos los tokens vÃ¡lidos (no expirados) y verificar
+    now = utc_now()
     records = session.exec(
         select(PasswordResetToken).where(PasswordResetToken.expires_at > now)
     ).all()
@@ -392,7 +393,7 @@ def confirm_password_reset(session: Session, data: ResetPasswordRequest) -> str:
             break
 
     if not matched:
-        raise ValueError("El enlace no es válido o ha caducado. Solicita uno nuevo.")
+        raise ValueError("El enlace no es vÃ¡lido o ha caducado. Solicita uno nuevo.")
 
     user = session.get(User, matched.user_id)
     if not user:
@@ -411,7 +412,7 @@ def confirm_password_reset(session: Session, data: ResetPasswordRequest) -> str:
         user_id=user.id,
         tenant_id=user.tenant_id,
         action="auth.password_reset_confirm",
-        details="Contraseña restablecida mediante enlace de recuperación",
+        details="ContraseÃ±a restablecida mediante enlace de recuperaciÃ³n",
     )
 
     return user.email

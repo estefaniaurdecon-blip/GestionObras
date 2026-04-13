@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -274,7 +275,7 @@ def create_inventory_movement(
         source=_normalize_text(payload.source) or "manual",
         notes=_normalize_text(payload.notes) or None,
         is_immediate_consumption=bool(payload.is_immediate_consumption),
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(movement)
     session.commit()

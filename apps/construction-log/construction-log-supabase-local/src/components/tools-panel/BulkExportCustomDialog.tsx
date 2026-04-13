@@ -228,7 +228,7 @@ export const BulkExportCustomDialog = ({
         />
       </DialogTrigger>
 
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Exportacion personalizada</DialogTitle>
           <DialogDescription>

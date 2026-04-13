@@ -1,11 +1,10 @@
 from typing import Annotated, Callable, Iterable, Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from jose import JWTError
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.core.security import decode_token
+from app.core.security import JWTError, decode_token
 from app.db.session import get_session
 from app.models.permission import Permission
 from app.models.role_permission import RolePermission

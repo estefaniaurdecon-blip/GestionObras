@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useWorkReportFormHandlers } from '@/hooks/useWorkReportFormHandlers';
 import { Accordion } from '@/components/ui/accordion';
 import { normalizeNoteCategory, type NoteCategory } from '@/components/ObservacionesIncidenciasSection';
 import { useObservacionesDictation } from '@/hooks/useObservacionesDictation';
@@ -48,16 +49,10 @@ import {
   computeRowTotals,
   createForemanResource,
   createMaterialGroup,
-  createMaterialRow,
-  createServiceLine,
   createRow,
-  createSubcontractAssignedWorker,
   createSubcontractGroup,
-  createSubcontractRow,
   createSubcontractedMachineryGroup,
-  createSubcontractedMachineryRow,
   createWorkforceGroup,
-  createWorkforceRow,
   editableNumericValue,
   mapRentalMachinesToLegacyRows,
   mapSubcontractGroupsToLegacyRows,
@@ -82,19 +77,11 @@ import type {
   GalleryImage,
   GenerateWorkReportDraft,
   MaterialGroup,
-  MaterialRow,
   SaveStatusOption,
-  ServiceLine,
-  SubcontractAssignedWorker,
   SubcontractGroup,
   SubcontractGroupTotals,
-  SubcontractRow,
-  SubcontractRowTotals,
-  SubcontractUnit,
   SubcontractedMachineryGroup,
-  SubcontractedMachineryRow,
   WorkforceGroup,
-  WorkforceRow,
 } from '@/components/work-report/types';
 
 export type { GenerateWorkReportDraft } from '@/components/work-report/types';
@@ -264,6 +251,63 @@ export const GenerateWorkReportPanel = ({
   });
 
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+
+  const {
+    handleGalleryUpload,
+    updateWorkforceGroup,
+    updateWorkforceRow,
+    addWorkforceGroup,
+    removeWorkforceGroup,
+    addWorkforceRow,
+    removeWorkforceRow,
+    updateSubcontractedMachineryGroup,
+    updateSubcontractedMachineryRow,
+    addSubcontractedMachineryGroup,
+    removeSubcontractedMachineryGroup,
+    addSubcontractedMachineryRow,
+    removeSubcontractedMachineryRow,
+    handleSubcontractedMachineryUpload,
+    updateMaterialGroup,
+    updateMaterialRow,
+    updateServiceLine,
+    addMaterialGroup,
+    removeMaterialGroup,
+    addMaterialRow,
+    addServiceLine,
+    removeMaterialRow,
+    removeServiceLine,
+    setMaterialGroupOpen,
+    updateSubcontractGroup,
+    updateSubcontractRow,
+    addSubcontractGroup,
+    removeSubcontractGroup,
+    addSubcontractRow,
+    removeSubcontractRow,
+    addSubcontractWorker,
+    updateSubcontractWorker,
+    removeSubcontractWorker,
+    setSubcontractWorkersOpen,
+    handleSubcontractUpload,
+  } = useWorkReportFormHandlers({
+    workforceGroups,
+    setWorkforceGroups,
+    subcontractedMachineryGroups,
+    setSubcontractedMachineryGroups,
+    materialGroups,
+    setMaterialGroups,
+    openMaterialGroups,
+    setOpenMaterialGroups,
+    activeMaterialGroupId,
+    setActiveMaterialGroupId,
+    subcontractGroups,
+    setSubcontractGroups,
+    openSubcontractWorkers,
+    setOpenSubcontractWorkers,
+    wasteRows,
+    setWasteRows,
+    galleryImages,
+    setGalleryImages,
+  });
 
   const [foremanResources, setForemanResources] = useState<ForemanResource[]>([createForemanResource()]);
   const [mainForeman, setMainForeman] = useState('');
@@ -821,446 +865,6 @@ export const GenerateWorkReportPanel = ({
       window.clearTimeout(timeoutLong);
     };
   }, [reportIdentifier, initialDate, initialDraft?.date]);
-
-  const handleGalleryUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') return;
-        setGalleryImages((current) => [...current, { id: crypto.randomUUID(), name: file.name, dataUrl: reader.result as string }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    event.target.value = '';
-  };
-
-  const updateWorkforceGroup = (groupId: string, patch: Partial<WorkforceGroup>) => {
-    setWorkforceGroups((current) =>
-      current.map((group) => (group.id === groupId ? { ...group, ...patch } : group)),
-    );
-  };
-
-  const updateWorkforceRow = (groupId: string, rowId: string, patch: Partial<WorkforceRow>) => {
-    setWorkforceGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const rows = group.rows.map((row) => {
-          if (row.id !== rowId) return row;
-          const nextHours = patch.hours ?? row.hours;
-          return {
-            ...row,
-            ...patch,
-            hours: nextHours,
-            total: nextHours,
-          };
-        });
-        return { ...group, rows };
-      }),
-    );
-  };
-
-  const addWorkforceGroup = () => {
-    setWorkforceGroups((current) => [...current, createWorkforceGroup()]);
-  };
-
-  const removeWorkforceGroup = (groupId: string) => {
-    setWorkforceGroups((current) => (current.length > 1 ? current.filter((group) => group.id !== groupId) : current));
-  };
-
-  const addWorkforceRow = (groupId: string) => {
-    setWorkforceGroups((current) =>
-      current.map((group) => (group.id === groupId ? { ...group, rows: [...group.rows, createWorkforceRow()] } : group)),
-    );
-  };
-
-  const removeWorkforceRow = (groupId: string, rowId: string) => {
-    setWorkforceGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        if (group.rows.length === 1) return group;
-        return { ...group, rows: group.rows.filter((row) => row.id !== rowId) };
-      }),
-    );
-  };
-
-  const updateSubcontractedMachineryGroup = (groupId: string, patch: Partial<SubcontractedMachineryGroup>) => {
-    setSubcontractedMachineryGroups((current) =>
-      current.map((group) => (group.id === groupId ? { ...group, ...patch } : group)),
-    );
-  };
-
-  const updateSubcontractedMachineryRow = (
-    groupId: string,
-    rowId: string,
-    patch: Partial<SubcontractedMachineryRow>,
-  ) => {
-    setSubcontractedMachineryGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const rows = group.rows.map((row) => {
-          if (row.id !== rowId) return row;
-          const nextHours = patch.hours ?? row.hours;
-          const nextTotal = patch.total ?? nextHours;
-          return {
-            ...row,
-            ...patch,
-            hours: nextHours,
-            total: nextTotal,
-          };
-        });
-        return { ...group, rows };
-      }),
-    );
-  };
-
-  const addSubcontractedMachineryGroup = () => {
-    setSubcontractedMachineryGroups((current) => [...current, createSubcontractedMachineryGroup()]);
-  };
-
-  const removeSubcontractedMachineryGroup = (groupId: string) => {
-    setSubcontractedMachineryGroups((current) =>
-      current.length === 1 ? current : current.filter((group) => group.id !== groupId),
-    );
-  };
-
-  const addSubcontractedMachineryRow = (groupId: string) => {
-    setSubcontractedMachineryGroups((current) =>
-      current.map((group) =>
-        group.id === groupId ? { ...group, rows: [...group.rows, createSubcontractedMachineryRow()] } : group,
-      ),
-    );
-  };
-
-  const removeSubcontractedMachineryRow = (groupId: string, rowId: string) => {
-    setSubcontractedMachineryGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        if (group.rows.length === 1) return group;
-        return { ...group, rows: group.rows.filter((row) => row.id !== rowId) };
-      }),
-    );
-  };
-
-  const handleSubcontractedMachineryUpload = (groupId: string, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return;
-      updateSubcontractedMachineryGroup(groupId, { documentImage: reader.result });
-    };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  };
-
-  const scrollToMaterialGroup = useCallback((groupId: string) => {
-    if (typeof document === 'undefined') return;
-    window.setTimeout(() => {
-      document.getElementById(`material-group-${groupId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      });
-    }, 90);
-  }, []);
-
-  const updateMaterialGroup = (groupId: string, patch: Partial<MaterialGroup>) => {
-    const normalizedPatch: Partial<MaterialGroup> = {
-      ...patch,
-    };
-    if (patch.supplier !== undefined) {
-      normalizedPatch.supplier = sanitizeText(patch.supplier);
-    }
-    if (patch.invoiceNumber !== undefined) {
-      normalizedPatch.invoiceNumber = sanitizeText(patch.invoiceNumber);
-    }
-    setMaterialGroups((current) =>
-      current.map((group) => (group.id === groupId ? { ...group, ...normalizedPatch } : group)),
-    );
-  };
-
-  const updateMaterialRow = (groupId: string, rowId: string, patch: Partial<MaterialRow>) => {
-    setMaterialGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const rows = group.rows.map((row) => {
-          if (row.id !== rowId) return row;
-          const nextQuantity = patch.quantity ?? row.quantity;
-          const nextUnitPrice = patch.unitPrice ?? row.unitPrice;
-          const nextTotal = typeof patch.total === 'number' ? patch.total : nextQuantity * nextUnitPrice;
-          const hasCostInputsChanged = patch.quantity !== undefined || patch.unitPrice !== undefined;
-          return {
-            ...row,
-            ...patch,
-            quantity: nextQuantity,
-            unitPrice: nextUnitPrice,
-            total: nextTotal,
-            costWarningDelta: hasCostInputsChanged ? null : (patch.costWarningDelta ?? row.costWarningDelta),
-            costDocValue: patch.costDocValue !== undefined ? patch.costDocValue : row.costDocValue,
-          };
-        });
-        return { ...group, rows };
-      }),
-    );
-  };
-
-  const updateServiceLine = (groupId: string, lineId: string, patch: Partial<ServiceLine>) => {
-    setMaterialGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const serviceLines = (group.serviceLines || []).map((line) => {
-          if (line.id !== lineId) return line;
-          return {
-            ...line,
-            ...patch,
-            description:
-              patch.description === undefined ? line.description : sanitizeText(patch.description),
-            hours:
-              patch.hours === undefined
-                ? line.hours
-                : typeof patch.hours === 'number' && Number.isFinite(patch.hours)
-                  ? nonNegative(patch.hours)
-                  : null,
-            trips:
-              patch.trips === undefined
-                ? line.trips
-                : typeof patch.trips === 'number' && Number.isFinite(patch.trips)
-                  ? nonNegative(patch.trips)
-                  : null,
-            tons:
-              patch.tons === undefined
-                ? line.tons
-                : typeof patch.tons === 'number' && Number.isFinite(patch.tons)
-                  ? nonNegative(patch.tons)
-                  : null,
-            m3:
-              patch.m3 === undefined
-                ? line.m3
-                : typeof patch.m3 === 'number' && Number.isFinite(patch.m3)
-                  ? nonNegative(patch.m3)
-                  : null,
-          };
-        });
-        return { ...group, serviceLines };
-      }),
-    );
-  };
-
-  const addMaterialGroup = () => {
-    const newGroup = createMaterialGroup();
-    setMaterialGroups((current) => [...current, newGroup]);
-    setOpenMaterialGroups((current) => ({ ...current, [newGroup.id]: true }));
-    setActiveMaterialGroupId(newGroup.id);
-    scrollToMaterialGroup(newGroup.id);
-  };
-
-  const removeMaterialGroup = (groupId: string) => {
-    setMaterialGroups((current) =>
-      current.length === 1 ? current : current.filter((group) => group.id !== groupId),
-    );
-    setOpenMaterialGroups((current) => {
-      if (!(groupId in current)) return current;
-      const next = { ...current };
-      delete next[groupId];
-      return next;
-    });
-    setActiveMaterialGroupId((current) => (current === groupId ? null : current));
-  };
-
-  const addMaterialRow = (groupId: string) => {
-    setMaterialGroups((current) =>
-      current.map((group) =>
-        group.id === groupId ? { ...group, rows: [...group.rows, createMaterialRow()] } : group,
-      ),
-    );
-  };
-
-  const addServiceLine = (groupId: string) => {
-    setMaterialGroups((current) =>
-      current.map((group) =>
-        group.id === groupId
-          ? { ...group, serviceLines: [...(group.serviceLines || []), createServiceLine()] }
-          : group,
-      ),
-    );
-  };
-
-  const removeMaterialRow = (groupId: string, rowId: string) => {
-    setMaterialGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        if (group.rows.length === 1) return group;
-        return { ...group, rows: group.rows.filter((row) => row.id !== rowId) };
-      }),
-    );
-  };
-
-  const removeServiceLine = (groupId: string, lineId: string) => {
-    setMaterialGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const serviceLines = group.serviceLines || [];
-        if (serviceLines.length <= 1) return group;
-        return { ...group, serviceLines: serviceLines.filter((line) => line.id !== lineId) };
-      }),
-    );
-  };
-
-  const setMaterialGroupOpen = (groupId: string, isOpen: boolean) => {
-    setOpenMaterialGroups((current) => ({ ...current, [groupId]: isOpen }));
-    setActiveMaterialGroupId(groupId);
-  };
-
-  const updateSubcontractGroup = (groupId: string, patch: Partial<SubcontractGroup>) => {
-    setSubcontractGroups((current) =>
-      current.map((group) => (group.id === groupId ? { ...group, ...patch } : group)),
-    );
-  };
-
-  const updateSubcontractRow = (groupId: string, rowId: string, patch: Partial<SubcontractRow>) => {
-    setSubcontractGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        const rows = group.rows.map((row) => {
-          if (row.id !== rowId) return row;
-          return {
-            ...row,
-            ...patch,
-            unit: normalizeSubcontractUnit(patch.unit ?? row.unit),
-            cantPerWorker: patch.cantPerWorker === undefined ? row.cantPerWorker : nonNegative(patch.cantPerWorker),
-            hours: patch.hours === undefined ? row.hours : nonNegative(patch.hours),
-            unitPrice:
-              patch.unitPrice === undefined
-                ? row.unitPrice
-                : typeof patch.unitPrice === 'number'
-                  ? nonNegative(patch.unitPrice)
-                  : null,
-          };
-        });
-        return { ...group, rows };
-      }),
-    );
-  };
-
-  const addSubcontractGroup = () => {
-    setSubcontractGroups((current) => [...current, createSubcontractGroup()]);
-  };
-
-  const removeSubcontractGroup = (groupId: string) => {
-    setSubcontractGroups((current) =>
-      current.length === 1 ? current : current.filter((group) => group.id !== groupId),
-    );
-  };
-
-  const addSubcontractRow = (groupId: string) => {
-    const newRow = createSubcontractRow();
-    setSubcontractGroups((current) =>
-      current.map((group) =>
-        group.id === groupId ? { ...group, rows: [...group.rows, newRow] } : group,
-      ),
-    );
-    setOpenSubcontractWorkers((current) => ({ ...current, [newRow.id]: false }));
-  };
-
-  const removeSubcontractRow = (groupId: string, rowId: string) => {
-    setSubcontractGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        if (group.rows.length === 1) return group;
-        return { ...group, rows: group.rows.filter((row) => row.id !== rowId) };
-      }),
-    );
-    setOpenSubcontractWorkers((current) => {
-      if (!(rowId in current)) return current;
-      const next = { ...current };
-      delete next[rowId];
-      return next;
-    });
-  };
-
-  const addSubcontractWorker = (groupId: string, rowId: string) => {
-    const newWorker = createSubcontractAssignedWorker();
-    setSubcontractGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        return {
-          ...group,
-          rows: group.rows.map((row) =>
-            row.id === rowId
-              ? { ...row, workersAssigned: [...row.workersAssigned, newWorker] }
-              : row,
-          ),
-        };
-      }),
-    );
-    setOpenSubcontractWorkers((current) => ({ ...current, [rowId]: true }));
-  };
-
-  const updateSubcontractWorker = (
-    groupId: string,
-    rowId: string,
-    workerId: string,
-    patch: Partial<SubcontractAssignedWorker>,
-  ) => {
-    setSubcontractGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        return {
-          ...group,
-          rows: group.rows.map((row) => {
-            if (row.id !== rowId) return row;
-            return {
-              ...row,
-              workersAssigned: row.workersAssigned.map((worker) =>
-                worker.id === workerId
-                  ? {
-                      ...worker,
-                      ...patch,
-                      hours:
-                        patch.hours === undefined
-                          ? worker.hours
-                          : nonNegative(patch.hours),
-                    }
-                  : worker,
-              ),
-            };
-          }),
-        };
-      }),
-    );
-  };
-
-  const removeSubcontractWorker = (groupId: string, rowId: string, workerId: string) => {
-    setSubcontractGroups((current) =>
-      current.map((group) => {
-        if (group.id !== groupId) return group;
-        return {
-          ...group,
-          rows: group.rows.map((row) =>
-            row.id === rowId
-              ? { ...row, workersAssigned: row.workersAssigned.filter((worker) => worker.id !== workerId) }
-              : row,
-          ),
-        };
-      }),
-    );
-  };
-
-  const setSubcontractWorkersOpen = (rowId: string, isOpen: boolean) => {
-    setOpenSubcontractWorkers((current) => ({ ...current, [rowId]: isOpen }));
-  };
-
-  const handleSubcontractUpload = (groupId: string, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return;
-      updateSubcontractGroup(groupId, { documentImage: reader.result });
-    };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  };
 
   const handleToggleSaveStatus = (status: SaveStatusOption) => {
     setSaveStatusSelection((current) => {

@@ -335,11 +335,12 @@ export function ConversationDetailPanel({
       if (href.startsWith("#/settings/help")) {
         const parsedHref = href.startsWith("#") ? href.slice(1) : href;
         const url = new URL(parsedHref, window.location.origin);
-        document.dispatchEvent(
-          new CustomEvent("open-help-center", {
-            detail: { tab: url.searchParams.get("tab") ?? "faq" },
-          }),
-        );
+        const nextParams = new URLSearchParams({ tab: "help" });
+        const legacyHelpTab = url.searchParams.get("tab");
+        if (legacyHelpTab === "features" || legacyHelpTab === "faq" || legacyHelpTab === "chat") {
+          nextParams.set("helpTab", legacyHelpTab);
+        }
+        navigate(`/settings?${nextParams.toString()}`);
         return;
       }
       if (href.startsWith("#/")) {

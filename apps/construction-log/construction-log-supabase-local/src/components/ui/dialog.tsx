@@ -12,6 +12,38 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
+const FULL_SCREEN_CLASS_PREFIXES = [
+  "max-w-",
+  "max-h-",
+  "sm:max-w-",
+  "sm:max-h-",
+  "md:max-w-",
+  "md:max-h-",
+  "lg:max-w-",
+  "lg:max-h-",
+  "xl:max-w-",
+  "xl:max-h-",
+  "2xl:max-w-",
+  "2xl:max-h-",
+  "rounded",
+  "sm:rounded",
+  "md:rounded",
+  "lg:rounded",
+  "xl:rounded",
+  "2xl:rounded",
+  "w-[calc(100vw-",
+];
+
+const stripFullScreenConflictingClasses = (className?: string) =>
+  className
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .filter(
+      (token) =>
+        !FULL_SCREEN_CLASS_PREFIXES.some((prefix) => token === prefix || token.startsWith(prefix)),
+    )
+    .join(" ");
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -31,15 +63,18 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     hideCloseButton?: boolean;
+    fullScreen?: boolean;
   }
->(({ className, children, hideCloseButton = false, ...props }, ref) => (
+>(({ className, children, hideCloseButton = false, fullScreen = false, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    {fullScreen ? null : <DialogOverlay />}
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-        className,
+        fullScreen
+          ? "fixed inset-0 z-50 flex h-[100dvh] w-screen max-w-none flex-col gap-4 overflow-y-auto border-0 bg-background p-4 shadow-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:p-6"
+          : "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        fullScreen ? stripFullScreenConflictingClasses(className) : className,
       )}
       {...props}
     >

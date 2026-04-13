@@ -98,7 +98,7 @@ export const AccessControlGenerateReportDialog = ({
   onGenerateReport,
 }: AccessControlGenerateReportDialogProps) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl">
+    <DialogContent fullScreen>
       <DialogHeader className="text-center">
         <DialogTitle className="app-dialog-title">Generar informe</DialogTitle>
         <DialogDescription className="app-page-subtitle">Sistema de Gestión de Obras</DialogDescription>

@@ -142,7 +142,7 @@ export const DataManagementExportDialog = ({
           onClick={() => setOpen(true)}
         />
       </DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent fullScreen className="overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Exportar datos</DialogTitle>
           <DialogDescription>

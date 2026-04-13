@@ -21,6 +21,7 @@ os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["ALLOW_BOOTSTRAP_SUPERADMIN"] = "true"
 os.environ["SUPERADMIN_EMAIL"] = "dios@cortecelestial.god"
 os.environ["SUPERADMIN_PASSWORD"] = "temporal"
+os.environ["ENABLE_LEGACY_NON_APP_ROUTERS"] = "true"
 # Fuerza un valor booleano válido para evitar conflictos
 # con variables de entorno existentes (por ejemplo DEBUG=WARN).
 os.environ["DEBUG"] = "false"

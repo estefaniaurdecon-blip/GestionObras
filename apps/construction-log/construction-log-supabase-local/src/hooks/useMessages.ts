@@ -12,14 +12,17 @@ import {
   type ApiMessageRead,
 } from '@/integrations/api/client';
 import {
+  cleanupStoredMessageArtifacts,
   createPendingMessageRecord,
   mergeMessageRecords,
+  reconcileStoredMessagesWithServer,
   readStoredMessages,
   type StoredMessageRecord,
   writeStoredMessages,
 } from './messagingOfflineStore';
 
 const POLL_INTERVAL_MS = 15000;
+let storedMessageArtifactsCleanupPromise: Promise<void> | null = null;
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -227,6 +230,14 @@ export const useMessages = () => {
         setLoading(true);
       }
 
+      if (storedMessageArtifactsCleanupPromise === null) {
+        storedMessageArtifactsCleanupPromise = cleanupStoredMessageArtifacts().catch((error) => {
+          console.warn('Error cleaning stored message artifacts:', error);
+        });
+      }
+
+      await storedMessageArtifactsCleanupPromise;
+
       const previousIds = new Set(knownMessageIdsRef.current);
       const cachedMessages = await readStoredMessages(messageScopeId);
       if (cachedMessages.length > 0) {
@@ -234,12 +245,35 @@ export const useMessages = () => {
       }
 
       try {
+        const localSeed = cachedMessages.length > 0 ? cachedMessages : storedMessagesRef.current;
+        let serverMessages: StoredMessageRecord[] | null = null;
+
+        try {
+          const response = await listMessages({ limit: 300, offset: 0, tenantId: activeTenantId });
+          serverMessages = response.items.map((item) => toStoredMessage(toLegacyMessage(item), 'synced'));
+        } catch {
+          serverMessages = null;
+        }
+
+        const reconciliationReferences = [
+          ...(serverMessages ?? []),
+          ...localSeed.filter((item) => item.syncStatus === 'synced'),
+        ];
+
+        const reconciledLocal = reconciliationReferences.length > 0
+          ? reconcileStoredMessagesWithServer(reconciliationReferences, localSeed)
+          : localSeed;
+
         const localAfterSync = await syncPendingMessages(
-          cachedMessages.length > 0 ? cachedMessages : storedMessagesRef.current
+          reconciledLocal
         );
-        const response = await listMessages({ limit: 300, offset: 0, tenantId: activeTenantId });
-        const mapped = response.items.map((item) => toStoredMessage(toLegacyMessage(item), 'synced'));
-        const merged = mergeMessageRecords(mapped, localAfterSync);
+
+        if (serverMessages === null) {
+          const response = await listMessages({ limit: 300, offset: 0, tenantId: activeTenantId });
+          serverMessages = response.items.map((item) => toStoredMessage(toLegacyMessage(item), 'synced'));
+        }
+
+        const merged = mergeMessageRecords(serverMessages, localAfterSync);
         await persistMessages(merged);
 
         if (options?.silent) {

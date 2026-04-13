@@ -3,7 +3,8 @@
  * Replaces Supabase client with standard REST API calls
  */
 import { Capacitor } from '@capacitor/core';
-import { clearToken, getAuthHeader, setToken } from './storage';
+import { clearToken as clearStoredToken, getAuthHeader, setToken } from './storage';
+import { storage } from '@/utils/storage';
 import { createNotificationsApi } from './modules/notifications';
 import { createMessagesApi } from './modules/messages';
 import { createAttachmentsApi } from './modules/attachments';
@@ -31,7 +32,7 @@ import type {
 import type { ApiUser, ApiUserAutocomplete } from './modules/users';
 
 // Re-export storage functions for convenience
-export { clearToken, getAuthHeader, getToken, setToken, TokenData } from './storage';
+export { getAuthHeader, getToken, setToken, TokenData } from './storage';
 export { decodeJwtExpiryMs, getTokenExpiryMs, isTokenExpired } from './storage';
 
 const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').trim();
@@ -39,8 +40,13 @@ const RAW_NATIVE_API_BASE_URL = (import.meta.env.VITE_NATIVE_API_BASE_URL || '')
 const RAW_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 2000);
 const API_REQUEST_TIMEOUT_MS =
   Number.isFinite(RAW_API_TIMEOUT_MS) && RAW_API_TIMEOUT_MS > 0 ? RAW_API_TIMEOUT_MS : 2000;
+const MESSAGING_API_TIMEOUT_MS = 10000;
 export const AUTH_SESSION_EXPIRED_EVENT = 'app-auth-session-expired';
+const SESSION_REFRESH_MODE_KEY = 'api_session_refresh_mode';
 let authSessionExpiredNotified = false;
+let inFlightRefreshPromise: Promise<boolean> | null = null;
+
+type SessionRefreshMode = 'unknown' | 'superadmin' | 'none';
 
 function normalizeBaseUrl(url: string): string {
   if (url.length > 1 && url.endsWith('/')) return url.slice(0, -1);
@@ -87,6 +93,39 @@ console.info(
 export interface ApiError extends Error {
   status?: number;
   data?: unknown;
+}
+
+async function readSessionRefreshMode(): Promise<SessionRefreshMode> {
+  try {
+    const raw = await storage.getItem(SESSION_REFRESH_MODE_KEY);
+    if (raw === 'superadmin' || raw === 'none' || raw === 'unknown') {
+      return raw;
+    }
+  } catch {
+    // Ignore storage issues and fall back to unknown mode.
+  }
+  return 'unknown';
+}
+
+export async function setSessionRefreshMode(isSuperAdmin: boolean | null | undefined): Promise<void> {
+  try {
+    await storage.setItem(SESSION_REFRESH_MODE_KEY, isSuperAdmin ? 'superadmin' : 'none');
+  } catch {
+    // Ignore storage issues; session recovery can still continue best-effort.
+  }
+}
+
+export async function clearSessionRefreshMode(): Promise<void> {
+  try {
+    await storage.removeItem(SESSION_REFRESH_MODE_KEY);
+  } catch {
+    // Ignore storage issues during cleanup.
+  }
+}
+
+export async function clearToken(): Promise<void> {
+  await clearStoredToken();
+  await clearSessionRefreshMode();
 }
 
 function normalizeApiPath(path: string, baseUrl = activeApiBaseUrl): string {
@@ -233,6 +272,19 @@ export function resetAuthSessionExpiredNotification(): void {
   authSessionExpiredNotified = false;
 }
 
+function hasAuthorizationHeader(headers: Record<string, string>): boolean {
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization');
+}
+
+function withoutAuthorizationHeader(headers: Record<string, string>): Record<string, string> {
+  const nextHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === 'authorization') continue;
+    nextHeaders[key] = value;
+  }
+  return nextHeaders;
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -338,6 +390,7 @@ async function fetchWithNativeFallback(path: string, init: RequestInit): Promise
 type ApiFetchOptions = RequestInit & {
   skipAuth?: boolean;
   skipSessionRecovery?: boolean;
+  skipAuthHeaderRecovery?: boolean;
   timeoutMs?: number;
 };
 
@@ -383,14 +436,29 @@ async function tryRefreshSession(): Promise<boolean> {
 }
 
 export async function refreshSessionIfPossible(): Promise<boolean> {
-  try {
-    return await tryRefreshSession();
-  } catch (error) {
-    if (isNetworkError(error)) {
+  if (inFlightRefreshPromise) {
+    return inFlightRefreshPromise;
+  }
+
+  inFlightRefreshPromise = (async () => {
+    const refreshMode = await readSessionRefreshMode();
+    if (refreshMode === 'none') {
       return false;
     }
-    throw error;
-  }
+
+    try {
+      return await tryRefreshSession();
+    } catch (error) {
+      if (isNetworkError(error)) {
+        return false;
+      }
+      throw error;
+    } finally {
+      inFlightRefreshPromise = null;
+    }
+  })();
+
+  return inFlightRefreshPromise;
 }
 
 export async function apiFetch(
@@ -417,7 +485,7 @@ export async function apiFetch(
     headers['X-Tenant-Id'] = TENANT_ID;
   }
   
-  const { skipAuth, skipSessionRecovery, ...restInit } = init ?? {};
+  const { skipAuth, skipSessionRecovery, skipAuthHeaderRecovery, ...restInit } = init ?? {};
 
   const fetchOptions: RequestInit = {
     ...restInit,
@@ -430,11 +498,24 @@ export async function apiFetch(
   // Handle 401 Unauthorized - clear token and throw error
   if (response.status === 401) {
     if (!skipAuth && !skipSessionRecovery) {
+      if (!skipAuthHeaderRecovery && hasAuthorizationHeader(headers)) {
+        const cookieOnlyResponse = await fetchWithNativeFallback(path, {
+          ...fetchOptions,
+          headers: withoutAuthorizationHeader(headers),
+        });
+
+        if (cookieOnlyResponse.status !== 401) {
+          await clearStoredToken();
+          return cookieOnlyResponse;
+        }
+      }
+
       const sessionRecovered = await refreshSessionIfPossible();
       if (sessionRecovered) {
         return apiFetch(path, {
           ...init,
           skipSessionRecovery: true,
+          skipAuthHeaderRecovery: true,
         });
       }
     }
@@ -992,6 +1073,7 @@ export async function getProjectConversationShell(
 ): Promise<ProjectConversationShellApi> {
   return apiFetchJson<ProjectConversationShellApi>(`/api/v1/erp/projects/${projectId}/conversation`, {
     headers: tenantHeader(tenantId),
+    timeoutMs: MESSAGING_API_TIMEOUT_MS,
   });
 }
 
@@ -1001,6 +1083,7 @@ export async function listProjectConversationMessages(
 ): Promise<ProjectConversationMessageListApi> {
   return apiFetchJson<ProjectConversationMessageListApi>(`/api/v1/erp/projects/${projectId}/conversation/messages`, {
     headers: tenantHeader(tenantId),
+    timeoutMs: MESSAGING_API_TIMEOUT_MS,
   });
 }
 
@@ -1013,6 +1096,7 @@ export async function createProjectConversationMessage(
     method: 'POST',
     headers: tenantHeader(tenantId),
     body: JSON.stringify(payload),
+    timeoutMs: MESSAGING_API_TIMEOUT_MS,
   });
 }
 

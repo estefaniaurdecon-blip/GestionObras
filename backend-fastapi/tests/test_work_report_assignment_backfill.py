@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.core.datetime import utc_now
 from uuid import uuid4
 
 from sqlmodel import Session, select
@@ -67,7 +68,7 @@ def _create_project(session: Session, *, tenant_id: int, name: str) -> Project:
     project = Project(
         tenant_id=tenant_id,
         name=name,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
     )
     session.add(project)
     session.commit()
@@ -94,7 +95,7 @@ def test_create_work_report_auto_assigns_current_user_to_project(
         db_session_fixture,
         WorkReportCreate(
             project_id=int(project.id or 0),
-            date=datetime.utcnow().date(),
+            date=utc_now().date(),
             title="Parte con asignacion",
             status="draft",
             payload={"workName": "Parte con asignacion"},
@@ -152,25 +153,25 @@ def test_backfill_work_assignments_from_existing_reports_is_deduplicated_and_ign
         tenant_id=tenant_id,
         project_id=int(project.id or 0),
         title="Parte 1",
-        date=datetime.utcnow().date(),
+        date=utc_now().date(),
         status="draft",
         payload={"workName": "Obra Backfill"},
         created_by_id=int(actor.id or 0),
         updated_by_id=int(editor.id or 0),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     second_report = WorkReport(
         tenant_id=tenant_id,
         project_id=int(project.id or 0),
         title="Parte 2",
-        date=datetime.utcnow().date(),
+        date=utc_now().date(),
         status="draft",
         payload={"workName": "Obra Backfill"},
         created_by_id=int(actor.id or 0),
         updated_by_id=int(superadmin.id or 0),
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utc_now(),
+        updated_at=utc_now(),
     )
     db_session_fixture.add(first_report)
     db_session_fixture.add(second_report)
@@ -220,7 +221,7 @@ def test_update_work_report_assigns_actor_when_moving_to_new_project(
         db_session_fixture,
         WorkReportCreate(
             project_id=int(project_a.id or 0),
-            date=datetime.utcnow().date(),
+            date=utc_now().date(),
             title="Parte mover",
             status="draft",
             payload={},
