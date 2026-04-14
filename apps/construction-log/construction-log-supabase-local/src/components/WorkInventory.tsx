@@ -1017,22 +1017,22 @@ export const WorkInventory: React.FC<WorkInventoryProps> = ({ workId, workName, 
           onValueChange={(value) => setActiveInventoryTab(value as 'dashboard' | 'pending' | 'materials' | 'tools')}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="dashboard">
-              <LayoutDashboard className="h-4 w-4 mr-2" />
-              Dashboard
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:h-10 sm:grid-cols-4 sm:gap-0">
+            <TabsTrigger value="dashboard" className="h-9 min-w-0 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <LayoutDashboard className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="truncate">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="pending" className="relative">
-              <FileCheck className="h-4 w-4 mr-2" />
-              Albaranes
+            <TabsTrigger value="pending" className="relative h-9 min-w-0 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <FileCheck className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="truncate">Albaranes</span>
             </TabsTrigger>
-            <TabsTrigger value="materials">
-              <Package className="h-4 w-4 mr-2" />
-              Materiales ({filteredMaterials.length})
+            <TabsTrigger value="materials" className="h-9 min-w-0 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <Package className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="truncate">Materiales ({filteredMaterials.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="tools">
-              <Wrench className="h-4 w-4 mr-2" />
-              Herramientas ({filteredTools.length})
+            <TabsTrigger value="tools" className="h-9 min-w-0 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <Wrench className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="truncate">Herramientas ({filteredTools.length})</span>
             </TabsTrigger>
           </TabsList>
 

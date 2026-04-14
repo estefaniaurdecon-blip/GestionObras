@@ -119,7 +119,7 @@ export const AccessControlReportsList = ({
   return (
     <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
       <CardHeader className="items-center text-center">
-        <CardTitle className="app-page-title">Control de accesos</CardTitle>
+        <CardTitle className="app-page-title">Reportes</CardTitle>
         <CardDescription className="app-page-subtitle">
           {accessControlLoading
             ? 'Cargando controles de acceso...'
@@ -164,16 +164,16 @@ export const AccessControlReportsList = ({
                 <Collapsible key={dateKey}>
                   <Card className="border border-slate-200 shadow-none">
                     <CollapsibleTrigger asChild>
-                      <CardHeader className="cursor-pointer pb-3 transition-colors hover:bg-accent/50">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <ChevronDown className="h-5 w-5 text-primary transition-transform data-[state=closed]:rotate-[-90deg]" />
-                            <Calendar className="h-5 w-5 text-primary" />
-                            <CardTitle className="app-card-title text-slate-700">
+                      <CardHeader className="cursor-pointer px-3 py-2 transition-colors hover:bg-accent/50 sm:px-4 sm:py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <ChevronDown className="h-4 w-4 shrink-0 text-primary transition-transform data-[state=closed]:rotate-[-90deg]" />
+                            <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                            <CardTitle className="truncate text-sm font-semibold leading-tight tracking-normal text-slate-700 sm:text-base">
                               {format(new Date(dateKey), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                             </CardTitle>
                           </div>
-                          <Badge className="border-0 bg-orange-500 text-white hover:bg-orange-500">
+                          <Badge className="shrink-0 whitespace-nowrap rounded-md border-0 bg-orange-500 text-white hover:bg-orange-500">
                             {totalReportsInDate} {totalReportsInDate === 1 ? 'reporte' : 'reportes'}
                           </Badge>
                         </div>
@@ -191,24 +191,24 @@ export const AccessControlReportsList = ({
                             <Collapsible key={siteName}>
                               <Card className="border border-slate-200 bg-slate-50/50 shadow-none">
                                 <CollapsibleTrigger asChild>
-                                  <CardHeader className="cursor-pointer pb-2 pt-3 transition-colors hover:bg-accent/30">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <div className="flex items-center gap-2">
+                                  <CardHeader className="cursor-pointer px-3 py-2 transition-colors hover:bg-accent/30 sm:px-4">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex min-w-0 flex-1 items-center gap-2">
                                         {selectionMode ? (
                                           <Checkbox
                                             checked={allSelected}
-                                            className="mr-1"
+                                            className="mr-1 shrink-0"
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               onToggleSiteSelection(siteReportIds, allSelected);
                                             }}
                                           />
                                         ) : null}
-                                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=closed]:rotate-[-90deg]" />
-                                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                                        <span className="app-field-label">{siteName}</span>
+                                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform data-[state=closed]:rotate-[-90deg]" />
+                                        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <span className="truncate text-sm font-medium text-slate-700">{siteName}</span>
                                       </div>
-                                      <Badge className="border-0 bg-orange-500 text-white hover:bg-orange-500">
+                                      <Badge className="shrink-0 whitespace-nowrap rounded-md border-0 bg-orange-500 text-white hover:bg-orange-500">
                                         {selectionMode && selectedCount > 0 ? `${selectedCount}/` : null}
                                         {reports.length} {reports.length === 1 ? 'reporte' : 'reportes'}
                                       </Badge>
@@ -267,12 +267,15 @@ export const AccessControlReportsList = ({
                                                 <Users className="h-4 w-4 flex-shrink-0" />
                                                 <span className="truncate">Responsable: {report.responsible}</span>
                                               </div>
-                                              <div className="flex flex-wrap gap-2">
-                                                <Badge className="border-0 bg-orange-500 text-white hover:bg-orange-500">
-                                                  {getPersonalCount(report)} Entradas de Personal
+                                              <div className="flex flex-wrap gap-1.5">
+                                                <Badge className="whitespace-nowrap rounded-md border border-orange-200 bg-orange-50 px-2 py-1 text-[11px] font-medium text-orange-700 hover:bg-orange-50">
+                                                  {getPersonalCount(report)} Personal
                                                 </Badge>
-                                                <Badge variant="outline">
-                                                  {getMachineryCount(report)} Entradas de Maquinaria
+                                                <Badge
+                                                  variant="outline"
+                                                  className="whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium"
+                                                >
+                                                  {getMachineryCount(report)} Maquinaria
                                                 </Badge>
                                               </div>
                                             </div>

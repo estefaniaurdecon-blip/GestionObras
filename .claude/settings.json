@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 5 -w \"\\\\nHTTP:%{http_code}\" http://localhost:8000/api/v1/erp/projects)",
+      "Bash(curl -s --max-time 5 -w \"\\\\nHTTP:%{http_code}\" http://localhost:8000/api/v1/users/me)",
+      "Bash(tasklist /FI \"PID eq 5764\")",
+      "Bash(tasklist /FI \"PID eq 5764\" /FO LIST)",
+      "Bash(curl -s --max-time 5 http://localhost:8000/)",
+      "Bash(curl -sv --max-time 5 http://localhost:8000/api/v1/erp/projects)",
+      "Bash(curl -s --max-time 10 http://localhost:8000/api/v1/erp/projects)",
+      "Bash(adb -s emulator-5554 logcat -d --pid=16649)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} | time %{time_total}s\\\\n\" http://192.168.1.18:8000/api/v1/ping)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} | time %{time_total}s\\\\n\" http://192.168.1.18:8000/docs)",
+      "Read(//c/Users/PINNOV~1/AppData/Local/Temp/claude/c--Users-pinnovacion-Desktop-rutas-Saas-Multi-Tenant-main-Saas-Multi-Tenant-main/4373f398-b590-4547-8ab0-7fb85700b026/tasks/**)",
+      "Bash(adb -s h6cidmd6euamtkqc install -r apps/construction-log/construction-log-supabase-local/android/app/build/outputs/apk/debug/app-debug.apk)",
+      "Bash(adb -s emulator-5554 install -r apps/construction-log/construction-log-supabase-local/android/app/build/outputs/apk/debug/app-debug.apk)",
+      "Bash(adb -s h6cidmd6euamtkqc shell am start -n com.partesdetrabajo.app/.MainActivity)",
+      "Bash(ANDROID_SERIAL=h6cidmd6euamtkqc ./gradlew installDebug)",
+      "Bash(adb version:*)",
+      "Bash(adb -s h6cidmd6euamtkqc shell ip -f inet addr show wlan0)",
+      "Bash(adb -s h6cidmd6euamtkqc tcpip 5555)",
+      "Bash(adb connect:*)",
+      "Bash(adb -s 192.168.1.245:5555 shell getprop ro.product.model)",
+      "Bash(adb -s 192.168.1.245:5555 shell pm list packages)",
+      "Bash(ANDROID_SERIAL=192.168.1.245:5555 ./gradlew installDebug)"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb *)",
+      "Bash(npm run *)",
+      "Bash(npx *)",
+      "Bash(.\\gradlew *)",
+      "Bash(dir *)",
+      "Bash(powershell *)",
+      "Bash(findstr *)",
+      "Bash(timeout *)",
+      "Bash(type *)",
+      "Bash(taskkill *)",
+      "Bash(netstat *)",
+      "Bash(docker compose up *)",
+      "Bash(docker compose *)",
+      "Bash(curl *)",
+      "Bash(ipconfig)",
+      "Bash(gradlew *)",
+      "Bash(git add *)"
+    ]
+  },
+  "$version": 3
+}

@@ -1268,6 +1268,7 @@ export const GenerateWorkReportPanel = ({
       </div>
       <ActiveRepasosSection workId={selectedWorkId ? String(selectedWorkId) : null} />
       <ForemanResourcesCard
+        sectionTriggerClass={sectionTriggerClass}
         readOnly={readOnly}
         totalForemanSectionHours={totalForemanSectionHours}
         foremanResources={foremanResources}

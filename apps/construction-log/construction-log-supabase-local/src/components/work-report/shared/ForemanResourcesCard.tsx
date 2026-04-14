@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronDown, Plus, Trash2, Users } from 'lucide-react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { ForemanResource } from '@/components/work-report/types';
 
 export type MainForemanSuggestion = {
@@ -16,6 +15,7 @@ export type MainForemanSuggestion = {
 };
 
 type ForemanResourcesCardProps = {
+  sectionTriggerClass: string;
   readOnly: boolean;
   totalForemanSectionHours: number;
   foremanResources: ForemanResource[];
@@ -42,6 +42,7 @@ type ForemanResourcesCardProps = {
 };
 
 export const ForemanResourcesCard = ({
+  sectionTriggerClass,
   readOnly,
   totalForemanSectionHours,
   foremanResources,
@@ -72,40 +73,26 @@ export const ForemanResourcesCard = ({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
-              <Users className="h-4 w-4 text-slate-500" />
-              Encargados, capataces y recursos preventivos
-            </CardTitle>
-            <div className="flex items-center gap-2">
+      <div className="rounded-md border border-[#d9e1ea] bg-white px-4">
+        <CollapsibleTrigger
+          className={`flex w-full flex-1 items-center justify-between py-4 text-left transition-all hover:underline [&[data-state=open]>svg]:rotate-180 ${sectionTriggerClass}`}
+        >
+          Encargados, capataces y recursos preventivos
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="space-y-4 pb-4 pt-2 text-[15px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm text-slate-600">
                 <span className="mr-2">Total horas:</span>
                 <span className="font-semibold text-blue-700">{totalForemanSectionHours.toFixed(1)}h</span>
               </div>
               <Button variant="outline" disabled={readOnly} onClick={onAddResource}>
                 <Plus className="mr-2 h-4 w-4" />
-                Anadir
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 px-2 text-slate-600 hover:text-slate-900"
-                onClick={() => setIsExpanded((previous) => !previous)}
-                aria-expanded={isExpanded}
-                aria-label={isExpanded ? 'Minimizar bloque de encargados' : 'Expandir bloque de encargados'}
-              >
-                {isExpanded ? 'Minimizar' : 'Expandir'}
-                <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                Añadir
               </Button>
             </div>
-          </div>
-        </CardHeader>
-
-        <CollapsibleContent>
-          <CardContent className="space-y-4 text-[15px]">
             <div className="space-y-3 rounded-md border border-[#d9e1ea] p-2">
               {foremanResources.map((entry) => (
                 <div key={entry.id} className="rounded-md border border-[#d9e1ea] p-2">
@@ -170,7 +157,7 @@ export const ForemanResourcesCard = ({
 
             <div className="grid grid-cols-1 divide-y divide-[#d9e1ea] rounded-md border border-[#d9e1ea] md:grid-cols-3 md:divide-x md:divide-y-0">
               <div className="p-3">
-                <Label htmlFor="main-foreman" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                <Label htmlFor="main-foreman" className="text-sm font-medium text-slate-600">
                   Encargado principal:
                 </Label>
                 <div className="relative mt-2">
@@ -233,10 +220,7 @@ export const ForemanResourcesCard = ({
                 ) : null}
               </div>
               <div className="p-3">
-                <Label
-                  htmlFor="main-foreman-hours"
-                  className="text-sm font-semibold uppercase tracking-wide text-slate-600"
-                >
+                <Label htmlFor="main-foreman-hours" className="text-sm font-medium text-slate-600">
                   Horas encargado principal:
                 </Label>
                 <Input
@@ -251,7 +235,7 @@ export const ForemanResourcesCard = ({
                 />
               </div>
               <div className="p-3">
-                <Label htmlFor="site-manager" className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                <Label htmlFor="site-manager" className="text-sm font-medium text-slate-600">
                   Jefe de obra:
                 </Label>
                 <div className="relative mt-2">
@@ -314,9 +298,9 @@ export const ForemanResourcesCard = ({
                 ) : null}
               </div>
             </div>
-          </CardContent>
+          </div>
         </CollapsibleContent>
-      </Card>
+      </div>
     </Collapsible>
   );
 };

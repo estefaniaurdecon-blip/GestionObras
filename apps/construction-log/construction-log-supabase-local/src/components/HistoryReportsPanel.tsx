@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,12 +21,148 @@ import {
   CalendarDays,
   Copy,
   Eye,
+  LockOpen,
   Pencil,
   Search,
   Trash2,
 } from 'lucide-react';
 
-const HISTORY_REPORTS_PAGE_SIZE = 100;
+// PERFORMANCE: Reduced page size for mobile, adaptive based on platform
+const isMobilePlatform = typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent);
+const HISTORY_REPORTS_PAGE_SIZE = isMobilePlatform ? 50 : 100;
+
+// PERFORMANCE: Memoized history report card to prevent unnecessary re-renders
+const HistoryReportCard = memo(({
+  report,
+  tenantUnavailable,
+  workReportsReadOnlyByRole,
+  onOpenCloneFromHistoryDialog,
+  onOpenHistoryReport,
+  onDeleteReport,
+  onReopenReport,
+  isSuperAdmin,
+  onPending,
+}: {
+  report: WorkReport;
+  tenantUnavailable: boolean;
+  workReportsReadOnlyByRole: boolean;
+  onOpenCloneFromHistoryDialog: (report: WorkReport) => void;
+  onOpenHistoryReport: (report: WorkReport) => void;
+  onDeleteReport?: (report: WorkReport) => void;
+  onReopenReport?: (report: WorkReport) => void;
+  isSuperAdmin: boolean;
+  onPending: (featureName: string) => void;
+}) => {
+  const reportName = payloadText(report.payload, 'workName') ?? report.title ?? `Parte ${report.date}`;
+  const reportIdentifier = payloadText(report.payload, 'reportIdentifier') ?? report.id.slice(0, 8);
+  const workNumber = payloadText(report.payload, 'workNumber') ?? '-';
+  const totalHours = payloadNumber(report.payload, 'totalHours');
+  const totalHoursLabel = typeof totalHours === 'number' ? totalHours.toFixed(2) : '--';
+  const statusText = String(report.status ?? '').toLowerCase();
+  const isClosed =
+    (payloadBoolean(report.payload, 'isClosed') ?? false) ||
+    statusText === 'completed' ||
+    statusText === 'closed';
+
+  return (
+    <div
+      key={report.id}
+      className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 200px' }}
+    >
+      <div className="min-w-0 space-y-1">
+        <div className="text-base font-medium text-slate-900 truncate">{reportName}</div>
+        <div className="text-sm text-muted-foreground">Nº obra: {workNumber}</div>
+        <div className="text-sm text-muted-foreground">Identificador: {reportIdentifier}</div>
+        <div className="text-sm text-muted-foreground">Fecha parte: {report.date}</div>
+        <div className="text-sm text-muted-foreground">Creado: {formatCreationDateTime(report.createdAt)}</div>
+        <div className="text-sm text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
+        <div className="text-sm text-muted-foreground">Horas totales: {totalHoursLabel}</div>
+      </div>
+      <div className="flex flex-col items-start gap-2 sm:flex-shrink-0 sm:items-end">
+        <div className="flex flex-wrap items-center gap-0.5 px-1 py-1 sm:justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-slate-500 hover:text-slate-800"
+            title="Clonar parte"
+            onClick={() => onOpenCloneFromHistoryDialog(report)}
+            disabled={tenantUnavailable || workReportsReadOnlyByRole}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-slate-500 hover:text-slate-800"
+            title={isClosed || workReportsReadOnlyByRole ? 'Ver parte' : 'Editar parte'}
+            onClick={() => onOpenHistoryReport(report)}
+            disabled={tenantUnavailable}
+          >
+            {isClosed || workReportsReadOnlyByRole ? (
+              <Eye className="h-4 w-4" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-red-500 hover:text-red-700"
+            title="Eliminar parte"
+            onClick={() => {
+              if (onDeleteReport) {
+                onDeleteReport(report);
+                return;
+              }
+              onPending('Eliminar parte desde historial');
+            }}
+            disabled={tenantUnavailable || workReportsReadOnlyByRole}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          {isClosed && isSuperAdmin && onReopenReport && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-600 hover:text-amber-800"
+              title="Reabrir parte (super admin)"
+              onClick={() => void onReopenReport(report)}
+              disabled={tenantUnavailable}
+            >
+              <LockOpen className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        {!isClosed ? (
+          <Badge
+            variant="outline"
+            className="border-amber-400 bg-amber-50 text-amber-700"
+          >
+            Por completar
+          </Badge>
+        ) : null}
+        <Badge
+          variant="outline"
+          className={
+            report.syncStatus === 'synced'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+              : report.syncStatus === 'error'
+                ? 'border-rose-500 bg-rose-100 text-rose-800'
+                : 'border-red-300 bg-red-50 text-red-700'
+          }
+        >
+          {report.syncStatus === 'synced'
+            ? 'Sincronizado'
+            : report.syncStatus === 'error'
+              ? 'Error de sincronizacion'
+              : 'Pendiente de sincronizar'}
+        </Badge>
+      </div>
+    </div>
+  );
+});
+HistoryReportCard.displayName = 'HistoryReportCard';
 
 export type HistoryReportsPanelProps = {
   historyEnabledFilters: HistoryFilterKey[];
@@ -54,6 +191,8 @@ export type HistoryReportsPanelProps = {
   onOpenCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenHistoryReport: (report: WorkReport) => void;
   onDeleteReport?: (report: WorkReport) => void;
+  isSuperAdmin?: boolean;
+  onReopenReport?: (report: WorkReport) => void;
 };
 
 export const HistoryReportsPanel = ({
@@ -83,6 +222,8 @@ export const HistoryReportsPanel = ({
   onOpenCloneFromHistoryDialog,
   onOpenHistoryReport,
   onDeleteReport,
+  isSuperAdmin = false,
+  onReopenReport,
 }: HistoryReportsPanelProps) => {
   const [visibleCount, setVisibleCount] = useState(HISTORY_REPORTS_PAGE_SIZE);
 
@@ -262,101 +403,21 @@ export const HistoryReportsPanel = ({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="max-h-[55vh] overflow-auto divide-y rounded-md border bg-slate-50">
-            {visibleReports.map((report) => {
-              const reportName = payloadText(report.payload, 'workName') ?? report.title ?? `Parte ${report.date}`;
-              const reportIdentifier = payloadText(report.payload, 'reportIdentifier') ?? report.id.slice(0, 8);
-              const workNumber = payloadText(report.payload, 'workNumber') ?? '-';
-              const totalHours = payloadNumber(report.payload, 'totalHours');
-              const totalHoursLabel = typeof totalHours === 'number' ? totalHours.toFixed(2) : '--';
-              const statusText = String(report.status ?? '').toLowerCase();
-              const isClosed =
-                (payloadBoolean(report.payload, 'isClosed') ?? false) ||
-                statusText === 'completed' ||
-                statusText === 'closed';
-
-              return (
-                <div key={report.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 space-y-1">
-                    <div className="text-base font-medium text-slate-900 truncate">{reportName}</div>
-                    <div className="text-sm text-muted-foreground">Nº obra: {workNumber}</div>
-                    <div className="text-sm text-muted-foreground">Identificador: {reportIdentifier}</div>
-                    <div className="text-sm text-muted-foreground">Fecha parte: {report.date}</div>
-                    <div className="text-sm text-muted-foreground">Creado: {formatCreationDateTime(report.createdAt)}</div>
-                    <div className="text-sm text-muted-foreground">Estado: {isClosed ? 'Cerrado' : 'Abierto'}</div>
-                    <div className="text-sm text-muted-foreground">Horas totales: {totalHoursLabel}</div>
-                  </div>
-                  <div className="flex flex-col items-start gap-2 sm:flex-shrink-0 sm:items-end">
-                    <div className="flex flex-wrap items-center gap-0.5 px-1 py-1 sm:justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                        title="Clonar parte"
-                        onClick={() => onOpenCloneFromHistoryDialog(report)}
-                        disabled={tenantUnavailable || workReportsReadOnlyByRole}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                        title={isClosed || workReportsReadOnlyByRole ? 'Ver parte' : 'Editar parte'}
-                        onClick={() => onOpenHistoryReport(report)}
-                        disabled={tenantUnavailable}
-                      >
-                        {isClosed || workReportsReadOnlyByRole ? (
-                          <Eye className="h-4 w-4" />
-                        ) : (
-                          <Pencil className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                        title="Eliminar parte"
-                        onClick={() => {
-                          if (onDeleteReport) {
-                            onDeleteReport(report);
-                            return;
-                          }
-                          onPending('Eliminar parte desde historial');
-                        }}
-                        disabled={tenantUnavailable || workReportsReadOnlyByRole}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {!isClosed ? (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-400 bg-amber-50 text-amber-700"
-                      >
-                        Por completar
-                      </Badge>
-                    ) : null}
-                    <Badge
-                      variant="outline"
-                      className={
-                        report.syncStatus === 'synced'
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                          : report.syncStatus === 'error'
-                            ? 'border-rose-500 bg-rose-100 text-rose-800'
-                            : 'border-red-300 bg-red-50 text-red-700'
-                      }
-                    >
-                      {report.syncStatus === 'synced'
-                        ? 'Sincronizado'
-                        : report.syncStatus === 'error'
-                          ? 'Error de sincronizacion'
-                          : 'Pendiente de sincronizar'}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="max-h-[55vh] overflow-auto divide-y rounded-md border bg-slate-50" style={{ contentVisibility: 'auto' }}>
+            {visibleReports.map((report) => (
+              <HistoryReportCard
+                key={report.id}
+                report={report}
+                tenantUnavailable={tenantUnavailable}
+                workReportsReadOnlyByRole={workReportsReadOnlyByRole}
+                onOpenCloneFromHistoryDialog={onOpenCloneFromHistoryDialog}
+                onOpenHistoryReport={onOpenHistoryReport}
+                onDeleteReport={onDeleteReport}
+                onReopenReport={onReopenReport}
+                isSuperAdmin={isSuperAdmin}
+                onPending={onPending}
+              />
+            ))}
           </div>
           {hiddenReportsCount > 0 ? (
             <div className="flex items-center justify-center">

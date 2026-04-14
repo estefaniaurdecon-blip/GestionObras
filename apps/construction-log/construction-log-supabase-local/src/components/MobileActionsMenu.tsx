@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Languages, MessageSquare, Calendar } from 'lucide-react';
+import { MoreVertical, Languages, MessageSquare, Calendar, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LanguageSelector } from './LanguageSelector';
+import { useNavigate } from 'react-router-dom';
 
 interface MobileActionsMenuProps {
   onOpenCalendar?: () => void;
@@ -14,6 +15,7 @@ interface MobileActionsMenuProps {
 
 export const MobileActionsMenu = ({ onOpenCalendar }: MobileActionsMenuProps) => {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -32,6 +34,15 @@ export const MobileActionsMenu = ({ onOpenCalendar }: MobileActionsMenuProps) =>
         className="w-auto bg-background border border-border shadow-lg z-[100] p-0"
       >
         <div className="flex flex-col gap-0.5 p-1">
+          {/* Radar de Obras */}
+          <button
+            className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-md text-left"
+            onClick={() => { navigate('/radar'); setOpen(false); }}
+          >
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <span>Radar de Obras</span>
+          </button>
+
           {/* Language Selector */}
           <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-md" onClick={() => setOpen(false)}>
             <Languages className="h-4 w-4 text-muted-foreground" />

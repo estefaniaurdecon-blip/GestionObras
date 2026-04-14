@@ -127,6 +127,25 @@ def _is_tenant_admin_actor(session: Session, user: User) -> bool:
         role="admin",
     )
 
+
+def _should_filter_by_user(session: Session, user: User) -> bool:
+    """
+    Determines if we should filter data by user_id.
+    
+    Returns True for regular users (usuario role) - they only see their own data.
+    Returns False for tenant_admin and super_admin - they see all tenant data.
+    """
+    # Super admins see everything
+    if user.is_super_admin:
+        return False
+    
+    # Tenant admins see everything in their tenant
+    if _is_tenant_admin_actor(session, user):
+        return False
+    
+    # Regular users (usuario) only see their own data
+    return True
+
 # Valida que exista un tenant_id
 def _optional_tenant(tenant_id: Optional[int]) -> Optional[int]:
     # Permite que tenant_id sea None para tareas de superadmin
@@ -179,18 +198,27 @@ def _as_aware(value: datetime) -> datetime:
     return value
 
 # Lista proyectos activos
-def list_projects(session: Session, tenant_id: Optional[int]) -> list[Project]:
+def list_projects(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[Project]:
     #Devuelve todos los proyectos activos
         # si hay tenant_id --> solo para proyectos de ese tenant
         # si no hay tenant_id --> todos los proyectos(admin)
-        
-    # Query base: solo para los proyectos activos    
+
+    # Query base: solo para los proyectos activos
     stmt = select(Project).where(Project.is_active.is_(True))
     # Filtro multi-tenat (aislamiento de datos)
     if tenant_id is not None:
         stmt = stmt.where(Project.tenant_id == tenant_id)
     # Ordena por fecha de creación descendente
-    return session.exec(stmt.order_by(Project.created_at.desc())).all()
+    stmt = stmt.order_by(Project.created_at.desc())
+    # PERFORMANCE: Pagination to prevent large dataset loading
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 1000)))
+    return session.exec(stmt).all()
 
 # Obtiene un proyecto concreto
 def get_project(session: Session, project_id: int, tenant_id: Optional[int]) -> Project:
@@ -198,18 +226,27 @@ def get_project(session: Session, project_id: int, tenant_id: Optional[int]) -> 
     return _get_project_or_404(session, project_id, tenant_id)
 
 # Lista tareas no eliminadas
-def list_tasks(session: Session, tenant_id: Optional[int]) -> list[Task]:
+def list_tasks(
+    session: Session,
+    tenant_id: Optional[int],
+    *,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[Task]:
     #Devuelve todas las tareas que no están marcadas como eliminadas.
         #Excluye estado 'deleted'.
         #Aplica filtro por tenant si existe.
-        
-    # Query base: tareas activas (no eliminadas)    
+
+    # Query base: tareas activas (no eliminadas)
     stmt = select(Task).where(Task.status != "deleted")
      # Aislamiento multi-tenant
     if tenant_id is not None:
         stmt = stmt.where(Task.tenant_id == tenant_id)
     # Orden por creación descendente
-    return session.exec(stmt.order_by(Task.created_at.desc())).all()
+    stmt = stmt.order_by(Task.created_at.desc())
+    # PERFORMANCE: Pagination to prevent large dataset loading
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 1000)))
+    return session.exec(stmt).all()
 
 # Valida presupuestos de hitos
 def _validate_budget_totals(
@@ -1021,7 +1058,10 @@ def create_task_template(
 
 
 def list_activities(
-    session: Session, tenant_id: Optional[int], project_id: Optional[int] = None
+    session: Session, tenant_id: Optional[int], project_id: Optional[int] = None,
+    current_user: Optional[User] = None,
+    limit: int = 200,
+    offset: int = 0,
 ) -> list[Activity]:
     stmt = select(Activity)
     if tenant_id is not None:
@@ -1029,7 +1069,15 @@ def list_activities(
     if project_id is not None:
         _get_project_or_404(session, project_id, tenant_id)
         stmt = stmt.where(Activity.project_id == project_id)
-    return session.exec(stmt.order_by(Activity.created_at.desc())).all()
+    
+    # Data isolation: regular users only see their own activities
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(Activity.assigned_to_id == current_user.id)
+    
+    stmt = stmt.order_by(Activity.created_at.desc())
+    # PERFORMANCE: Pagination
+    stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 1000)))
+    return session.exec(stmt).all()
 
 
 def create_activity(
@@ -1737,7 +1785,12 @@ def list_work_reports(
     stmt = select(WorkReport).where(WorkReport.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(WorkReport.deleted_at.is_(None))
-    # Visibilidad: mismo tenant = puede ver todos los partes (sin filtro de grupo).
+    
+    # Data isolation: regular users only see their own reports
+    # tenant_admin and super_admin can see all reports in the tenant
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(WorkReport.created_by_id == current_user.id)
+    
     if project_id is not None:
         stmt = stmt.where(WorkReport.project_id == project_id)
     if external_id is not None:
@@ -2430,6 +2483,7 @@ def list_access_control_reports(
     include_deleted: bool = False,
     limit: int = 100,
     offset: int = 0,
+    current_user: Optional[User] = None,
 ) -> list[AccessControlReport]:
     resolved_tenant_id = _require_tenant(tenant_id)
     if project_id is not None:
@@ -2438,6 +2492,11 @@ def list_access_control_reports(
     stmt = select(AccessControlReport).where(AccessControlReport.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(AccessControlReport.deleted_at.is_(None))
+    
+    # Data isolation: regular users only see their own reports
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(AccessControlReport.created_by_id == current_user.id)
+    
     if project_id is not None:
         stmt = stmt.where(AccessControlReport.project_id == project_id)
     if date_from is not None:
@@ -2619,6 +2678,7 @@ def list_rental_machinery(
     include_deleted: bool = False,
     limit: int = 100,
     offset: int = 0,
+    current_user: Optional[User] = None,
 ) -> list[RentalMachinery]:
     resolved_tenant_id = _require_tenant(tenant_id)
     if project_id is not None:
@@ -2630,6 +2690,11 @@ def list_rental_machinery(
     )
     if not include_deleted:
         stmt = stmt.where(RentalMachinery.deleted_at.is_(None))
+    
+    # Data isolation: regular users only see their own machinery
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(RentalMachinery.created_by_id == current_user.id)
+    
     if project_id is not None:
         stmt = stmt.where(RentalMachinery.project_id == project_id)
     if status is not None:
@@ -2909,6 +2974,7 @@ def list_work_repasos(
     include_deleted: bool = False,
     limit: int = 100,
     offset: int = 0,
+    current_user: Optional[User] = None,
 ) -> list[WorkRepaso]:
     resolved_tenant_id = _require_tenant(tenant_id)
     if project_id is not None:
@@ -2917,6 +2983,11 @@ def list_work_repasos(
     stmt = select(WorkRepaso).where(WorkRepaso.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(WorkRepaso.deleted_at.is_(None))
+    
+    # Data isolation: regular users only see their own work
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(WorkRepaso.created_by_id == current_user.id)
+    
     if project_id is not None:
         stmt = stmt.where(WorkRepaso.project_id == project_id)
     if status is not None:
@@ -3040,6 +3111,7 @@ def list_work_postventas(
     include_deleted: bool = False,
     limit: int = 100,
     offset: int = 0,
+    current_user: Optional[User] = None,
 ) -> list[WorkPostventa]:
     resolved_tenant_id = _require_tenant(tenant_id)
     if project_id is not None:
@@ -3048,6 +3120,11 @@ def list_work_postventas(
     stmt = select(WorkPostventa).where(WorkPostventa.tenant_id == resolved_tenant_id)
     if not include_deleted:
         stmt = stmt.where(WorkPostventa.deleted_at.is_(None))
+    
+    # Data isolation: regular users only see their own work
+    if current_user is not None and _should_filter_by_user(session, current_user):
+        stmt = stmt.where(WorkPostventa.created_by_id == current_user.id)
+    
     if project_id is not None:
         stmt = stmt.where(WorkPostventa.project_id == project_id)
     if status is not None:

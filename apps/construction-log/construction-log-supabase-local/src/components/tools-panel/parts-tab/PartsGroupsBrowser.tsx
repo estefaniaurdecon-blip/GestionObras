@@ -36,6 +36,8 @@ type PartsGroupsBrowserProps = {
   onCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenExistingReport: (report: WorkReport, options?: { navigationReportIds?: string[] }) => void;
   onDeleteReport: (report: WorkReport) => void;
+  isSuperAdmin?: boolean;
+  onReopenReport?: (report: WorkReport) => void;
 };
 
 export const PartsGroupsBrowser = ({
@@ -65,6 +67,8 @@ export const PartsGroupsBrowser = ({
   onCloneFromHistoryDialog,
   onOpenExistingReport,
   onDeleteReport,
+  isSuperAdmin = false,
+  onReopenReport,
 }: PartsGroupsBrowserProps) => (
   <>
     <div
@@ -197,7 +201,7 @@ export const PartsGroupsBrowser = ({
                         </AccordionPrimitive.Header>
                       </div>
                       <AccordionContent className="border-t bg-white pb-0 pt-0">
-                        <div className="divide-y">
+                        <div className="divide-y" style={{ contentVisibility: 'auto' }}>
                           {visibleReportsForGroup.map((report) => (
                             <PartsReportCard
                               key={`${group.key}-${report.id}`}
@@ -211,6 +215,8 @@ export const PartsGroupsBrowser = ({
                               onCloneFromHistoryDialog={onCloneFromHistoryDialog}
                               onOpenExistingReport={onOpenExistingReport}
                               onDeleteReport={onDeleteReport}
+                              isSuperAdmin={isSuperAdmin}
+                              onReopenReport={onReopenReport}
                             />
                           ))}
                         </div>
@@ -254,7 +260,7 @@ export const PartsGroupsBrowser = ({
         {recentReports.length === 0 ? (
           <div className="px-3 py-4 text-[15px] text-slate-500">No hay partes para la seleccion actual.</div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y" style={{ contentVisibility: 'auto' }}>
             {recentReports.map((report) => (
               <PartsReportCard
                 key={`display-${report.id}`}
@@ -268,6 +274,8 @@ export const PartsGroupsBrowser = ({
                 onCloneFromHistoryDialog={onCloneFromHistoryDialog}
                 onOpenExistingReport={onOpenExistingReport}
                 onDeleteReport={onDeleteReport}
+                isSuperAdmin={isSuperAdmin}
+                onReopenReport={onReopenReport}
               />
             ))}
           </div>

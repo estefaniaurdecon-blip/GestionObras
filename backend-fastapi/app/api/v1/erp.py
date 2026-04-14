@@ -216,9 +216,11 @@ def api_list_projects(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> list[ProjectRead]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)
-    return list_projects(session, tenant_id)
+    return list_projects(session, tenant_id, limit=limit, offset=offset)
 
 
 @router.get("/projects/member-directory", response_model=list[WorkMessageDirectoryRead])
@@ -713,9 +715,11 @@ def api_list_tasks(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> list[TaskRead]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)
-    return list_tasks(session, tenant_id)
+    return list_tasks(session, tenant_id, limit=limit, offset=offset)
 
 
 @router.post("/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
@@ -759,9 +763,11 @@ def api_list_activities(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permissions(["erp:read"])),
     x_tenant_id: Optional[int] = Header(default=None, alias="X-Tenant-Id"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> list[ActivityRead]:
     tenant_id = _tenant_for_read(current_user, x_tenant_id)
-    return list_activities(session, tenant_id, project_id=project_id)
+    return list_activities(session, tenant_id, project_id=project_id, current_user=current_user, limit=limit, offset=offset)
 
 
 @router.post("/activities", response_model=ActivityRead, status_code=status.HTTP_201_CREATED)
@@ -1267,6 +1273,7 @@ def api_list_access_control_reports(
             include_deleted=include_deleted,
             limit=limit,
             offset=offset,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=_map_access_control_error(str(exc)), detail=str(exc)) from exc
@@ -1370,6 +1377,7 @@ def api_list_rental_machinery(
             include_deleted=include_deleted,
             limit=limit,
             offset=offset,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -1457,6 +1465,7 @@ def api_list_work_repasos(
             include_deleted=include_deleted,
             limit=limit,
             offset=offset,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -1544,6 +1553,7 @@ def api_list_work_postventas(
             include_deleted=include_deleted,
             limit=limit,
             offset=offset,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

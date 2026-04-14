@@ -766,10 +766,10 @@ export const ReportsAnalysisWindow = ({
 
         <TabsContent value="foreman">
           <Card className="border-slate-200">
-            <CardHeader className="text-center">
+            <CardHeader className="px-3 py-3 text-center sm:p-6">
               <CardTitle className="app-page-title">Horas del encargado por período</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-8">
+            <CardContent className="space-y-4 px-3 pb-4 sm:space-y-8 sm:p-6 sm:pt-0">
               <PeriodHoursChart
                 title="Horas del Encargado por Periodo"
                 rawRows={foremanChartRows}

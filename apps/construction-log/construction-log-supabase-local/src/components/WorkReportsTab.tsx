@@ -143,6 +143,8 @@ type WorkReportsActionsConfig = {
   openCloneFromHistoryDialog: (report: WorkReport) => void;
   openExistingReport: (report: WorkReport) => void;
   deleteWorkReportPermanently: (report: WorkReport) => Promise<boolean>;
+  reopenReport?: (report: WorkReport) => Promise<void>;
+  isSuperAdmin?: boolean;
   // Optional for backwards compatibility with old Index action wiring.
   setHistoryOpen?: Dispatch<SetStateAction<boolean>>;
 };
@@ -166,8 +168,10 @@ export const WorkReportsTab = ({
   actions,
   history,
 }: WorkReportsTabProps) => {
-  const INITIAL_HEALTH_CHECK_DELAY_MS = Capacitor.isNativePlatform() ? 20000 : 12000;
-  const HEALTH_CHECK_INTERVAL_MS = Capacitor.isNativePlatform() ? 30000 : 10000;
+  // PERFORMANCE: Reduced polling frequency for mobile to avoid main thread stress
+  // Desktop: 60s initial, 120s interval | Mobile: 30s initial, 180s interval
+  const INITIAL_HEALTH_CHECK_DELAY_MS = Capacitor.isNativePlatform() ? 30000 : 60000;
+  const HEALTH_CHECK_INTERVAL_MS = Capacitor.isNativePlatform() ? 180000 : 120000;
 
   const {
     open: generatePanelOpen,
@@ -226,6 +230,8 @@ export const WorkReportsTab = ({
     openCloneFromHistoryDialog,
     openExistingReport,
     deleteWorkReportPermanently,
+    reopenReport,
+    isSuperAdmin = false,
   } = actions;
   const [activeToolsTab, setActiveToolsTab] = useState<DashboardToolsTab>('parts');
   const [summaryReportAnalysisOpen, setSummaryReportAnalysisOpen] = useState(false);
@@ -366,20 +372,39 @@ export const WorkReportsTab = ({
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
+    // PERFORMANCE: Use requestIdleCallback to defer health check to idle periods
     let initialTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let initialIdleId: number | null = null;
     initialTimeoutId = globalThis.setTimeout(() => {
       if (typeof window.requestIdleCallback === 'function') {
         initialIdleId = window.requestIdleCallback(() => {
           void checkSyncConnectivity();
-        }, { timeout: 2000 });
+        }, { timeout: 5000 });
         return;
       }
 
       void checkSyncConnectivity();
     }, INITIAL_HEALTH_CHECK_DELAY_MS);
+    
+    // PERFORMANCE: Interval handler with idle callback deferral
+    let intervalIdleId: number | null = null;
     const intervalId = window.setInterval(() => {
-      void checkSyncConnectivity();
+      // Skip if page is hidden or idle callback available
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
+      if (typeof window.requestIdleCallback === 'function') {
+        if (intervalIdleId !== null) {
+          window.cancelIdleCallback(intervalIdleId);
+        }
+        intervalIdleId = window.requestIdleCallback(() => {
+          void checkSyncConnectivity();
+          intervalIdleId = null;
+        }, { timeout: 10000 });
+      } else {
+        void checkSyncConnectivity();
+      }
     }, HEALTH_CHECK_INTERVAL_MS);
 
     return () => {
@@ -392,6 +417,9 @@ export const WorkReportsTab = ({
       }
       if (initialIdleId !== null && typeof window.cancelIdleCallback === 'function') {
         window.cancelIdleCallback(initialIdleId);
+      }
+      if (intervalIdleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(intervalIdleId);
       }
     };
   }, [HEALTH_CHECK_INTERVAL_MS, INITIAL_HEALTH_CHECK_DELAY_MS]);
@@ -589,7 +617,7 @@ export const WorkReportsTab = ({
                       </div>
                     ) : history ? (
                       <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando historial...</div>}>
-                        <HistoryReportsPanel {...history} onDeleteReport={setReportToDelete} />
+                        <HistoryReportsPanel {...history} onDeleteReport={setReportToDelete} isSuperAdmin={isSuperAdmin} onReopenReport={reopenReport} />
                       </Suspense>
                     ) : (
                       <div className="text-sm text-muted-foreground">
@@ -652,6 +680,8 @@ export const WorkReportsTab = ({
                   onCloneFromHistoryDialog={openCloneFromHistoryDialog}
                   onOpenExistingReport={openExistingReportWithContext}
                   onDeleteReport={setReportToDelete}
+                  isSuperAdmin={isSuperAdmin}
+                  onReopenReport={reopenReport}
                 />
               )}
             </div>

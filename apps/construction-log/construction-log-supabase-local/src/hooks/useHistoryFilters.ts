@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useDeferredValue, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { WorkReport } from '@/offline-db/types';
 import {
   asRecord,
@@ -8,6 +8,31 @@ import {
   payloadText,
   type HistoryFilterKey,
 } from '@/pages/indexHelpers';
+
+// PERFORMANCE: Custom hook for debounced state updates on text inputs
+function useDebouncedState<T extends string>(initialValue: T, delayMs = 300): [T, Dispatch<SetStateAction<T>>, T] {
+  const [immediateValue, setImmediateValue] = useState<T>(initialValue);
+  const [debouncedValue, setDebouncedValue] = useState<T>(initialValue);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedValue(immediateValue);
+      timeoutRef.current = null;
+    }, delayMs);
+
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [immediateValue, delayMs]);
+
+  return [immediateValue, setImmediateValue, debouncedValue];
+}
 
 type UseHistoryFiltersResult = {
   historyForemanFilter: string;
@@ -32,19 +57,20 @@ type UseHistoryFiltersResult = {
 };
 
 export const useHistoryFilters = (allWorkReports: WorkReport[]): UseHistoryFiltersResult => {
-  const [historyForemanFilter, setHistoryForemanFilter] = useState('');
+  // PERFORMANCE: Debounced text inputs to prevent recalculation on every keystroke
+  const [historyForemanFilter, setHistoryForemanFilter, debouncedForemanFilter] = useDebouncedState('', 300);
   const [historyWeekFilter, setHistoryWeekFilter] = useState('');
   const [historyMonthFilter, setHistoryMonthFilter] = useState('');
-  const [historyWorkNameFilter, setHistoryWorkNameFilter] = useState('');
+  const [historyWorkNameFilter, setHistoryWorkNameFilter, debouncedWorkNameFilter] = useDebouncedState('', 300);
   const [historyDateFilter, setHistoryDateFilter] = useState('');
   const [historyDatePickerOpen, setHistoryDatePickerOpen] = useState(false);
   const [historyEnabledFilters, setHistoryEnabledFilters] = useState<HistoryFilterKey[]>([]);
   const deferredAllWorkReports = useDeferredValue(allWorkReports);
   const deferredEnabledFilters = useDeferredValue(historyEnabledFilters);
-  const deferredForemanFilter = useDeferredValue(historyForemanFilter);
+  const deferredForemanFilter = useDeferredValue(debouncedForemanFilter);
   const deferredWeekFilter = useDeferredValue(historyWeekFilter);
   const deferredMonthFilter = useDeferredValue(historyMonthFilter);
-  const deferredWorkNameFilter = useDeferredValue(historyWorkNameFilter);
+  const deferredWorkNameFilter = useDeferredValue(debouncedWorkNameFilter);
   const deferredDateFilter = useDeferredValue(historyDateFilter);
 
   const sortedHistoryReports = useMemo(

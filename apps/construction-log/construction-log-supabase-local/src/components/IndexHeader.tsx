@@ -84,7 +84,7 @@ export const IndexHeader = ({
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate('/radar')}
-                className="h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
+                className="hidden sm:inline-flex h-9 w-9 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-lg"
                 title="Radar de Obras"
               >
                 <Globe className="h-4 w-4" />

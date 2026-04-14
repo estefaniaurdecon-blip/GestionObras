@@ -64,6 +64,8 @@ export type PartsTabContentProps = BaseToolsProps & {
   onCloneFromHistoryDialog: (report: WorkReport) => void;
   onOpenExistingReport: (report: WorkReport, options?: OpenExistingReportOptions) => void;
   onDeleteReport: (report: WorkReport) => void;
+  isSuperAdmin?: boolean;
+  onReopenReport?: (report: WorkReport) => void;
 };
 
 export const PartsTabContent = ({
@@ -86,6 +88,8 @@ export const PartsTabContent = ({
   onCloneFromHistoryDialog,
   onOpenExistingReport,
   onDeleteReport,
+  isSuperAdmin = false,
+  onReopenReport,
 }: PartsTabContentProps) => {
   const { toast } = useToast();
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
@@ -403,6 +407,8 @@ export const PartsTabContent = ({
             onCloneFromHistoryDialog={onCloneFromHistoryDialog}
             onOpenExistingReport={onOpenExistingReport}
             onDeleteReport={onDeleteReport}
+            isSuperAdmin={isSuperAdmin}
+            onReopenReport={onReopenReport}
           />
         </CardContent>
       </Card>

@@ -54,6 +54,7 @@ type UseWorkReportMutationsResult = {
   handleCloneFromHistory: (options: CloneOptions) => void;
   handleSaveGeneratedWorkReport: (draft: GenerateWorkReportDraft) => Promise<void>;
   handleConfirmOverwrite: () => Promise<void>;
+  handleReopenReport: (report: WorkReport) => Promise<void>;
 };
 
 export const useWorkReportMutations = ({
@@ -580,6 +581,31 @@ export const useWorkReportMutations = ({
     ],
   );
 
+  const handleReopenReport = useCallback(
+    async (report: WorkReport) => {
+      try {
+        const existingPayload = asRecord(report.payload) ?? {};
+        await workReportsRepo.update(report.id, {
+          status: 'draft',
+          payload: { ...existingPayload, isClosed: false, workReportStatus: 'draft' },
+        });
+        await loadWorkReports();
+        toast({
+          title: 'Parte reabierto',
+          description: 'El parte ha sido reabierto y puede volver a editarse.',
+        });
+      } catch (error) {
+        console.error('[WorkReports] Error reopening report:', error);
+        toast({
+          title: 'Error al reabrir',
+          description: 'No se pudo reabrir el parte.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [loadWorkReports],
+  );
+
   return {
     openGenerateWorkReport,
     openExistingReport,
@@ -589,5 +615,6 @@ export const useWorkReportMutations = ({
     handleCloneFromHistory,
     handleSaveGeneratedWorkReport,
     handleConfirmOverwrite,
+    handleReopenReport,
   };
 };

@@ -6,6 +6,7 @@ import { getCurrentUser, listManagedUserRoles } from '@/integrations/api/client'
 interface UserPermissionsContextType {
   roles: AppRole[];
   loading: boolean;
+  isSuperAdmin: boolean;
   isMaster: boolean;
   isAdmin: boolean;
   isSiteManager: boolean;
@@ -112,6 +113,7 @@ export const UserPermissionsProvider = ({ children }: { children: ReactNode }) =
       value={{
         roles,
         loading,
+        isSuperAdmin,
         isMaster,
         isAdmin,
         isSiteManager,

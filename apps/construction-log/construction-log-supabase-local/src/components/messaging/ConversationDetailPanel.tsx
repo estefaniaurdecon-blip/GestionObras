@@ -690,8 +690,8 @@ export function ConversationDetailPanel({
       </ScrollArea>
 
       {/* Composer */}
-      <div className="p-4 border-t bg-white">
-        <div className="flex items-end gap-3">
+      <div className="px-2 py-2 border-t bg-white sm:p-4">
+        <div className="flex items-center gap-1 sm:items-end sm:gap-3">
           {isWorkConversationSelected ? (
             <>
               <Textarea
@@ -705,17 +705,21 @@ export function ConversationDetailPanel({
                 }}
                 placeholder={selectedWorkConversation ? "Escribe en la conversación de obra..." : "Selecciona una obra"}
                 disabled={!selectedWorkConversation || sendingProjectConversation}
-                className="min-h-[56px] h-[56px] resize-none text-lg"
-                rows={2}
+                className="h-10 min-h-[40px] resize-none text-sm sm:h-[56px] sm:min-h-[56px] sm:text-lg"
+                rows={1}
               />
               <Button
                 onClick={handleSend}
                 disabled={!selectedWorkConversation || !text.trim() || sendingProjectConversation}
                 size="icon"
                 title="Enviar"
-                className="shrink-0 h-12 w-12"
+                className="shrink-0 h-10 w-10 sm:h-12 sm:w-12"
               >
-                {sendingProjectConversation ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
+                {sendingProjectConversation ? (
+                  <Loader2 className="h-5 w-5 animate-spin sm:h-6 sm:w-6" />
+                ) : (
+                  <Send className="h-5 w-5 sm:h-6 sm:w-6" />
+                )}
               </Button>
             </>
           ) : isAiHelpConversation ? (
@@ -731,17 +735,21 @@ export function ConversationDetailPanel({
                 }}
                 placeholder="Pregunta cómo hacer algo o dónde encontrar una función..."
                 disabled={!selectedUser || sendingAiHelp}
-                className="min-h-[56px] h-[56px] resize-none text-lg"
-                rows={2}
+                className="h-10 min-h-[40px] resize-none text-sm sm:h-[56px] sm:min-h-[56px] sm:text-lg"
+                rows={1}
               />
               <Button
                 onClick={() => void handleSend()}
                 disabled={!selectedUser || !text.trim() || sendingAiHelp}
                 size="icon"
                 title="Enviar"
-                className="shrink-0 h-12 w-12"
+                className="shrink-0 h-10 w-10 sm:h-12 sm:w-12"
               >
-                {sendingAiHelp ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
+                {sendingAiHelp ? (
+                  <Loader2 className="h-5 w-5 animate-spin sm:h-6 sm:w-6" />
+                ) : (
+                  <Send className="h-5 w-5 sm:h-6 sm:w-6" />
+                )}
               </Button>
             </>
           ) : (
@@ -758,9 +766,9 @@ export function ConversationDetailPanel({
               {isRecording ? (
                 <>
                   <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse shrink-0" />
-                  <span className="flex-1 text-base font-medium text-red-500">Grabando {fmtDuration(recordingDuration)}</span>
-                  <Button onClick={stopRecording} variant="destructive" size="icon" title="Detener y enviar" className="shrink-0 h-12 w-12">
-                    <Send className="h-6 w-6" />
+                  <span className="flex-1 text-sm font-medium text-red-500 sm:text-base">Grabando {fmtDuration(recordingDuration)}</span>
+                  <Button onClick={stopRecording} variant="destructive" size="icon" title="Detener y enviar" className="shrink-0 h-10 w-10 sm:h-12 sm:w-12">
+                    <Send className="h-5 w-5 sm:h-6 sm:w-6" />
                   </Button>
                 </>
               ) : (
@@ -771,9 +779,9 @@ export function ConversationDetailPanel({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!selectedUser || isSharingFile}
                     title="Adjuntar archivo"
-                    className="shrink-0 h-12 w-12"
+                    className="shrink-0 h-9 w-9 sm:h-12 sm:w-12"
                   >
-                    <Paperclip className="h-7 w-7" />
+                    <Paperclip className="h-5 w-5 sm:h-7 sm:w-7" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -781,9 +789,9 @@ export function ConversationDetailPanel({
                     onClick={startRecording}
                     disabled={!selectedUser || isSharingFile}
                     title="Nota de voz"
-                    className="shrink-0 h-12 w-12"
+                    className="shrink-0 h-9 w-9 sm:h-12 sm:w-12"
                   >
-                    <Mic className="h-7 w-7" />
+                    <Mic className="h-5 w-5 sm:h-7 sm:w-7" />
                   </Button>
                   <Textarea
                     value={text}
@@ -796,11 +804,11 @@ export function ConversationDetailPanel({
                     }}
                     placeholder={selectedUser ? "Escribe un mensaje..." : "Selecciona un contacto"}
                     disabled={!selectedUser}
-                    className="min-h-[56px] h-[56px] resize-none text-lg"
-                    rows={2}
+                    className="h-10 min-h-[40px] resize-none text-sm sm:h-[56px] sm:min-h-[56px] sm:text-lg"
+                    rows={1}
                   />
-                  <Button onClick={() => void handleSend()} disabled={!selectedUser || !text.trim()} size="icon" title="Enviar" className="shrink-0 h-12 w-12">
-                    <Send className="h-6 w-6" />
+                  <Button onClick={() => void handleSend()} disabled={!selectedUser || !text.trim()} size="icon" title="Enviar" className="shrink-0 h-10 w-10 sm:h-12 sm:w-12">
+                    <Send className="h-5 w-5 sm:h-6 sm:w-6" />
                   </Button>
                 </>
               )}

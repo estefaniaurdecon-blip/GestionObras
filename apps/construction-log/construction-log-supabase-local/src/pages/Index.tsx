@@ -307,6 +307,7 @@ const Index = () => {
     handleCloneFromHistory,
     handleSaveGeneratedWorkReport,
     handleConfirmOverwrite,
+    handleReopenReport,
   } = useWorkReportMutations({
     user,
     resolvedTenantId,
@@ -454,6 +455,8 @@ const Index = () => {
               openCloneFromHistoryDialog,
               openExistingReport,
               deleteWorkReportPermanently: handleDeleteWorkReportPermanently,
+              reopenReport: handleReopenReport,
+              isSuperAdmin: Boolean(user?.is_super_admin),
             }}
             history={{
               historyEnabledFilters,

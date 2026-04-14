@@ -19,6 +19,7 @@ describe('chatCenterContext', () => {
         workId: 7,
         workName: 'Obra Norte',
       },
+      selectedWorkConversation: null,
     });
   });
 
@@ -33,6 +34,7 @@ describe('chatCenterContext', () => {
     expect(direct).toEqual({
       selectedUserId: '42',
       activeWorkContext: null,
+      selectedWorkConversation: null,
     });
   });
 
@@ -58,6 +60,7 @@ describe('chatCenterContext', () => {
     expect(clearConversationSelection()).toEqual({
       selectedUserId: '',
       activeWorkContext: null,
+      selectedWorkConversation: null,
     });
   });
 });

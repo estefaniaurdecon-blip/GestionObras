@@ -1,6 +1,7 @@
 const CLIENT_OP_SCHEMA_VERSION = 'v4';
 
 function toNumber(value) {
+  if (value === null || value === undefined) return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }

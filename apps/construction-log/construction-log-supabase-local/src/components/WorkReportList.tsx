@@ -27,12 +27,12 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-f
 import { enUS, es, fr, it, de as deLocale } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { 
-  Plus, 
-  Edit, 
-  Copy, 
-  Trash2, 
-  Download, 
+import {
+  Plus,
+  Edit,
+  Copy,
+  Trash2,
+  Download,
   Upload,
   FileBarChart,
   Building2,
@@ -46,6 +46,7 @@ import {
   Eye,
   FileText,
   FileSpreadsheet,
+  LockOpen,
   RefreshCw,
   Filter,
   X,
@@ -78,6 +79,7 @@ interface WorkReportListProps {
   onUnapprove?: (reportId: string) => void;
   onArchive?: (reportIdOrIds: string | string[], showToast?: boolean) => Promise<void>;
   onUnarchive?: (reportId: string) => Promise<void>;
+  onReopenReport?: (report: WorkReport) => Promise<void>;
   canApprove?: boolean;
   companyLogo?: string;
   onReload?: () => Promise<void>;
@@ -98,6 +100,7 @@ export const WorkReportList = ({
   onUnapprove,
   onArchive,
   onUnarchive,
+  onReopenReport,
   canApprove = false,
   companyLogo,
   onReload,
@@ -106,6 +109,7 @@ export const WorkReportList = ({
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const currentUserId = user ? String(user.id) : null;
+  const isSuperAdmin = Boolean(user?.is_super_admin);
   const { isSiteManager, isAdmin, isOfi, isMaster } = useUserPermissions();
   const { toast } = useToast();
   const { organization } = useOrganization();
@@ -1220,6 +1224,18 @@ export const WorkReportList = ({
                                              </Button>
                                            </>
                                          )}
+                                         {report.status === 'completed' && isSuperAdmin && onReopenReport && (
+                                           <Button
+                                             variant="outline"
+                                             size="sm"
+                                             onClick={() => void onReopenReport(report)}
+                                             className="w-full text-amber-600 hover:text-amber-800 border-amber-300"
+                                             title="Reabrir parte (super admin)"
+                                           >
+                                             <LockOpen className="h-4 w-4 mr-1" />
+                                             <span className="text-xs">Reabrir</span>
+                                           </Button>
+                                         )}
                                        </>
                                      )}
                                     </div>
@@ -1430,9 +1446,20 @@ export const WorkReportList = ({
                                                       </Button>
                                                     </>
                                                   )}
+                                                  {report.status === 'completed' && isSuperAdmin && onReopenReport && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => void onReopenReport(report)}
+                                                      className="h-7 w-7 p-0 text-amber-600 hover:text-amber-800"
+                                                      title="Reabrir parte (super admin)"
+                                                    >
+                                                      <LockOpen className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
                                                 </div>
                                               </div>
-                                              
+
                                               {/* Botones de estado */}
                                               <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border">
                                                 <Button
@@ -1641,9 +1668,20 @@ export const WorkReportList = ({
                                                       </Button>
                                                     </>
                                                   )}
+                                                  {report.status === 'completed' && isSuperAdmin && onReopenReport && (
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => void onReopenReport(report)}
+                                                      className="h-7 w-7 p-0 text-amber-600 hover:text-amber-800"
+                                                      title="Reabrir parte (super admin)"
+                                                    >
+                                                      <LockOpen className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
                                                 </div>
                                               </div>
-                                              
+
                                               {/* Botones de estado */}
                                               <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border">
                                                 <Button

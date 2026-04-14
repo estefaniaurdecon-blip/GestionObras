@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   aggregateByDay,
   aggregateByMonth,
@@ -33,6 +34,7 @@ export const PeriodHoursChart = ({ title, rawRows, seriesType }: PeriodHoursChar
   const [pageOffset, setPageOffset] = useState(0);
   const gradientToken = useId().replace(/:/g, '');
   const barGradientId = `period-hours-bar-gradient-${gradientToken}`;
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setPageOffset(0);
@@ -79,24 +81,24 @@ export const PeriodHoursChart = ({ title, rawRows, seriesType }: PeriodHoursChar
 
   return (
     <div className="space-y-3" aria-label={title} data-series={seriesType}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <ToggleGroup
           type="single"
           value={mode}
           onValueChange={handleModeChange}
-          className="w-full justify-start rounded-lg bg-slate-100 p-1 sm:w-auto"
+          className="inline-flex justify-center rounded-lg bg-slate-100 p-1"
         >
           {modeOptions.map((option) => (
             <ToggleGroupItem
               key={option.value}
               value={option.value}
-              className="h-8 px-3 text-xs font-medium text-slate-700 data-[state=on]:bg-white data-[state=on]:text-slate-900"
+              className="h-8 flex-1 px-4 text-xs font-medium text-slate-700 data-[state=on]:bg-white data-[state=on]:text-slate-900 sm:flex-none sm:px-3"
             >
               {option.label}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-center gap-2 sm:justify-end">
           <Button
             type="button"
             variant="outline"
@@ -122,9 +124,16 @@ export const PeriodHoursChart = ({ title, rawRows, seriesType }: PeriodHoursChar
         </div>
       </div>
 
-      <div className="h-[280px] rounded-xl border border-slate-200 bg-white p-2 sm:h-[295px]">
+      <div className="-mx-3 h-[260px] sm:mx-0 sm:h-[295px] sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 8, right: 10, left: 2, bottom: 0 }}>
+          <BarChart
+            data={chartData}
+            margin={
+              isMobile
+                ? { top: 8, right: 6, left: -24, bottom: 0 }
+                : { top: 8, right: 10, left: 2, bottom: 0 }
+            }
+          >
             <defs>
               <linearGradient id={barGradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#1AB3E5" />
@@ -133,14 +142,20 @@ export const PeriodHoursChart = ({ title, rawRows, seriesType }: PeriodHoursChar
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="4 4" stroke="#d1d5db" />
-            <XAxis dataKey="period" tick={{ fontSize: 12 }} stroke="#6b7280" padding={{ left: 16, right: 16 }} />
+            <XAxis
+              dataKey="period"
+              tick={{ fontSize: isMobile ? 10 : 12 }}
+              stroke="#6b7280"
+              padding={{ left: isMobile ? 8 : 16, right: isMobile ? 8 : 16 }}
+            />
             <YAxis
               domain={[0, yMax]}
               ticks={yTicks}
               allowDecimals
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: isMobile ? 10 : 12 }}
               stroke="#6b7280"
               tickCount={yTicks.length}
+              width={isMobile ? 28 : 40}
             />
             <Tooltip
               cursor={false}

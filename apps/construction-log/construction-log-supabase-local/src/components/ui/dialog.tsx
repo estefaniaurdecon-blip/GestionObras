@@ -34,15 +34,33 @@ const FULL_SCREEN_CLASS_PREFIXES = [
   "w-[calc(100vw-",
 ];
 
-const stripFullScreenConflictingClasses = (className?: string) =>
-  className
-    ?.split(/\s+/)
+// PERFORMANCE: Memoize regex-based class stripping to avoid recomputation on every render
+const stripCache = new Map<string, string>();
+
+const stripFullScreenConflictingClasses = (className?: string) => {
+  if (!className) return className;
+  
+  const cached = stripCache.get(className);
+  if (cached !== undefined) return cached;
+  
+  const result = className
+    .split(/\s+/)
     .filter(Boolean)
     .filter(
       (token) =>
         !FULL_SCREEN_CLASS_PREFIXES.some((prefix) => token === prefix || token.startsWith(prefix)),
     )
     .join(" ");
+  
+  // Limit cache size to prevent memory leaks
+  if (stripCache.size > 200) {
+    const firstKey = stripCache.keys().next().value;
+    if (firstKey) stripCache.delete(firstKey);
+  }
+  stripCache.set(className, result);
+  
+  return result;
+};
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -73,7 +91,7 @@ const DialogContent = React.forwardRef<
       className={cn(
         fullScreen
           ? "fixed inset-0 z-50 flex h-[100dvh] w-screen max-w-none flex-col gap-4 overflow-y-auto border-0 bg-background p-4 shadow-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:p-6"
-          : "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+          : "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 sm:p-6 shadow-lg duration-200 max-h-[90dvh] overflow-y-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         fullScreen ? stripFullScreenConflictingClasses(className) : className,
       )}
       {...props}

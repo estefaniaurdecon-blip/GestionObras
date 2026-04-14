@@ -70,13 +70,13 @@ export const MaterialsSection = ({
   removeServiceLine,
 }: MaterialsSectionProps) => {
   return (
-    <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-4">
+    <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-2 sm:px-4">
       <AccordionTrigger className={sectionTriggerClass}>Materiales</AccordionTrigger>
       <AccordionContent className="space-y-4 text-[15px]">
-        <div className="rounded-md border border-[#d9e1ea] bg-white">
-          <div className="border-b border-[#d9e1ea] p-4 text-center">
-            <p className="text-xl font-semibold uppercase tracking-wide text-slate-700">Materiales</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <div className="sm:rounded-md sm:border sm:border-[#d9e1ea] sm:bg-white">
+          <div className="pt-2 text-center sm:border-b sm:border-[#d9e1ea] sm:p-4">
+            <p className="hidden text-xl font-semibold uppercase tracking-wide text-slate-700 sm:block">Materiales</p>
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:mt-3">
               <Button variant="outline" onClick={addMaterialGroup} disabled={readOnly || isAlbaranProcessing}>
                 <Plus className="mr-2 h-4 w-4" />
                 Albarán
@@ -86,7 +86,7 @@ export const MaterialsSection = ({
               <p className="mt-2 text-sm text-red-600">{albaranScanError}</p>
             ) : null}
           </div>
-          <div className="space-y-4 p-3">
+          <div className="space-y-4 py-3 sm:p-3">
             {materialGroups.map((group) => {
               const isActiveMaterialGroup = activeMaterialGroupId === group.id;
               const isScanningThisGroup = isAlbaranProcessing && scanInFlightTargetGroupId === group.id;
@@ -137,7 +137,7 @@ export const MaterialsSection = ({
                     <Button
                       size="sm"
                       variant={isActiveMaterialGroup ? 'default' : 'outline'}
-                      className="h-8"
+                      className="h-8 px-2 text-xs sm:px-3 sm:text-sm"
                       onClick={(event) => {
                         event.stopPropagation();
                         void handleScanMaterialsForGroup(group.id);
@@ -146,13 +146,15 @@ export const MaterialsSection = ({
                     >
                       {isScanningThisGroup ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Procesando...
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin sm:mr-2" />
+                          <span className="hidden sm:inline">Procesando...</span>
+                          <span className="sm:hidden">...</span>
                         </>
                       ) : (
                         <>
-                          <Camera className="mr-2 h-4 w-4" />
-                          Escanear IA
+                          <Camera className="mr-1 h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Escanear IA</span>
+                          <span className="sm:hidden">IA</span>
                         </>
                       )}
                     </Button>
@@ -184,7 +186,7 @@ export const MaterialsSection = ({
                     </div>
                   ) : null}
                   <CollapsibleContent>
-                    <div className="space-y-4 p-3">
+                    <div className="space-y-4 p-2 sm:p-3">
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
                           <Label>Proveedor:</Label>
@@ -205,7 +207,7 @@ export const MaterialsSection = ({
                           />
                         </div>
                       </div>
-                      <div className="rounded-md border border-[#d9e1ea]">
+                      <div className="sm:rounded-md sm:border sm:border-[#d9e1ea]">
                         <div className="hidden grid-cols-12 gap-2 bg-slate-100 px-3 py-2 text-sm font-semibold uppercase text-slate-700 md:grid">
                           <div className="col-span-3">Material</div>
                           <div className="col-span-2">Cantidad</div>
@@ -214,24 +216,23 @@ export const MaterialsSection = ({
                           <div className="col-span-2 whitespace-nowrap">Coste (€)</div>
                           <div className="col-span-1"></div>
                         </div>
-                        <div className="space-y-2 p-3">
+                        <div className="space-y-3 sm:space-y-2 sm:p-3">
                           {group.rows.map((row) => (
-                            <div key={row.id} className="rounded-md border border-[#d9e1ea] p-2 md:rounded-none md:border-0 md:p-0">
+                            <div
+                              key={row.id}
+                              className="rounded-md border border-slate-200 bg-white p-2 md:rounded-none md:border-0 md:bg-transparent md:p-0"
+                            >
                               <div className="grid grid-cols-12 gap-2">
                                 <div className="col-span-12 space-y-1 md:col-span-3 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Material
-                                  </p>
+                                  <p className="text-[11px] font-medium text-slate-500 md:hidden">Material</p>
                                   <Input
                                     placeholder="Nombre del material"
                                     value={row.name}
                                     onChange={(event) => updateMaterialRow(group.id, row.id, { name: event.target.value })}
                                   />
                                 </div>
-                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Cantidad
-                                  </p>
+                                <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-[11px] font-medium text-slate-500 md:hidden">Cantidad</p>
                                   <Input
                                     type="number"
                                     min={0}
@@ -242,10 +243,8 @@ export const MaterialsSection = ({
                                     }
                                   />
                                 </div>
-                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Unidad
-                                  </p>
+                                <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-[11px] font-medium text-slate-500 md:hidden">Unidad</p>
                                   <Select
                                     value={row.unit || undefined}
                                     onValueChange={(value) => updateMaterialRow(group.id, row.id, { unit: value })}
@@ -262,10 +261,8 @@ export const MaterialsSection = ({
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div className="col-span-4 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Precio/Ud
-                                  </p>
+                                <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-[11px] font-medium text-slate-500 md:hidden">Precio/Ud</p>
                                   <Input
                                     type="number"
                                     min={0}
@@ -276,10 +273,8 @@ export const MaterialsSection = ({
                                     }
                                   />
                                 </div>
-                                <div className="col-span-9 space-y-1 md:col-span-2 md:space-y-0">
-                                  <p className="text-sm font-medium uppercase tracking-wide text-slate-500 md:hidden">
-                                    Coste (€)
-                                  </p>
+                                <div className="col-span-6 space-y-1 md:col-span-2 md:space-y-0">
+                                  <p className="text-[11px] font-medium text-slate-500 md:hidden">Coste (€)</p>
                                   <Input
                                     type="text"
                                     value={row.total.toFixed(2)}
@@ -297,9 +292,9 @@ export const MaterialsSection = ({
                                     </button>
                                   ) : null}
                                 </div>
-                                <div className="col-span-3 flex items-end md:col-span-1 md:justify-center">
+                                <div className="col-span-12 flex justify-end md:col-span-1 md:items-end md:justify-center">
                                   <Button
-                                    className="h-9 w-full md:h-10 md:w-10"
+                                    className="h-9 w-9 md:h-10 md:w-10"
                                     size="icon"
                                     variant="ghost"
                                     onClick={() => removeMaterialRow(group.id, row.id)}
@@ -312,7 +307,7 @@ export const MaterialsSection = ({
                               </div>
                             </div>
                           ))}
-                          <Button variant="outline" onClick={() => addMaterialRow(group.id)}>
+                          <Button variant="outline" className="w-full sm:w-auto" onClick={() => addMaterialRow(group.id)}>
                             <Plus className="mr-2 h-4 w-4" />
                             Añadir Fila
                           </Button>
