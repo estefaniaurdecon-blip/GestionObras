@@ -482,7 +482,7 @@ export const WorkReportsTab = ({
             <h2 className="text-xl font-semibold text-slate-900 sm:text-3xl">Partes de trabajo</h2>
             <p className="text-[15px] text-muted-foreground">Gestiona tus partes diarios</p>
           </div>
-          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
             <Card className="border-emerald-200 bg-emerald-50/60">
               <CardContent className="p-2.5">
                 <div className="flex min-h-[74px] flex-col items-center justify-center gap-1.5 text-center">

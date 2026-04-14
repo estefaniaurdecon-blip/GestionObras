@@ -189,6 +189,18 @@
     @apply h-10 justify-center border-slate-200 bg-slate-50 px-4 text-[15px] font-medium text-slate-700 shadow-none hover:bg-slate-100 hover:text-slate-900 sm:h-11 sm:text-base;
   }
 
+  .app-top-nav-tab {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    line-height: 1.25 !important;
+  }
+
+  @media (min-width: 640px) {
+    .app-top-nav-tab {
+      font-size: 16px !important;
+    }
+  }
+
   .app-btn-primary {
     @apply h-10 justify-center bg-primary px-4 text-[15px] font-semibold text-primary-foreground hover:bg-primary/90 sm:h-11 sm:text-base;
   }
@@ -643,8 +655,8 @@
      PHONE-SPECIFIC STYLES (≤479px — smartphones, no tablets)
      ============================================================ */
   @media (max-width: 479px) {
-    /* Compact tab trigger text on very small phones */
-    [role="tab"] {
+    /* Compact tab trigger text on very small phones, except the main top navigation */
+    [role="tab"]:not(.app-top-nav-tab) {
       font-size: 12px !important;
       padding-left: 0.375rem !important;
       padding-right: 0.375rem !important;

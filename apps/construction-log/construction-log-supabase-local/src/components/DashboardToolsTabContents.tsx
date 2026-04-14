@@ -97,8 +97,11 @@ export const PartsTabContent = ({
     ? 'h-11 w-[158px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[16px] font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800'
     : 'h-10 w-[148px] justify-center gap-1.5 border border-cyan-500 bg-slate-100 text-[15px] font-semibold text-cyan-700 hover:bg-cyan-50 hover:text-cyan-800';
   const partsHeaderRowClass = isAndroidPlatform
-    ? 'flex flex-col gap-3 sm:grid sm:grid-cols-[158px_1fr_158px] sm:items-center'
-    : 'flex flex-col gap-3 sm:grid sm:grid-cols-[148px_1fr_148px] sm:items-center';
+    ? 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[158px_1fr_158px]'
+    : 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[148px_1fr_148px]';
+  const partsHeaderPrimaryActionClass = 'flex items-center justify-start sm:justify-self-start';
+  const partsHeaderTitleClass = 'order-3 col-span-2 text-center sm:order-none sm:col-span-1 sm:justify-self-center';
+  const partsHeaderSecondaryActionClass = 'flex items-center justify-end sm:justify-self-end';
   const reportNameClass = isAndroidPlatform
     ? 'text-[19px] font-semibold text-slate-900 truncate leading-snug'
     : 'text-[17px] font-medium text-slate-900 truncate';
@@ -245,7 +248,7 @@ export const PartsTabContent = ({
         <Card className="bg-white">
           <CardHeader className="space-y-3">
             <div className={partsHeaderRowClass}>
-              <div className="flex items-center justify-start sm:justify-self-start">
+              <div className={partsHeaderPrimaryActionClass}>
                 <Button
                   className={generatePartButtonClass}
                   disabled={!canCreateWorkReport}
@@ -255,8 +258,8 @@ export const PartsTabContent = ({
                   Generar parte
                 </Button>
               </div>
-              <div className="text-center sm:justify-self-center">
-                <CardTitle>Partes recientes</CardTitle>
+              <div className={partsHeaderTitleClass}>
+                <CardTitle className="text-xl sm:text-3xl">Partes recientes</CardTitle>
                 <CardDescription className="text-[15px] sm:text-base">
                   {tenantResolving
                     ? 'Resolviendo tenant...'
@@ -269,7 +272,7 @@ export const PartsTabContent = ({
                           : `No hay partes de trabajo en los ultimos ${workReportVisibleDays} dias`}
                 </CardDescription>
               </div>
-              <div className="flex items-center justify-end sm:justify-self-end">
+              <div className={partsHeaderSecondaryActionClass}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -303,7 +306,7 @@ export const PartsTabContent = ({
       <Card className="bg-white">
         <CardHeader className="space-y-3">
           <div className={partsHeaderRowClass}>
-            <div className="flex items-center justify-start sm:justify-self-start">
+            <div className={partsHeaderPrimaryActionClass}>
               <Button
                 className={generatePartButtonClass}
                 disabled={!canCreateWorkReport}
@@ -314,8 +317,8 @@ export const PartsTabContent = ({
               </Button>
             </div>
 
-            <div className="text-center sm:justify-self-center">
-              <CardTitle>Partes recientes</CardTitle>
+            <div className={partsHeaderTitleClass}>
+              <CardTitle className="text-xl sm:text-3xl">Partes recientes</CardTitle>
               <CardDescription className="text-[15px] sm:text-base">
                 {tenantResolving
                   ? 'Resolviendo tenant...'
@@ -331,7 +334,7 @@ export const PartsTabContent = ({
               </CardDescription>
             </div>
 
-            <div className="flex items-center justify-end sm:justify-self-end">
+            <div className={partsHeaderSecondaryActionClass}>
               <Button
                 type="button"
                 variant="ghost"

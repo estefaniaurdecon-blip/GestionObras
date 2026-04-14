@@ -70,7 +70,7 @@ export const MaterialsSection = ({
   removeServiceLine,
 }: MaterialsSectionProps) => {
   return (
-    <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-2 sm:px-4">
+    <AccordionItem value="materials" className="rounded-md border border-[#d9e1ea] bg-white px-4">
       <AccordionTrigger className={sectionTriggerClass}>Materiales</AccordionTrigger>
       <AccordionContent className="space-y-4 text-[15px]">
         <div className="sm:rounded-md sm:border sm:border-[#d9e1ea] sm:bg-white">

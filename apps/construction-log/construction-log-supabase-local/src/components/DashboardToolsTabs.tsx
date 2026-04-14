@@ -30,7 +30,7 @@ export const DashboardToolsTabs = ({
               variant="ghost"
               onClick={() => onValueChange(tab.value)}
               className={cn(
-                'app-btn-soft min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 sm:px-3 text-center text-[13px] sm:text-[15px] md:text-base leading-tight',
+                'app-btn-soft min-h-10 h-auto w-full whitespace-normal rounded-lg px-1 py-1.5 sm:px-3 text-center text-[15px] sm:text-[15px] md:text-base leading-tight',
                 value === tab.value
                   ? 'border-slate-300 bg-white text-slate-900 shadow-none'
                   : ''

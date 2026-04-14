@@ -145,25 +145,25 @@ export const IndexHeader = ({
           <TabsList className="grid h-auto min-h-12 w-full grid-cols-2 gap-2 rounded-xl bg-slate-200/90 p-1 sm:grid-cols-4">
             <TabsTrigger
               value="work-reports"
-              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="app-btn-soft app-top-nav-tab min-h-10 h-auto w-full min-w-0 whitespace-normal rounded-lg border-transparent bg-transparent px-1.5 py-1.5 text-center leading-tight data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
             >
               Partes de trabajo
             </TabsTrigger>
             <TabsTrigger
               value="access-control"
-              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="app-btn-soft app-top-nav-tab min-h-10 h-auto w-full min-w-0 whitespace-normal rounded-lg border-transparent bg-transparent px-1.5 py-1.5 text-center leading-tight data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
             >
               Control de accesos
             </TabsTrigger>
             <TabsTrigger
               value="works"
-              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="app-btn-soft app-top-nav-tab min-h-10 h-auto w-full min-w-0 whitespace-normal rounded-lg border-transparent bg-transparent px-1.5 py-1.5 text-center leading-tight data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
             >
               Obras
             </TabsTrigger>
             <TabsTrigger
               value="economics"
-              className="min-h-10 h-auto w-full whitespace-normal rounded-lg px-2 py-1.5 text-[13px] sm:text-[15px] md:text-base font-medium leading-tight data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="app-btn-soft app-top-nav-tab min-h-10 h-auto w-full min-w-0 whitespace-normal rounded-lg border-transparent bg-transparent px-1.5 py-1.5 text-center leading-tight data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
             >
               Análisis económico
             </TabsTrigger>

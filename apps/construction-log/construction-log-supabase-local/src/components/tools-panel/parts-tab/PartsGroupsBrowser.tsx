@@ -80,75 +80,77 @@ export const PartsGroupsBrowser = ({
     >
       <div className="min-h-0 overflow-hidden">
         <div className="space-y-3 pt-1">
-          <div className="rounded-md border bg-slate-100 p-2">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-100/90 p-2.5">
+            <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
               <Tabs
                 value={partsGroupMode}
                 onValueChange={(value) => onPartsGroupModeChange(value as PartsGroupMode)}
-                className="w-full sm:w-auto"
+                className="w-full sm:flex-1"
               >
-                <TabsList className="grid h-9 w-full grid-cols-3 rounded-md border border-slate-300 bg-slate-100 sm:w-auto">
+                <TabsList className="grid h-10 w-full grid-cols-3 items-stretch overflow-hidden rounded-lg border border-slate-300 bg-slate-100 p-1">
                   <TabsTrigger
                     value="foreman"
-                    className="text-[14px] data-[state=active]:border data-[state=active]:border-slate-400 data-[state=active]:bg-slate-300 data-[state=active]:text-slate-900 sm:text-[15px]"
+                    className="h-full min-w-0 rounded-md border border-transparent px-2 py-0 text-center text-[12px] font-medium leading-none text-slate-600 shadow-none data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-none data-[state=active]:ring-0 sm:px-3 sm:text-[14px]"
                   >
                     Por Encargado
                   </TabsTrigger>
                   <TabsTrigger
                     value="weekly"
-                    className="text-[14px] data-[state=active]:border data-[state=active]:border-slate-400 data-[state=active]:bg-slate-300 data-[state=active]:text-slate-900 sm:text-[15px]"
+                    className="h-full min-w-0 rounded-md border border-transparent px-2 py-0 text-center text-[12px] font-medium leading-none text-slate-600 shadow-none data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-none data-[state=active]:ring-0 sm:px-3 sm:text-[14px]"
                   >
                     Por Semanas
                   </TabsTrigger>
                   <TabsTrigger
                     value="monthly"
-                    className="text-[14px] data-[state=active]:border data-[state=active]:border-slate-400 data-[state=active]:bg-slate-300 data-[state=active]:text-slate-900 sm:text-[15px]"
+                    className="h-full min-w-0 rounded-md border border-transparent px-2 py-0 text-center text-[12px] font-medium leading-none text-slate-600 shadow-none data-[state=active]:border-slate-300 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-none data-[state=active]:ring-0 sm:px-3 sm:text-[14px]"
                   >
                     Por Meses
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-[14px] sm:text-[15px]"
-                onClick={() => onExport('weekly')}
-                disabled={excelExportingPeriod !== null || !canExportWeekly}
-              >
-                {excelExportingPeriod === 'weekly' ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Excel Semanal
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-[14px] sm:text-[15px]"
-                onClick={() => onExport('monthly')}
-                disabled={excelExportingPeriod !== null || !canExportMonthly}
-              >
-                {excelExportingPeriod === 'monthly' ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Excel Mensual
-                  </>
-                )}
-              </Button>
+              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[280px]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 min-w-0 justify-center rounded-lg border-slate-300 bg-white px-2 text-[13px] font-medium text-slate-700 shadow-sm sm:px-3 sm:text-[14px]"
+                  onClick={() => onExport('weekly')}
+                  disabled={excelExportingPeriod !== null || !canExportWeekly}
+                >
+                  {excelExportingPeriod === 'weekly' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Excel Semanal
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 min-w-0 justify-center rounded-lg border-slate-300 bg-white px-2 text-[13px] font-medium text-slate-700 shadow-sm sm:px-3 sm:text-[14px]"
+                  onClick={() => onExport('monthly')}
+                  disabled={excelExportingPeriod !== null || !canExportMonthly}
+                >
+                  {excelExportingPeriod === 'monthly' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Excel Mensual
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
 
